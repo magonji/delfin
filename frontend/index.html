@@ -239,9 +239,15 @@
                 
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="category">Category</label>
-                        <select id="category">
-                            <option value="">Select category...</option>
+                        <label for="parentCategory">Parent Category</label>
+                        <select id="parentCategory">
+                            <option value="">Select parent category...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="category">Subcategory</label>
+                        <select id="category" disabled>
+                            <option value="">First select a parent category...</option>
                         </select>
                     </div>
                     <div class="form-group">
@@ -303,23 +309,67 @@
         }
         
         // Load categories
+        // Global variable to store all categories
+        let allCategories = [];
+
+        // Load categories
         async function loadCategories() {
             try {
                 const response = await fetch(`${API_URL}/categories`);
-                const categories = await response.json();
-                const select = document.getElementById('category');
-                categories.forEach(category => {
+                allCategories = await response.json();
+                
+                // Get unique parent categories
+                const parentCategories = [...new Set(allCategories
+                    .map(c => c.parent)
+                    .filter(p => p && p.trim() !== ''))]
+                    .sort();
+                
+                const parentSelect = document.getElementById('parentCategory');
+                parentCategories.forEach(parent => {
                     const option = document.createElement('option');
-                    option.value = category.id;
-                    const displayName = category.parent 
-                        ? `${category.parent} > ${category.name}` 
-                        : category.name;
-                    option.textContent = displayName;
-                    select.appendChild(option);
+                    option.value = parent;
+                    option.textContent = parent;
+                    parentSelect.appendChild(option);
                 });
+                
+                // Add event listener for parent category change
+                parentSelect.addEventListener('change', (e) => {
+                    loadSubcategories(e.target.value);
+                });
+                
             } catch (error) {
                 console.error('Error loading categories:', error);
             }
+        }
+
+        // Load subcategories based on parent
+        function loadSubcategories(parentName) {
+            const categorySelect = document.getElementById('category');
+            categorySelect.innerHTML = '<option value="">Select subcategory...</option>';
+            
+            if (!parentName) {
+                categorySelect.disabled = true;
+                return;
+            }
+            
+            // Filter categories by parent
+            const subcategories = allCategories
+                .filter(c => c.parent === parentName)
+                .sort((a, b) => a.name.localeCompare(b.name));
+            
+            if (subcategories.length === 0) {
+                categorySelect.innerHTML = '<option value="">No subcategories available</option>';
+                categorySelect.disabled = true;
+                return;
+            }
+            
+            categorySelect.disabled = false;
+            subcategories.forEach(category => {
+                const option = document.createElement('option');
+                option.value = category.id;
+                option.textContent = category.name;
+                categorySelect.appendChild(option);
+            });
         }
         
         // Load payees for autocomplete
