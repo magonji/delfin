@@ -250,11 +250,27 @@
                             <option value="">First select a parent category...</option>
                         </select>
                     </div>
+                </div>
+
+                <div class="form-row">
                     <div class="form-group">
                         <label for="payee">Payee</label>
                         <input type="text" id="payee" placeholder="ASDA, Lidl, etc." list="payeeList">
                         <datalist id="payeeList"></datalist>
                     </div>
+                    <div class="form-group">
+                        <label for="location">Location</label>
+                        <select id="location">
+                            <option value="">Select location...</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="project">Project</label>
+                    <select id="project">
+                        <option value="">Select project...</option>
+                    </select>
                 </div>
                 
                 <div class="form-group">
@@ -282,6 +298,8 @@
             await loadAccounts();
             await loadCategories();
             await loadPayees();
+            await loadLocations();  
+            await loadProjects();
             await loadStats();
             await loadRecentTransactions();
             
@@ -388,6 +406,40 @@
             }
         }
         
+        // Load locations
+        async function loadLocations() {
+            try {
+                const response = await fetch(`${API_URL}/locations`);
+                const locations = await response.json();
+                const select = document.getElementById('location');
+                locations.forEach(location => {
+                    const option = document.createElement('option');
+                    option.value = location.id;
+                    option.textContent = location.name;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading locations:', error);
+            }
+        }
+
+        // Load projects
+        async function loadProjects() {
+            try {
+                const response = await fetch(`${API_URL}/projects`);
+                const projects = await response.json();
+                const select = document.getElementById('project');
+                projects.forEach(project => {
+                    const option = document.createElement('option');
+                    option.value = project.id;
+                    option.textContent = project.name;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading projects:', error);
+            }
+        }
+
         // Load statistics
         async function loadStats() {
             try {
@@ -488,8 +540,8 @@
                 account_id: parseInt(document.getElementById('account').value),
                 category_id: document.getElementById('category').value ? parseInt(document.getElementById('category').value) : null,
                 payee_id: payeeId,
-                location_id: null,
-                project_id: null,
+                location_id: document.getElementById('location').value ? parseInt(document.getElementById('location').value) : null,  
+                project_id: document.getElementById('project').value ? parseInt(document.getElementById('project').value) : null,    
                 note: document.getElementById('note').value || null
             };
             

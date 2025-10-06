@@ -106,6 +106,39 @@ def get_payees(
 
 
 # ============================================
+# LOCATIONS ENDPOINTS
+# ============================================
+
+@app.get("/locations", response_model=List[schemas.PayeeResponse])
+def get_locations(
+    skip: int = 0,
+    limit: int = 200,
+    db: Session = Depends(get_db)
+):
+    """
+    Retrieve all locations.
+    """
+    locations = db.query(models.Location).offset(skip).limit(limit).all()
+    return locations
+
+
+# ============================================
+# PROJECTS ENDPOINTS
+# ============================================
+
+@app.get("/projects", response_model=List[schemas.PayeeResponse])
+def get_projects(
+    skip: int = 0,
+    limit: int = 200,
+    db: Session = Depends(get_db)
+):
+    """
+    Retrieve all projects.
+    """
+    projects = db.query(models.Project).offset(skip).limit(limit).all()
+    return projects
+
+# ============================================
 # TRANSACTIONS ENDPOINTS
 # ============================================
 
