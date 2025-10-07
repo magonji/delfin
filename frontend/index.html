@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Financisto Manager</title>
+    <title>Financisto Manager - Dashboard</title>
     <style>
         * {
             margin: 0;
@@ -19,26 +19,8 @@
         }
         
         .container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
-        }
-        
-        .header {
-            background: white;
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-            margin-bottom: 30px;
-        }
-        
-        h1 {
-            color: #667eea;
-            margin-bottom: 10px;
-        }
-        
-        .subtitle {
-            color: #666;
-            font-size: 14px;
         }
         
         .card {
@@ -47,77 +29,6 @@
             border-radius: 15px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.2);
             margin-bottom: 20px;
-        }
-        
-        .form-group {
-            margin-bottom: 20px;
-        }
-        
-        label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
-            color: #333;
-        }
-        
-        input, select, textarea {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-size: 14px;
-            transition: border-color 0.3s;
-        }
-        
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-        
-        .form-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-        }
-        
-        button {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 15px 30px;
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
-            width: 100%;
-        }
-        
-        button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
-        }
-        
-        button:active {
-            transform: translateY(0);
-        }
-        
-        .success-message {
-            background: #10b981;
-            color: white;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            display: none;
-        }
-        
-        .error-message {
-            background: #ef4444;
-            color: white;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            display: none;
         }
         
         .stats-grid {
@@ -146,63 +57,30 @@
             color: #666;
             font-size: 14px;
         }
-        
-        .transactions-list {
-            max-height: 500px;
-            overflow-y: auto;
-        }
-        
-        .transaction-item {
-            background: #f8f9fa;
+
+        .success-message {
+            background: #10b981;
+            color: white;
             padding: 15px;
             border-radius: 8px;
-            margin-bottom: 10px;
-            display: grid;
-            grid-template-columns: auto 1fr auto;
-            gap: 15px;
-            align-items: center;
+            margin-bottom: 20px;
+            display: none;
         }
         
-        .transaction-date {
-            font-size: 12px;
-            color: #666;
-        }
-        
-        .transaction-details {
-            flex: 1;
-        }
-        
-        .transaction-payee {
-            font-weight: 600;
-            color: #333;
-        }
-        
-        .transaction-category {
-            font-size: 12px;
-            color: #666;
-        }
-        
-        .transaction-amount {
-            font-size: 18px;
-            font-weight: bold;
-        }
-        
-        .amount-negative {
-            color: #ef4444;
-        }
-        
-        .amount-positive {
-            color: #10b981;
+        .error-message {
+            background: #ef4444;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
         }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="navbar.js"></script>
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <h1>💰 Financisto Manager</h1>
-            <p class="subtitle">Quick transaction entry from your computer</p>
-        </div>
-        
         <div id="successMessage" class="success-message"></div>
         <div id="errorMessage" class="error-message"></div>
         
@@ -210,282 +88,33 @@
             <!-- Stats will be loaded here -->
         </div>
         
-        <div class="card">
-            <h2 style="margin-bottom: 20px;">➕ Add New Transaction</h2>
-            <form id="transactionForm">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="date">Date</label>
-                        <input type="date" id="date" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="time">Time</label>
-                        <input type="time" id="time" required>
-                    </div>
-                </div>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="amount">Amount (£)</label>
-                        <input type="number" id="amount" step="0.01" required placeholder="-20.50">
-                    </div>
-                    <div class="form-group">
-                        <label for="account">Account</label>
-                        <select id="account" required>
-                            <option value="">Select account...</option>
-                        </select>
-                    </div>
-                </div>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="parentCategory">Parent Category</label>
-                        <select id="parentCategory">
-                            <option value="">Select parent category...</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="category">Subcategory</label>
-                        <select id="category" disabled>
-                            <option value="">First select a parent category...</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="payee">Payee</label>
-                        <input type="text" id="payee" placeholder="ASDA, Lidl, etc." list="payeeList">
-                        <datalist id="payeeList"></datalist>
-                    </div>
-                    <div class="form-group">
-                        <label for="location">Location</label>
-                        <select id="location">
-                            <option value="">Select location...</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label for="project">Project</label>
-                    <select id="project">
-                        <option value="">Select project...</option>
-                    </select>
-                </div>
-                
-                <div class="form-group">
-                    <label for="note">Note (optional)</label>
-                    <textarea id="note" rows="2" placeholder="Additional details..."></textarea>
-                </div>
-                
-                <div style="display: flex; gap: 10px;">
-                    <button type="submit" style="flex: 1;">💾 Save Transaction</button>
-                    <button type="button" onclick="cancelEdit()" style="flex: 1; background: #6c757d;">❌ Cancel</button>
-                </div>
-            </form>
+        <!-- Charts Section -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+            <div class="card">
+                <h2 style="margin-bottom: 20px;">📊 Expenses by Category</h2>
+                <canvas id="categoryChart"></canvas>
+            </div>
+            
+            <div class="card">
+                <h2 style="margin-bottom: 20px;">💳 Balance by Account</h2>
+                <canvas id="accountChart"></canvas>
+            </div>
         </div>
         
         <div class="card">
-            <h2 style="margin-bottom: 20px;">📊 Recent Transactions</h2>
-            
-            <!-- Filters Section -->
-            <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
-                <h3 style="margin-bottom: 15px; font-size: 16px;">🔍 Filters</h3>
-                
-                <div class="form-row">
-                    <div class="form-group" style="margin-bottom: 10px;">
-                        <label for="filterStartDate" style="font-size: 14px;">From Date</label>
-                        <input type="date" id="filterStartDate" style="padding: 8px;">
-                    </div>
-                    <div class="form-group" style="margin-bottom: 10px;">
-                        <label for="filterEndDate" style="font-size: 14px;">To Date</label>
-                        <input type="date" id="filterEndDate" style="padding: 8px;">
-                    </div>
-                </div>
-                
-                <div class="form-row">
-                    <div class="form-group" style="margin-bottom: 10px;">
-                        <label for="filterAccount" style="font-size: 14px;">Account</label>
-                        <select id="filterAccount" style="padding: 8px;">
-                            <option value="">All accounts</option>
-                        </select>
-                    </div>
-                    <div class="form-group" style="margin-bottom: 10px;">
-                        <label for="filterCategory" style="font-size: 14px;">Category</label>
-                        <select id="filterCategory" style="padding: 8px;">
-                            <option value="">All categories</option>
-                        </select>
-                    </div>
-                </div>
-                
-                <div class="form-group" style="margin-bottom: 10px;">
-                    <label for="filterSearch" style="font-size: 14px;">Search (payee or note)</label>
-                    <input type="text" id="filterSearch" placeholder="Search..." style="padding: 8px;">
-                </div>
-                
-                <div style="display: flex; gap: 10px;">
-                    <button onclick="applyFilters()" style="flex: 1; padding: 10px;">Apply Filters</button>
-                    <button onclick="clearFilters()" style="flex: 1; padding: 10px; background: #6c757d;">Clear</button>
-                </div>
-            </div>
-            
-            <div class="transactions-list" id="transactionsList">
-                <!-- Transactions will be loaded here -->
-            </div>
+            <h2 style="margin-bottom: 20px;">📈 Monthly Trend</h2>
+            <canvas id="monthlyChart"></canvas>
+        </div>
+        
+        <div class="card">
+            <h2 style="margin-bottom: 20px;">🔝 Top 10 Payees</h2>
+            <canvas id="topPayeesChart"></canvas>
         </div>
     </div>
     
     <script>
         const API_URL = 'http://localhost:8000';
         
-        // Load initial data
-        document.addEventListener('DOMContentLoaded', async () => {
-            await loadAccounts();
-            await loadCategories();
-            await loadPayees();
-            await loadLocations();  
-            await loadProjects();
-            await populateFilterDropdowns();
-            await loadStats();
-            await loadRecentTransactions();
-            
-            // Set current date and time
-            const now = new Date();
-            document.getElementById('date').valueAsDate = now;
-            document.getElementById('time').value = now.toTimeString().slice(0, 5);
-        });
-        
-        // Load accounts
-        async function loadAccounts() {
-            try {
-                const response = await fetch(`${API_URL}/accounts`);
-                const accounts = await response.json();
-                const select = document.getElementById('account');
-                accounts.forEach(account => {
-                    const option = document.createElement('option');
-                    option.value = account.id;
-                    option.textContent = `${account.name} (${account.currency})`;
-                    select.appendChild(option);
-                });
-            } catch (error) {
-                console.error('Error loading accounts:', error);
-            }
-        }
-        
-        // Load categories
-        // Global variable to store all categories
-        let allCategories = [];
-
-        // Load categories
-        async function loadCategories() {
-            try {
-                const response = await fetch(`${API_URL}/categories`);
-                allCategories = await response.json();
-                
-                // Get unique parent categories
-                const parentCategories = [...new Set(allCategories
-                    .map(c => c.parent)
-                    .filter(p => p && p.trim() !== ''))]
-                    .sort();
-                
-                const parentSelect = document.getElementById('parentCategory');
-                parentCategories.forEach(parent => {
-                    const option = document.createElement('option');
-                    option.value = parent;
-                    option.textContent = parent;
-                    parentSelect.appendChild(option);
-                });
-                
-                // Add event listener for parent category change
-                parentSelect.addEventListener('change', (e) => {
-                    loadSubcategories(e.target.value);
-                });
-                
-            } catch (error) {
-                console.error('Error loading categories:', error);
-            }
-        }
-
-        // Load subcategories based on parent
-        function loadSubcategories(parentName) {
-            const categorySelect = document.getElementById('category');
-            categorySelect.innerHTML = '<option value="">Select subcategory...</option>';
-            
-            if (!parentName) {
-                categorySelect.disabled = true;
-                return;
-            }
-            
-            // Filter categories by parent
-            const subcategories = allCategories
-                .filter(c => c.parent === parentName)
-                .sort((a, b) => a.name.localeCompare(b.name));
-            
-            if (subcategories.length === 0) {
-                categorySelect.innerHTML = '<option value="">No subcategories available</option>';
-                categorySelect.disabled = true;
-                return;
-            }
-            
-            categorySelect.disabled = false;
-            subcategories.forEach(category => {
-                const option = document.createElement('option');
-                option.value = category.id;
-                option.textContent = category.name;
-                categorySelect.appendChild(option);
-            });
-        }
-        
-        // Load payees for autocomplete
-        async function loadPayees() {
-            try {
-                const response = await fetch(`${API_URL}/payees`);
-                const payees = await response.json();
-                const datalist = document.getElementById('payeeList');
-                payees.forEach(payee => {
-                    const option = document.createElement('option');
-                    option.value = payee.name;
-                    datalist.appendChild(option);
-                });
-            } catch (error) {
-                console.error('Error loading payees:', error);
-            }
-        }
-        
-        // Load locations
-        async function loadLocations() {
-            try {
-                const response = await fetch(`${API_URL}/locations`);
-                const locations = await response.json();
-                const select = document.getElementById('location');
-                locations.forEach(location => {
-                    const option = document.createElement('option');
-                    option.value = location.id;
-                    option.textContent = location.name;
-                    select.appendChild(option);
-                });
-            } catch (error) {
-                console.error('Error loading locations:', error);
-            }
-        }
-
-        // Load projects
-        async function loadProjects() {
-            try {
-                const response = await fetch(`${API_URL}/projects`);
-                const projects = await response.json();
-                const select = document.getElementById('project');
-                projects.forEach(project => {
-                    const option = document.createElement('option');
-                    option.value = project.id;
-                    option.textContent = project.name;
-                    select.appendChild(option);
-                });
-            } catch (error) {
-                console.error('Error loading projects:', error);
-            }
-        }
-
         // Load statistics
         async function loadStats() {
             try {
@@ -516,101 +145,217 @@
             }
         }
         
-        // Load recent transactions
-        async function loadRecentTransactions() {
+        // Load chart data
+        async function loadCharts() {
+            await loadCategoryChart();
+            await loadAccountChart();
+            await loadMonthlyChart();
+            await loadTopPayeesChart();
+        }
+        
+        // Expenses by Category
+        async function loadCategoryChart() {
             try {
-                const response = await fetch(`${API_URL}/transactions?limit=20`);
+                const response = await fetch(`${API_URL}/transactions?limit=1000`);
                 const transactions = await response.json();
-                displayTransactions(transactions);
+                
+                // Group by category
+                const categoryTotals = {};
+                transactions.forEach(t => {
+                    if (t.amount < 0) { // Only expenses
+                        const category = t.category_name || 'Uncategorised';
+                        categoryTotals[category] = (categoryTotals[category] || 0) + Math.abs(t.amount);
+                    }
+                });
+                
+                // Sort and get top 10
+                const sorted = Object.entries(categoryTotals)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 10);
+                
+                const ctx = document.getElementById('categoryChart');
+                new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: sorted.map(([name]) => name),
+                        datasets: [{
+                            data: sorted.map(([, total]) => total.toFixed(2)),
+                            backgroundColor: [
+                                '#667eea', '#764ba2', '#f093fb', '#4facfe',
+                                '#43e97b', '#fa709a', '#fee140', '#30cfd0',
+                                '#a8edea', '#fed6e3'
+                            ]
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: { position: 'right' }
+                        }
+                    }
+                });
             } catch (error) {
-                console.error('Error loading transactions:', error);
+                console.error('Error loading category chart:', error);
             }
         }
         
-        // Handle form submission (create or update)
-        document.getElementById('transactionForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            const form = e.target;
-            const isEditing = form.dataset.editingId;
-            
-            const date = document.getElementById('date').value;
-            const time = document.getElementById('time').value;
-            const datetime = `${date}T${time}:00`;
-            
-            const payeeName = document.getElementById('payee').value.trim();
-            let payeeId = null;
-            
-            // Find or create payee
-            if (payeeName) {
-                try {
-                    const payeesResponse = await fetch(`${API_URL}/payees`);
-                    const payees = await payeesResponse.json();
-                    const existingPayee = payees.find(p => p.name.toLowerCase() === payeeName.toLowerCase());
-                    
-                    if (existingPayee) {
-                        payeeId = existingPayee.id;
-                    } else {
-                        // Create new payee
-                        const createResponse = await fetch(`${API_URL}/payees`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ name: payeeName })
-                        });
-                        const newPayee = await createResponse.json();
-                        payeeId = newPayee.id;
-                    }
-                } catch (error) {
-                    console.error('Error handling payee:', error);
-                }
-            }
-            
-            const transaction = {
-                date: datetime,
-                amount: parseFloat(document.getElementById('amount').value),
-                currency: 'GBP',
-                account_id: parseInt(document.getElementById('account').value),
-                category_id: document.getElementById('category').value ? parseInt(document.getElementById('category').value) : null,
-                payee_id: payeeId,
-                location_id: document.getElementById('location').value ? parseInt(document.getElementById('location').value) : null,
-                project_id: document.getElementById('project').value ? parseInt(document.getElementById('project').value) : null,
-                note: document.getElementById('note').value || null
-            };
-            
+        // Balance by Account
+        async function loadAccountChart() {
             try {
-                let response;
+                const response = await fetch(`${API_URL}/accounts`);
+                const accounts = await response.json();
                 
-                if (isEditing) {
-                    // UPDATE existing transaction
-                    response = await fetch(`${API_URL}/transactions/${isEditing}`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(transaction)
-                    });
-                } else {
-                    // CREATE new transaction
-                    response = await fetch(`${API_URL}/transactions`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(transaction)
-                    });
-                }
+                // Calculate balance for each account
+                const transResponse = await fetch(`${API_URL}/transactions?limit=10000`);
+                const transactions = await transResponse.json();
                 
-                if (response.ok) {
-                    showSuccess(isEditing ? 'Transaction updated successfully!' : 'Transaction saved successfully!');
-                    cancelEdit(); // Reset form
-                    
-                    // Reload data
-                    await loadStats();
-                    await loadRecentTransactions();
-                    await loadPayees();
-                } else {
-                    showError('Failed to save transaction');
-                }
+                const accountBalances = {};
+                accounts.forEach(acc => {
+                    accountBalances[acc.name] = 0;
+                });
+                
+                transactions.forEach(t => {
+                    if (accountBalances.hasOwnProperty(t.account_name)) {
+                        accountBalances[t.account_name] += t.amount;
+                    }
+                });
+                
+                const ctx = document.getElementById('accountChart');
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: Object.keys(accountBalances),
+                        datasets: [{
+                            label: 'Balance (£)',
+                            data: Object.values(accountBalances).map(v => v.toFixed(2)),
+                            backgroundColor: '#667eea'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: { display: false }
+                        },
+                        scales: {
+                            y: { beginAtZero: true }
+                        }
+                    }
+                });
             } catch (error) {
-                showError('Error: ' + error.message);
+                console.error('Error loading account chart:', error);
             }
-        });
+        }
+        
+        // Monthly Trend
+        async function loadMonthlyChart() {
+            try {
+                const response = await fetch(`${API_URL}/transactions?limit=10000`);
+                const transactions = await response.json();
+                
+                // Group by month
+                const monthlyData = {};
+                transactions.forEach(t => {
+                    const date = new Date(t.date);
+                    const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                    
+                    if (!monthlyData[monthKey]) {
+                        monthlyData[monthKey] = { income: 0, expenses: 0 };
+                    }
+                    
+                    if (t.amount > 0) {
+                        monthlyData[monthKey].income += t.amount;
+                    } else {
+                        monthlyData[monthKey].expenses += Math.abs(t.amount);
+                    }
+                });
+                
+                // Sort by date and get last 12 months
+                const sorted = Object.entries(monthlyData)
+                    .sort((a, b) => a[0].localeCompare(b[0]))
+                    .slice(-12);
+                
+                const ctx = document.getElementById('monthlyChart');
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: sorted.map(([month]) => month),
+                        datasets: [
+                            {
+                                label: 'Income',
+                                data: sorted.map(([, data]) => data.income.toFixed(2)),
+                                borderColor: '#10b981',
+                                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                                tension: 0.4
+                            },
+                            {
+                                label: 'Expenses',
+                                data: sorted.map(([, data]) => data.expenses.toFixed(2)),
+                                borderColor: '#ef4444',
+                                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                                tension: 0.4
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: { position: 'top' }
+                        },
+                        scales: {
+                            y: { beginAtZero: true }
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error('Error loading monthly chart:', error);
+            }
+        }
+        
+        // Top Payees
+        async function loadTopPayeesChart() {
+            try {
+                const response = await fetch(`${API_URL}/transactions?limit=10000`);
+                const transactions = await response.json();
+                
+                // Group by payee
+                const payeeTotals = {};
+                transactions.forEach(t => {
+                    if (t.amount < 0 && t.payee_name) { // Only expenses with payee
+                        payeeTotals[t.payee_name] = (payeeTotals[t.payee_name] || 0) + Math.abs(t.amount);
+                    }
+                });
+                
+                // Sort and get top 10
+                const sorted = Object.entries(payeeTotals)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 10);
+                
+                const ctx = document.getElementById('topPayeesChart');
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: sorted.map(([name]) => name),
+                        datasets: [{
+                            label: 'Total Spent (£)',
+                            data: sorted.map(([, total]) => total.toFixed(2)),
+                            backgroundColor: '#764ba2'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        indexAxis: 'y',
+                        plugins: {
+                            legend: { display: false }
+                        },
+                        scales: {
+                            x: { beginAtZero: true }
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error('Error loading top payees chart:', error);
+            }
+        }
         
         function showSuccess(message) {
             const element = document.getElementById('successMessage');
@@ -629,222 +374,12 @@
                 element.style.display = 'none';
             }, 5000);
         }
-
-        // Populate filter dropdowns
-        async function populateFilterDropdowns() {
-            // Populate accounts filter
-            try {
-                const accountsResponse = await fetch(`${API_URL}/accounts`);
-                const accounts = await accountsResponse.json();
-                const filterAccount = document.getElementById('filterAccount');
-                accounts.forEach(account => {
-                    const option = document.createElement('option');
-                    option.value = account.id;
-                    option.textContent = account.name;
-                    filterAccount.appendChild(option);
-                });
-            } catch (error) {
-                console.error('Error loading filter accounts:', error);
-            }
-            
-            // Populate categories filter (all categories, not just parents)
-            try {
-                const filterCategory = document.getElementById('filterCategory');
-                allCategories.forEach(category => {
-                    const option = document.createElement('option');
-                    option.value = category.id;
-                    const displayName = category.parent 
-                        ? `${category.parent} > ${category.name}` 
-                        : category.name;
-                    option.textContent = displayName;
-                    filterCategory.appendChild(option);
-                });
-            } catch (error) {
-                console.error('Error loading filter categories:', error);
-            }
-        }
-
-        // Apply filters to transactions
-        async function applyFilters() {
-            const startDate = document.getElementById('filterStartDate').value;
-            const endDate = document.getElementById('filterEndDate').value;
-            const accountId = document.getElementById('filterAccount').value;
-            const categoryId = document.getElementById('filterCategory').value;
-            const searchText = document.getElementById('filterSearch').value.toLowerCase();
-            
-            // Build query parameters
-            const params = new URLSearchParams();
-            params.append('limit', '100'); // Show more results when filtering
-            
-            if (startDate) params.append('start_date', startDate);
-            if (endDate) params.append('end_date', endDate);
-            if (accountId) params.append('account_id', accountId);
-            if (categoryId) params.append('category_id', categoryId);
-            
-            try {
-                const response = await fetch(`${API_URL}/transactions?${params.toString()}`);
-                let transactions = await response.json();
-                
-                // Apply client-side text search (since API doesn't support it)
-                if (searchText) {
-                    transactions = transactions.filter(t => {
-                        const payeeName = (t.payee_name || '').toLowerCase();
-                        const note = (t.note || '').toLowerCase();
-                        return payeeName.includes(searchText) || note.includes(searchText);
-                    });
-                }
-                
-                // Display filtered transactions
-                displayTransactions(transactions);
-                
-            } catch (error) {
-                console.error('Error applying filters:', error);
-                showError('Error applying filters');
-            }
-        }
-
-        // Clear all filters
-        function clearFilters() {
-            document.getElementById('filterStartDate').value = '';
-            document.getElementById('filterEndDate').value = '';
-            document.getElementById('filterAccount').value = '';
-            document.getElementById('filterCategory').value = '';
-            document.getElementById('filterSearch').value = '';
-            
-            loadRecentTransactions();
-        }
-
-        // Display transactions (extracted from loadRecentTransactions)
-        function displayTransactions(transactions) {
-            const list = document.getElementById('transactionsList');
-            
-            if (transactions.length === 0) {
-                list.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">No transactions found</p>';
-                return;
-            }
-            
-            list.innerHTML = transactions.map(t => {
-                const date = new Date(t.date).toLocaleDateString('en-GB');
-                const time = new Date(t.date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-                const amountClass = t.amount < 0 ? 'amount-negative' : 'amount-positive';
-                return `
-                    <div class="transaction-item">
-                        <div class="transaction-date">${date}<br>${time}</div>
-                        <div class="transaction-details">
-                            <div class="transaction-payee">${t.payee_name || 'No payee'}</div>
-                            <div class="transaction-category">${t.category_name || 'Uncategorised'} • ${t.account_name}</div>
-                            ${t.note ? `<div class="transaction-category">${t.note}</div>` : ''}
-                        </div>
-                        <div class="transaction-amount ${amountClass}">
-                            £${Math.abs(t.amount).toFixed(2)}
-                        </div>
-                        <div style="display: flex; gap: 5px; flex-direction: column;">
-                            <button onclick="editTransaction(${t.id})" style="padding: 5px 10px; font-size: 12px; background: #667eea;">✏️ Edit</button>
-                            <button onclick="deleteTransaction(${t.id})" style="padding: 5px 10px; font-size: 12px; background: #ef4444;">🗑️ Delete</button>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
-
-
-        // Edit transaction
-        async function editTransaction(transactionId) {
-            try {
-                // Fetch the transaction details
-                const response = await fetch(`${API_URL}/transactions/${transactionId}`);
-                const transaction = await response.json();
-                
-                // Populate the form with existing data
-                const transactionDate = new Date(transaction.date);
-                document.getElementById('date').valueAsDate = transactionDate;
-                document.getElementById('time').value = transactionDate.toTimeString().slice(0, 5);
-                document.getElementById('amount').value = transaction.amount;
-                document.getElementById('account').value = transaction.account_id;
-                document.getElementById('note').value = transaction.note || '';
-                
-                // Handle category (need to select parent first, then child)
-                if (transaction.category_id) {
-                    const category = allCategories.find(c => c.id === transaction.category_id);
-                    if (category && category.parent) {
-                        document.getElementById('parentCategory').value = category.parent;
-                        loadSubcategories(category.parent);
-                        // Wait a bit for subcategories to load
-                        setTimeout(() => {
-                            document.getElementById('category').value = transaction.category_id;
-                        }, 100);
-                    }
-                }
-                
-                // Handle optional fields
-                if (transaction.location_id) {
-                    document.getElementById('location').value = transaction.location_id;
-                }
-                if (transaction.project_id) {
-                    document.getElementById('project').value = transaction.project_id;
-                }
-                if (transaction.payee_name) {
-                    document.getElementById('payee').value = transaction.payee_name;
-                }
-                
-                // Change form button to "Update" mode
-                const form = document.getElementById('transactionForm');
-                const submitButton = form.querySelector('button[type="submit"]');
-                submitButton.textContent = '✏️ Update Transaction';
-                submitButton.style.background = '#f59e0b';
-                
-                // Store transaction ID for update
-                form.dataset.editingId = transactionId;
-                
-                // Scroll to form
-                form.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                
-                showSuccess('Transaction loaded for editing. Modify and click "Update Transaction".');
-                
-            } catch (error) {
-                console.error('Error loading transaction for edit:', error);
-                showError('Failed to load transaction');
-            }
-        }
-
-        // Delete transaction
-        async function deleteTransaction(transactionId) {
-            if (!confirm('Are you sure you want to delete this transaction? This cannot be undone.')) {
-                return;
-            }
-            
-            try {
-                const response = await fetch(`${API_URL}/transactions/${transactionId}`, {
-                    method: 'DELETE'
-                });
-                
-                if (response.ok) {
-                    showSuccess('Transaction deleted successfully!');
-                    await loadStats();
-                    await loadRecentTransactions();
-                } else {
-                    showError('Failed to delete transaction');
-                }
-            } catch (error) {
-                console.error('Error deleting transaction:', error);
-                showError('Error: ' + error.message);
-            }
-        }
-
-        // Cancel edit mode
-        function cancelEdit() {
-            const form = document.getElementById('transactionForm');
-            const submitButton = form.querySelector('button[type="submit"]');
-            submitButton.textContent = '💾 Save Transaction';
-            submitButton.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
-            delete form.dataset.editingId;
-            form.reset();
-            
-            // Reset date and time to now
-            const now = new Date();
-            document.getElementById('date').valueAsDate = now;
-            document.getElementById('time').value = now.toTimeString().slice(0, 5);
-        }
+        
+        // Load data on page load
+        document.addEventListener('DOMContentLoaded', async () => {
+            await loadStats();
+            await loadCharts();
+        });
     </script>
 </body>
 </html>
