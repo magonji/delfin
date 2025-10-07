@@ -284,6 +284,48 @@
         
         <div class="card">
             <h2 style="margin-bottom: 20px;">📊 Recent Transactions</h2>
+            
+            <!-- Filters Section -->
+            <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
+                <h3 style="margin-bottom: 15px; font-size: 16px;">🔍 Filters</h3>
+                
+                <div class="form-row">
+                    <div class="form-group" style="margin-bottom: 10px;">
+                        <label for="filterStartDate" style="font-size: 14px;">From Date</label>
+                        <input type="date" id="filterStartDate" style="padding: 8px;">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 10px;">
+                        <label for="filterEndDate" style="font-size: 14px;">To Date</label>
+                        <input type="date" id="filterEndDate" style="padding: 8px;">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group" style="margin-bottom: 10px;">
+                        <label for="filterAccount" style="font-size: 14px;">Account</label>
+                        <select id="filterAccount" style="padding: 8px;">
+                            <option value="">All accounts</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 10px;">
+                        <label for="filterCategory" style="font-size: 14px;">Category</label>
+                        <select id="filterCategory" style="padding: 8px;">
+                            <option value="">All categories</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-group" style="margin-bottom: 10px;">
+                    <label for="filterSearch" style="font-size: 14px;">Search (payee or note)</label>
+                    <input type="text" id="filterSearch" placeholder="Search..." style="padding: 8px;">
+                </div>
+                
+                <div style="display: flex; gap: 10px;">
+                    <button onclick="applyFilters()" style="flex: 1; padding: 10px;">Apply Filters</button>
+                    <button onclick="clearFilters()" style="flex: 1; padding: 10px; background: #6c757d;">Clear</button>
+                </div>
+            </div>
+            
             <div class="transactions-list" id="transactionsList">
                 <!-- Transactions will be loaded here -->
             </div>
@@ -300,6 +342,7 @@
             await loadPayees();
             await loadLocations();  
             await loadProjects();
+            await populateFilterDropdowns();
             await loadStats();
             await loadRecentTransactions();
             
@@ -475,24 +518,7 @@
             try {
                 const response = await fetch(`${API_URL}/transactions?limit=20`);
                 const transactions = await response.json();
-                
-                const list = document.getElementById('transactionsList');
-                list.innerHTML = transactions.map(t => {
-                    const date = new Date(t.date).toLocaleDateString('en-GB');
-                    const amountClass = t.amount < 0 ? 'amount-negative' : 'amount-positive';
-                    return `
-                        <div class="transaction-item">
-                            <div class="transaction-date">${date}</div>
-                            <div class="transaction-details">
-                                <div class="transaction-payee">${t.payee_name || 'No payee'}</div>
-                                <div class="transaction-category">${t.category_name || 'Uncategorised'} • ${t.account_name}</div>
-                            </div>
-                            <div class="transaction-amount ${amountClass}">
-                                £${Math.abs(t.amount).toFixed(2)}
-                            </div>
-                        </div>
-                    `;
-                }).join('');
+                displayTransactions(transactions);
             } catch (error) {
                 console.error('Error loading transactions:', error);
             }
@@ -591,6 +617,118 @@
             setTimeout(() => {
                 element.style.display = 'none';
             }, 5000);
+        }
+
+        // Populate filter dropdowns
+        async function populateFilterDropdowns() {
+            // Populate accounts filter
+            try {
+                const accountsResponse = await fetch(`${API_URL}/accounts`);
+                const accounts = await accountsResponse.json();
+                const filterAccount = document.getElementById('filterAccount');
+                accounts.forEach(account => {
+                    const option = document.createElement('option');
+                    option.value = account.id;
+                    option.textContent = account.name;
+                    filterAccount.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading filter accounts:', error);
+            }
+            
+            // Populate categories filter (all categories, not just parents)
+            try {
+                const filterCategory = document.getElementById('filterCategory');
+                allCategories.forEach(category => {
+                    const option = document.createElement('option');
+                    option.value = category.id;
+                    const displayName = category.parent 
+                        ? `${category.parent} > ${category.name}` 
+                        : category.name;
+                    option.textContent = displayName;
+                    filterCategory.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading filter categories:', error);
+            }
+        }
+
+        // Apply filters to transactions
+        async function applyFilters() {
+            const startDate = document.getElementById('filterStartDate').value;
+            const endDate = document.getElementById('filterEndDate').value;
+            const accountId = document.getElementById('filterAccount').value;
+            const categoryId = document.getElementById('filterCategory').value;
+            const searchText = document.getElementById('filterSearch').value.toLowerCase();
+            
+            // Build query parameters
+            const params = new URLSearchParams();
+            params.append('limit', '100'); // Show more results when filtering
+            
+            if (startDate) params.append('start_date', startDate);
+            if (endDate) params.append('end_date', endDate);
+            if (accountId) params.append('account_id', accountId);
+            if (categoryId) params.append('category_id', categoryId);
+            
+            try {
+                const response = await fetch(`${API_URL}/transactions?${params.toString()}`);
+                let transactions = await response.json();
+                
+                // Apply client-side text search (since API doesn't support it)
+                if (searchText) {
+                    transactions = transactions.filter(t => {
+                        const payeeName = (t.payee_name || '').toLowerCase();
+                        const note = (t.note || '').toLowerCase();
+                        return payeeName.includes(searchText) || note.includes(searchText);
+                    });
+                }
+                
+                // Display filtered transactions
+                displayTransactions(transactions);
+                
+            } catch (error) {
+                console.error('Error applying filters:', error);
+                showError('Error applying filters');
+            }
+        }
+
+        // Clear all filters
+        function clearFilters() {
+            document.getElementById('filterStartDate').value = '';
+            document.getElementById('filterEndDate').value = '';
+            document.getElementById('filterAccount').value = '';
+            document.getElementById('filterCategory').value = '';
+            document.getElementById('filterSearch').value = '';
+            
+            loadRecentTransactions();
+        }
+
+        // Display transactions (extracted from loadRecentTransactions)
+        function displayTransactions(transactions) {
+            const list = document.getElementById('transactionsList');
+            
+            if (transactions.length === 0) {
+                list.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">No transactions found</p>';
+                return;
+            }
+            
+            list.innerHTML = transactions.map(t => {
+                const date = new Date(t.date).toLocaleDateString('en-GB');
+                const amountClass = t.amount < 0 ? 'amount-negative' : 'amount-positive';
+                return `
+                    <div class="transaction-item">
+                        <div class="transaction-date">${date}</div>
+                        <div class="transaction-details">
+                            <div class="transaction-payee">${t.payee_name || 'No payee'}</div>
+                            <div class="transaction-category">${t.category_name || 'Uncategorised'} • ${t.account_name}</div>
+                            ${t.note ? `<div class="transaction-category">${t.note}</div>` : ''}
+                        </div>
+                        <div class="transaction-amount ${amountClass}">
+                            £${Math.abs(t.amount).toFixed(2)}
+                        </div>
+                    </div>
+                `;
+            }).join('');
         }
     </script>
 </body>
