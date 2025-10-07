@@ -278,7 +278,10 @@
                     <textarea id="note" rows="2" placeholder="Additional details..."></textarea>
                 </div>
                 
-                <button type="submit">💾 Save Transaction</button>
+                <div style="display: flex; gap: 10px;">
+                    <button type="submit" style="flex: 1;">💾 Save Transaction</button>
+                    <button type="button" onclick="cancelEdit()" style="flex: 1; background: #6c757d;">❌ Cancel</button>
+                </div>
             </form>
         </div>
         
@@ -524,9 +527,12 @@
             }
         }
         
-        // Handle form submission
+        // Handle form submission (create or update)
         document.getElementById('transactionForm').addEventListener('submit', async (e) => {
             e.preventDefault();
+            
+            const form = e.target;
+            const isEditing = form.dataset.editingId;
             
             const date = document.getElementById('date').value;
             const time = document.getElementById('time').value;
@@ -566,33 +572,38 @@
                 account_id: parseInt(document.getElementById('account').value),
                 category_id: document.getElementById('category').value ? parseInt(document.getElementById('category').value) : null,
                 payee_id: payeeId,
-                location_id: document.getElementById('location').value ? parseInt(document.getElementById('location').value) : null,  
-                project_id: document.getElementById('project').value ? parseInt(document.getElementById('project').value) : null,    
+                location_id: document.getElementById('location').value ? parseInt(document.getElementById('location').value) : null,
+                project_id: document.getElementById('project').value ? parseInt(document.getElementById('project').value) : null,
                 note: document.getElementById('note').value || null
             };
             
             try {
-                const response = await fetch(`${API_URL}/transactions`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(transaction)
-                });
+                let response;
+                
+                if (isEditing) {
+                    // UPDATE existing transaction
+                    response = await fetch(`${API_URL}/transactions/${isEditing}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(transaction)
+                    });
+                } else {
+                    // CREATE new transaction
+                    response = await fetch(`${API_URL}/transactions`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(transaction)
+                    });
+                }
                 
                 if (response.ok) {
-                    showSuccess('Transaction saved successfully!');
-                    document.getElementById('transactionForm').reset();
-                    
-                    // Reset date and time to now
-                    const now = new Date();
-                    document.getElementById('date').valueAsDate = now;
-                    document.getElementById('time').value = now.toTimeString().slice(0, 5);
+                    showSuccess(isEditing ? 'Transaction updated successfully!' : 'Transaction saved successfully!');
+                    cancelEdit(); // Reset form
                     
                     // Reload data
                     await loadStats();
                     await loadRecentTransactions();
-                    await loadPayees(); // Refresh payee list
+                    await loadPayees();
                 } else {
                     showError('Failed to save transaction');
                 }
@@ -714,10 +725,11 @@
             
             list.innerHTML = transactions.map(t => {
                 const date = new Date(t.date).toLocaleDateString('en-GB');
+                const time = new Date(t.date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
                 const amountClass = t.amount < 0 ? 'amount-negative' : 'amount-positive';
                 return `
                     <div class="transaction-item">
-                        <div class="transaction-date">${date}</div>
+                        <div class="transaction-date">${date}<br>${time}</div>
                         <div class="transaction-details">
                             <div class="transaction-payee">${t.payee_name || 'No payee'}</div>
                             <div class="transaction-category">${t.category_name || 'Uncategorised'} • ${t.account_name}</div>
@@ -726,9 +738,112 @@
                         <div class="transaction-amount ${amountClass}">
                             £${Math.abs(t.amount).toFixed(2)}
                         </div>
+                        <div style="display: flex; gap: 5px; flex-direction: column;">
+                            <button onclick="editTransaction(${t.id})" style="padding: 5px 10px; font-size: 12px; background: #667eea;">✏️ Edit</button>
+                            <button onclick="deleteTransaction(${t.id})" style="padding: 5px 10px; font-size: 12px; background: #ef4444;">🗑️ Delete</button>
+                        </div>
                     </div>
                 `;
             }).join('');
+        }
+
+
+        // Edit transaction
+        async function editTransaction(transactionId) {
+            try {
+                // Fetch the transaction details
+                const response = await fetch(`${API_URL}/transactions/${transactionId}`);
+                const transaction = await response.json();
+                
+                // Populate the form with existing data
+                const transactionDate = new Date(transaction.date);
+                document.getElementById('date').valueAsDate = transactionDate;
+                document.getElementById('time').value = transactionDate.toTimeString().slice(0, 5);
+                document.getElementById('amount').value = transaction.amount;
+                document.getElementById('account').value = transaction.account_id;
+                document.getElementById('note').value = transaction.note || '';
+                
+                // Handle category (need to select parent first, then child)
+                if (transaction.category_id) {
+                    const category = allCategories.find(c => c.id === transaction.category_id);
+                    if (category && category.parent) {
+                        document.getElementById('parentCategory').value = category.parent;
+                        loadSubcategories(category.parent);
+                        // Wait a bit for subcategories to load
+                        setTimeout(() => {
+                            document.getElementById('category').value = transaction.category_id;
+                        }, 100);
+                    }
+                }
+                
+                // Handle optional fields
+                if (transaction.location_id) {
+                    document.getElementById('location').value = transaction.location_id;
+                }
+                if (transaction.project_id) {
+                    document.getElementById('project').value = transaction.project_id;
+                }
+                if (transaction.payee_name) {
+                    document.getElementById('payee').value = transaction.payee_name;
+                }
+                
+                // Change form button to "Update" mode
+                const form = document.getElementById('transactionForm');
+                const submitButton = form.querySelector('button[type="submit"]');
+                submitButton.textContent = '✏️ Update Transaction';
+                submitButton.style.background = '#f59e0b';
+                
+                // Store transaction ID for update
+                form.dataset.editingId = transactionId;
+                
+                // Scroll to form
+                form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                
+                showSuccess('Transaction loaded for editing. Modify and click "Update Transaction".');
+                
+            } catch (error) {
+                console.error('Error loading transaction for edit:', error);
+                showError('Failed to load transaction');
+            }
+        }
+
+        // Delete transaction
+        async function deleteTransaction(transactionId) {
+            if (!confirm('Are you sure you want to delete this transaction? This cannot be undone.')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/transactions/${transactionId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    showSuccess('Transaction deleted successfully!');
+                    await loadStats();
+                    await loadRecentTransactions();
+                } else {
+                    showError('Failed to delete transaction');
+                }
+            } catch (error) {
+                console.error('Error deleting transaction:', error);
+                showError('Error: ' + error.message);
+            }
+        }
+
+        // Cancel edit mode
+        function cancelEdit() {
+            const form = document.getElementById('transactionForm');
+            const submitButton = form.querySelector('button[type="submit"]');
+            submitButton.textContent = '💾 Save Transaction';
+            submitButton.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+            delete form.dataset.editingId;
+            form.reset();
+            
+            // Reset date and time to now
+            const now = new Date();
+            document.getElementById('date').valueAsDate = now;
+            document.getElementById('time').value = now.toTimeString().slice(0, 5);
         }
     </script>
 </body>

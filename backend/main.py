@@ -247,6 +247,48 @@ def get_transaction(
         "project_name": transaction.project.name if transaction.project else None,
     }
 
+@app.put("/transactions/{transaction_id}", response_model=schemas.TransactionResponse)
+def update_transaction(
+    transaction_id: int,
+    transaction: schemas.TransactionCreate,
+    db: Session = Depends(get_db)
+):
+    """
+    Update an existing transaction.
+    """
+    db_transaction = db.query(models.Transaction).filter(models.Transaction.id == transaction_id).first()
+    
+    if not db_transaction:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    # Update fields
+    for key, value in transaction.dict().items():
+        setattr(db_transaction, key, value)
+    
+    db_transaction.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(db_transaction)
+    
+    return db_transaction
+
+
+@app.delete("/transactions/{transaction_id}")
+def delete_transaction(
+    transaction_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Delete a transaction.
+    """
+    db_transaction = db.query(models.Transaction).filter(models.Transaction.id == transaction_id).first()
+    
+    if not db_transaction:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    db.delete(db_transaction)
+    db.commit()
+    
+    return {"message": "Transaction deleted successfully"}
 
 # ============================================
 # DASHBOARD / STATISTICS
