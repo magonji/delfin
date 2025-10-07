@@ -233,7 +233,7 @@
         </div>
         
         <div class="card">
-            <h2 style="margin-bottom: 20px;">📊 Recent Transactions</h2>
+            <h2 style="margin-bottom: 20px;">📊 Transactions</h2>
             
             <!-- Filters Section -->
             <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
@@ -467,14 +467,14 @@
         
         // Load recent transactions
         async function loadRecentTransactions() {
-            try {
-                const response = await fetch(`${API_URL}/transactions?limit=50`);
-                const transactions = await response.json();
-                displayTransactions(transactions);
-            } catch (error) {
-                console.error('Error loading transactions:', error);
-            }
+        try {
+            const response = await fetch(`${API_URL}/transactions?limit=100000`);
+            const transactions = await response.json();
+            displayTransactions(transactions);
+        } catch (error) {
+            console.error('Error loading transactions:', error);
         }
+    }
         
         // Display transactions
         function displayTransactions(transactions) {
