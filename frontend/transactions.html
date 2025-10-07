@@ -173,14 +173,13 @@
                 
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="amount">Amount (£)</label>
+                        <label for="amount">Amount</label>
                         <input type="number" id="amount" step="0.01" required placeholder="-20.50">
                     </div>
                     <div class="form-group">
-                        <label for="account">Account</label>
-                        <select id="account" required>
-                            <option value="">Select account...</option>
-                        </select>
+                        <label for="payee">Payee</label>
+                        <input type="text" id="payee" placeholder="Jiménez-Sevillano, Lidl, etc." list="payeeList">
+                        <datalist id="payeeList"></datalist>
                     </div>
                 </div>
                 
@@ -201,9 +200,10 @@
                 
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="payee">Payee</label>
-                        <input type="text" id="payee" placeholder="ASDA, Lidl, etc." list="payeeList">
-                        <datalist id="payeeList"></datalist>
+                        <label for="account">Account</label>
+                        <select id="account" required>
+                            <option value="">Select account...</option>
+                        </select>
                     </div>
                     <div class="form-group">
                         <label for="location">Location</label>
@@ -237,42 +237,47 @@
             
             <!-- Filters Section -->
             <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
-                <h3 style="margin-bottom: 15px; font-size: 16px;">🔍 Filters</h3>
-                
-                <div class="form-row">
-                    <div class="form-group" style="margin-bottom: 10px;">
-                        <label for="filterStartDate" style="font-size: 14px;">From Date</label>
-                        <input type="date" id="filterStartDate" style="padding: 8px;">
-                    </div>
-                    <div class="form-group" style="margin-bottom: 10px;">
-                        <label for="filterEndDate" style="font-size: 14px;">To Date</label>
-                        <input type="date" id="filterEndDate" style="padding: 8px;">
-                    </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleFilters()">
+                    <h3 style="margin: 0; font-size: 16px;">🔍 Filters</h3>
+                    <span id="filterToggleIcon" style="font-size: 20px; transition: transform 0.3s;">▼</span>
                 </div>
                 
-                <div class="form-row">
-                    <div class="form-group" style="margin-bottom: 10px;">
-                        <label for="filterAccount" style="font-size: 14px;">Account</label>
-                        <select id="filterAccount" style="padding: 8px;">
-                            <option value="">All accounts</option>
-                        </select>
+                <div id="filterContent" style="display: none; margin-top: 15px;">
+                    <div class="form-row">
+                        <div class="form-group" style="margin-bottom: 10px;">
+                            <label for="filterStartDate" style="font-size: 14px;">From Date</label>
+                            <input type="date" id="filterStartDate" style="padding: 8px;">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 10px;">
+                            <label for="filterEndDate" style="font-size: 14px;">To Date</label>
+                            <input type="date" id="filterEndDate" style="padding: 8px;">
+                        </div>
                     </div>
-                    <div class="form-group" style="margin-bottom: 10px;">
-                        <label for="filterCategory" style="font-size: 14px;">Category</label>
-                        <select id="filterCategory" style="padding: 8px;">
-                            <option value="">All categories</option>
-                        </select>
+                    
+                    <div class="form-row">
+                        <div class="form-group" style="margin-bottom: 10px;">
+                            <label for="filterAccount" style="font-size: 14px;">Account</label>
+                            <select id="filterAccount" style="padding: 8px;">
+                                <option value="">All accounts</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 10px;">
+                            <label for="filterCategory" style="font-size: 14px;">Category</label>
+                            <select id="filterCategory" style="padding: 8px;">
+                                <option value="">All categories</option>
+                            </select>
+                        </div>
                     </div>
-                </div>
-                
-                <div class="form-group" style="margin-bottom: 10px;">
-                    <label for="filterSearch" style="font-size: 14px;">Search (payee or note)</label>
-                    <input type="text" id="filterSearch" placeholder="Search..." style="padding: 8px;">
-                </div>
-                
-                <div style="display: flex; gap: 10px;">
-                    <button onclick="applyFilters()" style="flex: 1; padding: 10px;">Apply Filters</button>
-                    <button onclick="clearFilters()" style="flex: 1; padding: 10px; background: #6c757d;">Clear</button>
+                    
+                    <div class="form-group" style="margin-bottom: 10px;">
+                        <label for="filterSearch" style="font-size: 14px;">Search (payee or note)</label>
+                        <input type="text" id="filterSearch" placeholder="Search..." style="padding: 8px;">
+                    </div>
+                    
+                    <div style="display: flex; gap: 10px;">
+                        <button onclick="applyFilters()" style="flex: 1; padding: 10px;">Apply Filters</button>
+                        <button onclick="clearFilters()" style="flex: 1; padding: 10px; background: #6c757d;">Clear</button>
+                    </div>
                 </div>
             </div>
             
@@ -313,6 +318,7 @@
                 accounts.forEach(account => {
                     const option = document.createElement('option');
                     option.value = account.id;
+                    option.dataset.currency = account.currency;
                     option.textContent = `${account.name} (${account.currency})`;
                     select.appendChild(option);
                 });
@@ -320,6 +326,14 @@
                 console.error('Error loading accounts:', error);
             }
         }
+
+        // Update amount placeholder based on selected account
+        document.getElementById('account').addEventListener('change', (e) => {
+            const selectedOption = e.target.selectedOptions[0];
+            const currency = selectedOption?.dataset?.currency || 'GBP';
+            const symbol = getCurrencySymbol(currency);
+            document.getElementById('amount').placeholder = `${symbol}-20.50`;
+        });
         
         // Load categories
         async function loadCategories() {
@@ -485,20 +499,53 @@
                 return;
             }
             
-            list.innerHTML = transactions.map(t => {
+            // Calculate running balance for each account
+            // Group transactions by account and calculate cumulative balance
+            const accountBalances = {};
+            
+            // Initialize balances (assuming transactions are ordered by date desc)
+            // We need to calculate from oldest to newest for accurate running balance
+            const sortedTransactions = [...transactions].sort((a, b) => 
+                new Date(a.date) - new Date(b.date)
+            );
+            
+            // Calculate running balances
+            const transactionsWithBalance = sortedTransactions.map(t => {
+                if (!accountBalances[t.account_id]) {
+                    accountBalances[t.account_id] = 0;
+                }
+                accountBalances[t.account_id] += t.amount;
+                return {
+                    ...t,
+                    runningBalance: accountBalances[t.account_id]
+                };
+            });
+            
+            // Reverse back to show newest first
+            transactionsWithBalance.reverse();
+            
+            list.innerHTML = transactionsWithBalance.map(t => {
                 const date = new Date(t.date).toLocaleDateString('en-GB');
                 const time = new Date(t.date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
                 const amountClass = t.amount < 0 ? 'amount-negative' : 'amount-positive';
+                const balanceClass = t.runningBalance < 0 ? 'amount-negative' : 'amount-positive';
+                const currencySymbol = getCurrencySymbol(t.currency);
+                
                 return `
                     <div class="transaction-item">
                         <div class="transaction-date">${date}<br>${time}</div>
                         <div class="transaction-details">
                             <div class="transaction-payee">${t.payee_name || 'No payee'}</div>
-                            <div class="transaction-category">${t.category_name || 'Uncategorised'} • ${t.account_name}</div>
+                            <div class="transaction-category">${t.category_name || 'Uncategorised'} ${t.location_name ? ` (📍 ${t.location_name})` : ''}</div>
                             ${t.note ? `<div class="transaction-category">${t.note}</div>` : ''}
                         </div>
-                        <div class="transaction-amount ${amountClass}">
-                            £${Math.abs(t.amount).toFixed(2)}
+                        <div style="text-align: right;">
+                            <div class="transaction-amount ${amountClass}">
+                                ${currencySymbol}${Math.abs(t.amount).toFixed(2)}
+                            </div>
+                            <div class="${balanceClass}" style="font-size: 13px; margin-top: 4px; opacity: 0.9;">
+                                (<b>${t.account_name}:</b> ${currencySymbol}${t.runningBalance.toFixed(2)})
+                            </div>
                         </div>
                         <div style="display: flex; gap: 5px; flex-direction: column;">
                             <button onclick="editTransaction(${t.id})" style="padding: 5px 10px; font-size: 12px; background: #667eea;">✏️ Edit</button>
@@ -748,6 +795,58 @@
             setTimeout(() => {
                 element.style.display = 'none';
             }, 5000);
+        }
+
+        // Toggle filters visibility
+        function toggleFilters() {
+            const content = document.getElementById('filterContent');
+            const icon = document.getElementById('filterToggleIcon');
+            
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                icon.style.transform = 'rotate(180deg)';
+                icon.textContent = '▼';
+            } else {
+                content.style.display = 'none';
+                icon.style.transform = 'rotate(0deg)';
+                icon.textContent = '▼';
+            }
+        }
+
+        // Get currency symbol
+        function getCurrencySymbol(currency) {
+            const symbols = {
+                'GBP': '£',
+                'EUR': '€',
+                'USD': '$',
+                'JPY': '¥',
+                'CNY': '¥',
+                'CHF': 'Fr',
+                'CAD': 'CA$',
+                'AUD': 'A$',
+                'NZD': 'NZ$',
+                'INR': '₹',
+                'BRL': 'R$',
+                'RUB': '₽',
+                'KRW': '₩',
+                'SEK': 'kr',
+                'NOK': 'kr',
+                'DKK': 'kr',
+                'PLN': 'zł',
+                'MXN': 'MX$',
+                'ARS': 'AR$',
+                'CLP': 'CL$',
+                'COP': 'CO$',
+                'PEN': 'S/',
+                'TRY': '₺',
+                'ZAR': 'R',
+                'THB': '฿',
+                'SGD': 'S$',
+                'HKD': 'HK$',
+                'MYR': 'RM'
+            };
+            
+            return symbols[currency] || currency; // Fallback to currency code if not found
         }
     </script>
 </body>
