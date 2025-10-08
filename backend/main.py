@@ -214,6 +214,79 @@ def create_transaction(
     return db_transaction
 
 
+@app.get("/transactions/transfers")
+def get_transfers(db: Session = Depends(get_db)):
+    """
+    Get transfer transactions grouped together.
+    Identifies Transfer In/Out pairs and groups them.
+    """
+    from sqlalchemy import or_
+    
+    # Get all transactions with Transfer locations
+    transfer_in_location = db.query(models.Location).filter(models.Location.name == "Transfer In").first()
+    transfer_out_location = db.query(models.Location).filter(models.Location.name == "Transfer Out").first()
+    
+    if not transfer_in_location or not transfer_out_location:
+        return []
+    
+    # Get all transfer transactions
+    transfers = db.query(models.Transaction).filter(
+        or_(
+            models.Transaction.location_id == transfer_in_location.id,
+            models.Transaction.location_id == transfer_out_location.id
+        )
+    ).order_by(models.Transaction.date.desc()).all()
+    
+    # Group transfers by datetime and amount
+    grouped_transfers = []
+    processed_ids = set()
+    
+    for trans in transfers:
+        if trans.id in processed_ids:
+            continue
+            
+        # Look for matching transfer (same datetime, opposite amount)
+        matching = None
+        for other in transfers:
+            if other.id != trans.id and other.id not in processed_ids:
+                # Same datetime, opposite signs
+                if (trans.date == other.date and 
+                    trans.amount * other.amount < 0 and
+                    trans.location_id != other.location_id):
+                    matching = other
+                    break
+        
+        if matching:
+            # Determine which is out and which is in
+            if trans.amount < 0:
+                transfer_out = trans
+                transfer_in = matching
+            else:
+                transfer_out = matching
+                transfer_in = trans
+            
+            grouped_transfers.append({
+                "id": f"transfer_{transfer_out.id}_{transfer_in.id}",
+                "date": str(trans.date),
+                "from_account_id": transfer_out.account_id,
+                "from_account_name": transfer_out.account.name if transfer_out.account else None,
+                "from_amount": abs(transfer_out.amount),
+                "from_currency": transfer_out.currency,
+                "to_account_id": transfer_in.account_id,
+                "to_account_name": transfer_in.account.name if transfer_in.account else None,
+                "to_amount": transfer_in.amount,
+                "to_currency": transfer_in.currency,
+                "note": transfer_out.note or transfer_in.note,
+                "transfer_out_id": transfer_out.id,
+                "transfer_in_id": transfer_in.id
+            })
+            
+            processed_ids.add(trans.id)
+            processed_ids.add(matching.id)
+    
+    return grouped_transfers
+
+
 @app.get("/transactions/{transaction_id}", response_model=schemas.TransactionWithDetails)
 def get_transaction(
     transaction_id: int,
@@ -289,6 +362,83 @@ def delete_transaction(
     db.commit()
     
     return {"message": "Transaction deleted successfully"}
+
+
+from pydantic import BaseModel
+
+class TransferCreate(BaseModel):
+    date: datetime
+    from_account_id: int
+    to_account_id: int
+    from_amount: float
+    to_amount: Optional[float] = None  # If None, uses from_amount
+    note: Optional[str] = None
+
+@app.post("/transactions/transfer")
+def create_transfer(
+    transfer: TransferCreate,
+    db: Session = Depends(get_db)
+):
+    """
+    Create a transfer between two accounts.
+    Creates two transactions: one negative (out) and one positive (in).
+    """
+    # Get Transfer locations
+    transfer_out_loc = db.query(models.Location).filter(models.Location.name == "Transfer Out").first()
+    transfer_in_loc = db.query(models.Location).filter(models.Location.name == "Transfer In").first()
+    
+    if not transfer_out_loc:
+        transfer_out_loc = models.Location(name="Transfer Out")
+        db.add(transfer_out_loc)
+        db.flush()
+    
+    if not transfer_in_loc:
+        transfer_in_loc = models.Location(name="Transfer In")
+        db.add(transfer_in_loc)
+        db.flush()
+    
+    # Get accounts to determine currencies
+    from_account = db.query(models.Account).filter(models.Account.id == transfer.from_account_id).first()
+    to_account = db.query(models.Account).filter(models.Account.id == transfer.to_account_id).first()
+    
+    if not from_account or not to_account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    
+    # If to_amount not specified, use from_amount
+    to_amount = transfer.to_amount if transfer.to_amount else transfer.from_amount
+    
+    # Create outgoing transaction
+    transaction_out = models.Transaction(
+        date=transfer.date,
+        amount=-abs(transfer.from_amount),
+        currency=from_account.currency,
+        account_id=transfer.from_account_id,
+        location_id=transfer_out_loc.id,
+        note=transfer.note
+    )
+    db.add(transaction_out)
+    
+    # Create incoming transaction
+    transaction_in = models.Transaction(
+        date=transfer.date,
+        amount=abs(to_amount),
+        currency=to_account.currency,
+        account_id=transfer.to_account_id,
+        location_id=transfer_in_loc.id,
+        note=transfer.note
+    )
+    db.add(transaction_in)
+    
+    db.commit()
+    db.refresh(transaction_out)
+    db.refresh(transaction_in)
+    
+    return {
+        "transfer_out": transaction_out,
+        "transfer_in": transaction_in,
+        "message": "Transfer created successfully"
+    }
+
 
 # ============================================
 # DASHBOARD / STATISTICS

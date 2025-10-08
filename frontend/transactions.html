@@ -178,7 +178,7 @@
                     </div>
                     <div class="form-group">
                         <label for="payee">Payee</label>
-                        <input type="text" id="payee" placeholder="Jiménez-Sevillano, Lidl, etc." list="payeeList">
+                        <input type="text" id="payee" placeholder="ASDA, Lidl, etc." list="payeeList">
                         <datalist id="payeeList"></datalist>
                     </div>
                 </div>
@@ -233,54 +233,101 @@
         </div>
         
         <div class="card">
-            <h2 style="margin-bottom: 20px;">📊 Transactions</h2>
-            
-            <!-- Filters Section -->
-            <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleFilters()">
-                    <h3 style="margin: 0; font-size: 16px;">🔍 Filters</h3>
-                    <span id="filterToggleIcon" style="font-size: 20px; transition: transform 0.3s;">▼</span>
+            <h2 style="margin-bottom: 20px;">🔄 Transfer Between Accounts</h2>
+            <form id="transferForm">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="transferDate">Date</label>
+                        <input type="date" id="transferDate" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="transferTime">Time</label>
+                        <input type="time" id="transferTime" required>
+                    </div>
                 </div>
                 
-                <div id="filterContent" style="display: none; margin-top: 15px;">
-                    <div class="form-row">
-                        <div class="form-group" style="margin-bottom: 10px;">
-                            <label for="filterStartDate" style="font-size: 14px;">From Date</label>
-                            <input type="date" id="filterStartDate" style="padding: 8px;">
-                        </div>
-                        <div class="form-group" style="margin-bottom: 10px;">
-                            <label for="filterEndDate" style="font-size: 14px;">To Date</label>
-                            <input type="date" id="filterEndDate" style="padding: 8px;">
-                        </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="fromAccount">From Account</label>
+                        <select id="fromAccount" required>
+                            <option value="">Select account...</option>
+                        </select>
                     </div>
-                    
-                    <div class="form-row">
-                        <div class="form-group" style="margin-bottom: 10px;">
-                            <label for="filterAccount" style="font-size: 14px;">Account</label>
-                            <select id="filterAccount" style="padding: 8px;">
-                                <option value="">All accounts</option>
-                            </select>
-                        </div>
-                        <div class="form-group" style="margin-bottom: 10px;">
-                            <label for="filterCategory" style="font-size: 14px;">Category</label>
-                            <select id="filterCategory" style="padding: 8px;">
-                                <option value="">All categories</option>
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <div class="form-group" style="margin-bottom: 10px;">
-                        <label for="filterSearch" style="font-size: 14px;">Search (payee or note)</label>
-                        <input type="text" id="filterSearch" placeholder="Search..." style="padding: 8px;">
-                    </div>
-                    
-                    <div style="display: flex; gap: 10px;">
-                        <button onclick="applyFilters()" style="flex: 1; padding: 10px;">Apply Filters</button>
-                        <button onclick="clearFilters()" style="flex: 1; padding: 10px; background: #6c757d;">Clear</button>
+                    <div class="form-group">
+                        <label for="toAccount">To Account</label>
+                        <select id="toAccount" required>
+                            <option value="">Select account...</option>
+                        </select>
                     </div>
                 </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="fromAmount">Amount to Transfer</label>
+                        <input type="number" id="fromAmount" step="0.01" required placeholder="100.00">
+                    </div>
+                    <div class="form-group">
+                        <label for="toAmount">Amount Received (if different currency)</label>
+                        <input type="number" id="toAmount" step="0.01" placeholder="Leave empty if same currency">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="transferNote">Note (optional)</label>
+                    <textarea id="transferNote" rows="2" placeholder="Transfer details..."></textarea>
+                </div>
+                
+                <button type="submit">🔄 Create Transfer</button>
+            </form>
+        </div>
+        
+        <div class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleFilters()">
+                <h2 style="margin: 0;">🔍 Filters</h2>
+                <span id="filterToggleIcon" style="font-size: 20px; transition: transform 0.3s;">▼</span>
             </div>
             
+            <div id="filterContent" style="display: none; margin-top: 15px; background: #f8f9fa; padding: 20px; border-radius: 10px;">
+                <div class="form-row">
+                    <div class="form-group" style="margin-bottom: 10px;">
+                        <label for="filterStartDate" style="font-size: 14px;">From Date</label>
+                        <input type="date" id="filterStartDate" style="padding: 8px;">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 10px;">
+                        <label for="filterEndDate" style="font-size: 14px;">To Date</label>
+                        <input type="date" id="filterEndDate" style="padding: 8px;">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group" style="margin-bottom: 10px;">
+                        <label for="filterAccount" style="font-size: 14px;">Account</label>
+                        <select id="filterAccount" style="padding: 8px;">
+                            <option value="">All accounts</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 10px;">
+                        <label for="filterCategory" style="font-size: 14px;">Category</label>
+                        <select id="filterCategory" style="padding: 8px;">
+                            <option value="">All categories</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-group" style="margin-bottom: 10px;">
+                    <label for="filterSearch" style="font-size: 14px;">Search (payee or note)</label>
+                    <input type="text" id="filterSearch" placeholder="Search..." style="padding: 8px;">
+                </div>
+                
+                <div style="display: flex; gap: 10px;">
+                    <button onclick="applyFilters()" style="flex: 1; padding: 10px;">Apply Filters</button>
+                    <button onclick="clearFilters()" style="flex: 1; padding: 10px; background: #6c757d;">Clear</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h2 style="margin-bottom: 20px;">📊 Transactions</h2>
             <div class="transactions-list" id="transactionsList">
                 <!-- Transactions will be loaded here -->
             </div>
@@ -290,8 +337,46 @@
     <script>
         const API_URL = 'http://localhost:8000';
         
-        // Global variable to store all categories
+        // Global variables
         let allCategories = [];
+        let regularTransactions = [];
+        let transferTransactions = [];
+        
+        // Get currency symbol
+        function getCurrencySymbol(currency) {
+            const symbols = {
+                'GBP': '£',
+                'EUR': '€',
+                'USD': '$',
+                'JPY': '¥',
+                'CNY': '¥',
+                'CHF': 'Fr',
+                'CAD': 'CA$',
+                'AUD': 'A$',
+                'NZD': 'NZ$',
+                'INR': '₹',
+                'BRL': 'R$',
+                'RUB': '₽',
+                'KRW': '₩',
+                'SEK': 'kr',
+                'NOK': 'kr',
+                'DKK': 'kr',
+                'PLN': 'zł',
+                'MXN': 'MX$',
+                'ARS': 'AR$',
+                'CLP': 'CL$',
+                'COP': 'CO$',
+                'PEN': 'S/',
+                'TRY': '₺',
+                'ZAR': 'R',
+                'THB': '฿',
+                'SGD': 'S$',
+                'HKD': 'HK$',
+                'MYR': 'RM'
+            };
+            
+            return symbols[currency] || currency;
+        }
         
         // Load initial data
         document.addEventListener('DOMContentLoaded', async () => {
@@ -300,13 +385,18 @@
             await loadPayees();
             await loadLocations();
             await loadProjects();
+            await loadTransferAccounts();
             await populateFilterDropdowns();
             await loadRecentTransactions();
             
-            // Set current date and time
+            // Set current date and time for transaction form
             const now = new Date();
             document.getElementById('date').valueAsDate = now;
             document.getElementById('time').value = now.toTimeString().slice(0, 5);
+            
+            // Set current date and time for transfer form
+            document.getElementById('transferDate').valueAsDate = now;
+            document.getElementById('transferTime').value = now.toTimeString().slice(0, 5);
         });
         
         // Load accounts
@@ -326,7 +416,7 @@
                 console.error('Error loading accounts:', error);
             }
         }
-
+        
         // Update amount placeholder based on selected account
         document.getElementById('account').addEventListener('change', (e) => {
             const selectedOption = e.target.selectedOptions[0];
@@ -445,6 +535,33 @@
             }
         }
         
+        // Load accounts for transfer form
+        async function loadTransferAccounts() {
+            try {
+                const response = await fetch(`${API_URL}/accounts`);
+                const accounts = await response.json();
+                
+                const fromSelect = document.getElementById('fromAccount');
+                const toSelect = document.getElementById('toAccount');
+                
+                accounts.forEach(account => {
+                    const option1 = document.createElement('option');
+                    option1.value = account.id;
+                    option1.dataset.currency = account.currency;
+                    option1.textContent = `${account.name} (${account.currency})`;
+                    fromSelect.appendChild(option1);
+                    
+                    const option2 = document.createElement('option');
+                    option2.value = account.id;
+                    option2.dataset.currency = account.currency;
+                    option2.textContent = `${account.name} (${account.currency})`;
+                    toSelect.appendChild(option2);
+                });
+            } catch (error) {
+                console.error('Error loading accounts for transfer:', error);
+            }
+        }
+        
         // Populate filter dropdowns
         async function populateFilterDropdowns() {
             // Populate accounts filter
@@ -462,7 +579,7 @@
                 console.error('Error loading filter accounts:', error);
             }
             
-            // Populate categories filter (all categories, not just parents)
+            // Populate categories filter
             try {
                 const filterCategory = document.getElementById('filterCategory');
                 allCategories.forEach(category => {
@@ -479,38 +596,103 @@
             }
         }
         
-        // Load recent transactions
+        // Load transactions
         async function loadRecentTransactions() {
-        try {
-            const response = await fetch(`${API_URL}/transactions?limit=100000`);
-            const transactions = await response.json();
-            displayTransactions(transactions);
-        } catch (error) {
-            console.error('Error loading transactions:', error);
+            try {
+                // Load regular transactions
+                const transResponse = await fetch(`${API_URL}/transactions?limit=100000`);
+                const allTrans = await transResponse.json();
+                
+                // Load transfers
+                const transferResponse = await fetch(`${API_URL}/transactions/transfers`);
+                transferTransactions = await transferResponse.json();
+                
+                // Filter out transfer transactions from regular list
+                const transferIds = new Set();
+                transferTransactions.forEach(t => {
+                    if (t.transfer_out_id) transferIds.add(t.transfer_out_id);
+                    if (t.transfer_in_id) transferIds.add(t.transfer_in_id);
+                });
+                
+                regularTransactions = allTrans.filter(t => !transferIds.has(t.id));
+                
+                // Display combined list
+                displayCombinedTransactions();
+                
+            } catch (error) {
+                console.error('Error loading transactions:', error);
+            }
         }
-    }
         
-        // Display transactions
-        function displayTransactions(transactions) {
+        function displayCombinedTransactions() {
+            // Combine and sort by date
+            const combined = [
+                ...regularTransactions.map(t => ({...t, type: 'transaction'})),
+                ...transferTransactions.map(t => ({...t, type: 'transfer'}))
+            ].sort((a, b) => new Date(b.date) - new Date(a.date));
+            
+            displayMixedTransactions(combined);
+        }
+        
+        function displayMixedTransactions(items) {
             const list = document.getElementById('transactionsList');
             
-            if (transactions.length === 0) {
+            if (items.length === 0) {
                 list.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">No transactions found</p>';
                 return;
             }
             
-            // Calculate running balance for each account
-            // Group transactions by account and calculate cumulative balance
+            // Calculate running balances including transfers
             const accountBalances = {};
             
-            // Initialize balances (assuming transactions are ordered by date desc)
-            // We need to calculate from oldest to newest for accurate running balance
-            const sortedTransactions = [...transactions].sort((a, b) => 
-                new Date(a.date) - new Date(b.date)
-            );
+            // Combine regular transactions and transfers for balance calculation
+            const allForBalance = [];
+            
+            // Add regular transactions
+            regularTransactions.forEach(t => {
+                allForBalance.push({
+                    id: t.id,
+                    date: new Date(t.date),
+                    account_id: t.account_id,
+                    amount: t.amount,
+                    account_name: t.account_name,
+                    currency: t.currency,
+                    type: 'transaction'
+                });
+            });
+            
+            // Add transfers as two separate balance entries
+            transferTransactions.forEach(t => {
+                // Transfer out (negative)
+                allForBalance.push({
+                    id: `transfer_out_${t.transfer_out_id}`,
+                    date: new Date(t.date),
+                    account_id: t.from_account_id,
+                    amount: -t.from_amount,
+                    account_name: t.from_account_name,
+                    currency: t.from_currency,
+                    type: 'transfer_out',
+                    original_transaction_id: t.transfer_out_id
+                });
+                
+                // Transfer in (positive)
+                allForBalance.push({
+                    id: `transfer_in_${t.transfer_in_id}`,
+                    date: new Date(t.date),
+                    account_id: t.to_account_id,
+                    amount: t.to_amount,
+                    account_name: t.to_account_name,
+                    currency: t.to_currency,
+                    type: 'transfer_in',
+                    original_transaction_id: t.transfer_in_id
+                });
+            });
+            
+            // Sort by date (oldest first)
+            allForBalance.sort((a, b) => a.date - b.date);
             
             // Calculate running balances
-            const transactionsWithBalance = sortedTransactions.map(t => {
+            const transactionsWithBalance = allForBalance.map(t => {
                 if (!accountBalances[t.account_id]) {
                     accountBalances[t.account_id] = 0;
                 }
@@ -521,42 +703,112 @@
                 };
             });
             
-            // Reverse back to show newest first
-            transactionsWithBalance.reverse();
+            // Create lookup for balances by original transaction id
+            const balanceLookup = {};
+            transactionsWithBalance.forEach(t => {
+                if (t.type === 'transaction') {
+                    balanceLookup[t.id] = t.runningBalance;
+                }
+            });
             
-            list.innerHTML = transactionsWithBalance.map(t => {
-                const date = new Date(t.date).toLocaleDateString('en-GB');
-                const time = new Date(t.date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-                const amountClass = t.amount < 0 ? 'amount-negative' : 'amount-positive';
-                const balanceClass = t.runningBalance < 0 ? 'amount-negative' : 'amount-positive';
-                const currencySymbol = getCurrencySymbol(t.currency);
-                
-                return `
-                    <div class="transaction-item">
-                        <div class="transaction-date">${date}<br>${time}</div>
-                        <div class="transaction-details">
-                            <div class="transaction-payee">${t.payee_name || 'No payee'}</div>
-                            <div class="transaction-category">${t.category_name || 'Uncategorised'} ${t.location_name ? ` (📍 ${t.location_name})` : ''}</div>
-                            ${t.note ? `<div class="transaction-category">${t.note}</div>` : ''}
-                        </div>
-                        <div style="text-align: right;">
-                            <div class="transaction-amount ${amountClass}">
-                                ${currencySymbol}${Math.abs(t.amount).toFixed(2)}
-                            </div>
-                            <div class="${balanceClass}" style="font-size: 13px; margin-top: 4px; opacity: 0.9;">
-                                (<b>${t.account_name}:</b> ${currencySymbol}${t.runningBalance.toFixed(2)})
-                            </div>
-                        </div>
-                        <div style="display: flex; gap: 5px; flex-direction: column;">
-                            <button onclick="editTransaction(${t.id})" style="padding: 5px 10px; font-size: 12px; background: #667eea;">✏️ Edit</button>
-                            <button onclick="deleteTransaction(${t.id})" style="padding: 5px 10px; font-size: 12px; background: #ef4444;">🗑️ Delete</button>
-                        </div>
-                    </div>
-                `;
+            list.innerHTML = items.map(item => {
+                if (item.type === 'transfer') {
+                    return displayTransferItem(item);
+                } else {
+                    return displayRegularTransaction(item, balanceLookup[item.id]);
+                }
             }).join('');
         }
         
-        // Apply filters to transactions
+        function displayTransferItem(transfer) {
+            const date = new Date(transfer.date).toLocaleDateString('en-GB');
+            const time = new Date(transfer.date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+            
+            const sameCurrency = transfer.from_currency === transfer.to_currency;
+            const fromSymbol = getCurrencySymbol(transfer.from_currency);
+            const toSymbol = getCurrencySymbol(transfer.to_currency);
+            
+            let amountDisplay;
+            if (sameCurrency) {
+                amountDisplay = `<div style="color: #555; font-size: 18px; font-weight: bold;">${fromSymbol}${transfer.from_amount.toFixed(2)}</div>`;
+            } else {
+                const exchangeRate = (transfer.to_amount / transfer.from_amount).toFixed(4);
+                amountDisplay = `
+                    <div style="color: #555; font-size: 16px; font-weight: bold;">
+                        ${fromSymbol}${transfer.from_amount.toFixed(2)} → ${toSymbol}${transfer.to_amount.toFixed(2)}
+                    </div>
+                    <div style="font-size: 11px; color: #888; margin-top: 2px;">
+                        Rate: 1 ${transfer.from_currency} = ${exchangeRate} ${transfer.to_currency}
+                    </div>
+                `;
+            }
+            
+            return `
+                <div class="transaction-item" style="background: #f0f4ff;">
+                    <div class="transaction-date">${date}<br>${time}</div>
+                    <div class="transaction-details">
+                        <div class="transaction-payee">🔄 Transfer</div>
+                        <div class="transaction-category">${transfer.from_account_name} → ${transfer.to_account_name}</div>
+                        ${transfer.note ? `<div class="transaction-category">${transfer.note}</div>` : ''}
+                    </div>
+                    <div style="text-align: right;">
+                        ${amountDisplay}
+                    </div>
+                    <div style="display: flex; gap: 5px; flex-direction: column;">
+                        <button onclick="deleteTransfer('${transfer.transfer_out_id}', '${transfer.transfer_in_id}')" style="padding: 5px 10px; font-size: 12px; background: #ef4444;">🗑️</button>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function displayRegularTransaction(t, runningBalance) {
+            const date = new Date(t.date).toLocaleDateString('en-GB');
+            const time = new Date(t.date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+            const amountClass = t.amount < 0 ? 'amount-negative' : 'amount-positive';
+            const balanceClass = runningBalance < 0 ? 'amount-negative' : 'amount-positive';
+            const currencySymbol = getCurrencySymbol(t.currency);
+            
+            return `
+                <div class="transaction-item">
+                    <div class="transaction-date">${date}<br>${time}</div>
+                    <div class="transaction-details">
+                        <div class="transaction-payee">${t.payee_name || 'No payee'}</div>
+                        <div class="transaction-category">${t.category_name || 'Uncategorised'} ${t.location_name ? ` (📍 ${t.location_name})` : ''}</div>
+                        ${t.note ? `<div class="transaction-category">${t.note}</div>` : ''}
+                    </div>
+                    <div style="text-align: right;">
+                        <div class="transaction-amount ${amountClass}">
+                            ${currencySymbol}${Math.abs(t.amount).toFixed(2)}
+                        </div>
+                        ${runningBalance !== undefined ? `
+                            <div class="${balanceClass}" style="font-size: 13px; margin-top: 4px; opacity: 0.9;">
+                                (<b>${t.account_name}:</b> ${currencySymbol}${runningBalance.toFixed(2)})
+                            </div>
+                        ` : ''}
+                    </div>
+                    <div style="display: flex; gap: 5px; flex-direction: column;">
+                        <button onclick="editTransaction(${t.id})" style="padding: 5px 10px; font-size: 12px; background: #667eea;">✏️</button>
+                        <button onclick="deleteTransaction(${t.id})" style="padding: 5px 10px; font-size: 12px; background: #ef4444;">🗑️</button>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Toggle filters visibility
+        function toggleFilters() {
+            const content = document.getElementById('filterContent');
+            const icon = document.getElementById('filterToggleIcon');
+            
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                icon.style.transform = 'rotate(180deg)';
+            } else {
+                content.style.display = 'none';
+                icon.style.transform = 'rotate(0deg)';
+            }
+        }
+        
+        // Apply filters
         async function applyFilters() {
             const startDate = document.getElementById('filterStartDate').value;
             const endDate = document.getElementById('filterEndDate').value;
@@ -564,37 +816,99 @@
             const categoryId = document.getElementById('filterCategory').value;
             const searchText = document.getElementById('filterSearch').value.toLowerCase();
             
-            // Build query parameters
-            const params = new URLSearchParams();
-            params.append('limit', '100');
+            // Filter regular transactions
+            let filtered = [...regularTransactions];
             
-            if (startDate) params.append('start_date', startDate);
-            if (endDate) params.append('end_date', endDate);
-            if (accountId) params.append('account_id', accountId);
-            if (categoryId) params.append('category_id', categoryId);
-            
-            try {
-                const response = await fetch(`${API_URL}/transactions?${params.toString()}`);
-                let transactions = await response.json();
-                
-                // Apply client-side text search
-                if (searchText) {
-                    transactions = transactions.filter(t => {
-                        const payeeName = (t.payee_name || '').toLowerCase();
-                        const note = (t.note || '').toLowerCase();
-                        return payeeName.includes(searchText) || note.includes(searchText);
-                    });
-                }
-                
-                displayTransactions(transactions);
-                
-            } catch (error) {
-                console.error('Error applying filters:', error);
-                showError('Error applying filters');
+            if (startDate) {
+                filtered = filtered.filter(t => new Date(t.date) >= new Date(startDate));
             }
+            if (endDate) {
+                filtered = filtered.filter(t => new Date(t.date) <= new Date(endDate));
+            }
+            if (accountId) {
+                filtered = filtered.filter(t => t.account_id === parseInt(accountId));
+            }
+            if (categoryId) {
+                filtered = filtered.filter(t => t.category_id === parseInt(categoryId));
+            }
+            if (searchText) {
+                filtered = filtered.filter(t => {
+                    const payeeName = (t.payee_name || '').toLowerCase();
+                    const note = (t.note || '').toLowerCase();
+                    return payeeName.includes(searchText) || note.includes(searchText);
+                });
+            }
+            
+            // Filter transfers
+            let filteredTransfers = [...transferTransactions];
+            
+            if (startDate) {
+                filteredTransfers = filteredTransfers.filter(t => new Date(t.date) >= new Date(startDate));
+            }
+            if (endDate) {
+                filteredTransfers = filteredTransfers.filter(t => new Date(t.date) <= new Date(endDate));
+            }
+            if (accountId) {
+                const accId = parseInt(accountId);
+                filteredTransfers = filteredTransfers.filter(t => 
+                    t.from_account_id === accId || t.to_account_id === accId
+                );
+            }
+            if (searchText) {
+                filteredTransfers = filteredTransfers.filter(t => {
+                    const note = (t.note || '').toLowerCase();
+                    return note.includes(searchText);
+                });
+            }
+            
+            // Combine and display
+            const combined = [
+                ...filtered.map(t => ({...t, type: 'transaction'})),
+                ...filteredTransfers.map(t => ({...t, type: 'transfer'}))
+            ].sort((a, b) => new Date(b.date) - new Date(a.date));
+            
+            // Calculate balances for filtered regular transactions
+            const accountBalances = {};
+            const sortedFiltered = [...filtered].sort((a, b) => 
+                new Date(a.date) - new Date(b.date)
+            );
+            
+            const transactionsWithBalance = sortedFiltered.map(t => {
+                if (!accountBalances[t.account_id]) {
+                    accountBalances[t.account_id] = 0;
+                }
+                accountBalances[t.account_id] += t.amount;
+                return {
+                    ...t,
+                    runningBalance: accountBalances[t.account_id]
+                };
+            });
+            
+            transactionsWithBalance.reverse();
+            
+            // Create lookup
+            const balanceLookup = {};
+            transactionsWithBalance.forEach(t => {
+                balanceLookup[t.id] = t.runningBalance;
+            });
+            
+            // Display
+            const list = document.getElementById('transactionsList');
+            if (combined.length === 0) {
+                list.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">No transactions found</p>';
+                return;
+            }
+            
+            list.innerHTML = combined.map(item => {
+                if (item.type === 'transfer') {
+                    return displayTransferItem(item);
+                } else {
+                    return displayRegularTransaction(item, balanceLookup[item.id]);
+                }
+            }).join('');
         }
         
-        // Clear all filters
+        // Clear filters
         function clearFilters() {
             document.getElementById('filterStartDate').value = '';
             document.getElementById('filterEndDate').value = '';
@@ -602,7 +916,25 @@
             document.getElementById('filterCategory').value = '';
             document.getElementById('filterSearch').value = '';
             
-            loadRecentTransactions();
+            displayCombinedTransactions();
+        }
+        
+        // Delete transfer
+        async function deleteTransfer(outId, inId) {
+            if (!confirm('Are you sure you want to delete this transfer? This will delete both transactions.')) {
+                return;
+            }
+            
+            try {
+                await fetch(`${API_URL}/transactions/${outId}`, { method: 'DELETE' });
+                await fetch(`${API_URL}/transactions/${inId}`, { method: 'DELETE' });
+                
+                showSuccess('Transfer deleted successfully!');
+                await loadRecentTransactions();
+            } catch (error) {
+                console.error('Error deleting transfer:', error);
+                showError('Error deleting transfer');
+            }
         }
         
         // Edit transaction
@@ -700,7 +1032,7 @@
             document.getElementById('time').value = now.toTimeString().slice(0, 5);
         }
         
-        // Handle form submission (create or update)
+        // Handle transaction form submission
         document.getElementById('transactionForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             
@@ -779,6 +1111,60 @@
             }
         });
         
+        // Handle transfer form submission
+        document.getElementById('transferForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const date = document.getElementById('transferDate').value;
+            const time = document.getElementById('transferTime').value;
+            const datetime = `${date}T${time}:00`;
+            
+            const fromAccountId = parseInt(document.getElementById('fromAccount').value);
+            const toAccountId = parseInt(document.getElementById('toAccount').value);
+            
+            if (fromAccountId === toAccountId) {
+                showError('Cannot transfer to the same account!');
+                return;
+            }
+            
+            const fromAmount = parseFloat(document.getElementById('fromAmount').value);
+            const toAmountInput = document.getElementById('toAmount').value;
+            const toAmount = toAmountInput ? parseFloat(toAmountInput) : null;
+            
+            const transfer = {
+                date: datetime,
+                from_account_id: fromAccountId,
+                to_account_id: toAccountId,
+                from_amount: fromAmount,
+                to_amount: toAmount,
+                note: document.getElementById('transferNote').value || null
+            };
+            
+            try {
+                const response = await fetch(`${API_URL}/transactions/transfer`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(transfer)
+                });
+                
+                if (response.ok) {
+                    showSuccess('Transfer created successfully!');
+                    document.getElementById('transferForm').reset();
+                    
+                    // Reset date and time to now
+                    const now = new Date();
+                    document.getElementById('transferDate').valueAsDate = now;
+                    document.getElementById('transferTime').value = now.toTimeString().slice(0, 5);
+                    
+                    await loadRecentTransactions();
+                } else {
+                    showError('Failed to create transfer');
+                }
+            } catch (error) {
+                showError('Error: ' + error.message);
+            }
+        });
+        
         function showSuccess(message) {
             const element = document.getElementById('successMessage');
             element.textContent = message;
@@ -795,58 +1181,6 @@
             setTimeout(() => {
                 element.style.display = 'none';
             }, 5000);
-        }
-
-        // Toggle filters visibility
-        function toggleFilters() {
-            const content = document.getElementById('filterContent');
-            const icon = document.getElementById('filterToggleIcon');
-            
-            if (content.style.display === 'none') {
-                content.style.display = 'block';
-                icon.style.transform = 'rotate(180deg)';
-                icon.textContent = '▼';
-            } else {
-                content.style.display = 'none';
-                icon.style.transform = 'rotate(0deg)';
-                icon.textContent = '▼';
-            }
-        }
-
-        // Get currency symbol
-        function getCurrencySymbol(currency) {
-            const symbols = {
-                'GBP': '£',
-                'EUR': '€',
-                'USD': '$',
-                'JPY': '¥',
-                'CNY': '¥',
-                'CHF': 'Fr',
-                'CAD': 'CA$',
-                'AUD': 'A$',
-                'NZD': 'NZ$',
-                'INR': '₹',
-                'BRL': 'R$',
-                'RUB': '₽',
-                'KRW': '₩',
-                'SEK': 'kr',
-                'NOK': 'kr',
-                'DKK': 'kr',
-                'PLN': 'zł',
-                'MXN': 'MX$',
-                'ARS': 'AR$',
-                'CLP': 'CL$',
-                'COP': 'CO$',
-                'PEN': 'S/',
-                'TRY': '₺',
-                'ZAR': 'R',
-                'THB': '฿',
-                'SGD': 'S$',
-                'HKD': 'HK$',
-                'MYR': 'RM'
-            };
-            
-            return symbols[currency] || currency; // Fallback to currency code if not found
         }
     </script>
 </body>
