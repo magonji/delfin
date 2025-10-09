@@ -397,6 +397,94 @@
             // Set current date and time for transfer form
             document.getElementById('transferDate').valueAsDate = now;
             document.getElementById('transferTime').value = now.toTimeString().slice(0, 5);
+
+            document.getElementById('payee').addEventListener('blur', async function() {
+                const payeeName = this.value.trim();
+                
+                if (!payeeName) return;
+                
+                const commonValues = getMostCommonValuesForPayee(payeeName);
+                
+                if (!commonValues) return;
+                
+                // Autocomplete category
+                if (commonValues.categoryId) {
+                    const category = allCategories.find(c => c.id === commonValues.categoryId);
+                    if (category && category.parent) {
+                        document.getElementById('parentCategory').value = category.parent;
+                        loadSubcategories(category.parent);
+                        
+                        // Wait until subcategories are loaded
+                        setTimeout(() => {
+                            document.getElementById('category').value = commonValues.categoryId;
+                            // Añadir indicador visual
+                            document.getElementById('category').style.background = '#e8f5e9';
+                            setTimeout(() => {
+                                document.getElementById('category').style.background = '';
+                            }, 1000);
+                        }, 100);
+                        
+                        // visual indicator
+                        document.getElementById('parentCategory').style.background = '#e8f5e9';
+                        setTimeout(() => {
+                            document.getElementById('parentCategory').style.background = '';
+                        }, 1000);
+                    }
+                }
+                
+                // Autocomplete location
+                if (commonValues.locationId) {
+                    document.getElementById('location').value = commonValues.locationId;
+                    // Indicador visual
+                    document.getElementById('location').style.background = '#e8f5e9';
+                    setTimeout(() => {
+                        document.getElementById('location').style.background = '';
+                    }, 1000);
+                }
+                
+                // Autocomplete account
+                if (commonValues.accountId) {
+                    document.getElementById('account').value = commonValues.accountId;
+                    // Indicador visual
+                    document.getElementById('account').style.background = '#e8f5e9';
+                    setTimeout(() => {
+                        document.getElementById('account').style.background = '';
+                    }, 1000);
+                    
+                    // Update the right currency
+                    const event = new Event('change');
+                    document.getElementById('account').dispatchEvent(event);
+                }
+
+                // Autocomplete project
+                if (commonValues.projectId) {
+                    document.getElementById('project').value = commonValues.projectId;
+                    // Indicador visual
+                    document.getElementById('project').style.background = '#e8f5e9';
+                    setTimeout(() => {
+                        document.getElementById('project').style.background = '';
+                    }, 1000);
+                }
+                
+                // Showw success message
+                showSuccess(`✨ Auto-completado basado en ${commonValues.transactionCount} transacción(es) anterior(es) de ${payeeName}`);
+            });
+
+            // Listener for a datalist
+            document.getElementById('payee').addEventListener('input', function() {
+                // Small delay
+                setTimeout(() => {
+                    const payeeName = this.value.trim();
+                    if (payeeName) {
+                        const commonValues = getMostCommonValuesForPayee(payeeName);
+                        if (commonValues) {
+                            // Trigger the autocomplete
+                            this.blur();
+                            this.focus();
+                        }
+                    }
+                }, 100);
+            });
         });
         
         // Load accounts
@@ -506,16 +594,79 @@
             try {
                 const response = await fetch(`${API_URL}/locations`);
                 const locations = await response.json();
-                const select = document.getElementById('location');
-                locations.forEach(location => {
-                    const option = document.createElement('option');
-                    option.value = location.id;
-                    option.textContent = location.name;
-                    select.appendChild(option);
-                });
+                
+                // Save to global variable for later use
+                window.allLocations = locations;
+                
+                // Do initial sorting (will be updated later)
+                populateLocationSelect();
             } catch (error) {
                 console.error('Error loading locations:', error);
             }
+        }
+
+        // New function to populate the location select
+        function populateLocationSelect() {
+            const select = document.getElementById('location');
+            
+            // Clear existing options except the first one
+            while (select.options.length > 1) {
+                select.remove(1);
+            }
+            
+            if (!window.allLocations) return;
+            
+            // Filter out transfer locations
+            const filteredLocations = window.allLocations.filter(location => 
+                location.name !== 'Transfer In' && location.name !== 'Transfer Out'
+            );
+            
+            // Count frequency of each location
+            const locationCounts = {};
+            regularTransactions.forEach(t => {
+                if (t.location_id) {
+                    locationCounts[t.location_id] = (locationCounts[t.location_id] || 0) + 1;
+                }
+            });
+            
+            // Sort all locations by frequency
+            const sortedByFrequency = [...filteredLocations].sort((a, b) => {
+                const countA = locationCounts[a.id] || 0;
+                const countB = locationCounts[b.id] || 0;
+                return countB - countA;
+            });
+            
+            // Get the top 5 most frequent
+            const top5 = sortedByFrequency.slice(0, 5);
+            
+            // Get the rest and sort alphabetically
+            const rest = sortedByFrequency.slice(5).sort((a, b) => 
+                a.name.localeCompare(b.name)
+            );
+            
+            // Add the top 5
+            top5.forEach(location => {
+                const option = document.createElement('option');
+                option.value = location.id;
+                option.textContent = location.name;
+                select.appendChild(option);
+            });
+            
+            // Add visual separator if there are more than 5 locations
+            if (rest.length > 0 && top5.length > 0) {
+                const separator = document.createElement('option');
+                separator.disabled = true;
+                separator.textContent = '──────────';
+                select.appendChild(separator);
+            }
+            
+            // Add the rest sorted alphabetically
+            rest.forEach(location => {
+                const option = document.createElement('option');
+                option.value = location.id;
+                option.textContent = location.name;
+                select.appendChild(option);
+            });
         }
         
         // Load projects
@@ -618,10 +769,65 @@
                 
                 // Display combined list
                 displayCombinedTransactions();
+
+                // Update location order based on loaded transactions
+                populateLocationSelect();
                 
             } catch (error) {
                 console.error('Error loading transactions:', error);
             }
+        }
+
+        
+        // Function to finde the most common values of a payee
+        function getMostCommonValuesForPayee(payeeName) {
+            if (!payeeName || !regularTransactions.length) return null;
+            
+            // filter transactions of a payee
+            const payeeTransactions = regularTransactions.filter(t => 
+                t.payee_name && t.payee_name.toLowerCase() === payeeName.toLowerCase()
+            );
+            
+            if (payeeTransactions.length === 0) return null;
+            
+            // Count the frecuency of each value
+            const categoryCounts = {};
+            const locationCounts = {};
+            const accountCounts = {};
+            const projectCounts = {};
+            
+            payeeTransactions.forEach(t => {
+                // count categories
+                if (t.category_id) {
+                    categoryCounts[t.category_id] = (categoryCounts[t.category_id] || 0) + 1;
+                }
+                // count locations
+                if (t.location_id) {
+                    locationCounts[t.location_id] = (locationCounts[t.location_id] || 0) + 1;
+                }
+                // count accounts
+                if (t.account_id) {
+                    accountCounts[t.account_id] = (accountCounts[t.account_id] || 0) + 1;
+                }
+                // Count projects
+                if (t.project_id) {
+                    projectCounts[t.project_id] = (projectCounts[t.project_id] || 0) + 1;
+                }
+            });
+            
+            // Find the most common values
+            const getMostCommon = (counts) => {
+                if (Object.keys(counts).length === 0) return null;
+                return parseInt(Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0]);
+            };
+            
+            return {
+                categoryId: getMostCommon(categoryCounts),
+                locationId: getMostCommon(locationCounts),
+                accountId: getMostCommon(accountCounts),
+                projectId: getMostCommon(projectCounts),
+                transactionCount: payeeTransactions.length
+            };
         }
         
         function displayCombinedTransactions() {
