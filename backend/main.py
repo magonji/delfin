@@ -104,12 +104,26 @@ def get_payees(
     payees = db.query(models.Payee).offset(skip).limit(limit).all()
     return payees
 
+@app.post("/payees", response_model=schemas.PayeeResponse)
+def create_payee(
+    payee: schemas.PayeeCreate,
+    db: Session = Depends(get_db)
+):
+    """
+    Create a new payee.
+    """
+    db_payee = models.Payee(**payee.dict())
+    db.add(db_payee)
+    db.commit()
+    db.refresh(db_payee)
+    return db_payee
+
 
 # ============================================
 # LOCATIONS ENDPOINTS
 # ============================================
 
-@app.get("/locations", response_model=List[schemas.PayeeResponse])
+@app.get("/locations", response_model=List[schemas.LocationResponse])
 def get_locations(
     skip: int = 0,
     limit: int = 200,
@@ -122,11 +136,27 @@ def get_locations(
     return locations
 
 
+
+@app.post("/locations", response_model=schemas.LocationResponse)
+def create_location(
+    location: schemas.LocationCreate,
+    db: Session = Depends(get_db)
+):
+    """
+    Create a new location.
+    """
+    db_location = models.Location(**location.dict())
+    db.add(db_location)
+    db.commit()
+    db.refresh(db_location)
+    return db_location
+
+
 # ============================================
 # PROJECTS ENDPOINTS
 # ============================================
 
-@app.get("/projects", response_model=List[schemas.PayeeResponse])
+@app.get("/projects", response_model=List[schemas.ProjectResponse])
 def get_projects(
     skip: int = 0,
     limit: int = 200,
@@ -137,6 +167,21 @@ def get_projects(
     """
     projects = db.query(models.Project).offset(skip).limit(limit).all()
     return projects
+
+
+@app.post("/projects", response_model=schemas.ProjectResponse)
+def create_project(
+    project: schemas.ProjectCreate,
+    db: Session = Depends(get_db)
+):
+    """
+    Create a new project.
+    """
+    db_project = models.Project(**project.dict())
+    db.add(db_project)
+    db.commit()
+    db.refresh(db_project)
+    return db_project
 
 # ============================================
 # TRANSACTIONS ENDPOINTS

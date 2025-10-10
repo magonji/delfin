@@ -149,6 +149,46 @@
         .amount-positive {
             color: #10b981;
         }
+
+        .hidden {
+            display: none;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        
+        .modal-content {
+            background-color: white;
+            margin: 10% auto;
+            padding: 30px;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        
+        .modal-header {
+            margin-bottom: 20px;
+        }
+        
+        .modal-header h3 {
+            margin: 0;
+            color: #333;
+        }
+        
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
     </style>
     <script src="navbar.js"></script>
 </head>
@@ -266,9 +306,9 @@
                         <label for="fromAmount">Amount to Transfer</label>
                         <input type="number" id="fromAmount" step="0.01" required placeholder="100.00">
                     </div>
-                    <div class="form-group">
-                        <label for="toAmount">Amount Received (if different currency)</label>
-                        <input type="number" id="toAmount" step="0.01" placeholder="Leave empty if same currency">
+                    <div class="form-group" id="toAmountGroup">
+                        <label for="toAmount">Amount Received</label>
+                        <input type="number" id="toAmount" step="0.01" placeholder="Amount in destination currency">
                     </div>
                 </div>
                 
@@ -277,7 +317,10 @@
                     <textarea id="transferNote" rows="2" placeholder="Transfer details..."></textarea>
                 </div>
                 
-                <button type="submit">🔄 Create Transfer</button>
+                <div style="display: flex; gap: 10px;">
+                    <button type="submit" style="flex: 1;">🔄 Create Transfer</button>
+                    <button type="button" onclick="cancelTransferEdit()" style="flex: 1; background: #6c757d;">❌ Cancel</button>
+                </div>
             </form>
         </div>
         
@@ -334,9 +377,79 @@
         </div>
     </div>
     
+
+    <!-- Modals for creating new items -->
+    <div id="newCategoryModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add New Parent Category</h3>
+            </div>
+            <div class="form-group">
+                <label for="newCategoryName">Category Name</label>
+                <input type="text" id="newCategoryName" placeholder="e.g. Shopping, Transport...">
+            </div>
+            <div class="modal-buttons">
+                <button type="button" onclick="saveNewCategory()" style="flex: 1;">Save</button>
+                <button type="button" onclick="closeModal('newCategoryModal')" style="flex: 1; background: #6c757d;">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="newSubcategoryModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add New Subcategory</h3>
+            </div>
+            <div class="form-group">
+                <label for="newSubcategoryName">Subcategory Name</label>
+                <input type="text" id="newSubcategoryName" placeholder="e.g. Groceries, Fuel...">
+            </div>
+            <div class="form-group">
+                <label>Parent Category</label>
+                <input type="text" id="newSubcategoryParent" readonly style="background: #f0f0f0;">
+            </div>
+            <div class="modal-buttons">
+                <button type="button" onclick="saveNewSubcategory()" style="flex: 1;">Save</button>
+                <button type="button" onclick="closeModal('newSubcategoryModal')" style="flex: 1; background: #6c757d;">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="newLocationModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add New Location</h3>
+            </div>
+            <div class="form-group">
+                <label for="newLocationName">Location Name</label>
+                <input type="text" id="newLocationName" placeholder="e.g. City Centre, Airport...">
+            </div>
+            <div class="modal-buttons">
+                <button type="button" onclick="saveNewLocation()" style="flex: 1;">Save</button>
+                <button type="button" onclick="closeModal('newLocationModal')" style="flex: 1; background: #6c757d;">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="newProjectModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add New Project</h3>
+            </div>
+            <div class="form-group">
+                <label for="newProjectName">Project Name</label>
+                <input type="text" id="newProjectName" placeholder="e.g. Kitchen Renovation...">
+            </div>
+            <div class="modal-buttons">
+                <button type="button" onclick="saveNewProject()" style="flex: 1;">Save</button>
+                <button type="button" onclick="closeModal('newProjectModal')" style="flex: 1; background: #6c757d;">Cancel</button>
+            </div>
+        </div>
+    </div>
+    
     <script>
         const API_URL = 'http://localhost:8000';
-        
+      
         // Global variables
         let allCategories = [];
         let regularTransactions = [];
@@ -388,6 +501,16 @@
             await loadTransferAccounts();
             await populateFilterDropdowns();
             await loadRecentTransactions();
+
+            // Add event listener for parent category change (only once)
+            document.getElementById('parentCategory').addEventListener('change', (e) => {
+                if (e.target.value === '__NEW__') {
+                    openModal('newCategoryModal');
+                    e.target.value = '';
+                } else {
+                    loadSubcategories(e.target.value);
+                }
+            });
             
             // Set current date and time for transaction form
             const now = new Date();
@@ -397,6 +520,28 @@
             // Set current date and time for transfer form
             document.getElementById('transferDate').valueAsDate = now;
             document.getElementById('transferTime').value = now.toTimeString().slice(0, 5);
+
+            // Add event listeners for currency check
+            document.getElementById('fromAccount').addEventListener('change', checkTransferCurrencies);
+            document.getElementById('toAccount').addEventListener('change', checkTransferCurrencies);
+            
+            // Hide toAmount field initially
+            document.getElementById('toAmountGroup').classList.add('hidden');
+
+            // Event listener for creating new subcategory
+            document.getElementById('category').addEventListener('change', (e) => {
+                if (e.target.value === '__NEW__') {
+                    const parentCategory = document.getElementById('parentCategory').value;
+                    if (!parentCategory) {
+                        showError('Please select a parent category first');
+                        e.target.value = '';
+                        return;
+                    }
+                    document.getElementById('newSubcategoryParent').value = parentCategory;
+                    openModal('newSubcategoryModal');
+                    e.target.value = '';
+                }
+            });
 
             document.getElementById('payee').addEventListener('blur', async function() {
                 const payeeName = this.value.trim();
@@ -417,7 +562,7 @@
                         // Wait until subcategories are loaded
                         setTimeout(() => {
                             document.getElementById('category').value = commonValues.categoryId;
-                            // Añadir indicador visual
+                            // Add visual indicator
                             document.getElementById('category').style.background = '#e8f5e9';
                             setTimeout(() => {
                                 document.getElementById('category').style.background = '';
@@ -435,7 +580,7 @@
                 // Autocomplete location
                 if (commonValues.locationId) {
                     document.getElementById('location').value = commonValues.locationId;
-                    // Indicador visual
+                    //  Visual indicator
                     document.getElementById('location').style.background = '#e8f5e9';
                     setTimeout(() => {
                         document.getElementById('location').style.background = '';
@@ -445,7 +590,7 @@
                 // Autocomplete account
                 if (commonValues.accountId) {
                     document.getElementById('account').value = commonValues.accountId;
-                    // Indicador visual
+                    //  Visual indicator
                     document.getElementById('account').style.background = '#e8f5e9';
                     setTimeout(() => {
                         document.getElementById('account').style.background = '';
@@ -459,7 +604,7 @@
                 // Autocomplete project
                 if (commonValues.projectId) {
                     document.getElementById('project').value = commonValues.projectId;
-                    // Indicador visual
+                    //  Visual indicator
                     document.getElementById('project').style.background = '#e8f5e9';
                     setTimeout(() => {
                         document.getElementById('project').style.background = '';
@@ -514,35 +659,52 @@
         });
         
         // Load categories
+        // Load categories
         async function loadCategories() {
             try {
-                const response = await fetch(`${API_URL}/categories`);
+                const response = await fetch(`${API_URL}/categories?limit=1000`);  
                 allCategories = await response.json();
                 
-                // Get unique parent categories
-                const parentCategories = [...new Set(allCategories
-                    .map(c => c.parent)
-                    .filter(p => p && p.trim() !== ''))]
-                    .sort();
-                
-                const parentSelect = document.getElementById('parentCategory');
-                parentCategories.forEach(parent => {
-                    const option = document.createElement('option');
-                    option.value = parent;
-                    option.textContent = parent;
-                    parentSelect.appendChild(option);
-                });
-                
-                // Add event listener for parent category change
-                parentSelect.addEventListener('change', (e) => {
-                    loadSubcategories(e.target.value);
-                });
+                // Populate the parent category select
+                populateParentCategories();
                 
             } catch (error) {
                 console.error('Error loading categories:', error);
             }
         }
-        
+
+        // Populate parent category select
+        function populateParentCategories() {
+            const parentSelect = document.getElementById('parentCategory');
+            
+            // Clear all options except the first one (the placeholder)
+            while (parentSelect.options.length > 1) {
+                parentSelect.remove(1);
+            }
+            
+            // Get unique parent categories from allCategories
+            const parentCategories = [...new Set(allCategories
+                .map(c => c.parent)
+                .filter(p => p && p.trim() !== ''))]
+                .sort();
+            
+            // Add parent categories
+            parentCategories.forEach(parent => {
+                const option = document.createElement('option');
+                option.value = parent;
+                option.textContent = parent;
+                parentSelect.appendChild(option);
+            });
+
+            // Add option to create new category
+            const newOption = document.createElement('option');
+            newOption.value = '__NEW__';
+            newOption.textContent = '➕ Add new category';
+            newOption.style.fontWeight = 'bold';
+            newOption.style.color = '#667eea';
+            parentSelect.appendChild(newOption);
+        }
+
         // Load subcategories based on parent
         function loadSubcategories(parentName) {
             const categorySelect = document.getElementById('category');
@@ -571,6 +733,76 @@
                 option.textContent = category.name;
                 categorySelect.appendChild(option);
             });
+
+            // Add option to create new subcategory
+            const newOption = document.createElement('option');
+            newOption.value = '__NEW__';
+            newOption.textContent = '➕ Add new subcategory';
+            newOption.style.fontWeight = 'bold';
+            newOption.style.color = '#667eea';
+            categorySelect.appendChild(newOption);
+        }
+        
+        // Save new subcategory
+        async function saveNewSubcategory() {
+            const name = document.getElementById('newSubcategoryName').value.trim();
+            const parent = document.getElementById('newSubcategoryParent').value;
+            
+            if (!name) {
+                showError('Please enter a subcategory name');
+                return;
+            }
+            
+            if (!parent) {
+                showError('Parent category is required');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/categories`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: name, parent: parent })
+                });
+                
+                if (response.ok) {
+                    const newCategory = await response.json();
+                    showSuccess(`Subcategory "${name}" created successfully under "${parent}"!`);
+                    closeModal('newSubcategoryModal');
+                    
+                    // Reload ALL categories from the database
+                    const categoriesResponse = await fetch(`${API_URL}/categories?limit=1000`);
+                    allCategories = await categoriesResponse.json();
+                    
+                    // Repopulate the parent categories dropdown
+                    populateParentCategories();
+                    
+                    // Select the parent category
+                    document.getElementById('parentCategory').value = parent;
+                    
+                    // Load and display subcategories for this parent
+                    loadSubcategories(parent);
+                    
+                    // Select the newly created subcategory
+                    setTimeout(() => {
+                        document.getElementById('category').value = newCategory.id;
+                        // Visual feedback
+                        document.getElementById('category').style.background = '#e8f5e9';
+                        setTimeout(() => {
+                            document.getElementById('category').style.background = '';
+                        }, 1000);
+                    }, 100);
+                    
+                    // Also update the filter dropdown
+                    populateFilterDropdowns();
+                    
+                } else {
+                    const errorData = await response.json();
+                    showError('Failed to create subcategory: ' + (errorData.detail || 'Unknown error'));
+                }
+            } catch (error) {
+                showError('Error: ' + error.message);
+            }
         }
         
         // Load payees for autocomplete
@@ -667,7 +899,23 @@
                 option.textContent = location.name;
                 select.appendChild(option);
             });
+
+            // Add option to create new location
+            const newOption = document.createElement('option');
+            newOption.value = '__NEW__';
+            newOption.textContent = '➕ Add new location';
+            newOption.style.fontWeight = 'bold';
+            newOption.style.color = '#667eea';
+            select.appendChild(newOption);
         }
+
+        // Event listener for creating new location
+        document.getElementById('location').addEventListener('change', (e) => {
+            if (e.target.value === '__NEW__') {
+                openModal('newLocationModal');
+                e.target.value = '';
+            }
+        });
         
         // Load projects
         async function loadProjects() {
@@ -681,10 +929,26 @@
                     option.textContent = project.name;
                     select.appendChild(option);
                 });
+
+                // Add option to create new project
+                const newOption = document.createElement('option');
+                newOption.value = '__NEW__';
+                newOption.textContent = '➕ Add new project';
+                newOption.style.fontWeight = 'bold';
+                newOption.style.color = '#667eea';
+                select.appendChild(newOption);
             } catch (error) {
                 console.error('Error loading projects:', error);
             }
         }
+
+        // Event listener for creating new project
+        document.getElementById('project').addEventListener('change', (e) => {
+            if (e.target.value === '__NEW__') {
+                openModal('newProjectModal');
+                e.target.value = '';
+            }
+        });
         
         // Load accounts for transfer form
         async function loadTransferAccounts() {
@@ -712,6 +976,33 @@
                 console.error('Error loading accounts for transfer:', error);
             }
         }
+
+        // Check if currencies are different and show/hide toAmount field
+        function checkTransferCurrencies() {
+            const fromSelect = document.getElementById('fromAccount');
+            const toSelect = document.getElementById('toAccount');
+            const toAmountGroup = document.getElementById('toAmountGroup');
+            
+            const fromOption = fromSelect.selectedOptions[0];
+            const toOption = toSelect.selectedOptions[0];
+            
+            if (!fromOption || !toOption || !fromOption.value || !toOption.value) {
+                toAmountGroup.classList.add('hidden');
+                return;
+            }
+            
+            const fromCurrency = fromOption.dataset.currency;
+            const toCurrency = toOption.dataset.currency;
+            
+            if (fromCurrency !== toCurrency) {
+                toAmountGroup.classList.remove('hidden');
+                document.getElementById('toAmount').required = true;
+            } else {
+                toAmountGroup.classList.add('hidden');
+                document.getElementById('toAmount').required = false;
+                document.getElementById('toAmount').value = '';
+            }
+        }
         
         // Populate filter dropdowns
         async function populateFilterDropdowns() {
@@ -733,6 +1024,12 @@
             // Populate categories filter
             try {
                 const filterCategory = document.getElementById('filterCategory');
+                
+                // Clear existing options except the first one
+                while (filterCategory.options.length > 1) {
+                    filterCategory.remove(1);
+                }
+
                 allCategories.forEach(category => {
                     const option = document.createElement('option');
                     option.value = category.id;
@@ -961,6 +1258,7 @@
                         ${amountDisplay}
                     </div>
                     <div style="display: flex; gap: 5px; flex-direction: column;">
+                        <button onclick="editTransfer('${transfer.transfer_out_id}', '${transfer.transfer_in_id}')" style="padding: 5px 10px; font-size: 12px; background: #667eea;">✏️</button>
                         <button onclick="deleteTransfer('${transfer.transfer_out_id}', '${transfer.transfer_in_id}')" style="padding: 5px 10px; font-size: 12px; background: #ef4444;">🗑️</button>
                     </div>
                 </div>
@@ -1142,6 +1440,74 @@
                 showError('Error deleting transfer');
             }
         }
+
+        // Edit transfer
+        async function editTransfer(outId, inId) {
+            try {
+                // Load both transactions that make up the transfer
+                const outResponse = await fetch(`${API_URL}/transactions/${outId}`);
+                const inResponse = await fetch(`${API_URL}/transactions/${inId}`);
+                
+                const outTransaction = await outResponse.json();
+                const inTransaction = await inResponse.json();
+                
+                // Populate the transfer form
+                const transferDate = new Date(outTransaction.date);
+                document.getElementById('transferDate').valueAsDate = transferDate;
+                document.getElementById('transferTime').value = transferDate.toTimeString().slice(0, 5);
+                
+                document.getElementById('fromAccount').value = outTransaction.account_id;
+                document.getElementById('toAccount').value = inTransaction.account_id;
+                document.getElementById('fromAmount').value = Math.abs(outTransaction.amount);
+                
+                // Check if different currencies
+                if (outTransaction.currency !== inTransaction.currency) {
+                    document.getElementById('toAmount').value = inTransaction.amount;
+                } else {
+                    document.getElementById('toAmount').value = '';
+                }
+
+                // Trigger currency check to show/hide toAmount field
+                checkTransferCurrencies();
+                
+                document.getElementById('transferNote').value = outTransaction.note || '';
+                
+                // Change form button to "Update" mode
+                const form = document.getElementById('transferForm');
+                const submitButton = form.querySelector('button[type="submit"]');
+                submitButton.textContent = '✏️ Update Transfer';
+                submitButton.style.background = '#f59e0b';
+                
+                // Store transaction IDs for update
+                form.dataset.editingOutId = outId;
+                form.dataset.editingInId = inId;
+                
+                // Scroll to form
+                form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                
+                showSuccess('Transfer loaded for editing. Modify and click "Update Transfer".');
+                
+            } catch (error) {
+                console.error('Error loading transfer for edit:', error);
+                showError('Failed to load transfer');
+            }
+        }
+
+        // Cancel transfer edit mode
+        function cancelTransferEdit() {
+            const form = document.getElementById('transferForm');
+            const submitButton = form.querySelector('button[type="submit"]');
+            submitButton.textContent = '🔄 Create Transfer';
+            submitButton.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+            delete form.dataset.editingOutId;
+            delete form.dataset.editingInId;
+            form.reset();
+            
+            // Reset date and time to now
+            const now = new Date();
+            document.getElementById('transferDate').valueAsDate = now;
+            document.getElementById('transferTime').value = now.toTimeString().slice(0, 5);
+        }
         
         // Edit transaction
         async function editTransaction(transactionId) {
@@ -1321,6 +1687,9 @@
         document.getElementById('transferForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             
+            const form = e.target;
+            const isEditing = form.dataset.editingOutId && form.dataset.editingInId;
+            
             const date = document.getElementById('transferDate').value;
             const time = document.getElementById('transferTime').value;
             const datetime = `${date}T${time}:00`;
@@ -1337,16 +1706,23 @@
             const toAmountInput = document.getElementById('toAmount').value;
             const toAmount = toAmountInput ? parseFloat(toAmountInput) : null;
             
-            const transfer = {
-                date: datetime,
-                from_account_id: fromAccountId,
-                to_account_id: toAccountId,
-                from_amount: fromAmount,
-                to_amount: toAmount,
-                note: document.getElementById('transferNote').value || null
-            };
-            
             try {
+                if (isEditing) {
+                    // Update mode: delete old transfer and create new one
+                    await fetch(`${API_URL}/transactions/${form.dataset.editingOutId}`, { method: 'DELETE' });
+                    await fetch(`${API_URL}/transactions/${form.dataset.editingInId}`, { method: 'DELETE' });
+                }
+                
+                // Create transfer (either new or updated)
+                const transfer = {
+                    date: datetime,
+                    from_account_id: fromAccountId,
+                    to_account_id: toAccountId,
+                    from_amount: fromAmount,
+                    to_amount: toAmount,
+                    note: document.getElementById('transferNote').value || null
+                };
+                
                 const response = await fetch(`${API_URL}/transactions/transfer`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1354,17 +1730,11 @@
                 });
                 
                 if (response.ok) {
-                    showSuccess('Transfer created successfully!');
-                    document.getElementById('transferForm').reset();
-                    
-                    // Reset date and time to now
-                    const now = new Date();
-                    document.getElementById('transferDate').valueAsDate = now;
-                    document.getElementById('transferTime').value = now.toTimeString().slice(0, 5);
-                    
+                    showSuccess(isEditing ? 'Transfer updated successfully!' : 'Transfer created successfully!');
+                    cancelTransferEdit();
                     await loadRecentTransactions();
                 } else {
-                    showError('Failed to create transfer');
+                    showError('Failed to save transfer');
                 }
             } catch (error) {
                 showError('Error: ' + error.message);
@@ -1388,6 +1758,189 @@
                 element.style.display = 'none';
             }, 5000);
         }
+
+
+        // Modal functions
+        function openModal(modalId) {
+            document.getElementById(modalId).style.display = 'block';
+            // Focus on input field
+            setTimeout(() => {
+                const input = document.querySelector(`#${modalId} input[type="text"]:not([readonly])`);
+                if (input) input.focus();
+            }, 100);
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+            // Clear input fields
+            document.querySelectorAll(`#${modalId} input[type="text"]`).forEach(input => {
+                if (!input.readOnly) input.value = '';
+            });
+        }
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            if (event.target.classList.contains('modal')) {
+                event.target.style.display = 'none';
+            }
+        }
+
+        // Save new category (which is actually creating a parent by creating a subcategory)
+        async function saveNewCategory() {
+            const parentName = document.getElementById('newCategoryName').value.trim();
+            
+            if (!parentName) {
+                showError('Please enter a category name');
+                return;
+            }
+            
+            // Store the parent name temporarily
+            window.tempNewParent = parentName;
+            
+            // Close the modal
+            closeModal('newCategoryModal');
+            
+            // Show info message
+            showSuccess(`Now create the first subcategory for "${parentName}"`);
+            
+            // Open the subcategory modal with the parent pre-filled
+            document.getElementById('newSubcategoryParent').value = parentName;
+            setTimeout(() => {
+                openModal('newSubcategoryModal');
+            }, 500);
+        }
+
+        // Save new subcategory
+        async function saveNewSubcategory() {
+            const name = document.getElementById('newSubcategoryName').value.trim();
+            const parent = document.getElementById('newSubcategoryParent').value;
+            
+            if (!name) {
+                showError('Please enter a subcategory name');
+                return;
+            }
+            
+            if (!parent) {
+                showError('Parent category is required');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/categories`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: name, parent: parent })
+                });
+                
+                if (response.ok) {
+                    const newCategory = await response.json();
+                    showSuccess(`Subcategory "${name}" created successfully under "${parent}"!`);
+                    closeModal('newSubcategoryModal');
+                    
+                    // Reload all categories from the database
+                    const categoriesResponse = await fetch(`${API_URL}/categories?limit=1000`);
+                    allCategories = await categoriesResponse.json();
+                    
+                    // Repopulate the parent categories dropdown
+                    populateParentCategories();
+                    
+                    // Select the parent category
+                    document.getElementById('parentCategory').value = parent;
+                    
+                    // Load and display subcategories for this parent
+                    loadSubcategories(parent);
+                    
+                    // Select the newly created subcategory
+                    setTimeout(() => {
+                        document.getElementById('category').value = newCategory.id;
+                        // Visual feedback
+                        document.getElementById('category').style.background = '#e8f5e9';
+                        setTimeout(() => {
+                            document.getElementById('category').style.background = '';
+                        }, 1000);
+                    }, 100);
+                    
+                    // Update the filter dropdown
+                    populateFilterDropdowns();
+                    
+                } else {
+                    const errorData = await response.json();
+                    showError('Failed to create subcategory: ' + (errorData.detail || 'Unknown error'));
+                }
+            } catch (error) {
+                showError('Error: ' + error.message);
+            }
+        }
+
+        // Save new location
+        async function saveNewLocation() {
+            const name = document.getElementById('newLocationName').value.trim();
+            
+            if (!name) {
+                showError('Please enter a location name');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/locations`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: name })
+                });
+                
+                if (response.ok) {
+                    const newLocation = await response.json();
+                    showSuccess(`Location "${name}" created successfully!`);
+                    closeModal('newLocationModal');
+                    
+                    // Reload locations
+                    window.allLocations = null;
+                    await loadLocations();
+                    await loadRecentTransactions();
+                    
+                    // Select the new location
+                    document.getElementById('location').value = newLocation.id;
+                } else {
+                    showError('Failed to create location');
+                }
+            } catch (error) {
+                showError('Error: ' + error.message);
+            }
+        }
+
+        // Save new project
+        async function saveNewProject() {
+            const name = document.getElementById('newProjectName').value.trim();
+            
+            if (!name) {
+                showError('Please enter a project name');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/projects`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: name })
+                });
+                
+                if (response.ok) {
+                    const newProject = await response.json();
+                    showSuccess(`Project "${name}" created successfully!`);
+                    closeModal('newProjectModal');
+                    
+                    // Reload projects and select the new one
+                    await loadProjects();
+                    document.getElementById('project').value = newProject.id;
+                } else {
+                    showError('Failed to create project');
+                }
+            } catch (error) {
+                showError('Error: ' + error.message);
+            }
+        }
     </script>
+
+    
 </body>
 </html>

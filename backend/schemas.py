@@ -82,7 +82,38 @@ class TransactionResponse(TransactionBase):
     class Config:
         from_attributes = True
 
+class LocationBase(BaseModel):
+    name: str
 
+
+class LocationCreate(LocationBase):
+    pass
+
+
+class LocationResponse(LocationBase):
+    id: int
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+class ProjectBase(BaseModel):
+    name: str
+
+
+class ProjectCreate(ProjectBase):
+    pass
+
+
+class ProjectResponse(ProjectBase):
+    id: int
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+        
 class TransactionWithDetails(TransactionResponse):
     """
     Transaction response with related entity names.
