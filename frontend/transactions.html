@@ -1358,6 +1358,16 @@
                     t.from_account_id === accId || t.to_account_id === accId
                 );
             }
+            // If filtering by category, exclude all transfers (they don't have categories)
+            if (categoryId) {
+                filteredTransfers = [];
+            }
+            if (searchText) {
+                filteredTransfers = filteredTransfers.filter(t => {
+                    const note = (t.note || '').toLowerCase();
+                    return note.includes(searchText);
+                });
+            }
             if (searchText) {
                 filteredTransfers = filteredTransfers.filter(t => {
                     const note = (t.note || '').toLowerCase();
