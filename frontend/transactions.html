@@ -446,6 +446,55 @@
             </div>
         </div>
     </div>
+
+    <div id="newAccountModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add New Account</h3>
+            </div>
+            <div class="form-group">
+                <label for="newAccountName">Account Name</label>
+                <input type="text" id="newAccountName" placeholder="e.g. Main Account, Savings...">
+            </div>
+            <div class="form-group">
+                <label for="newAccountCurrency">Currency</label>
+                <select id="newAccountCurrency">
+                    <option value="GBP">GBP (£)</option>
+                    <option value="EUR">EUR (€)</option>
+                    <option value="USD">USD ($)</option>
+                    <option value="JPY">JPY (¥)</option>
+                    <option value="CNY">CNY (¥)</option>
+                    <option value="CHF">CHF (Fr)</option>
+                    <option value="CAD">CAD (CA$)</option>
+                    <option value="AUD">AUD (A$)</option>
+                    <option value="NZD">NZD (NZ$)</option>
+                    <option value="INR">INR (₹)</option>
+                    <option value="BRL">BRL (R$)</option>
+                    <option value="RUB">RUB (₽)</option>
+                    <option value="KRW">KRW (₩)</option>
+                    <option value="SEK">SEK (kr)</option>
+                    <option value="NOK">NOK (kr)</option>
+                    <option value="DKK">DKK (kr)</option>
+                    <option value="PLN">PLN (zł)</option>
+                    <option value="MXN">MXN (MX$)</option>
+                    <option value="ARS">ARS (AR$)</option>
+                    <option value="CLP">CLP (CL$)</option>
+                    <option value="COP">COP (CO$)</option>
+                    <option value="PEN">PEN (S/)</option>
+                    <option value="TRY">TRY (₺)</option>
+                    <option value="ZAR">ZAR (R)</option>
+                    <option value="THB">THB (฿)</option>
+                    <option value="SGD">SGD (S$)</option>
+                    <option value="HKD">HKD (HK$)</option>
+                    <option value="MYR">MYR (RM)</option>
+                </select>
+            </div>
+            <div class="modal-buttons">
+                <button type="button" onclick="saveNewAccount()" style="flex: 1;">Save</button>
+                <button type="button" onclick="closeModal('newAccountModal')" style="flex: 1; background: #6c757d;">Cancel</button>
+            </div>
+        </div>
+    </div>
     
     <script>
         const API_URL = 'http://localhost:8000';
@@ -539,6 +588,32 @@
                     }
                     document.getElementById('newSubcategoryParent').value = parentCategory;
                     openModal('newSubcategoryModal');
+                    e.target.value = '';
+                }
+            });
+
+            // Event listener for creating new account in transaction form
+            document.getElementById('account').addEventListener('change', (e) => {
+                if (e.target.value === '__NEW__') {
+                    openModal('newAccountModal');
+                    e.target.value = '';
+                }
+            });
+            
+            // Event listener for creating new account in transfer form (from)
+            document.getElementById('fromAccount').addEventListener('change', (e) => {
+                if (e.target.value === '__NEW__') {
+                    window.creatingAccountFor = 'fromAccount';
+                    openModal('newAccountModal');
+                    e.target.value = '';
+                }
+            });
+            
+            // Event listener for creating new account in transfer form (to)
+            document.getElementById('toAccount').addEventListener('change', (e) => {
+                if (e.target.value === '__NEW__') {
+                    window.creatingAccountFor = 'toAccount';
+                    openModal('newAccountModal');
                     e.target.value = '';
                 }
             });
@@ -645,6 +720,13 @@
                     option.textContent = `${account.name} (${account.currency})`;
                     select.appendChild(option);
                 });
+                
+                const newOption = document.createElement('option');
+                newOption.value = '__NEW__';
+                newOption.textContent = '➕ Add new account';
+                newOption.style.fontWeight = 'bold';
+                newOption.style.color = '#667eea';
+                select.appendChild(newOption);
             } catch (error) {
                 console.error('Error loading accounts:', error);
             }
@@ -972,6 +1054,20 @@
                     option2.textContent = `${account.name} (${account.currency})`;
                     toSelect.appendChild(option2);
                 });
+                
+                const newOption1 = document.createElement('option');
+                newOption1.value = '__NEW__';
+                newOption1.textContent = '➕ Add new account';
+                newOption1.style.fontWeight = 'bold';
+                newOption1.style.color = '#667eea';
+                fromSelect.appendChild(newOption1);
+                
+                const newOption2 = document.createElement('option');
+                newOption2.value = '__NEW__';
+                newOption2.textContent = '➕ Add new account';
+                newOption2.style.fontWeight = 'bold';
+                newOption2.style.color = '#667eea';
+                toSelect.appendChild(newOption2);
             } catch (error) {
                 console.error('Error loading accounts for transfer:', error);
             }
@@ -1654,7 +1750,7 @@
             const transaction = {
                 date: datetime,
                 amount: parseFloat(document.getElementById('amount').value),
-                currency: 'GBP',
+                currency: document.getElementById('account').selectedOptions[0].dataset.currency,
                 account_id: parseInt(document.getElementById('account').value),
                 category_id: document.getElementById('category').value ? parseInt(document.getElementById('category').value) : null,
                 payee_id: payeeId,
@@ -1786,6 +1882,12 @@
             document.querySelectorAll(`#${modalId} input[type="text"]`).forEach(input => {
                 if (!input.readOnly) input.value = '';
             });
+            
+            // Clear account modal fields if closing that modal
+            if (modalId === 'newAccountModal') {
+                document.getElementById('newAccountName').value = '';
+                document.getElementById('newAccountCurrency').value = 'GBP';
+            }
         }
 
         // Close modal when clicking outside
@@ -1949,8 +2051,75 @@
                 showError('Error: ' + error.message);
             }
         }
-    </script>
 
+
+        // Save new account
+        async function saveNewAccount() {
+            const name = document.getElementById('newAccountName').value.trim();
+            const currency = document.getElementById('newAccountCurrency').value;
+            
+            if (!name) {
+                showError('Please enter an account name');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/accounts`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        name: name, 
+                        currency: currency,
+                        type: 'Regular',
+                        initial_balance: 0
+                    })
+                });
+                
+                if (response.ok) {
+                    const newAccount = await response.json();
+                    showSuccess(`Account "${name}" created successfully!`);
+                    closeModal('newAccountModal');
+                    
+                    // Reload accounts
+                    const accountSelect = document.getElementById('account');
+                    const fromSelect = document.getElementById('fromAccount');
+                    const toSelect = document.getElementById('toAccount');
+                    
+                    // Clear and reload all account selects
+                    accountSelect.innerHTML = '<option value="">Select account...</option>';
+                    fromSelect.innerHTML = '<option value="">Select account...</option>';
+                    toSelect.innerHTML = '<option value="">Select account...</option>';
+                    
+                    await loadAccounts();
+                    await loadTransferAccounts();
+                    
+                    // Select the new account in the appropriate dropdown
+                    if (window.creatingAccountFor === 'fromAccount') {
+                        fromSelect.value = newAccount.id;
+                        delete window.creatingAccountFor;
+                        // Trigger change to update currency check
+                        checkTransferCurrencies();
+                    } else if (window.creatingAccountFor === 'toAccount') {
+                        toSelect.value = newAccount.id;
+                        delete window.creatingAccountFor;
+                        // Trigger change to update currency check
+                        checkTransferCurrencies();
+                    } else {
+                        // For transaction form
+                        accountSelect.value = newAccount.id;
+                        // Update placeholder with correct currency symbol
+                        const symbol = getCurrencySymbol(currency);
+                        document.getElementById('amount').placeholder = `${symbol}-20.50`;
+                    }
+                } else {
+                    showError('Failed to create account');
+                }
+            } catch (error) {
+                showError('Error: ' + error.message);
+            }
+        }
+
+    </script>
     
 </body>
 </html>

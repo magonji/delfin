@@ -1,6 +1,6 @@
 function createNavbar() {
     const currentPage = window.location.pathname.split('/').pop() || 'index.html';
-    
+   
     return `
         <nav style="background: white; padding: 15px 30px; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center;">
             <div style="display: flex; gap: 20px; align-items: center;">
@@ -11,6 +11,9 @@ function createNavbar() {
                     </a>
                     <a href="transactions.html" style="text-decoration: none; color: ${currentPage === 'transactions.html' ? '#667eea' : '#666'}; font-weight: ${currentPage === 'transactions.html' ? '600' : '400'}; padding: 8px 16px; border-radius: 8px; background: ${currentPage === 'transactions.html' ? '#f0f4ff' : 'transparent'}; transition: all 0.3s;">
                         💳 Transactions
+                    </a>
+                    <a href="loans.html" style="text-decoration: none; color: ${currentPage === 'loans.html' ? '#667eea' : '#666'}; font-weight: ${currentPage === 'loans.html' ? '600' : '400'}; padding: 8px 16px; border-radius: 8px; background: ${currentPage === 'loans.html' ? '#f0f4ff' : 'transparent'}; transition: all 0.3s;">
+                        💰 Loans
                     </a>
                 </div>
             </div>
