@@ -282,7 +282,7 @@
             <div class="tool-card" onclick="openTool('import')">
                 <div class="tool-icon">📥</div>
                 <div class="tool-title">Import Bank Statements</div>
-                <div class="tool-description">Import transactions from CSV or PDF bank statements</div>
+                <div class="tool-description">Import transactions from CSV bank statements</div>
             </div>
         </div>
     </div>
@@ -399,8 +399,8 @@
                 <div style="border: 2px dashed #667eea; border-radius: 10px; padding: 40px; text-align: center; margin-bottom: 20px; background: #f8f9ff;">
                     <div style="font-size: 48px; margin-bottom: 15px;">📄</div>
                     <h4 style="margin-bottom: 10px; color: #333;">Upload your bank statement</h4>
-                    <p style="color: #666; margin-bottom: 20px;">Supported formats: CSV, PDF</p>
-                    <input type="file" id="fileInput" accept=".csv,.pdf" style="display: none;" onchange="handleFileUpload(event)">
+                    <p style="color: #666; margin-bottom: 20px;">Supported format: CSV</p>
+                    <input type="file" id="fileInput" accept=".csv" style="display: none;" onchange="handleFileUpload(event)">
                     <button onclick="document.getElementById('fileInput').click()" style="padding: 12px 30px;">Choose File</button>
                 </div>
                 
@@ -1022,10 +1022,6 @@
             try {
                 if (file.name.endsWith('.csv')) {
                     await parseCSV(file, accountId);
-                } else if (file.name.endsWith('.pdf')) {
-                    showError('PDF parsing not yet implemented. Please use CSV for now.');
-                    event.target.value = '';
-                    return;
                 } else {
                     showError('Unsupported file format');
                     event.target.value = '';
@@ -1061,8 +1057,8 @@
             if (headers.includes('Transaction ID') && headers.includes('Emoji')) {
                 // Monzo format
                 parseMonzoCSV(lines, headers, accountId);
-            } else if (headers.includes('Date') && headers.includes('Description') && headers.includes('Money In (£)')) {
-                // Bank of Scotland format (though it's PDF, this is for future CSV export)
+            } else if (headers.includes('Transaction Date') && headers.includes('Transaction Description') && headers.includes('Debit Amount')) {
+                // Bank of Scotland CSV export format
                 parseBankOfScotlandCSV(lines, headers, accountId);
             } else {
                 // Generic format
@@ -1872,14 +1868,16 @@
             checkDuplicates();
         }
 
-        // Parse Bank of Scotland CSV format (if they provide CSV export)
+        // Parse Bank of Scotland CSV format
         function parseBankOfScotlandCSV(lines, headers, accountId) {
             parsedTransactions = [];
             
-            const dateIdx = headers.indexOf('Date');
-            const descIdx = headers.indexOf('Description');
-            const moneyInIdx = headers.indexOf('Money In (£)');
-            const moneyOutIdx = headers.indexOf('Money Out (£)');
+            const dateIdx = headers.indexOf('Transaction Date');
+            const typeIdx = headers.indexOf('Transaction Type');
+            const descIdx = headers.indexOf('Transaction Description');
+            const debitIdx = headers.indexOf('Debit Amount');
+            const creditIdx = headers.indexOf('Credit Amount');
+            const balanceIdx = headers.indexOf('Balance');
             
             // Track time for transactions on same day
             let lastDate = null;
@@ -1894,25 +1892,33 @@
                 if (values.length < headers.length) continue;
                 
                 const dateStr = values[dateIdx];
+                const type = values[typeIdx];
                 const description = values[descIdx];
-                const moneyIn = values[moneyInIdx] ? parseFloat(values[moneyInIdx]) : 0;
-                const moneyOut = values[moneyOutIdx] ? parseFloat(values[moneyOutIdx]) : 0;
+                const debit = values[debitIdx] ? parseFloat(values[debitIdx]) : 0;
+                const credit = values[creditIdx] ? parseFloat(values[creditIdx]) : 0;
                 
-                const amount = moneyIn > 0 ? moneyIn : -moneyOut;
+                if (!dateStr) continue;
                 
-                if (!dateStr || amount === 0) continue;
+                // Calculate amount (credit is positive, debit is negative)
+                const amount = credit > 0 ? credit : -debit;
                 
-                // Parse date (format: DD Mon YY, e.g., "01 Jul 25")
+                if (amount === 0) continue;
+                
+                // Parse date (format: DD/MM/YYYY)
                 let date;
                 try {
-                    const parts = dateStr.split(' ');
-                    if (parts.length === 3) {
-                        const day = parts[0];
-                        const month = parts[1];
-                        const year = '20' + parts[2];
-                        date = new Date(`${day} ${month} ${year}`);
+                    const dateParts = dateStr.split('/');
+                    if (dateParts.length === 3) {
+                        const day = dateParts[0].padStart(2, '0');
+                        const month = dateParts[1].padStart(2, '0');
+                        const year = dateParts[2];
+                        
+                        date = new Date(`${year}-${month}-${day}`);
+                    } else {
+                        continue;
                     }
                 } catch (e) {
+                    console.error('Error parsing date:', dateStr, e);
                     continue;
                 }
                 
@@ -1930,9 +1936,12 @@
                 const datetime = new Date(date);
                 datetime.setHours(hours, minutes, 0, 0);
                 
+                // Combine type and description for better context
+                const fullDescription = type && description ? `${type} - ${description}` : (description || type || '');
+                
                 parsedTransactions.push({
                     date: datetime.toISOString().slice(0, 19),
-                    description: description,
+                    description: fullDescription,
                     amount: amount,
                     note: '',
                     account_id: parseInt(accountId),
@@ -1946,6 +1955,10 @@
             }
             
             checkDuplicates();
+            
+            if (parsedTransactions.length === 0) {
+                throw new Error('No transactions found in CSV. Please check the file format.');
+            }
         }
     </script>
 </body>
