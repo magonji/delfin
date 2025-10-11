@@ -220,6 +220,26 @@
         .search-box {
             margin-bottom: 20px;
         }
+
+        #transactionsTable input, #transactionsTable select {
+            padding: 6px;
+            font-size: 12px;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+        }
+
+        #transactionsTable tbody tr {
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        #transactionsTable tbody tr:hover {
+            background: #f8f9fa;
+        }
+
+        #transactionsTable tbody tr.duplicate {
+            background: #fee;
+            opacity: 0.6;
+        }
     </style>
     <script src="navbar.js"></script>
 </head>
@@ -257,6 +277,12 @@
                 <div class="tool-icon">📋</div>
                 <div class="tool-title">Manage Projects</div>
                 <div class="tool-description">Edit project names</div>
+            </div>
+
+            <div class="tool-card" onclick="openTool('import')">
+                <div class="tool-icon">📥</div>
+                <div class="tool-title">Import Bank Statements</div>
+                <div class="tool-description">Import transactions from CSV or PDF bank statements</div>
             </div>
         </div>
     </div>
@@ -360,6 +386,73 @@
             </div>
         </div>
     </div>
+
+    <!-- Import Modal -->
+    <div id="importModal" class="modal">
+        <div class="modal-content" style="max-width: 95%; max-height: 90vh;">
+            <div class="modal-header">
+                <h3>📥 Import Bank Statements</h3>
+                <button class="close-btn" onclick="closeModal('importModal')">&times;</button>
+            </div>
+            
+            <div id="uploadSection">
+                <div style="border: 2px dashed #667eea; border-radius: 10px; padding: 40px; text-align: center; margin-bottom: 20px; background: #f8f9ff;">
+                    <div style="font-size: 48px; margin-bottom: 15px;">📄</div>
+                    <h4 style="margin-bottom: 10px; color: #333;">Upload your bank statement</h4>
+                    <p style="color: #666; margin-bottom: 20px;">Supported formats: CSV, PDF</p>
+                    <input type="file" id="fileInput" accept=".csv,.pdf" style="display: none;" onchange="handleFileUpload(event)">
+                    <button onclick="document.getElementById('fileInput').click()" style="padding: 12px 30px;">Choose File</button>
+                </div>
+                
+                <div class="form-group">
+                    <label for="importAccount">Select Account for Import</label>
+                    <select id="importAccount" required>
+                        <option value="">Select account...</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div id="previewSection" style="display: none;">
+                <div style="background: #f0f4ff; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                    <h4 style="margin-bottom: 10px;">Preview Transactions</h4>
+                    <p style="color: #666; font-size: 14px;">Review and map transactions before importing. Select payees to auto-fill categories. Mark transfers to link with other accounts.</p>
+                    <div style="margin-top: 10px;">
+                        <span style="font-weight: 600;">Total transactions:</span> <span id="totalTransactions">0</span> | 
+                        <span style="font-weight: 600;">Duplicates found:</span> <span id="duplicateCount" style="color: #ef4444;">0</span> | 
+                        <span style="font-weight: 600;">New transactions:</span> <span id="newCount" style="color: #10b981;">0</span>
+                    </div>
+                </div>
+                
+                <div style="overflow-x: auto; max-height: 500px; overflow-y: auto;">
+                    <table id="transactionsTable" style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                        <thead style="position: sticky; top: 0; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                            <tr style="background: #667eea; color: white;">
+                                <th style="padding: 10px; text-align: center; width: 50px;">Skip</th>
+                                <th style="padding: 10px; text-align: left;">Date/Time</th>
+                                <th style="padding: 10px; text-align: left;">Description</th>
+                                <th style="padding: 10px; text-align: right;">Amount</th>
+                                <th style="padding: 10px; text-align: center; min-width: 120px;">Type</th>
+                                <th style="padding: 10px; text-align: left; min-width: 150px;">Payee / To Account</th>
+                                <th style="padding: 10px; text-align: left; min-width: 150px;">Category</th>
+                                <th style="padding: 10px; text-align: left;">Location</th>
+                                <th style="padding: 10px; text-align: left;">Project</th>
+                                <th style="padding: 10px; text-align: left; min-width: 200px;">Note</th>
+                                <th style="padding: 10px; text-align: center;">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="transactionsTableBody">
+                            <!-- Rows will be inserted here -->
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button onclick="importTransactions()" style="flex: 1; padding: 15px; font-size: 16px;">✅ Import <span id="importCount">0</span> Transactions</button>
+                    <button onclick="cancelImport()" class="secondary" style="flex: 0 0 auto; padding: 15px 30px;">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
     
     <script>
         const API_URL = 'http://localhost:8000';
@@ -372,7 +465,13 @@
         
         let currentEditItem = null;
         let currentEditType = null;
-        
+
+        // Import variables
+        let parsedTransactions = [];
+        let existingTransactions = [];
+        let payeeSuggestions = {};
+        let allAccountsForImport = [];
+                
         // Open tool modal
         async function openTool(toolName) {
             switch(toolName) {
@@ -401,9 +500,13 @@
                     displayProjects();
                     document.getElementById('projectsModal').style.display = 'block';
                     break;
+                case 'import':
+                    await loadImportData();
+                    document.getElementById('importModal').style.display = 'block';
+                    break;
             }
         }
-        
+   
         // Close modal
         function closeModal(modalId) {
             document.getElementById(modalId).style.display = 'none';
@@ -861,6 +964,988 @@
             if (event.target.classList.contains('modal')) {
                 event.target.style.display = 'none';
             }
+        }
+
+        // Load data needed for import
+        async function loadImportData() {
+            try {
+                // Load accounts for import selection
+                const accountsResponse = await fetch(`${API_URL}/accounts`);
+                allAccountsForImport = await accountsResponse.json();
+                
+                const importAccountSelect = document.getElementById('importAccount');
+                importAccountSelect.innerHTML = '<option value="">Select account...</option>';
+                allAccountsForImport.forEach(account => {
+                    const option = document.createElement('option');
+                    option.value = account.id;
+                    option.textContent = `${account.name} (${account.currency})`;
+                    importAccountSelect.appendChild(option);
+                });
+                
+                // Load payees
+                const payeesResponse = await fetch(`${API_URL}/payees`);
+                allPayees = await payeesResponse.json();
+                
+                // Load categories
+                await loadCategories();
+                
+                // Load locations
+                const locationsResponse = await fetch(`${API_URL}/locations`);
+                allLocations = await locationsResponse.json();
+                
+                // Load projects
+                const projectsResponse = await fetch(`${API_URL}/projects`);
+                allProjects = await projectsResponse.json();
+                
+                // Load existing transactions for duplicate detection
+                const transResponse = await fetch(`${API_URL}/transactions?limit=100000`);
+                existingTransactions = await transResponse.json();
+                
+            } catch (error) {
+                console.error('Error loading import data:', error);
+                showError('Failed to load data for import');
+            }
+        }
+
+        // Handle file upload
+        async function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const accountId = document.getElementById('importAccount').value;
+            if (!accountId) {
+                showError('Please select an account first');
+                event.target.value = '';
+                return;
+            }
+            
+            try {
+                if (file.name.endsWith('.csv')) {
+                    await parseCSV(file, accountId);
+                } else if (file.name.endsWith('.pdf')) {
+                    showError('PDF parsing not yet implemented. Please use CSV for now.');
+                    event.target.value = '';
+                    return;
+                } else {
+                    showError('Unsupported file format');
+                    event.target.value = '';
+                    return;
+                }
+                
+                // Show preview section
+                document.getElementById('uploadSection').style.display = 'none';
+                document.getElementById('previewSection').style.display = 'block';
+                
+                displayTransactionsPreview();
+                
+            } catch (error) {
+                console.error('Error processing file:', error);
+                showError('Error processing file: ' + error.message);
+                event.target.value = '';
+            }
+        }
+
+        // Parse CSV file
+        async function parseCSV(file, accountId) {
+            const text = await file.text();
+            const lines = text.split('\n');
+            
+            if (lines.length < 2) {
+                throw new Error('CSV file is empty or invalid');
+            }
+            
+            // Get headers
+            const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+            
+            // Detect bank type and parse accordingly
+            if (headers.includes('Transaction ID') && headers.includes('Emoji')) {
+                // Monzo format
+                parseMonzoCSV(lines, headers, accountId);
+            } else if (headers.includes('Date') && headers.includes('Description') && headers.includes('Money In (£)')) {
+                // Bank of Scotland format (though it's PDF, this is for future CSV export)
+                parseBankOfScotlandCSV(lines, headers, accountId);
+            } else {
+                // Generic format
+                parseGenericCSV(lines, headers, accountId);
+            }
+        }
+
+        // Parse Monzo CSV format
+        function parseMonzoCSV(lines, headers, accountId) {
+            parsedTransactions = [];
+            
+            // Find column indices
+            const dateIdx = headers.indexOf('Date');
+            const timeIdx = headers.indexOf('Time');
+            const typeIdx = headers.indexOf('Type');
+            const nameIdx = headers.indexOf('Name');
+            const descriptionIdx = headers.indexOf('Description');
+            const amountIdx = headers.indexOf('Amount');
+            const categoryIdx = headers.indexOf('Category');
+            const notesIdx = headers.indexOf('Notes and #tags');
+            
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue;
+                
+                const values = parseCSVLine(line);
+                
+                if (values.length < headers.length) continue;
+                
+                const dateStr = values[dateIdx];
+                const timeStr = values[timeIdx];
+                const type = values[typeIdx];
+                const name = values[nameIdx];
+                const descriptionCol = values[descriptionIdx];
+                const amount = parseFloat(values[amountIdx]);
+                const note = values[notesIdx];
+                
+                if (!dateStr || isNaN(amount)) continue;
+                
+                // Combine Type, Name and Description
+                let description = '';
+                if (type && name) {
+                    description = `${type} - ${name}`;
+                } else {
+                    description = name || type || '';
+                }
+                
+                // Add Description column in parentheses if available
+                if (descriptionCol && descriptionCol.trim() !== '') {
+                    description += ` (${descriptionCol})`;
+                }
+                
+                // Parse date - Monzo format is DD/MM/YYYY
+                let date;
+                try {
+                    const dateParts = dateStr.split('/');
+                    if (dateParts.length === 3) {
+                        const day = dateParts[0].padStart(2, '0');
+                        const month = dateParts[1].padStart(2, '0');
+                        const year = dateParts[2];
+                        
+                        // Parse time - format is HH:MM:SS
+                        let time = '12:00:00';
+                        if (timeStr) {
+                            time = timeStr;
+                        }
+                        
+                        // Create ISO format: YYYY-MM-DDTHH:MM:SS
+                        const datetime = `${year}-${month}-${day}T${time}`;
+                        
+                        parsedTransactions.push({
+                            date: datetime,
+                            description: description,
+                            amount: amount,
+                            note: note,
+                            account_id: parseInt(accountId),
+                            isDuplicate: false,
+                            type: 'transaction',
+                            payee_id: null,
+                            category_id: null,
+                            location_id: null,
+                            project_id: null
+                        });
+                    }
+                } catch (e) {
+                    console.error('Error parsing date:', dateStr, e);
+                    continue;
+                }
+            }
+            
+            // Check for duplicates
+            checkDuplicates();
+        }
+
+        // Try to auto-suggest payee based on description
+        function autoSuggestPayee(description, index) {
+            if (!description) return;
+            
+            const descLower = description.toLowerCase();
+            
+            // Check if we already have a suggestion for this exact description
+            if (payeeSuggestions[description]) {
+                const payeeInput = document.getElementById(`payee_${index}`);
+                payeeInput.value = payeeSuggestions[description];
+                handlePayeeChange(index);
+                return;
+            }
+            
+            // Try to find a matching payee by name similarity
+            for (const payee of allPayees) {
+                const payeeLower = payee.name.toLowerCase();
+                
+                // Check if payee name is contained in description
+                if (descLower.includes(payeeLower)) {
+                    const payeeInput = document.getElementById(`payee_${index}`);
+                    payeeInput.value = payee.name;
+                    payeeSuggestions[description] = payee.name;
+                    handlePayeeChange(index);
+                    return;
+                }
+                
+                // Check if description is contained in payee name
+                if (payeeLower.includes(descLower)) {
+                    const payeeInput = document.getElementById(`payee_${index}`);
+                    payeeInput.value = payee.name;
+                    payeeSuggestions[description] = payee.name;
+                    handlePayeeChange(index);
+                    return;
+                }
+            }
+            
+            // Try fuzzy matching with existing payees (check first words)
+            const descWords = descLower.split(/[\s\-_]+/).filter(w => w.length > 2);
+            
+            for (const payee of allPayees) {
+                const payeeWords = payee.name.toLowerCase().split(/[\s\-_]+/);
+                
+                // If any significant word matches
+                for (const descWord of descWords) {
+                    for (const payeeWord of payeeWords) {
+                        if (descWord.includes(payeeWord) || payeeWord.includes(descWord)) {
+                            const payeeInput = document.getElementById(`payee_${index}`);
+                            payeeInput.value = payee.name;
+                            payeeSuggestions[description] = payee.name;
+                            handlePayeeChange(index);
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Parse a CSV line handling quoted values
+        function parseCSVLine(line) {
+            const values = [];
+            let current = '';
+            let inQuotes = false;
+            
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                
+                if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    values.push(current.trim());
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            
+            values.push(current.trim());
+            return values;
+        }
+
+        // Check for duplicate transactions
+        function checkDuplicates() {
+            parsedTransactions.forEach(trans => {
+                // Check if transaction already exists (same date, amount, account)
+                const exists = existingTransactions.some(existing => {
+                    const existingDate = new Date(existing.date);
+                    const transDate = new Date(trans.date);
+                    
+                    return existing.account_id === trans.account_id &&
+                        existing.amount === trans.amount &&
+                        existingDate.getTime() === transDate.getTime();
+                });
+                
+                trans.isDuplicate = exists;
+            });
+        }
+
+        // Cancel import
+        function cancelImport() {
+            document.getElementById('uploadSection').style.display = 'block';
+            document.getElementById('previewSection').style.display = 'none';
+            document.getElementById('fileInput').value = '';
+            parsedTransactions = [];
+            payeeSuggestions = {};
+        }
+
+        // Display transactions preview table
+        function displayTransactionsPreview() {
+            const tbody = document.getElementById('transactionsTableBody');
+            tbody.innerHTML = '';
+            
+            let duplicateCount = 0;
+            let newCount = 0;
+            
+            parsedTransactions.forEach((trans, index) => {
+                if (trans.isDuplicate) {
+                    duplicateCount++;
+                } else {
+                    newCount++;
+                }
+                
+                const row = document.createElement('tr');
+                if (trans.isDuplicate) {
+                    row.classList.add('duplicate');
+                }
+                
+                row.innerHTML = `
+                    <td style="padding: 8px; text-align: center;">
+                        <input type="checkbox" id="skip_${index}" onchange="handleSkipChange(${index})" 
+                            style="width: 20px; height: 20px; cursor: pointer;">
+                    </td>
+                    <td style="padding: 8px;">
+                        ${new Date(trans.date).toLocaleString('en-GB', { 
+                            day: '2-digit', 
+                            month: '2-digit', 
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        })}
+                    </td>
+                    <td style="padding: 8px;">${trans.description || ''}</td>
+                    <td style="padding: 8px; text-align: right; font-weight: bold; color: ${trans.amount < 0 ? '#ef4444' : '#10b981'};">
+                        £${Math.abs(trans.amount).toFixed(2)}
+                    </td>
+                    <td style="padding: 8px;">
+                        <select id="type_${index}" onchange="handleTypeChange(${index})" style="width: 100%;">
+                            <option value="transaction">Transaction</option>
+                            <option value="transfer">Transfer</option>
+                        </select>
+                    </td>
+                    <td style="padding: 8px;">
+                        <input list="payees_${index}" id="payee_${index}" 
+                            placeholder="Select or type payee..." 
+                            onchange="handlePayeeChange(${index})"
+                            style="width: 100%;">
+                        <datalist id="payees_${index}">
+                            ${allPayees.map(p => `<option value="${p.name}" data-id="${p.id}">`).join('')}
+                        </datalist>
+                        <select id="account_${index}" style="width: 100%; display: none;">
+                            <option value="">Select account...</option>
+                            ${allAccountsForImport.map(acc => `<option value="${acc.id}">${acc.name}</option>`).join('')}
+                        </select>
+                    </td>
+                    <td style="padding: 8px;">
+                        <select id="parentCategory_${index}" onchange="handleParentCategoryChange(${index})" style="width: 100%; margin-bottom: 4px;">
+                            <option value="">Select parent...</option>
+                            ${getUniqueParents().map(p => `<option value="${p}">${p}</option>`).join('')}
+                        </select>
+                        <select id="category_${index}" disabled style="width: 100%;">
+                            <option value="">Select category...</option>
+                        </select>
+                    </td>
+                    <td style="padding: 8px;">
+                        <select id="location_${index}" style="width: 100%;">
+                            <option value="">None</option>
+                            ${allLocations.map(l => `<option value="${l.id}">${l.name}</option>`).join('')}
+                        </select>
+                    </td>
+                    <td style="padding: 8px;">
+                        <select id="project_${index}" style="width: 100%;">
+                            <option value="">None</option>
+                            ${allProjects.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
+                        </select>
+                    </td>
+                    <td style="padding: 8px;">
+                        <textarea id="note_${index}" 
+                                rows="2" 
+                                placeholder="Optional note..."
+                                style="width: 100%; padding: 6px; border: 1px solid #e0e0e0; border-radius: 4px; font-size: 12px; resize: vertical;"
+                                onchange="parsedTransactions[${index}].note = this.value">${trans.note || ''}</textarea>
+                    </td>
+                    <td style="padding: 8px; text-align: center;">
+                        ${trans.isDuplicate ? 
+                            '<span style="color: #ef4444; font-weight: bold;">⚠️ Duplicate</span>' : 
+                            '<span style="color: #10b981; font-weight: bold;">✓ New</span>'}
+                    </td>
+                `;
+                
+                tbody.appendChild(row);
+
+                // Try to auto-suggest payee based on description
+                if (!trans.isDuplicate && trans.type === 'transaction') {
+                    setTimeout(() => autoSuggestPayee(trans.description, index), 10);
+                }
+            });
+            
+            // Update counts
+            document.getElementById('totalTransactions').textContent = parsedTransactions.length;
+            document.getElementById('duplicateCount').textContent = duplicateCount;
+            document.getElementById('newCount').textContent = newCount;
+            document.getElementById('importCount').textContent = newCount;
+        }
+
+        // Get unique parent categories
+        function getUniqueParents() {
+            const parents = new Set();
+            allCategories.forEach(cat => {
+                if (cat.parent) {
+                    parents.add(cat.parent);
+                }
+            });
+            return Array.from(parents).sort();
+        }
+
+        // Handle type change (Transaction vs Transfer)
+        function handleTypeChange(index) {
+            const type = document.getElementById(`type_${index}`).value;
+            const payeeInput = document.getElementById(`payee_${index}`);
+            const accountSelect = document.getElementById(`account_${index}`);
+            const categoryParent = document.getElementById(`parentCategory_${index}`);
+            const categorySelect = document.getElementById(`category_${index}`);
+            const locationSelect = document.getElementById(`location_${index}`);
+            const projectSelect = document.getElementById(`project_${index}`);
+            
+            if (type === 'transfer') {
+                // Show account selector, hide payee and disable category/location/project
+                payeeInput.style.display = 'none';
+                accountSelect.style.display = 'block';
+                categoryParent.disabled = true;
+                categorySelect.disabled = true;
+                locationSelect.disabled = true;
+                projectSelect.disabled = true;
+                
+                parsedTransactions[index].type = 'transfer';
+                
+                // Add listener to check currency difference
+                accountSelect.onchange = () => checkCurrencyDifference(index);
+                
+            } else {
+                // Show payee input, hide account selector, enable others
+                payeeInput.style.display = 'block';
+                accountSelect.style.display = 'none';
+                categoryParent.disabled = false;
+                locationSelect.disabled = false;
+                projectSelect.disabled = false;
+                
+                parsedTransactions[index].type = 'transaction';
+                
+                // Remove currency conversion field if exists
+                const existingConversion = document.getElementById(`currencyConversion_${index}`);
+                if (existingConversion) {
+                    existingConversion.remove();
+                }
+            }
+        }
+
+        // Check if currencies are different and show conversion field
+        function checkCurrencyDifference(index) {
+            const trans = parsedTransactions[index];
+            const toAccountId = document.getElementById(`account_${index}`).value;
+            
+            if (!toAccountId) return;
+            
+            // Get currencies
+            const fromAccount = allAccountsForImport.find(a => a.id === trans.account_id);
+            const toAccount = allAccountsForImport.find(a => a.id === parseInt(toAccountId));
+            
+            const td = document.getElementById(`account_${index}`).parentElement;
+            
+            // Remove existing conversion field if any
+            const existingConversion = document.getElementById(`currencyConversion_${index}`);
+            if (existingConversion) {
+                existingConversion.remove();
+            }
+            
+            if (fromAccount.currency !== toAccount.currency) {
+                // Different currencies - show conversion field
+                const conversionDiv = document.createElement('div');
+                conversionDiv.id = `currencyConversion_${index}`;
+                conversionDiv.style.marginTop = '8px';
+                conversionDiv.innerHTML = `
+                    <div style="background: #fff3cd; padding: 8px; border-radius: 4px; border: 1px solid #ffc107;">
+                        <div style="font-size: 11px; color: #856404; margin-bottom: 4px;">
+                            <strong>Currency conversion required</strong>
+                        </div>
+                        <div style="font-size: 12px; margin-bottom: 4px;">
+                            From: ${fromAccount.currency} ${Math.abs(trans.amount).toFixed(2)}
+                        </div>
+                        <label style="font-size: 12px; display: block; margin-bottom: 4px;">
+                            Amount received in ${toAccount.currency}:
+                        </label>
+                        <input type="number" 
+                            id="convertedAmount_${index}" 
+                            step="0.01" 
+                            placeholder="Enter amount in ${toAccount.currency}"
+                            style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px;"
+                            onchange="parsedTransactions[${index}].convertedAmount = parseFloat(this.value)">
+                    </div>
+                `;
+                td.appendChild(conversionDiv);
+            }
+        }
+
+        // Handle payee change
+        async function handlePayeeChange(index) {
+            const payeeInput = document.getElementById(`payee_${index}`);
+            const payeeName = payeeInput.value.trim();
+            
+            if (!payeeName) return;
+            
+            // Find or suggest payee
+            let payee = allPayees.find(p => p.name.toLowerCase() === payeeName.toLowerCase());
+            
+            if (payee) {
+                parsedTransactions[index].payee_id = payee.id;
+                
+                // Auto-fill category, location, project based on most common for this payee
+                await autoFillFromPayee(index, payee.id);
+                
+                // Store suggestion for similar descriptions
+                payeeSuggestions[parsedTransactions[index].description] = payeeName;
+                
+                // Apply suggestion to other transactions with same description
+                applySuggestionToSimilar(index);
+            } else {
+                parsedTransactions[index].payee_id = null;
+            }
+        }
+
+        // Auto-fill fields based on most common values for this payee
+        async function autoFillFromPayee(index, payeeId) {
+            try {
+                // Get all transactions for this payee
+                const response = await fetch(`${API_URL}/transactions?limit=100000`);
+                const allTransactions = await response.json();
+                
+                const payeeTransactions = allTransactions.filter(t => t.payee_id === payeeId);
+                
+                if (payeeTransactions.length === 0) return;
+                
+                // Find most common category
+                const categoryCounts = {};
+                const locationCounts = {};
+                const projectCounts = {};
+                
+                payeeTransactions.forEach(t => {
+                    if (t.category_id) {
+                        categoryCounts[t.category_id] = (categoryCounts[t.category_id] || 0) + 1;
+                    }
+                    if (t.location_id) {
+                        locationCounts[t.location_id] = (locationCounts[t.location_id] || 0) + 1;
+                    }
+                    if (t.project_id) {
+                        projectCounts[t.project_id] = (projectCounts[t.project_id] || 0) + 1;
+                    }
+                });
+                
+                // Get most common values
+                const mostCommonCategory = Object.keys(categoryCounts).reduce((a, b) => 
+                    categoryCounts[a] > categoryCounts[b] ? a : b, null);
+                const mostCommonLocation = Object.keys(locationCounts).reduce((a, b) => 
+                    locationCounts[a] > locationCounts[b] ? a : b, null);
+                const mostCommonProject = Object.keys(projectCounts).reduce((a, b) => 
+                    projectCounts[a] > projectCounts[b] ? a : b, null);
+                
+                // Set the values
+                if (mostCommonCategory) {
+                    const category = allCategories.find(c => c.id === parseInt(mostCommonCategory));
+                    if (category && category.parent) {
+                        document.getElementById(`parentCategory_${index}`).value = category.parent;
+                        handleParentCategoryChange(index);
+                        setTimeout(() => {
+                            document.getElementById(`category_${index}`).value = mostCommonCategory;
+                            parsedTransactions[index].category_id = parseInt(mostCommonCategory);
+                        }, 100);
+                    }
+                }
+                
+                if (mostCommonLocation) {
+                    document.getElementById(`location_${index}`).value = mostCommonLocation;
+                    parsedTransactions[index].location_id = parseInt(mostCommonLocation);
+                }
+                
+                if (mostCommonProject) {
+                    document.getElementById(`project_${index}`).value = mostCommonProject;
+                    parsedTransactions[index].project_id = parseInt(mostCommonProject);
+                }
+                
+            } catch (error) {
+                console.error('Error auto-filling from payee:', error);
+            }
+        }
+
+        // Apply payee suggestion to other transactions with same description
+        function applySuggestionToSimilar(sourceIndex) {
+            const sourceDescription = parsedTransactions[sourceIndex].description;
+            const suggestedPayee = payeeSuggestions[sourceDescription];
+            
+            if (!suggestedPayee) return;
+            
+            // Apply to all other transactions with same description
+            parsedTransactions.forEach((trans, index) => {
+                if (index !== sourceIndex && trans.description === sourceDescription) {
+                    const payeeInput = document.getElementById(`payee_${index}`);
+                    if (!payeeInput.value) { // Only if not already filled
+                        payeeInput.value = suggestedPayee;
+                        handlePayeeChange(index);
+                    }
+                }
+            });
+        }
+
+        // Handle parent category change
+        function handleParentCategoryChange(index) {
+            const parentValue = document.getElementById(`parentCategory_${index}`).value;
+            const categorySelect = document.getElementById(`category_${index}`);
+            
+            categorySelect.innerHTML = '<option value="">Select category...</option>';
+            
+            if (!parentValue) {
+                categorySelect.disabled = true;
+                return;
+            }
+            
+            // Filter categories by parent
+            const subcategories = allCategories
+                .filter(c => c.parent === parentValue)
+                .sort((a, b) => a.name.localeCompare(b.name));
+            
+            if (subcategories.length === 0) {
+                categorySelect.disabled = true;
+                return;
+            }
+            
+            categorySelect.disabled = false;
+            subcategories.forEach(cat => {
+                const option = document.createElement('option');
+                option.value = cat.id;
+                option.textContent = cat.name;
+                categorySelect.appendChild(option);
+            });
+        }
+
+        // Handle skip checkbox change
+        function handleSkipChange(index) {
+            const skipCheckbox = document.getElementById(`skip_${index}`);
+            const row = skipCheckbox.closest('tr');
+            
+            parsedTransactions[index].skip = skipCheckbox.checked;
+            
+            if (skipCheckbox.checked) {
+                row.style.opacity = '0.4';
+                row.style.background = '#f0f0f0';
+            } else {
+                row.style.opacity = '1';
+                row.style.background = parsedTransactions[index].isDuplicate ? '#fee' : '';
+            }
+            
+            // Update counts
+            updateImportCounts();
+        }
+
+        // Update import counts
+        function updateImportCounts() {
+            let duplicateCount = 0;
+            let newCount = 0;
+            let skippedCount = 0;
+            
+            parsedTransactions.forEach(trans => {
+                if (trans.skip) {
+                    skippedCount++;
+                } else if (trans.isDuplicate) {
+                    duplicateCount++;
+                } else {
+                    newCount++;
+                }
+            });
+            
+            document.getElementById('duplicateCount').textContent = duplicateCount;
+            document.getElementById('newCount').textContent = newCount;
+            document.getElementById('importCount').textContent = newCount;
+        }
+
+        // Import transactions
+        async function importTransactions() {
+            const newTransactions = parsedTransactions.filter(t => !t.isDuplicate);
+            
+            if (newTransactions.length === 0) {
+                showError('No new transactions to import');
+                return;
+            }
+            
+            if (!confirm(`Import ${newTransactions.length} transactions?`)) {
+                return;
+            }
+            
+            try {
+                let successCount = 0;
+                let errorCount = 0;
+                
+                for (let i = 0; i < parsedTransactions.length; i++) {
+                    const trans = parsedTransactions[i];
+                    
+                    if (trans.isDuplicate || trans.skip) continue;
+                    
+                    // Get values from form
+                    const type = document.getElementById(`type_${i}`).value;
+                    
+                    if (type === 'transfer') {
+                        // Handle transfer
+                        const toAccountId = document.getElementById(`account_${i}`).value;
+                        
+                        if (!toAccountId) {
+                            errorCount++;
+                            continue;
+                        }
+                        
+                        // Check if there's a converted amount
+                        let toAmount = null;
+                        if (trans.convertedAmount) {
+                            toAmount = trans.convertedAmount;
+                        }
+                        
+                        const transferData = {
+                            date: trans.date,
+                            from_account_id: trans.amount < 0 ? trans.account_id : parseInt(toAccountId),
+                            to_account_id: trans.amount < 0 ? parseInt(toAccountId) : trans.account_id,
+                            from_amount: Math.abs(trans.amount),
+                            to_amount: toAmount,
+                            note: trans.note
+                        };
+                        
+                        const response = await fetch(`${API_URL}/transactions/transfer`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(transferData)
+                        });
+                        
+                        if (response.ok) {
+                            successCount++;
+                        } else {
+                            errorCount++;
+                        }
+                        
+                    } else {
+                        // Handle regular transaction
+                        const payeeInput = document.getElementById(`payee_${i}`).value.trim();
+                        let payeeId = null;
+                        
+                        // Create payee if doesn't exist
+                        if (payeeInput) {
+                            let payee = allPayees.find(p => p.name.toLowerCase() === payeeInput.toLowerCase());
+                            
+                            if (!payee) {
+                                const createResponse = await fetch(`${API_URL}/payees`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ name: payeeInput })
+                                });
+                                
+                                if (createResponse.ok) {
+                                    payee = await createResponse.json();
+                                    allPayees.push(payee);
+                                }
+                            }
+                            
+                            if (payee) {
+                                payeeId = payee.id;
+                            }
+                        }
+                        
+                        const categoryId = document.getElementById(`category_${i}`).value;
+                        const locationId = document.getElementById(`location_${i}`).value;
+                        const projectId = document.getElementById(`project_${i}`).value;
+                        
+                        const transactionData = {
+                            date: trans.date,
+                            amount: trans.amount,
+                            currency: 'GBP',
+                            account_id: trans.account_id,
+                            category_id: categoryId ? parseInt(categoryId) : null,
+                            payee_id: payeeId,
+                            location_id: locationId ? parseInt(locationId) : null,
+                            project_id: projectId ? parseInt(projectId) : null,
+                            note: trans.note
+                        };
+                        
+                        const response = await fetch(`${API_URL}/transactions`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(transactionData)
+                        });
+                        
+                        if (response.ok) {
+                            successCount++;
+                        } else {
+                            errorCount++;
+                        }
+                    }
+                }
+                
+                if (successCount > 0) {
+                    showSuccess(`Successfully imported ${successCount} transactions!`);
+                }
+                
+                if (errorCount > 0) {
+                    showError(`Failed to import ${errorCount} transactions`);
+                }
+                
+                // Close modal and reset
+                closeModal('importModal');
+                cancelImport();
+                
+            } catch (error) {
+                console.error('Error importing transactions:', error);
+                showError('Error importing transactions: ' + error.message);
+            }
+        }
+
+        // Parse generic CSV format
+        function parseGenericCSV(lines, headers, accountId) {
+            parsedTransactions = [];
+            
+            // Try to detect common column names
+            const dateIdx = headers.findIndex(h => 
+                h.toLowerCase().includes('date') || h.toLowerCase().includes('fecha'));
+            const descIdx = headers.findIndex(h => 
+                h.toLowerCase().includes('description') || h.toLowerCase().includes('concept') || 
+                h.toLowerCase().includes('name') || h.toLowerCase().includes('descripción'));
+            const amountIdx = headers.findIndex(h => 
+                h.toLowerCase().includes('amount') || h.toLowerCase().includes('importe'));
+            
+            if (dateIdx === -1 || amountIdx === -1) {
+                throw new Error('Could not detect date and amount columns. Please use a supported format.');
+            }
+            
+            // Track time for transactions on same day
+            let lastDate = null;
+            let timeCounter = 0;
+            
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue;
+                
+                const values = parseCSVLine(line);
+                
+                if (values.length < headers.length) continue;
+                
+                const dateStr = values[dateIdx];
+                const description = descIdx !== -1 ? values[descIdx] : '';
+                const amountStr = values[amountIdx].replace(/[£€$,]/g, '');
+                const amount = parseFloat(amountStr);
+                
+                if (!dateStr || isNaN(amount)) continue;
+                
+                // Parse date and add time
+                let date;
+                try {
+                    date = new Date(dateStr);
+                    if (isNaN(date.getTime())) {
+                        // Try UK format DD/MM/YYYY
+                        const parts = dateStr.split('/');
+                        if (parts.length === 3) {
+                            date = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+                        }
+                    }
+                } catch (e) {
+                    continue;
+                }
+                
+                // Handle time assignment for same day transactions
+                const dateOnly = date.toDateString();
+                if (dateOnly !== lastDate) {
+                    lastDate = dateOnly;
+                    timeCounter = 0;
+                }
+                
+                // Set time: 12:00 for first transaction of the day, then increment by minute
+                const hours = 12;
+                const minutes = timeCounter;
+                timeCounter++;
+                
+                const datetime = new Date(date);
+                datetime.setHours(hours, minutes, 0, 0);
+                
+                parsedTransactions.push({
+                    date: datetime.toISOString().slice(0, 19),
+                    description: description,
+                    amount: amount,
+                    note: '',
+                    account_id: parseInt(accountId),
+                    isDuplicate: false,
+                    type: 'transaction',
+                    payee_id: null,
+                    category_id: null,
+                    location_id: null,
+                    project_id: null
+                });
+            }
+            
+            // Check for duplicates
+            checkDuplicates();
+        }
+
+        // Parse Bank of Scotland CSV format (if they provide CSV export)
+        function parseBankOfScotlandCSV(lines, headers, accountId) {
+            parsedTransactions = [];
+            
+            const dateIdx = headers.indexOf('Date');
+            const descIdx = headers.indexOf('Description');
+            const moneyInIdx = headers.indexOf('Money In (£)');
+            const moneyOutIdx = headers.indexOf('Money Out (£)');
+            
+            // Track time for transactions on same day
+            let lastDate = null;
+            let timeCounter = 0;
+            
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue;
+                
+                const values = parseCSVLine(line);
+                
+                if (values.length < headers.length) continue;
+                
+                const dateStr = values[dateIdx];
+                const description = values[descIdx];
+                const moneyIn = values[moneyInIdx] ? parseFloat(values[moneyInIdx]) : 0;
+                const moneyOut = values[moneyOutIdx] ? parseFloat(values[moneyOutIdx]) : 0;
+                
+                const amount = moneyIn > 0 ? moneyIn : -moneyOut;
+                
+                if (!dateStr || amount === 0) continue;
+                
+                // Parse date (format: DD Mon YY, e.g., "01 Jul 25")
+                let date;
+                try {
+                    const parts = dateStr.split(' ');
+                    if (parts.length === 3) {
+                        const day = parts[0];
+                        const month = parts[1];
+                        const year = '20' + parts[2];
+                        date = new Date(`${day} ${month} ${year}`);
+                    }
+                } catch (e) {
+                    continue;
+                }
+                
+                // Handle time assignment
+                const dateOnly = date.toDateString();
+                if (dateOnly !== lastDate) {
+                    lastDate = dateOnly;
+                    timeCounter = 0;
+                }
+                
+                const hours = 12;
+                const minutes = timeCounter;
+                timeCounter++;
+                
+                const datetime = new Date(date);
+                datetime.setHours(hours, minutes, 0, 0);
+                
+                parsedTransactions.push({
+                    date: datetime.toISOString().slice(0, 19),
+                    description: description,
+                    amount: amount,
+                    note: '',
+                    account_id: parseInt(accountId),
+                    isDuplicate: false,
+                    type: 'transaction',
+                    payee_id: null,
+                    category_id: null,
+                    location_id: null,
+                    project_id: null
+                });
+            }
+            
+            checkDuplicates();
         }
     </script>
 </body>
