@@ -15,6 +15,9 @@ function createNavbar() {
                     <a href="loans.html" style="text-decoration: none; color: ${currentPage === 'loans.html' ? '#667eea' : '#666'}; font-weight: ${currentPage === 'loans.html' ? '600' : '400'}; padding: 8px 16px; border-radius: 8px; background: ${currentPage === 'loans.html' ? '#f0f4ff' : 'transparent'}; transition: all 0.3s;">
                         💰 Loans
                     </a>
+                    <a href="tools.html" style="text-decoration: none; color: ${currentPage === 'tools.html' ? '#667eea' : '#666'}; font-weight: ${currentPage === 'tools.html' ? '600' : '400'}; padding: 8px 16px; border-radius: 8px; background: ${currentPage === 'tools.html' ? '#f0f4ff' : 'transparent'}; transition: all 0.3s;">
+                        🛠️ Tools
+                    </a>
                 </div>
             </div>
         </nav>

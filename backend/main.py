@@ -95,7 +95,7 @@ def create_category(
 @app.get("/payees", response_model=List[schemas.PayeeResponse])
 def get_payees(
     skip: int = 0,
-    limit: int = 200,
+    limit: int = 1000,
     db: Session = Depends(get_db)
 ):
     """
@@ -182,6 +182,131 @@ def create_project(
     db.commit()
     db.refresh(db_project)
     return db_project
+
+
+# ============================================
+# UPDATE ENDPOINTS
+# ============================================
+
+@app.put("/accounts/{account_id}", response_model=schemas.AccountResponse)
+def update_account(
+    account_id: int,
+    account: schemas.AccountCreate,
+    db: Session = Depends(get_db)
+):
+    """
+    Update an existing account.
+    """
+    db_account = db.query(models.Account).filter(models.Account.id == account_id).first()
+    
+    if not db_account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    
+    # Update fields
+    for key, value in account.dict().items():
+        setattr(db_account, key, value)
+    
+    db.commit()
+    db.refresh(db_account)
+    
+    return db_account
+
+
+@app.put("/categories/{category_id}", response_model=schemas.CategoryResponse)
+def update_category(
+    category_id: int,
+    category: schemas.CategoryCreate,
+    db: Session = Depends(get_db)
+):
+    """
+    Update an existing category.
+    """
+    db_category = db.query(models.Category).filter(models.Category.id == category_id).first()
+    
+    if not db_category:
+        raise HTTPException(status_code=404, detail="Category not found")
+    
+    # Update fields
+    for key, value in category.dict().items():
+        setattr(db_category, key, value)
+    
+    db.commit()
+    db.refresh(db_category)
+    
+    return db_category
+
+
+@app.put("/payees/{payee_id}", response_model=schemas.PayeeResponse)
+def update_payee(
+    payee_id: int,
+    payee: schemas.PayeeCreate,
+    db: Session = Depends(get_db)
+):
+    """
+    Update an existing payee.
+    """
+    db_payee = db.query(models.Payee).filter(models.Payee.id == payee_id).first()
+    
+    if not db_payee:
+        raise HTTPException(status_code=404, detail="Payee not found")
+    
+    # Update fields
+    for key, value in payee.dict().items():
+        setattr(db_payee, key, value)
+    
+    db.commit()
+    db.refresh(db_payee)
+    
+    return db_payee
+
+
+@app.put("/locations/{location_id}", response_model=schemas.LocationResponse)
+def update_location(
+    location_id: int,
+    location: schemas.LocationCreate,
+    db: Session = Depends(get_db)
+):
+    """
+    Update an existing location.
+    """
+    db_location = db.query(models.Location).filter(models.Location.id == location_id).first()
+    
+    if not db_location:
+        raise HTTPException(status_code=404, detail="Location not found")
+    
+    # Update fields
+    for key, value in location.dict().items():
+        setattr(db_location, key, value)
+    
+    db.commit()
+    db.refresh(db_location)
+    
+    return db_location
+
+
+@app.put("/projects/{project_id}", response_model=schemas.ProjectResponse)
+def update_project(
+    project_id: int,
+    project: schemas.ProjectCreate,
+    db: Session = Depends(get_db)
+):
+    """
+    Update an existing project.
+    """
+    db_project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    
+    if not db_project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Update fields
+    for key, value in project.dict().items():
+        setattr(db_project, key, value)
+    
+    db.commit()
+    db.refresh(db_project)
+    
+    return db_project
+
 
 # ============================================
 # TRANSACTIONS ENDPOINTS
@@ -483,7 +608,6 @@ def create_transfer(
         "transfer_in": transaction_in,
         "message": "Transfer created successfully"
     }
-
 
 # ============================================
 # DASHBOARD / STATISTICS

@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Financisto Manager - Tools</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .tools-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .tool-card {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .tool-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .tool-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+        
+        .tool-title {
+            font-size: 20px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        .tool-description {
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        
+        .modal-content {
+            background-color: white;
+            margin: 3% auto;
+            padding: 30px;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 800px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        
+        .modal-header {
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .modal-header h3 {
+            margin: 0;
+            color: #333;
+        }
+        
+        .close-btn {
+            font-size: 28px;
+            font-weight: bold;
+            color: #999;
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 0;
+            width: auto;
+        }
+        
+        .close-btn:hover {
+            color: #333;
+            transform: none;
+        }
+        
+        .item-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .item-row {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 10px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+        
+        .item-info {
+            flex: 1;
+        }
+        
+        .item-name {
+            font-weight: 600;
+            color: #333;
+            font-size: 16px;
+        }
+        
+        .item-meta {
+            font-size: 12px;
+            color: #666;
+            margin-top: 4px;
+        }
+        
+        .item-actions {
+            display: flex;
+            gap: 5px;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        button.secondary {
+            background: #6c757d;
+        }
+        
+        button.danger {
+            background: #ef4444;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        input, select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .success-message {
+            background: #10b981;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        
+        .error-message {
+            background: #ef4444;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        
+        .search-box {
+            margin-bottom: 20px;
+        }
+    </style>
+    <script src="navbar.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div id="successMessage" class="success-message"></div>
+        <div id="errorMessage" class="error-message"></div>
+        
+        <div class="tools-grid">
+            <div class="tool-card" onclick="openTool('categories')">
+                <div class="tool-icon">📁</div>
+                <div class="tool-title">Manage Categories</div>
+                <div class="tool-description">Edit parent categories and subcategories</div>
+            </div>
+            
+            <div class="tool-card" onclick="openTool('accounts')">
+                <div class="tool-icon">💳</div>
+                <div class="tool-title">Manage Accounts</div>
+                <div class="tool-description">Edit account names and currencies</div>
+            </div>
+            
+            <div class="tool-card" onclick="openTool('payees')">
+                <div class="tool-icon">👤</div>
+                <div class="tool-title">Manage Payees</div>
+                <div class="tool-description">Edit payee names</div>
+            </div>
+            
+            <div class="tool-card" onclick="openTool('locations')">
+                <div class="tool-icon">📍</div>
+                <div class="tool-title">Manage Locations</div>
+                <div class="tool-description">Edit location names</div>
+            </div>
+            
+            <div class="tool-card" onclick="openTool('projects')">
+                <div class="tool-icon">📋</div>
+                <div class="tool-title">Manage Projects</div>
+                <div class="tool-description">Edit project names</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Categories Modal -->
+    <div id="categoriesModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Manage Categories</h3>
+                <button class="close-btn" onclick="closeModal('categoriesModal')">&times;</button>
+            </div>
+            <div class="search-box">
+                <input type="text" id="categorySearch" placeholder="Search categories..." onkeyup="filterCategories()">
+            </div>
+            <div class="item-list" id="categoriesList"></div>
+        </div>
+    </div>
+    
+    <!-- Accounts Modal -->
+    <div id="accountsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Manage Accounts</h3>
+                <button class="close-btn" onclick="closeModal('accountsModal')">&times;</button>
+            </div>
+            <div class="search-box">
+                <input type="text" id="accountSearch" placeholder="Search accounts..." onkeyup="filterAccounts()">
+            </div>
+            <div class="item-list" id="accountsList"></div>
+        </div>
+    </div>
+    
+    <!-- Payees Modal -->
+    <div id="payeesModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Manage Payees</h3>
+                <button class="close-btn" onclick="closeModal('payeesModal')">&times;</button>
+            </div>
+            <div class="search-box">
+                <input type="text" id="payeeSearch" placeholder="Search payees..." onkeyup="filterPayees()">
+            </div>
+            <div class="item-list" id="payeesList"></div>
+        </div>
+    </div>
+    
+    <!-- Locations Modal -->
+    <div id="locationsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Manage Locations</h3>
+                <button class="close-btn" onclick="closeModal('locationsModal')">&times;</button>
+            </div>
+            <div class="search-box">
+                <input type="text" id="locationSearch" placeholder="Search locations..." onkeyup="filterLocations()">
+            </div>
+            <div class="item-list" id="locationsList"></div>
+        </div>
+    </div>
+    
+    <!-- Projects Modal -->
+    <div id="projectsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Manage Projects</h3>
+                <button class="close-btn" onclick="closeModal('projectsModal')">&times;</button>
+            </div>
+            <div class="search-box">
+                <input type="text" id="projectSearch" placeholder="Search projects..." onkeyup="filterProjects()">
+            </div>
+            <div class="item-list" id="projectsList"></div>
+        </div>
+    </div>
+    
+    <!-- Edit Modal -->
+    <div id="editModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3 id="editModalTitle">Edit Item</h3>
+                <button class="close-btn" onclick="closeModal('editModal')">&times;</button>
+            </div>
+            <div class="form-group">
+                <label for="editName">Name</label>
+                <input type="text" id="editName">
+            </div>
+            <div class="form-group" id="editCurrencyGroup" style="display: none;">
+                <label for="editCurrency">Currency</label>
+                <select id="editCurrency">
+                    <option value="GBP">GBP (£)</option>
+                    <option value="EUR">EUR (€)</option>
+                    <option value="USD">USD ($)</option>
+                </select>
+            </div>
+            <div class="form-group" id="editParentGroup" style="display: none;">
+                <label for="editParent">Parent Category</label>
+                <input type="text" id="editParent" readonly style="background: #f0f0f0;">
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button onclick="saveEdit()" style="flex: 1;">Save</button>
+                <button onclick="closeModal('editModal')" class="secondary" style="flex: 1;">Cancel</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const API_URL = 'http://localhost:8000';
+        
+        let allCategories = [];
+        let allAccounts = [];
+        let allPayees = [];
+        let allLocations = [];
+        let allProjects = [];
+        
+        let currentEditItem = null;
+        let currentEditType = null;
+        
+        // Open tool modal
+        async function openTool(toolName) {
+            switch(toolName) {
+                case 'categories':
+                    await loadCategories();
+                    displayCategories();
+                    document.getElementById('categoriesModal').style.display = 'block';
+                    break;
+                case 'accounts':
+                    await loadAccounts();
+                    displayAccounts();
+                    document.getElementById('accountsModal').style.display = 'block';
+                    break;
+                case 'payees':
+                    await loadPayees();
+                    displayPayees();
+                    document.getElementById('payeesModal').style.display = 'block';
+                    break;
+                case 'locations':
+                    await loadLocations();
+                    displayLocations();
+                    document.getElementById('locationsModal').style.display = 'block';
+                    break;
+                case 'projects':
+                    await loadProjects();
+                    displayProjects();
+                    document.getElementById('projectsModal').style.display = 'block';
+                    break;
+            }
+        }
+        
+        // Close modal
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+        }
+        
+        // Load data functions
+        async function loadCategories() {
+            const response = await fetch(`${API_URL}/categories?limit=1000`);
+            allCategories = await response.json();
+            
+            // Sort alphabetically by parent first, then by name
+            allCategories.sort((a, b) => {
+                const parentA = a.parent || '';
+                const parentB = b.parent || '';
+                if (parentA !== parentB) {
+                    return parentA.localeCompare(parentB);
+                }
+                return a.name.localeCompare(b.name);
+            });
+        }
+        
+        async function loadAccounts() {
+            const response = await fetch(`${API_URL}/accounts`);
+            allAccounts = await response.json();
+            
+            // Sort alphabetically by name
+            allAccounts.sort((a, b) => a.name.localeCompare(b.name));
+        }
+        
+        async function loadPayees() {
+            const response = await fetch(`${API_URL}/payees`);
+            allPayees = await response.json();
+            
+            // Sort alphabetically by name
+            allPayees.sort((a, b) => a.name.localeCompare(b.name));
+        }
+        
+        async function loadLocations() {
+            const response = await fetch(`${API_URL}/locations`);
+            allLocations = await response.json();
+            
+            // Sort alphabetically by name
+            allLocations.sort((a, b) => a.name.localeCompare(b.name));
+        }
+        
+        async function loadProjects() {
+            const response = await fetch(`${API_URL}/projects`);
+            allProjects = await response.json();
+            
+            // Sort alphabetically by name
+            allProjects.sort((a, b) => a.name.localeCompare(b.name));
+        }
+        
+        // Display functions
+        function displayCategories(filtered = null) {
+            const categories = filtered || allCategories;
+            const list = document.getElementById('categoriesList');
+            
+            // Group categories by parent
+            const grouped = {};
+            const allParentNames = new Set();
+            
+            categories.forEach(cat => {
+                if (cat.parent) {
+                    allParentNames.add(cat.parent);
+                    if (!grouped[cat.parent]) {
+                        grouped[cat.parent] = [];
+                    }
+                    grouped[cat.parent].push(cat);
+                }
+            });
+            
+            // Find standalone parent categories (parents without children)
+            const standaloneParents = categories.filter(cat => 
+                !cat.parent && !allParentNames.has(cat.name)
+            );
+            
+            // Add standalone parents to grouped (with empty array)
+            standaloneParents.forEach(cat => {
+                grouped[cat.name] = [];
+            });
+            
+            // Sort all parent names alphabetically
+            const sortedParents = Object.keys(grouped).sort((a, b) => a.localeCompare(b));
+            
+            // Build HTML
+            let html = '';
+            
+            sortedParents.forEach(parent => {
+                const subcategories = grouped[parent].sort((a, b) => a.name.localeCompare(b.name));
+                
+                // Header with parent name and edit button
+                if (subcategories.length > 0) {
+                    html += `
+                        <div style="margin-bottom: 25px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 18px; font-weight: bold; color: #667eea; margin-bottom: 10px; padding: 10px; background: #f0f4ff; border-radius: 8px;">
+                                <span>📁 ${parent}</span>
+                                <button onclick="editParentCategory('${parent.replace(/'/g, "\\'")}', ${JSON.stringify(subcategories.map(c => c.id))})" style="padding: 6px 12px; font-size: 13px;">✏️ Edit Parent</button>
+                            </div>
+                    `;
+                    
+                    subcategories.forEach((cat, index) => {
+                        const isLast = index === subcategories.length - 1;
+                        const connector = isLast ? '└─' : '├─';
+                        
+                        html += `
+                            <div class="item-row" style="margin-left: 20px; margin-bottom: 8px;">
+                                <div class="item-info">
+                                    <div class="item-name">
+                                        <span style="color: #999; margin-right: 8px;">${connector}</span>
+                                        ${cat.name}
+                                    </div>
+                                </div>
+                                <div class="item-actions">
+                                    <button onclick="editItem('category', ${cat.id})">✏️ Edit</button>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    html += '</div>';
+                } else {
+                    // Standalone parent (no children)
+                    const standaloneCategory = standaloneParents.find(c => c.name === parent);
+                    html += `
+                        <div style="margin-bottom: 25px;">
+                            <div class="item-row">
+                                <div class="item-info">
+                                    <div class="item-name">📁 ${parent}</div>
+                                    <div class="item-meta">Parent Category (no subcategories)</div>
+                                </div>
+                                <div class="item-actions">
+                                    <button onclick="editItem('category', ${standaloneCategory.id})">✏️ Edit</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+            });
+            
+            if (html === '') {
+                html = '<p style="text-align: center; color: #666; padding: 20px;">No categories found</p>';
+            }
+            
+            list.innerHTML = html;
+        }
+        
+        function displayAccounts(filtered = null) {
+            const accounts = filtered || allAccounts;
+            const list = document.getElementById('accountsList');
+            
+            list.innerHTML = accounts.map(acc => `
+                <div class="item-row">
+                    <div class="item-info">
+                        <div class="item-name">${acc.name}</div>
+                        <div class="item-meta">Currency: ${acc.currency} | Type: ${acc.type || 'Regular'}</div>
+                    </div>
+                    <div class="item-actions">
+                        <button onclick="editItem('account', ${acc.id})">✏️ Edit</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        function displayPayees(filtered = null) {
+            const payees = filtered || allPayees;
+            const list = document.getElementById('payeesList');
+            
+            list.innerHTML = payees.map(payee => `
+                <div class="item-row">
+                    <div class="item-info">
+                        <div class="item-name">${payee.name}</div>
+                    </div>
+                    <div class="item-actions">
+                        <button onclick="editItem('payee', ${payee.id})">✏️ Edit</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        function displayLocations(filtered = null) {
+            const locations = filtered || allLocations;
+            const list = document.getElementById('locationsList');
+            
+            list.innerHTML = locations.map(loc => `
+                <div class="item-row">
+                    <div class="item-info">
+                        <div class="item-name">${loc.name}</div>
+                    </div>
+                    <div class="item-actions">
+                        <button onclick="editItem('location', ${loc.id})">✏️ Edit</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        function displayProjects(filtered = null) {
+            const projects = filtered || allProjects;
+            const list = document.getElementById('projectsList');
+            
+            list.innerHTML = projects.map(proj => `
+                <div class="item-row">
+                    <div class="item-info">
+                        <div class="item-name">${proj.name}</div>
+                    </div>
+                    <div class="item-actions">
+                        <button onclick="editItem('project', ${proj.id})">✏️ Edit</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        // Filter functions
+        function filterCategories() {
+            const search = document.getElementById('categorySearch').value.toLowerCase();
+            const filtered = allCategories.filter(cat => 
+                cat.name.toLowerCase().includes(search) || 
+                (cat.parent && cat.parent.toLowerCase().includes(search))
+            );
+            displayCategories(filtered);
+        }
+        
+        function filterAccounts() {
+            const search = document.getElementById('accountSearch').value.toLowerCase();
+            const filtered = allAccounts.filter(acc => 
+                acc.name.toLowerCase().includes(search)
+            );
+            displayAccounts(filtered);
+        }
+        
+        function filterPayees() {
+            const search = document.getElementById('payeeSearch').value.toLowerCase();
+            const filtered = allPayees.filter(payee => 
+                payee.name.toLowerCase().includes(search)
+            );
+            displayPayees(filtered);
+        }
+        
+        function filterLocations() {
+            const search = document.getElementById('locationSearch').value.toLowerCase();
+            const filtered = allLocations.filter(loc => 
+                loc.name.toLowerCase().includes(search)
+            );
+            displayLocations(filtered);
+        }
+        
+        function filterProjects() {
+            const search = document.getElementById('projectSearch').value.toLowerCase();
+            const filtered = allProjects.filter(proj => 
+                proj.name.toLowerCase().includes(search)
+            );
+            displayProjects(filtered);
+        }
+        
+        // Edit item
+        function editItem(type, id) {
+            currentEditType = type;
+            let item;
+            
+            switch(type) {
+                case 'category':
+                    item = allCategories.find(c => c.id === id);
+                    document.getElementById('editModalTitle').textContent = 'Edit Category';
+                    document.getElementById('editName').value = item.name;
+                    document.getElementById('editCurrencyGroup').style.display = 'none';
+                    document.getElementById('editParentGroup').style.display = item.parent ? 'block' : 'none';
+                    if (item.parent) {
+                        document.getElementById('editParent').value = item.parent;
+                    }
+                    break;
+                case 'account':
+                    item = allAccounts.find(a => a.id === id);
+                    document.getElementById('editModalTitle').textContent = 'Edit Account';
+                    document.getElementById('editName').value = item.name;
+                    document.getElementById('editCurrencyGroup').style.display = 'block';
+                    document.getElementById('editCurrency').value = item.currency;
+                    document.getElementById('editParentGroup').style.display = 'none';
+                    break;
+                case 'payee':
+                    item = allPayees.find(p => p.id === id);
+                    document.getElementById('editModalTitle').textContent = 'Edit Payee';
+                    document.getElementById('editName').value = item.name;
+                    document.getElementById('editCurrencyGroup').style.display = 'none';
+                    document.getElementById('editParentGroup').style.display = 'none';
+                    break;
+                case 'location':
+                    item = allLocations.find(l => l.id === id);
+                    document.getElementById('editModalTitle').textContent = 'Edit Location';
+                    document.getElementById('editName').value = item.name;
+                    document.getElementById('editCurrencyGroup').style.display = 'none';
+                    document.getElementById('editParentGroup').style.display = 'none';
+                    break;
+                case 'project':
+                    item = allProjects.find(p => p.id === id);
+                    document.getElementById('editModalTitle').textContent = 'Edit Project';
+                    document.getElementById('editName').value = item.name;
+                    document.getElementById('editCurrencyGroup').style.display = 'none';
+                    document.getElementById('editParentGroup').style.display = 'none';
+                    break;
+            }
+            
+            currentEditItem = item;
+            document.getElementById('editModal').style.display = 'block';
+        }
+
+        // Edit parent category name
+        async function editParentCategory(oldParentName, subcategoryIds) {
+            const newParentName = prompt(`Edit parent category name:`, oldParentName);
+            
+            if (!newParentName || newParentName.trim() === '') {
+                return;
+            }
+            
+            if (newParentName.trim() === oldParentName) {
+                return; // No change
+            }
+            
+            try {
+                // Update all subcategories with the new parent name
+                const updatePromises = subcategoryIds.map(async (id) => {
+                    const category = allCategories.find(c => c.id === id);
+                    
+                    const response = await fetch(`${API_URL}/categories/${id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            name: category.name,
+                            parent: newParentName.trim(),
+                            type: category.type
+                        })
+                    });
+                    
+                    return response.ok;
+                });
+                
+                const results = await Promise.all(updatePromises);
+                
+                if (results.every(r => r)) {
+                    showSuccess('Parent category renamed successfully!');
+                    await loadCategories();
+                    displayCategories();
+                } else {
+                    showError('Some categories failed to update');
+                }
+            } catch (error) {
+                showError('Error: ' + error.message);
+            }
+        }
+        
+        // Save edit
+        async function saveEdit() {
+            const newName = document.getElementById('editName').value.trim();
+            
+            if (!newName) {
+                showError('Name cannot be empty');
+                return;
+            }
+            
+            try {
+                let endpoint, body;
+                
+                switch(currentEditType) {
+                    case 'category':
+                        endpoint = `${API_URL}/categories/${currentEditItem.id}`;
+                        body = {
+                            name: newName,
+                            parent: currentEditItem.parent,
+                            type: currentEditItem.type
+                        };
+                        break;
+                    case 'account':
+                        endpoint = `${API_URL}/accounts/${currentEditItem.id}`;
+                        body = {
+                            name: newName,
+                            currency: document.getElementById('editCurrency').value,
+                            type: currentEditItem.type,
+                            initial_balance: currentEditItem.initial_balance
+                        };
+                        break;
+                    case 'payee':
+                        endpoint = `${API_URL}/payees/${currentEditItem.id}`;
+                        body = { name: newName };
+                        break;
+                    case 'location':
+                        endpoint = `${API_URL}/locations/${currentEditItem.id}`;
+                        body = { name: newName };
+                        break;
+                    case 'project':
+                        endpoint = `${API_URL}/projects/${currentEditItem.id}`;
+                        body = { name: newName };
+                        break;
+                }
+                
+                const response = await fetch(endpoint, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                
+                if (response.ok) {
+                    showSuccess('Item updated successfully!');
+                    closeModal('editModal');
+                    
+                    // Reload the appropriate list
+                    switch(currentEditType) {
+                        case 'category':
+                            await loadCategories();
+                            displayCategories();
+                            break;
+                        case 'account':
+                            await loadAccounts();
+                            displayAccounts();
+                            break;
+                        case 'payee':
+                            await loadPayees();
+                            displayPayees();
+                            break;
+                        case 'location':
+                            await loadLocations();
+                            displayLocations();
+                            break;
+                        case 'project':
+                            await loadProjects();
+                            displayProjects();
+                            break;
+                    }
+                } else {
+                    showError('Failed to update item');
+                }
+            } catch (error) {
+                showError('Error: ' + error.message);
+            }
+        }
+        
+        function showSuccess(message) {
+            const element = document.getElementById('successMessage');
+            element.textContent = message;
+            element.style.display = 'block';
+            setTimeout(() => {
+                element.style.display = 'none';
+            }, 3000);
+        }
+        
+        function showError(message) {
+            const element = document.getElementById('errorMessage');
+            element.textContent = message;
+            element.style.display = 'block';
+            setTimeout(() => {
+                element.style.display = 'none';
+            }, 5000);
+        }
+        
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            if (event.target.classList.contains('modal')) {
+                event.target.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html>
