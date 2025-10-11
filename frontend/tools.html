@@ -284,6 +284,11 @@
                 <div class="tool-title">Import Bank Statements</div>
                 <div class="tool-description">Import transactions from CSV bank statements</div>
             </div>
+            <div class="tool-card" onclick="openTool('export')">
+                <div class="tool-icon">📤</div>
+                <div class="tool-title">Export to CSV</div>
+                <div class="tool-description">Export your transactions to CSV format</div>
+            </div>
         </div>
     </div>
     
@@ -453,6 +458,64 @@
             </div>
         </div>
     </div>
+
+    <!-- Export Modal -->
+    <div id="exportModal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3>📤 Export to CSV</h3>
+                <button class="close-btn" onclick="closeModal('exportModal')">&times;</button>
+            </div>
+            
+            <div style="background: #f0f4ff; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <p style="color: #666; font-size: 14px;">Select filters to export specific transactions, or leave empty to export all.</p>
+            </div>
+            
+            <div class="form-group">
+                <label for="exportStartDate">From Date</label>
+                <input type="date" id="exportStartDate">
+            </div>
+            
+            <div class="form-group">
+                <label for="exportEndDate">To Date</label>
+                <input type="date" id="exportEndDate">
+            </div>
+            
+            <div class="form-group">
+                <label for="exportAccount">Account</label>
+                <select id="exportAccount">
+                    <option value="">All accounts</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="exportParentCategory">Parent Category</label>
+                <select id="exportParentCategory" onchange="loadExportSubcategories()">
+                    <option value="">All categories</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="exportCategory">Subcategory</label>
+                <select id="exportCategory" disabled>
+                    <option value="">First select a parent category...</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="exportFormat">CSV Format</label>
+                <select id="exportFormat">
+                    <option value="standard">Standard Format</option>
+                    <option value="detailed">Detailed Format (with all fields)</option>
+                </select>
+            </div>
+            
+            <div style="display: flex; gap: 10px;">
+                <button onclick="exportToCSV()" style="flex: 1; padding: 15px;">📥 Download CSV</button>
+                <button onclick="closeModal('exportModal')" class="secondary" style="flex: 0 0 auto; padding: 15px 30px;">Cancel</button>
+            </div>
+        </div>
+    </div>
     
     <script>
         const API_URL = 'http://localhost:8000';
@@ -503,6 +566,10 @@
                 case 'import':
                     await loadImportData();
                     document.getElementById('importModal').style.display = 'block';
+                    break;
+                case 'export':
+                    await loadExportData();
+                    document.getElementById('exportModal').style.display = 'block';
                     break;
             }
         }
@@ -1959,6 +2026,184 @@
             if (parsedTransactions.length === 0) {
                 throw new Error('No transactions found in CSV. Please check the file format.');
             }
+        }
+
+        // Load data for export
+        async function loadExportData() {
+            try {
+                // Load accounts for filter
+                const accountsResponse = await fetch(`${API_URL}/accounts`);
+                const accounts = await accountsResponse.json();
+                
+                const exportAccountSelect = document.getElementById('exportAccount');
+                exportAccountSelect.innerHTML = '<option value="">All accounts</option>';
+                accounts.forEach(account => {
+                    const option = document.createElement('option');
+                    option.value = account.id;
+                    option.textContent = account.name;
+                    exportAccountSelect.appendChild(option);
+                });
+                
+                // Load categories for filter
+                await loadCategories();
+                
+                const exportParentSelect = document.getElementById('exportParentCategory');
+                exportParentSelect.innerHTML = '<option value="">All categories</option>';
+                
+                const parents = [...new Set(allCategories
+                    .map(c => c.parent)
+                    .filter(p => p && p.trim() !== ''))]
+                    .sort();
+                
+                parents.forEach(parent => {
+                    const option = document.createElement('option');
+                    option.value = parent;
+                    option.textContent = parent;
+                    exportParentSelect.appendChild(option);
+                });
+                
+            } catch (error) {
+                console.error('Error loading export data:', error);
+                showError('Failed to load export options');
+            }
+        }
+
+        // Load subcategories for export
+        function loadExportSubcategories() {
+            const parentValue = document.getElementById('exportParentCategory').value;
+            const categorySelect = document.getElementById('exportCategory');
+            
+            categorySelect.innerHTML = '<option value="">All subcategories</option>';
+            
+            if (!parentValue) {
+                categorySelect.disabled = true;
+                return;
+            }
+            
+            const subcategories = allCategories
+                .filter(c => c.parent === parentValue)
+                .sort((a, b) => a.name.localeCompare(b.name));
+            
+            if (subcategories.length === 0) {
+                categorySelect.disabled = true;
+                return;
+            }
+            
+            categorySelect.disabled = false;
+            subcategories.forEach(cat => {
+                const option = document.createElement('option');
+                option.value = cat.id;
+                option.textContent = cat.name;
+                categorySelect.appendChild(option);
+            });
+        }
+
+        // Export to CSV
+        async function exportToCSV() {
+            try {
+                // Get filter values
+                const startDate = document.getElementById('exportStartDate').value;
+                const endDate = document.getElementById('exportEndDate').value;
+                const accountId = document.getElementById('exportAccount').value;
+                const categoryId = document.getElementById('exportCategory').value;
+                const format = document.getElementById('exportFormat').value;
+                
+                // Build query parameters
+                let url = `${API_URL}/transactions?limit=100000`;
+                
+                if (startDate) {
+                    url += `&start_date=${startDate}`;
+                }
+                if (endDate) {
+                    url += `&end_date=${endDate}`;
+                }
+                if (accountId) {
+                    url += `&account_id=${accountId}`;
+                }
+                if (categoryId) {
+                    url += `&category_id=${categoryId}`;
+                }
+                
+                // Fetch transactions
+                const response = await fetch(url);
+                const transactions = await response.json();
+                
+                if (transactions.length === 0) {
+                    showError('No transactions found with selected filters');
+                    return;
+                }
+                
+                // Generate CSV content
+                let csvContent = '';
+                
+                if (format === 'standard') {
+                    // Standard format: Date, Description, Amount, Category, Account
+                    csvContent = 'Date,Time,Description,Amount,Currency,Category,Account,Payee,Location,Project,Note\n';
+                    
+                    transactions.forEach(t => {
+                        const date = new Date(t.date);
+                        const dateStr = date.toLocaleDateString('en-GB');
+                        const timeStr = date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                        const description = (t.payee_name || 'No payee').replace(/,/g, ';');
+                        const amount = t.amount.toFixed(2);
+                        const category = (t.category_name || 'Uncategorised').replace(/,/g, ';');
+                        const account = (t.account_name || '').replace(/,/g, ';');
+                        const payee = (t.payee_name || '').replace(/,/g, ';');
+                        const location = (t.location_name || '').replace(/,/g, ';');
+                        const project = (t.project_name || '').replace(/,/g, ';');
+                        const note = (t.note || '').replace(/,/g, ';');
+                        
+                        csvContent += `${dateStr},${timeStr},"${description}",${amount},${t.currency},"${category}","${account}","${payee}","${location}","${project}","${note}"\n`;
+                    });
+                } else {
+                    // Detailed format: All fields including IDs
+                    csvContent = 'ID,Date,Time,Amount,Currency,Account ID,Account Name,Category ID,Category Name,Payee ID,Payee Name,Location ID,Location Name,Project ID,Project Name,Note,Created At,Updated At\n';
+                    
+                    transactions.forEach(t => {
+                        const date = new Date(t.date);
+                        const dateStr = date.toLocaleDateString('en-GB');
+                        const timeStr = date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                        const amount = t.amount.toFixed(2);
+                        const note = (t.note || '').replace(/,/g, ';').replace(/"/g, '""');
+                        const accountName = (t.account_name || '').replace(/,/g, ';').replace(/"/g, '""');
+                        const categoryName = (t.category_name || '').replace(/,/g, ';').replace(/"/g, '""');
+                        const payeeName = (t.payee_name || '').replace(/,/g, ';').replace(/"/g, '""');
+                        const locationName = (t.location_name || '').replace(/,/g, ';').replace(/"/g, '""');
+                        const projectName = (t.project_name || '').replace(/,/g, ';').replace(/"/g, '""');
+                        
+                        csvContent += `${t.id},${dateStr},${timeStr},${amount},${t.currency},`;
+                        csvContent += `${t.account_id || ''},"${accountName}",`;
+                        csvContent += `${t.category_id || ''},"${categoryName}",`;
+                        csvContent += `${t.payee_id || ''},"${payeeName}",`;
+                        csvContent += `${t.location_id || ''},"${locationName}",`;
+                        csvContent += `${t.project_id || ''},"${projectName}",`;
+                        csvContent += `"${note}","${t.created_at || ''}","${t.updated_at || ''}"\n`;
+                    });
+                }
+                
+                // Create download link
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                const downloadUrl = URL.createObjectURL(blob);
+
+                // Generate filename with date
+                const now = new Date();
+                const filename = `financisto_export_${now.getFullYear()}-${(now.getMonth()+1).toString().padStart(2,'0')}-${now.getDate().toString().padStart(2,'0')}.csv`;
+
+                link.setAttribute('href', downloadUrl);
+                link.setAttribute('download', filename);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+
+                showSuccess(`Exported ${transactions.length} transactions successfully!`);
+                closeModal('exportModal');
+
+                } catch (error) {
+                    console.error('Error exporting to CSV:', error);
+                    showError('Error exporting data: ' + error.message);
+                }
         }
     </script>
 </body>
