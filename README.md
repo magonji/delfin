@@ -9,19 +9,32 @@ A personal finance management system built with Python FastAPI and vanilla JavaS
 ## 📋 Features
 
 ### Dashboard
+
 - 📊 **Visual Statistics**: View total transactions, accounts, categories, and balance at a glance
-- 📈 **Expenses by Category**: Doughnut chart showing your top 10 spending categories
-- 💳 **Balance by Account**: Bar chart displaying balances across all accounts
+- 💱 **Multi-Currency Support**: All amounts automatically converted to your most common currency
+- 📈 **Monthly Expenses by Category**: Interactive doughnut chart with month selector showing your top 20 spending categories
+- 🔝 **Top 10 Expenses**: Table showing the largest individual expenses for the selected month
+- 💳 **Balance by Account**: Detailed table displaying balances in original and converted currencies
 - 📉 **Monthly Trend**: Line chart comparing income vs expenses over the last 12 months
-- 🔝 **Top Payees**: Horizontal bar chart of your most frequent merchants
+- 🏪 **Top Payees**: Horizontal bar chart of your most frequent merchants
 
 ### Transaction Management
+
 - ➕ **Quick Entry**: Fast transaction input with autocomplete
+- 🔄 **Transfer Transactions**: Create transfers between accounts with currency conversion support
 - 🏷️ **Hierarchical Categories**: Parent-child category selection
 - 📍 **Location & Project Tracking**: Organise transactions by location and project
 - 🔍 **Advanced Filters**: Filter by date range, account, category, or search text
 - ✏️ **Edit & Delete**: Modify or remove transactions directly from the interface
-- 📊 **Recent Transactions List**: View your last 50 transactions with full details
+- 📊 **Recent Transactions List**: View all your transactions with running balances and currency conversion
+
+### Currency Management
+
+- 💱 **Automatic Currency Conversion**: All amounts displayed in your most common currency
+- 🌍 **Live Exchange Rates**: Fetches current rates from exchangerate-api.com
+- 📅 **Historical Rates**: Stores exchange rate history for accurate conversions
+- 🔄 **Manual Updates**: Update exchange rates on demand
+- 💰 **30+ Currencies Supported**: Including GBP, EUR, USD, JPY, and many more
 
 ## 🛠️ Technology Stack
 
@@ -30,6 +43,7 @@ A personal finance management system built with Python FastAPI and vanilla JavaS
 - **SQLAlchemy**: SQL toolkit and ORM
 - **SQLite**: Lightweight database
 - **Pandas**: Data manipulation and CSV import
+- **Requests**: HTTP library for fetching exchange rates
 - **Uvicorn**: ASGI server
 
 ### Frontend
@@ -44,17 +58,19 @@ financisto-manager/
 ├── backend/
 │   ├── __init__.py
 │   ├── main.py                    # FastAPI application
-│   ├── models.py                  # Database models
+│   ├── models.py                  # Database models (including ExchangeRate)
 │   ├── schemas.py                 # Pydantic schemas
-│   ├── database.py                # Database configuration
-│   ├── create_tables.py           # Table creation script
-│   └── import_financisto_csv.py   # CSV import utility
+│   └── database.py                # Database configuration
 ├── frontend/
 │   ├── index.html                 # Dashboard page
 │   ├── transactions.html          # Transaction management page
 │   └── navbar.js                  # Navigation component
 ├── data/
 │   └── finance.db                 # SQLite database (gitignored)
+├── create_tables.py               # Table creation script
+├── import_financisto_csv.py       # CSV import utility
+├── update_exchange_rates.py       # Exchange rate updater script
+├── update_database.py             # Database schema updater
 ├── .gitignore
 └── README.md
 ```
@@ -65,6 +81,7 @@ financisto-manager/
 
 - Python 3.11 or higher
 - pip (Python package manager)
+- Internet connection (for fetching exchange rates)
 
 ### Installation
 
@@ -76,83 +93,196 @@ financisto-manager/
 
 2. **Install dependencies**
    ```bash
-   pip install fastapi uvicorn sqlalchemy python-multipart pandas questionary
+   pip install fastapi uvicorn sqlalchemy python-multipart pandas questionary requests
    ```
 
 3. **Create the database tables**
    ```bash
-   python -m backend.create_tables
+   python create_tables.py
    ```
 
 4. **Import your Financisto data (optional)**
    ```bash
-   python -m backend.import_financisto_csv
+   python import_financisto_csv.py
    ```
    Follow the prompts to select your CSV file.
 
-5. **Start the API server**
+5. **Update exchange rates**
    ```bash
-   python -m uvicorn backend.main:app --reload
+   python update_exchange_rates.py
+   ```
+   This will fetch the latest exchange rates for all currencies in your transactions.
+
+6. **Start the API server**
+   ```bash
+   uvicorn backend.main:app --reload
    ```
 
-6. **Open the frontend**
+7. **Open the frontend**
    - Open `frontend/index.html` in your web browser
    - Or navigate to `http://localhost:8000/docs` for the interactive API documentation
+
+### First Time Setup with Existing Data
+
+If you're setting up Financisto Manager with existing data:
+
+1. Complete steps 1-4 above to install and import your data
+2. **Important**: Run the exchange rate updater:
+   ```bash
+   python update_exchange_rates.py
+   ```
+3. You should see output like:
+   ```
+   🔄 Updating exchange rates...
+   📊 Currencies in use: GBP, EUR, USD
+      ✅ Added GBP: 1.0
+      ✅ Added EUR: 1.17
+      ✅ Added USD: 1.27
+   
+   ✅ Successfully updated 3 exchange rates!
+   ```
+4. Start the server and enjoy your multi-currency dashboard!
+
+### Updating Database Schema (For Existing Installations)
+
+If you're upgrading from an older version without exchange rate support:
+
+```bash
+python update_database.py
+python update_exchange_rates.py
+```
 
 ## 📊 Usage
 
 ### Dashboard
+
 Navigate to `index.html` to view:
-- Summary statistics of your finances
-- Visual charts showing spending patterns
-- Monthly trends and top merchants
+
+- Summary statistics with currency conversion
+- Monthly expenses by category (with month selector)
+- Top 10 individual expenses for the selected month
+- Balance by account in both original and converted currencies
+- Monthly income vs expenses trend
+- Top merchants ranked by spending
 
 ### Managing Transactions
+
 Navigate to `transactions.html` to:
+
 - Add new transactions with the quick-entry form
+- Create transfers between accounts (with different currencies)
 - Filter existing transactions by multiple criteria
 - Edit or delete transactions
-- View recent transaction history
+- View complete transaction history with running balances
 
-### API Endpoints
+### Updating Exchange Rates
+
+Exchange rates can be updated in two ways:
+
+1. **Manual script execution**:
+   ```bash
+   python update_exchange_rates.py
+   ```
+
+2. **Via API** (from the dashboard or any HTTP client):
+   ```bash
+   curl -X POST http://localhost:8000/exchange-rates/update
+   ```
+
+**Recommendation**: Set up a daily cron job or scheduled task to keep rates current:
+
+```bash
+# Linux/Mac - Add to crontab (runs daily at 2 AM)
+0 2 * * * cd /path/to/financisto-manager && python update_exchange_rates.py
+
+# Windows - Use Task Scheduler to run the script daily
+```
+
+## 🌐 API Endpoints
 
 The FastAPI backend provides a RESTful API:
+
+### Core Resources
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/accounts` | GET | List all accounts |
 | `/accounts` | POST | Create new account |
+| `/accounts/{id}` | PUT | Update account |
 | `/categories` | GET | List all categories |
+| `/categories` | POST | Create new category |
+| `/categories/{id}` | PUT | Update category |
 | `/payees` | GET | List all payees |
+| `/payees` | POST | Create new payee |
+| `/payees/{id}` | PUT | Update payee |
 | `/locations` | GET | List all locations |
+| `/locations` | POST | Create new location |
+| `/locations/{id}` | PUT | Update location |
 | `/projects` | GET | List all projects |
+| `/projects` | POST | Create new project |
+| `/projects/{id}` | PUT | Update project |
+
+### Transactions
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
 | `/transactions` | GET | List transactions (with filters) |
 | `/transactions` | POST | Create new transaction |
 | `/transactions/{id}` | GET | Get specific transaction |
 | `/transactions/{id}` | PUT | Update transaction |
 | `/transactions/{id}` | DELETE | Delete transaction |
-| `/dashboard/summary` | GET | Get dashboard statistics |
+| `/transactions/transfer` | POST | Create transfer between accounts |
+| `/transactions/transfers` | GET | List all transfers grouped |
+
+### Exchange Rates
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/exchange-rates/latest` | GET | Get most recent exchange rates |
+| `/exchange-rates/update` | POST | Manually trigger rate update |
+| `/exchange-rates` | GET | Get historical exchange rates |
+
+### Dashboard
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/dashboard/summary` | GET | Get dashboard statistics with currency conversion |
 
 Full API documentation available at: `http://localhost:8000/docs`
 
-## 📝 Database Schema
+## 💱 Supported Currencies
+
+The system supports 30+ currencies with automatic symbol detection:
+
+- **Major**: GBP (£), EUR (€), USD ($), JPY (¥), CHF (Fr)
+- **Americas**: CAD, BRL, MXN, ARS, CLP, COP, PEN
+- **Asia-Pacific**: CNY, INR, AUD, NZD, SGD, HKD, KRW, THB, MYR
+- **Europe**: SEK, NOK, DKK, PLN, RUB, TRY
+- **Africa**: ZAR
+
+Exchange rates are fetched from [exchangerate-api.com](https://www.exchangerate-api.com/) which provides free access without requiring an API key.
+
+## 📊 Database Schema
 
 ### Main Tables
-- **accounts**: Bank accounts, cash, credit cards
+- **accounts**: Bank accounts, cash, credit cards (with currency)
 - **categories**: Hierarchical expense/income categories
 - **payees**: Merchants and payment recipients
 - **locations**: Geographic locations
 - **projects**: Project groupings for transactions
-- **transactions**: Individual financial transactions
+- **transactions**: Individual financial transactions (with currency)
+- **exchange_rates**: Historical exchange rate data
 
 ### Relationships
-Transactions link to accounts, categories, payees, locations, and projects via foreign keys.
+- Transactions link to accounts, categories, payees, locations, and projects via foreign keys
+- Exchange rates are indexed by currency and date for efficient lookups
+- The system automatically determines the base currency from transaction frequency
 
 ## 🔧 Development
 
 ### Running in Development Mode
 ```bash
-python -m uvicorn backend.main:app --reload
+uvicorn backend.main:app --reload
 ```
 
 The `--reload` flag enables auto-reload on code changes.
@@ -161,49 +291,116 @@ The `--reload` flag enables auto-reload on code changes.
 
 1. **Backend changes**: Edit files in `backend/`
 2. **Frontend changes**: Edit `frontend/index.html` or `transactions.html`
-3. **Database changes**: Update `backend/models.py` and recreate tables
+3. **Database changes**: 
+   - Update `backend/models.py`
+   - Run `python update_database.py`
 
-## 🐛 Troubleshooting
+### Testing Exchange Rate Updates
+
+```bash
+# Test the exchange rate fetching
+python update_exchange_rates.py
+
+# Check what rates are stored
+sqlite3 data/finance.db "SELECT * FROM exchange_rates ORDER BY date DESC LIMIT 10;"
+```
+
+## 🛠 Troubleshooting
 
 ### CORS Errors
+
 If you see CORS errors in the browser console, ensure the CORS middleware is properly configured in `backend/main.py`.
 
 ### Database Issues
+
 If you encounter database errors:
 ```bash
 # Delete the database
-del data\finance.db  # Windows
 rm data/finance.db   # Mac/Linux
+del data\finance.db  # Windows
 
 # Recreate tables
-python -m backend.create_tables
+python create_tables.py
+
+# Reimport data if needed
+python import_financisto_csv.py
 ```
 
+### Exchange Rate Issues
+
+**Problem**: "No exchange rates found" or conversion errors
+
+**Solution**:
+```bash
+# Update exchange rates
+python update_exchange_rates.py
+
+# Verify rates were stored
+sqlite3 data/finance.db "SELECT COUNT(*) FROM exchange_rates;"
+```
+
+**Problem**: API request fails
+
+**Solution**: 
+- Check your internet connection
+- The free API has rate limits; wait a few minutes and try again
+- If persistent, check [exchangerate-api.com status](https://www.exchangerate-api.com/)
+
 ### Import Errors
+
 If CSV import fails:
+
 - Ensure the CSV format matches Financisto export format
 - Check for encoding issues (should be UTF-8)
 - Verify all required columns are present
 
-## 🔐 Security Notes
+## 🔒 Security Notes
 
 - The database file (`finance.db`) is gitignored to protect your financial data
 - Never commit the `data/` folder to version control
 - When deploying to production, add proper authentication
 - Use environment variables for sensitive configuration
+- Exchange rate API calls don't require authentication but are rate-limited
 
 ## 🚀 Future Enhancements
 
 Potential features for future development:
+
 - [ ] Budget tracking and alerts
 - [ ] Recurring transaction templates
-- [ ] Multi-currency support with conversion
 - [ ] Export reports to PDF/Excel
 - [ ] Mobile app (React Native)
 - [ ] Cloud deployment (Railway/Render)
 - [ ] Desktop app (Electron)
 - [ ] User authentication
-- [ ] Automated backups
+- [ ] Automated backup
+- [x] Multi-currency support with conversion ✅
+- [x] Live exchange rate updates ✅
+- [ ] Custom exchange rate entry (for historical accuracy)
+- [ ] Currency conversion history tracking
+- [ ] Investment portfolio tracking
+- [ ] Cryptocurrency support
+
+
+## 📝 Changelog
+
+### Version 2.0 (Current)
+- ✨ Added multi-currency support with automatic conversion
+- ✨ Integrated live exchange rate fetching from exchangerate-api.com
+- ✨ New ExchangeRate model for historical rate storage
+- 🎨 Redesigned "Balance by Account" as a detailed table
+- 🎨 Monthly category expenses with interactive month selector
+- 📊 Added "Top 10 Expenses" table for selected month
+- 🔄 Support for transfers between different currency accounts
+- 💱 All dashboard statistics now display in base currency
+- 🌍 Support for 30+ currencies with proper symbols
+
+### Version 1.0
+- 🎉 Initial release
+- ✅ Basic transaction management
+- ✅ Dashboard with charts
+- ✅ CSV import from Financisto
+- ✅ SQLite database backend
 
 ## 📄 Licence
 
@@ -215,6 +412,7 @@ This project is for personal use. Feel free to fork and modify for your own need
 - **FastAPI**: For the excellent web framework
 - **Chart.js**: For beautiful charts
 - **SQLAlchemy**: For powerful ORM capabilities
+- **exchangerate-api.com**: For providing free exchange rate data
 
 ## 📧 Contact
 

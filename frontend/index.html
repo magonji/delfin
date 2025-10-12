@@ -75,6 +75,151 @@
             margin-bottom: 20px;
             display: none;
         }
+        .account-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        .account-table th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .account-table td {
+            padding: 12px;
+            border-bottom: 1px solid #e0e0e0;
+            font-size: 14px;
+        }
+
+        .account-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .account-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .balance-positive {
+            color: #10b981;
+            font-weight: 600;
+        }
+
+        .balance-negative {
+            color: #ef4444;
+            font-weight: 600;
+        }
+
+        .balance-zero {
+            color: #666;
+        }
+
+        .account-name {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .account-currency {
+            color: #666;
+            font-size: 12px;
+            margin-left: 5px;
+        }
+
+        .total-row {
+            background: #f0f4ff !important;
+            font-weight: bold;
+            border-top: 2px solid #667eea;
+        }
+
+        #monthSelector {
+            min-width: 180px;
+            font-weight: 600;
+        }
+
+        #monthSelector:hover {
+            border-color: #764ba2;
+        }
+
+        #monthSelector:focus {
+            outline: none;
+            border-color: #764ba2;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        /* Estilos para la tabla de top gastos */
+        .top-expenses-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            font-size: 13px;
+        }
+
+        .top-expenses-table th {
+            background: #f8f9fa;
+            color: #333;
+            padding: 10px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 12px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .top-expenses-table td {
+            padding: 10px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .top-expenses-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .top-expenses-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .expense-rank {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 12px;
+        }
+
+        .expense-date {
+            color: #666;
+            font-size: 12px;
+        }
+
+        .expense-payee {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .expense-category-badge {
+            background: #e0e7ff;
+            color: #667eea;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            display: inline-block;
+            margin-top: 3px;
+        }
+
+        .expense-amount-cell {
+            text-align: right;
+            font-weight: 600;
+            color: #ef4444;
+            font-size: 14px;
+        }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="navbar.js"></script>
@@ -91,13 +236,27 @@
         <!-- Charts Section -->
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
             <div class="card">
-                <h2 style="margin-bottom: 20px;">📊 Expenses by Category</h2>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2 style="margin: 0;">📊 Expenses by Category</h2>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <select id="monthSelector" style="padding: 8px 12px; border: 2px solid #667eea; border-radius: 8px; font-size: 14px; cursor: pointer; background: white;">
+                            <!-- Options will be populated by JavaScript -->
+                        </select>
+                        <button onclick="loadPreviousMonth()" style="padding: 8px 12px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px;">◀</button>
+                        <button onclick="loadNextMonth()" style="padding: 8px 12px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px;">▶</button>
+                    </div>
+                </div>
                 <canvas id="categoryChart"></canvas>
+
+                    <div style="margin-top: 30px;">
+                        <h3 style="margin-bottom: 15px; color: #333;">🔝 Top 10 Expenses This Month</h3>
+                        <div id="topExpensesTable" style="overflow-x: auto;"></div>
+                    </div>
             </div>
             
             <div class="card">
                 <h2 style="margin-bottom: 20px;">💳 Balance by Account</h2>
-                <canvas id="accountChart"></canvas>
+                <div id="accountBalanceTable" style="overflow-x: auto;"></div>
             </div>
         </div>
         
@@ -107,7 +266,7 @@
         </div>
         
         <div class="card">
-            <h2 style="margin-bottom: 20px;">🔝 Top 10 Payees</h2>
+            <h2 style="margin-bottom: 20px;">🔝 Top 20 Payees</h2>
             <canvas id="topPayeesChart"></canvas>
         </div>
 
@@ -214,20 +373,118 @@
         // Load all charts
         async function loadCharts() {
             await loadCategoryChart();
-            await loadAccountChart();
+            await loadAccountBalanceTable();  
             await loadMonthlyChart();
             await loadTopPayeesChart();
         }
 
-        // Expenses by Category (with conversion)
+        // Global variables for month selection
+        let availableMonths = [];
+        let currentMonthIndex = 0;
+        let categoryChartInstance = null;
+
+        // Populate month selector
+        function populateMonthSelector(transactions) {
+            const monthSet = new Set();
+            
+            transactions.forEach(t => {
+                const date = new Date(t.date);
+                const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                monthSet.add(monthKey);
+            });
+            
+            // Sort months in descending order (newest first)
+            availableMonths = Array.from(monthSet).sort((a, b) => b.localeCompare(a));
+            
+            const selector = document.getElementById('monthSelector');
+            selector.innerHTML = '';
+            
+            availableMonths.forEach((month, index) => {
+                const option = document.createElement('option');
+                option.value = index;
+                
+                // Format month for display
+                const [year, monthNum] = month.split('-');
+                const date = new Date(year, parseInt(monthNum) - 1);
+                const monthName = date.toLocaleDateString('en-GB', { year: 'numeric', month: 'long' });
+                
+                option.textContent = monthName;
+                selector.appendChild(option);
+            });
+            
+            // Set current month as default
+            currentMonthIndex = 0;
+            selector.value = currentMonthIndex;
+            
+            // Add change event listener
+            selector.addEventListener('change', (e) => {
+                currentMonthIndex = parseInt(e.target.value);
+                loadCategoryChart();
+            });
+        }
+
+        // Load previous month
+        function loadPreviousMonth() {
+            if (currentMonthIndex < availableMonths.length - 1) {
+                currentMonthIndex++;
+                document.getElementById('monthSelector').value = currentMonthIndex;
+                loadCategoryChart();
+            }
+        }
+
+        // Load next month
+        function loadNextMonth() {
+            if (currentMonthIndex > 0) {
+                currentMonthIndex--;
+                document.getElementById('monthSelector').value = currentMonthIndex;
+                loadCategoryChart();
+            }
+        }
+
+        // Expenses by Category (Monthly with conversion)
         async function loadCategoryChart() {
             try {
                 const response = await fetch(`${API_URL}/transactions?limit=100000`);
-                const transactions = await response.json();
+                const allTransactions = await response.json();
+                
+                // Get transfers to exclude them
+                const transferResponse = await fetch(`${API_URL}/transactions/transfers`);
+                const transfers = await transferResponse.json();
+                
+                // Create set of transfer transaction IDs
+                const transferIds = new Set();
+                transfers.forEach(t => {
+                    if (t.transfer_out_id) transferIds.add(t.transfer_out_id);
+                    if (t.transfer_in_id) transferIds.add(t.transfer_in_id);
+                });
+                
+                // Filter out transfer transactions
+                const transactions = allTransactions.filter(t => !transferIds.has(t.id));
+                
+                // Populate month selector if not already done
+                if (availableMonths.length === 0) {
+                    populateMonthSelector(transactions);
+                }
+                
+                // Get selected month
+                const selectedMonth = availableMonths[currentMonthIndex];
+                
+                if (!selectedMonth) {
+                    console.warn('No month selected');
+                    return;
+                }
+                
+                // Filter transactions for selected month
+                const [year, month] = selectedMonth.split('-');
+                const monthTransactions = transactions.filter(t => {
+                    const date = new Date(t.date);
+                    const transMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                    return transMonth === selectedMonth;
+                });
                 
                 // Group by category with currency conversion
                 const categoryTotals = {};
-                transactions.forEach(t => {
+                monthTransactions.forEach(t => {
                     if (t.amount < 0) { // Only expenses
                         const category = t.category_name || 'Uncategorised';
                         const convertedAmount = convertToBaseCurrency(Math.abs(t.amount), t.currency);
@@ -235,13 +492,23 @@
                     }
                 });
                 
-                // Sort and get top 10
+                // Sort and get top 20
                 const sorted = Object.entries(categoryTotals)
                     .sort((a, b) => b[1] - a[1])
-                    .slice(0, 10);
+                    .slice(0, 20);
+                
+                // Destroy previous chart instance if exists
+                if (categoryChartInstance) {
+                    categoryChartInstance.destroy();
+                }
                 
                 const ctx = document.getElementById('categoryChart');
-                new Chart(ctx, {
+                const baseCurrencySymbol = getCurrencySymbol(baseCurrency);
+                
+                // Calculate total for percentage
+                const total = sorted.reduce((sum, [, amount]) => sum + amount, 0);
+                
+                categoryChartInstance = new Chart(ctx, {
                     type: 'doughnut',
                     data: {
                         labels: sorted.map(([name]) => name),
@@ -250,32 +517,136 @@
                             backgroundColor: [
                                 '#667eea', '#764ba2', '#f093fb', '#4facfe',
                                 '#43e97b', '#fa709a', '#fee140', '#30cfd0',
-                                '#a8edea', '#fed6e3'
+                                '#a8edea', '#fed6e3', '#ff6b6b', '#4ecdc4',
+                                '#45b7d1', '#f38181', '#aa96da', '#fcbad3',
+                                '#a8e6cf', '#ffd3b6', '#ffaaa5', '#ff8b94'
                             ]
                         }]
                     },
                     options: {
                         responsive: true,
+                        maintainAspectRatio: true,
                         plugins: {
-                            legend: { position: 'right' },
+                            legend: { 
+                                display: false
+                            },
                             tooltip: {
                                 callbacks: {
                                     label: function(context) {
-                                        const symbol = getCurrencySymbol(baseCurrency);
-                                        return `${context.label}: ${symbol}${parseFloat(context.raw).toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+                                        const value = parseFloat(context.raw);
+                                        const percentage = ((value / total) * 100).toFixed(1);
+                                        return `${context.label}: ${baseCurrencySymbol}${value.toLocaleString(undefined, {minimumFractionDigits: 2})} (${percentage}%)`;
                                     }
                                 }
+                            },
+                            title: {
+                                display: true,
+                                text: `Total: ${baseCurrencySymbol}${total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`,
+                                font: {
+                                    size: 14,
+                                    weight: 'bold'
+                                },
+                                color: '#667eea'
                             }
                         }
                     }
                 });
+                
+                // Load top 10 expenses table
+                loadTopExpensesTable(monthTransactions);
+                
+                // Show message if no expenses in selected month
+                if (sorted.length === 0) {
+                    categoryChartInstance.destroy();
+                    const chartContainer = document.getElementById('categoryChart').parentElement;
+                    chartContainer.innerHTML = `
+                        <p style="text-align: center; color: #666; padding: 40px;">
+                            No expenses found for this month
+                        </p>
+                        <canvas id="categoryChart"></canvas>
+                    `;
+                }
+                
             } catch (error) {
                 console.error('Error loading category chart:', error);
             }
         }
+                
+        // Load top 10 expenses table for the selected month
+        function loadTopExpensesTable(monthTransactions) {
+            const tableContainer = document.getElementById('topExpensesTable');
+            
+            // Filter only expenses and sort by amount (highest first)
+            const expenses = monthTransactions
+                .filter(t => t.amount < 0)
+                .map(t => ({
+                    ...t,
+                    convertedAmount: convertToBaseCurrency(Math.abs(t.amount), t.currency)
+                }))
+                .sort((a, b) => b.convertedAmount - a.convertedAmount)
+                .slice(0, 10);
+            
+            if (expenses.length === 0) {
+                tableContainer.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">No expenses found for this month</p>';
+                return;
+            }
+            
+            const baseCurrencySymbol = getCurrencySymbol(baseCurrency);
+            
+            let tableHTML = `
+                <table class="top-expenses-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 40px;">#</th>
+                            <th>Date</th>
+                            <th>Payee</th>
+                            <th>Category</th>
+                            <th style="text-align: right;">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            expenses.forEach((expense, index) => {
+                const date = new Date(expense.date);
+                const dateStr = date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+                const originalSymbol = getCurrencySymbol(expense.currency);
+                
+                tableHTML += `
+                    <tr>
+                        <td>
+                            <span class="expense-rank">${index + 1}</span>
+                        </td>
+                        <td>
+                            <span class="expense-date">${dateStr}</span>
+                        </td>
+                        <td>
+                            <div class="expense-payee">${expense.payee_name || 'No payee'}</div>
+                            ${expense.note ? `<div style="font-size: 11px; color: #888; margin-top: 2px;">${expense.note}</div>` : ''}
+                        </td>
+                        <td>
+                            <span class="expense-category-badge">${expense.category_name || 'Uncategorised'}</span>
+                        </td>
+                        <td class="expense-amount-cell">
+                            <div>${baseCurrencySymbol}${expense.convertedAmount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+                            ${expense.currency !== baseCurrency ? 
+                                `<div style="font-size: 11px; color: #888;">(${originalSymbol}${Math.abs(expense.amount).toFixed(2)})</div>` 
+                                : ''}
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            tableHTML += `
+                    </tbody>
+                </table>
+            `;
+            
+            tableContainer.innerHTML = tableHTML;
+        }
 
-        // Balance by Account (with conversion)
-        async function loadAccountChart() {
+        // Balance by Account (as table with conversion)
+        async function loadAccountBalanceTable() {
             try {
                 const response = await fetch(`${API_URL}/accounts`);
                 const accounts = await response.json();
@@ -284,44 +655,100 @@
                 const transResponse = await fetch(`${API_URL}/transactions?limit=100000`);
                 const transactions = await transResponse.json();
                 
-                const accountBalances = {};
+                const accountData = {};
+                
+                // Initialize account data
                 accounts.forEach(acc => {
-                    accountBalances[acc.name] = 0;
+                    accountData[acc.name] = {
+                        balance: 0,
+                        balanceConverted: 0,
+                        currency: acc.currency,
+                        isActive: acc.is_active
+                    };
                 });
                 
-                // Sum transactions with currency conversion
+                // Sum transactions
                 transactions.forEach(t => {
-                    if (accountBalances.hasOwnProperty(t.account_name)) {
+                    if (accountData.hasOwnProperty(t.account_name)) {
+                        accountData[t.account_name].balance += t.amount;
                         const convertedAmount = convertToBaseCurrency(t.amount, t.currency);
-                        accountBalances[t.account_name] += convertedAmount;
+                        accountData[t.account_name].balanceConverted += convertedAmount;
                     }
                 });
                 
-                const currencySymbol = getCurrencySymbol(baseCurrency);
+                // Sort by converted balance (descending)
+                const sortedAccounts = Object.entries(accountData)
+                    .sort((a, b) => b[1].balanceConverted - a[1].balanceConverted);
                 
-                const ctx = document.getElementById('accountChart');
-                new Chart(ctx, {
-                    type: 'bar',
-                    data: {
-                        labels: Object.keys(accountBalances),
-                        datasets: [{
-                            label: `Balance (${currencySymbol})`,
-                            data: Object.values(accountBalances).map(v => v.toFixed(2)),
-                            backgroundColor: '#667eea'
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        plugins: {
-                            legend: { display: false }
-                        },
-                        scales: {
-                            y: { beginAtZero: true }
-                        }
-                    }
+                // Calculate total
+                const totalConverted = sortedAccounts.reduce((sum, [, data]) => sum + data.balanceConverted, 0);
+                
+                const baseCurrencySymbol = getCurrencySymbol(baseCurrency);
+                
+                // Build table HTML
+                let tableHTML = `
+                    <table class="account-table">
+                        <thead>
+                            <tr>
+                                <th>Account</th>
+                                <th style="text-align: right;">Original Balance</th>
+                                <th style="text-align: right;">Converted Balance (${baseCurrency})</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+                
+                sortedAccounts.forEach(([name, data]) => {
+                    const originalSymbol = getCurrencySymbol(data.currency);
+                    const balanceClass = data.balanceConverted > 0 ? 'balance-positive' : 
+                                        data.balanceConverted < 0 ? 'balance-negative' : 
+                                        'balance-zero';
+                    
+                    tableHTML += `
+                        <tr>
+                            <td>
+                                <span class="account-name">${name}</span>
+                                <span class="account-currency">(${data.currency})</span>
+                            </td>
+                            <td style="text-align: right;">
+                                <span class="${balanceClass}">
+                                    ${originalSymbol}${data.balance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                </span>
+                            </td>
+                            <td style="text-align: right;">
+                                <span class="${balanceClass}">
+                                    ${baseCurrencySymbol}${data.balanceConverted.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                </span>
+                            </td>
+                        </tr>
+                    `;
                 });
+                
+                // Add total row
+                const totalClass = totalConverted > 0 ? 'balance-positive' : 
+                                totalConverted < 0 ? 'balance-negative' : 
+                                'balance-zero';
+                
+                tableHTML += `
+                            <tr class="total-row">
+                                <td><strong>TOTAL</strong></td>
+                                <td></td>
+                                <td style="text-align: right;">
+                                    <span class="${totalClass}">
+                                        ${baseCurrencySymbol}${totalConverted.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                    </span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                `;
+                
+                document.getElementById('accountBalanceTable').innerHTML = tableHTML;
+                
             } catch (error) {
-                console.error('Error loading account chart:', error);
+                console.error('Error loading account balance table:', error);
+                document.getElementById('accountBalanceTable').innerHTML = 
+                    '<p style="text-align: center; color: #ef4444; padding: 20px;">Failed to load account balances</p>';
             }
         }
 
@@ -410,7 +837,7 @@
                 // Sort and get top 10
                 const sorted = Object.entries(payeeTotals)
                     .sort((a, b) => b[1] - a[1])
-                    .slice(0, 10);
+                    .slice(0, 20);
                 
                 const currencySymbol = getCurrencySymbol(baseCurrency);
                 
