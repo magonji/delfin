@@ -110,3 +110,16 @@ class Transaction(Base):
     payee = relationship("Payee", back_populates="transactions")
     location = relationship("Location", back_populates="transactions")
     project = relationship("Project", back_populates="transactions")
+
+class ExchangeRate(Base):
+    """
+    Stores historical exchange rates for currency conversion.
+    Rates are stored with GBP as the base currency.
+    """
+    __tablename__ = "exchange_rates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    currency = Column(String, nullable=False, index=True)
+    rate = Column(Float, nullable=False)  # Rate relative to base currency (GBP)
+    date = Column(DateTime, nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)

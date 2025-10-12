@@ -6,6 +6,9 @@ from datetime import datetime, date
 
 from backend.database import get_db, engine
 from backend import models, schemas
+from backend.models import Account, Category, Payee, Location, Project, Transaction, ExchangeRate
+from backend.schemas import ExchangeRateResponse
+from sqlalchemy import func
 
 # Create tables if they don't exist
 models.Base.metadata.create_all(bind=engine)
@@ -610,28 +613,141 @@ def create_transfer(
     }
 
 # ============================================
+# EXCHANGE RATES ENDPOINTS
+# ============================================
+
+@app.get("/exchange-rates/latest")
+def get_latest_exchange_rates(db: Session = Depends(get_db)):
+    """
+    Get the most recent exchange rates for all currencies.
+    """
+    from sqlalchemy import func
+    
+    # Get the most recent rate for each currency
+    subquery = db.query(
+        ExchangeRate.currency,
+        func.max(ExchangeRate.date).label('max_date')
+    ).group_by(ExchangeRate.currency).subquery()
+    
+    rates_query = db.query(ExchangeRate).join(
+        subquery,
+        (ExchangeRate.currency == subquery.c.currency) &
+        (ExchangeRate.date == subquery.c.max_date)
+    ).all()
+    
+    rates_dict = {rate.currency: rate.rate for rate in rates_query}
+    
+    # Always ensure GBP is 1.0 (base currency)
+    rates_dict['GBP'] = 1.0
+    
+    # Get most common currency
+    currency_counts = db.query(
+        Transaction.currency,
+        func.count(Transaction.id).label('count')
+    ).group_by(Transaction.currency).order_by(func.count(Transaction.id).desc()).all()
+    
+    most_common_currency = currency_counts[0][0] if currency_counts else "GBP"
+    
+    return {
+        "base_currency": most_common_currency,
+        "rates": rates_dict,
+        "last_updated": rates_query[0].date.isoformat() if rates_query else None
+    }
+
+
+@app.post("/exchange-rates/update")
+def trigger_exchange_rate_update(db: Session = Depends(get_db)):
+    """
+    Manually trigger an exchange rate update.
+    """
+    try:
+        from update_exchange_rates import update_exchange_rates
+        update_exchange_rates()
+        return {"message": "Exchange rates updated successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update rates: {str(e)}")
+
+
+@app.get("/exchange-rates", response_model=List[ExchangeRateResponse])
+def get_exchange_rates_history(
+    currency: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db)
+):
+    """
+    Get historical exchange rates with optional currency filter.
+    """
+    query = db.query(ExchangeRate)
+    
+    if currency:
+        query = query.filter(ExchangeRate.currency == currency)
+    
+    query = query.order_by(ExchangeRate.date.desc())
+    rates = query.offset(skip).limit(limit).all()
+    
+    return rates
+
+# ============================================
 # DASHBOARD / STATISTICS
 # ============================================
 
 @app.get("/dashboard/summary")
 def get_dashboard_summary(db: Session = Depends(get_db)):
     """
-    Get summary statistics for the dashboard.
+    Get summary statistics for the dashboard with currency conversion.
     """
-    total_transactions = db.query(models.Transaction).count()
-    total_accounts = db.query(models.Account).count()
-    total_categories = db.query(models.Category).count()
+    # Get latest exchange rates
+    from sqlalchemy import func as sql_func
     
-    # Calculate total balance across all accounts
-    # (This is a simple sum - you might want more complex logic)
-    from sqlalchemy import func
-    total_balance = db.query(func.sum(models.Transaction.amount)).scalar() or 0
+    subquery = db.query(
+        ExchangeRate.currency,
+        sql_func.max(ExchangeRate.date).label('max_date')
+    ).group_by(ExchangeRate.currency).subquery()
+    
+    rates_query = db.query(ExchangeRate).join(
+        subquery,
+        (ExchangeRate.currency == subquery.c.currency) &
+        (ExchangeRate.date == subquery.c.max_date)
+    ).all()
+    
+    rates_dict = {rate.currency: rate.rate for rate in rates_query}
+    rates_dict['GBP'] = 1.0
+    
+    # Find most common currency
+    currency_counts = db.query(
+        Transaction.currency,
+        sql_func.count(Transaction.id).label('count')
+    ).group_by(Transaction.currency).order_by(sql_func.count(Transaction.id).desc()).all()
+    
+    base_currency = currency_counts[0][0] if currency_counts else "GBP"
+    base_rate = rates_dict.get(base_currency, 1.0)
+    
+    # Calculate total balance with conversion
+    transactions = db.query(Transaction).all()
+    total_balance_converted = 0
+    
+    for t in transactions:
+        if t.currency in rates_dict:
+            # Convert to base currency
+            # Formula: amount * (base_rate / transaction_rate)
+            conversion_factor = base_rate / rates_dict[t.currency]
+            total_balance_converted += t.amount * conversion_factor
+        else:
+            # If no rate available, use direct amount (fallback)
+            total_balance_converted += t.amount
+    
+    total_transactions = db.query(Transaction).count()
+    total_accounts = db.query(Account).count()
+    total_categories = db.query(Category).count()
     
     return {
         "total_transactions": total_transactions,
         "total_accounts": total_accounts,
         "total_categories": total_categories,
-        "total_balance": round(total_balance, 2)
+        "total_balance": round(total_balance_converted, 2),
+        "base_currency": base_currency,
+        "rates_available": len(rates_dict) > 0
     }
 
 

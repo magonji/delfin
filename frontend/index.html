@@ -110,16 +110,81 @@
             <h2 style="margin-bottom: 20px;">🔝 Top 10 Payees</h2>
             <canvas id="topPayeesChart"></canvas>
         </div>
+
+        <div class="card" style="text-align: center; padding: 15px;">
+            <button onclick="updateExchangeRates()" style="padding: 10px 20px; background: #10b981; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                🔄 Update Exchange Rates
+            </button>
+            <span id="lastUpdated" style="margin-left: 15px; color: #666; font-size: 14px;"></span>
+        </div>
     </div>
     
     <script>
         const API_URL = 'http://localhost:8000';
-        
-        // Load statistics
+
+        // Global variables for exchange rates
+        let exchangeRates = {};
+        let baseCurrency = 'GBP';
+
+        // Get currency symbol helper function
+        function getCurrencySymbol(currency) {
+            const symbols = {
+                'GBP': '£', 'EUR': '€', 'USD': '$', 'JPY': '¥',
+                'CNY': '¥', 'CHF': 'Fr', 'CAD': 'CA$', 'AUD': 'A$',
+                'NZD': 'NZ$', 'INR': '₹', 'BRL': 'R$', 'RUB': '₽',
+                'KRW': '₩', 'SEK': 'kr', 'NOK': 'kr', 'DKK': 'kr',
+                'PLN': 'zł', 'MXN': 'MX$', 'TRY': '₺', 'ZAR': 'R',
+                'THB': '฿', 'SGD': 'S$', 'HKD': 'HK$', 'MYR': 'RM'
+            };
+            return symbols[currency] || currency;
+        }
+
+        // Load exchange rates from API
+        async function loadExchangeRates() {
+            try {
+                const response = await fetch(`${API_URL}/exchange-rates/latest`);
+                const data = await response.json();
+                
+                exchangeRates = data.rates;
+                baseCurrency = data.base_currency;
+                
+                console.log(`📊 Base currency: ${baseCurrency}`);
+                console.log(`💱 Loaded ${Object.keys(exchangeRates).length} exchange rates`);
+                
+                return data;
+            } catch (error) {
+                console.error('Error loading exchange rates:', error);
+                // Use GBP as fallback
+                exchangeRates = { 'GBP': 1.0 };
+                baseCurrency = 'GBP';
+            }
+        }
+
+        // Convert amount to base currency
+        function convertToBaseCurrency(amount, fromCurrency) {
+            if (!fromCurrency || fromCurrency === baseCurrency) {
+                return amount;
+            }
+            
+            const fromRate = exchangeRates[fromCurrency];
+            const toRate = exchangeRates[baseCurrency];
+            
+            if (!fromRate || !toRate) {
+                console.warn(`Missing exchange rate for ${fromCurrency} or ${baseCurrency}`);
+                return amount; // Return unconverted if rates missing
+            }
+            
+            // Convert: amount * (toRate / fromRate)
+            return amount * (toRate / fromRate);
+        }
+
+        // Load statistics with conversion
         async function loadStats() {
             try {
                 const response = await fetch(`${API_URL}/dashboard/summary`);
                 const stats = await response.json();
+                
+                const currencySymbol = getCurrencySymbol(stats.base_currency || baseCurrency);
                 
                 const statsGrid = document.getElementById('statsGrid');
                 statsGrid.innerHTML = `
@@ -136,35 +201,37 @@
                         <div class="stat-label">Categories</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-value">£${stats.total_balance.toLocaleString()}</div>
-                        <div class="stat-label">Total Balance</div>
+                        <div class="stat-value">${currencySymbol}${stats.total_balance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+                        <div class="stat-label">Total Balance (${stats.base_currency || baseCurrency})</div>
                     </div>
                 `;
             } catch (error) {
                 console.error('Error loading stats:', error);
+                showError('Failed to load statistics');
             }
         }
-        
-        // Load chart data
+
+        // Load all charts
         async function loadCharts() {
             await loadCategoryChart();
             await loadAccountChart();
             await loadMonthlyChart();
             await loadTopPayeesChart();
         }
-        
-        // Expenses by Category
+
+        // Expenses by Category (with conversion)
         async function loadCategoryChart() {
             try {
-                const response = await fetch(`${API_URL}/transactions?limit=1000`);
+                const response = await fetch(`${API_URL}/transactions?limit=100000`);
                 const transactions = await response.json();
                 
-                // Group by category
+                // Group by category with currency conversion
                 const categoryTotals = {};
                 transactions.forEach(t => {
                     if (t.amount < 0) { // Only expenses
                         const category = t.category_name || 'Uncategorised';
-                        categoryTotals[category] = (categoryTotals[category] || 0) + Math.abs(t.amount);
+                        const convertedAmount = convertToBaseCurrency(Math.abs(t.amount), t.currency);
+                        categoryTotals[category] = (categoryTotals[category] || 0) + convertedAmount;
                     }
                 });
                 
@@ -190,7 +257,15 @@
                     options: {
                         responsive: true,
                         plugins: {
-                            legend: { position: 'right' }
+                            legend: { position: 'right' },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const symbol = getCurrencySymbol(baseCurrency);
+                                        return `${context.label}: ${symbol}${parseFloat(context.raw).toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+                                    }
+                                }
+                            }
                         }
                     }
                 });
@@ -198,15 +273,15 @@
                 console.error('Error loading category chart:', error);
             }
         }
-        
-        // Balance by Account
+
+        // Balance by Account (with conversion)
         async function loadAccountChart() {
             try {
                 const response = await fetch(`${API_URL}/accounts`);
                 const accounts = await response.json();
                 
                 // Calculate balance for each account
-                const transResponse = await fetch(`${API_URL}/transactions?limit=10000`);
+                const transResponse = await fetch(`${API_URL}/transactions?limit=100000`);
                 const transactions = await transResponse.json();
                 
                 const accountBalances = {};
@@ -214,11 +289,15 @@
                     accountBalances[acc.name] = 0;
                 });
                 
+                // Sum transactions with currency conversion
                 transactions.forEach(t => {
                     if (accountBalances.hasOwnProperty(t.account_name)) {
-                        accountBalances[t.account_name] += t.amount;
+                        const convertedAmount = convertToBaseCurrency(t.amount, t.currency);
+                        accountBalances[t.account_name] += convertedAmount;
                     }
                 });
+                
+                const currencySymbol = getCurrencySymbol(baseCurrency);
                 
                 const ctx = document.getElementById('accountChart');
                 new Chart(ctx, {
@@ -226,7 +305,7 @@
                     data: {
                         labels: Object.keys(accountBalances),
                         datasets: [{
-                            label: 'Balance (£)',
+                            label: `Balance (${currencySymbol})`,
                             data: Object.values(accountBalances).map(v => v.toFixed(2)),
                             backgroundColor: '#667eea'
                         }]
@@ -245,14 +324,14 @@
                 console.error('Error loading account chart:', error);
             }
         }
-        
-        // Monthly Trend
+
+        // Monthly Trend (with conversion)
         async function loadMonthlyChart() {
             try {
-                const response = await fetch(`${API_URL}/transactions?limit=10000`);
+                const response = await fetch(`${API_URL}/transactions?limit=100000`);
                 const transactions = await response.json();
                 
-                // Group by month
+                // Group by month with currency conversion
                 const monthlyData = {};
                 transactions.forEach(t => {
                     const date = new Date(t.date);
@@ -262,10 +341,12 @@
                         monthlyData[monthKey] = { income: 0, expenses: 0 };
                     }
                     
-                    if (t.amount > 0) {
-                        monthlyData[monthKey].income += t.amount;
+                    const convertedAmount = convertToBaseCurrency(t.amount, t.currency);
+                    
+                    if (convertedAmount > 0) {
+                        monthlyData[monthKey].income += convertedAmount;
                     } else {
-                        monthlyData[monthKey].expenses += Math.abs(t.amount);
+                        monthlyData[monthKey].expenses += Math.abs(convertedAmount);
                     }
                 });
                 
@@ -310,18 +391,19 @@
                 console.error('Error loading monthly chart:', error);
             }
         }
-        
-        // Top Payees
+
+        // Top Payees (with conversion)
         async function loadTopPayeesChart() {
             try {
-                const response = await fetch(`${API_URL}/transactions?limit=10000`);
+                const response = await fetch(`${API_URL}/transactions?limit=100000`);
                 const transactions = await response.json();
                 
-                // Group by payee
+                // Group by payee with currency conversion
                 const payeeTotals = {};
                 transactions.forEach(t => {
                     if (t.amount < 0 && t.payee_name) { // Only expenses with payee
-                        payeeTotals[t.payee_name] = (payeeTotals[t.payee_name] || 0) + Math.abs(t.amount);
+                        const convertedAmount = convertToBaseCurrency(Math.abs(t.amount), t.currency);
+                        payeeTotals[t.payee_name] = (payeeTotals[t.payee_name] || 0) + convertedAmount;
                     }
                 });
                 
@@ -330,13 +412,15 @@
                     .sort((a, b) => b[1] - a[1])
                     .slice(0, 10);
                 
+                const currencySymbol = getCurrencySymbol(baseCurrency);
+                
                 const ctx = document.getElementById('topPayeesChart');
                 new Chart(ctx, {
                     type: 'bar',
                     data: {
                         labels: sorted.map(([name]) => name),
                         datasets: [{
-                            label: 'Total Spent (£)',
+                            label: `Total Spent (${currencySymbol})`,
                             data: sorted.map(([, total]) => total.toFixed(2)),
                             backgroundColor: '#764ba2'
                         }]
@@ -356,7 +440,7 @@
                 console.error('Error loading top payees chart:', error);
             }
         }
-        
+
         function showSuccess(message) {
             const element = document.getElementById('successMessage');
             element.textContent = message;
@@ -365,7 +449,7 @@
                 element.style.display = 'none';
             }, 3000);
         }
-        
+
         function showError(message) {
             const element = document.getElementById('errorMessage');
             element.textContent = message;
@@ -374,12 +458,34 @@
                 element.style.display = 'none';
             }, 5000);
         }
-        
+
         // Load data on page load
         document.addEventListener('DOMContentLoaded', async () => {
+            console.log('🚀 Loading dashboard...');
+            await loadExchangeRates();  // Load exchange rates first
             await loadStats();
             await loadCharts();
+            console.log('✅ Dashboard loaded successfully!');
         });
+
+        async function updateExchangeRates() {
+            try {
+                showSuccess('Updating exchange rates...');
+                const response = await fetch(`${API_URL}/exchange-rates/update`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                showSuccess(data.message);
+                
+                // Reload rates and refresh dashboard
+                await loadExchangeRates();
+                await loadStats();
+                await loadCharts();
+            } catch (error) {
+                console.error('Error updating exchange rates:', error);
+                showError('Failed to update exchange rates');
+            }
+        }
     </script>
 </body>
 </html>

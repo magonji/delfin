@@ -123,3 +123,21 @@ class TransactionWithDetails(TransactionResponse):
     payee_name: Optional[str] = None
     location_name: Optional[str] = None
     project_name: Optional[str] = None
+
+
+class ExchangeRateBase(BaseModel):
+    currency: str
+    rate: float
+    date: datetime
+
+
+class ExchangeRateCreate(ExchangeRateBase):
+    pass
+
+
+class ExchangeRateResponse(ExchangeRateBase):
+    id: int
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
