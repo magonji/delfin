@@ -189,6 +189,54 @@
             gap: 10px;
             margin-top: 20px;
         }
+
+        .bulk-edit-mode .transaction-item {
+            cursor: pointer;
+        }
+
+        .transaction-item.selected {
+            background: #e3f2fd !important;
+            border: 2px solid #667eea;
+        }
+
+        .bulk-edit-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            padding: 20px;
+            box-shadow: 0 -5px 20px rgba(0,0,0,0.2);
+            display: none;
+            z-index: 999;
+        }
+
+        .bulk-edit-bar.active {
+            display: block;
+        }
+
+        .checkbox-column {
+            display: none;
+        }
+
+        .bulk-edit-mode .checkbox-column {
+            display: flex;
+            align-items: center;
+        }
+
+        .bulk-edit-mode .transaction-item {
+            grid-template-columns: auto auto 1fr auto auto;
+        }
+
+        .transaction-item.disabled {
+            opacity: 0.4;
+            pointer-events: none;
+            cursor: not-allowed;
+        }
+
+        .bulk-edit-mode .transaction-item.disabled {
+            cursor: not-allowed;
+        }
     </style>
     <script src="navbar.js"></script>
 </head>
@@ -339,7 +387,10 @@
         <div class="card">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                 <h2 style="margin: 0;">📊 Transactions</h2>
-                <button onclick="openModal('filtersModal')" style="width: auto; padding: 10px 20px;">🔍 Filters</button>
+                <div style="display: flex; gap: 10px;">
+                    <button id="bulkEditToggle" onclick="toggleBulkEditMode()" style="width: auto; padding: 10px 20px;">📝 Bulk Edit</button>
+                    <button onclick="openModal('filtersModal')" style="width: auto; padding: 10px 20px;">🔍 Filters</button>
+                </div>
             </div>
             <div class="transactions-list" id="transactionsList">
                 <!-- Transactions will be loaded here -->
@@ -347,167 +398,241 @@
         </div>
     
 
-    <!-- Modals for creating new items -->
-    <div id="newCategoryModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Add New Parent Category</h3>
-            </div>
-            <div class="form-group">
-                <label for="newCategoryName">Category Name</label>
-                <input type="text" id="newCategoryName" placeholder="e.g. Shopping, Transport...">
-            </div>
-            <div class="modal-buttons">
-                <button type="button" onclick="saveNewCategory()" style="flex: 1;">Save</button>
-                <button type="button" onclick="closeModal('newCategoryModal')" style="flex: 1; background: #6c757d;">Cancel</button>
+        <!-- Modals for creating new items -->
+        <div id="newCategoryModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Add New Parent Category</h3>
+                </div>
+                <div class="form-group">
+                    <label for="newCategoryName">Category Name</label>
+                    <input type="text" id="newCategoryName" placeholder="e.g. Shopping, Transport...">
+                </div>
+                <div class="modal-buttons">
+                    <button type="button" onclick="saveNewCategory()" style="flex: 1;">Save</button>
+                    <button type="button" onclick="closeModal('newCategoryModal')" style="flex: 1; background: #6c757d;">Cancel</button>
+                </div>
             </div>
         </div>
-    </div>
 
-    <div id="newSubcategoryModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Add New Subcategory</h3>
-            </div>
-            <div class="form-group">
-                <label for="newSubcategoryName">Subcategory Name</label>
-                <input type="text" id="newSubcategoryName" placeholder="e.g. Groceries, Fuel...">
-            </div>
-            <div class="form-group">
-                <label>Parent Category</label>
-                <input type="text" id="newSubcategoryParent" readonly style="background: #f0f0f0;">
-            </div>
-            <div class="modal-buttons">
-                <button type="button" onclick="saveNewSubcategory()" style="flex: 1;">Save</button>
-                <button type="button" onclick="closeModal('newSubcategoryModal')" style="flex: 1; background: #6c757d;">Cancel</button>
+        <div id="newSubcategoryModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Add New Subcategory</h3>
+                </div>
+                <div class="form-group">
+                    <label for="newSubcategoryName">Subcategory Name</label>
+                    <input type="text" id="newSubcategoryName" placeholder="e.g. Groceries, Fuel...">
+                </div>
+                <div class="form-group">
+                    <label>Parent Category</label>
+                    <input type="text" id="newSubcategoryParent" readonly style="background: #f0f0f0;">
+                </div>
+                <div class="modal-buttons">
+                    <button type="button" onclick="saveNewSubcategory()" style="flex: 1;">Save</button>
+                    <button type="button" onclick="closeModal('newSubcategoryModal')" style="flex: 1; background: #6c757d;">Cancel</button>
+                </div>
             </div>
         </div>
-    </div>
 
-    <div id="newLocationModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Add New Location</h3>
-            </div>
-            <div class="form-group">
-                <label for="newLocationName">Location Name</label>
-                <input type="text" id="newLocationName" placeholder="e.g. City Centre, Airport...">
-            </div>
-            <div class="modal-buttons">
-                <button type="button" onclick="saveNewLocation()" style="flex: 1;">Save</button>
-                <button type="button" onclick="closeModal('newLocationModal')" style="flex: 1; background: #6c757d;">Cancel</button>
+        <div id="newLocationModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Add New Location</h3>
+                </div>
+                <div class="form-group">
+                    <label for="newLocationName">Location Name</label>
+                    <input type="text" id="newLocationName" placeholder="e.g. City Centre, Airport...">
+                </div>
+                <div class="modal-buttons">
+                    <button type="button" onclick="saveNewLocation()" style="flex: 1;">Save</button>
+                    <button type="button" onclick="closeModal('newLocationModal')" style="flex: 1; background: #6c757d;">Cancel</button>
+                </div>
             </div>
         </div>
-    </div>
 
-    <div id="newProjectModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Add New Project</h3>
-            </div>
-            <div class="form-group">
-                <label for="newProjectName">Project Name</label>
-                <input type="text" id="newProjectName" placeholder="e.g. Kitchen Renovation...">
-            </div>
-            <div class="modal-buttons">
-                <button type="button" onclick="saveNewProject()" style="flex: 1;">Save</button>
-                <button type="button" onclick="closeModal('newProjectModal')" style="flex: 1; background: #6c757d;">Cancel</button>
+        <div id="newProjectModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Add New Project</h3>
+                </div>
+                <div class="form-group">
+                    <label for="newProjectName">Project Name</label>
+                    <input type="text" id="newProjectName" placeholder="e.g. Kitchen Renovation...">
+                </div>
+                <div class="modal-buttons">
+                    <button type="button" onclick="saveNewProject()" style="flex: 1;">Save</button>
+                    <button type="button" onclick="closeModal('newProjectModal')" style="flex: 1; background: #6c757d;">Cancel</button>
+                </div>
             </div>
         </div>
-    </div>
 
-    <div id="newAccountModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Add New Account</h3>
-            </div>
-            <div class="form-group">
-                <label for="newAccountName">Account Name</label>
-                <input type="text" id="newAccountName" placeholder="e.g. Main Account, Savings...">
-            </div>
-            <div class="form-group">
-                <label for="newAccountCurrency">Currency</label>
-                <select id="newAccountCurrency">
-                    <option value="GBP">GBP (£)</option>
-                    <option value="EUR">EUR (€)</option>
-                    <option value="USD">USD ($)</option>
-                    <option value="JPY">JPY (¥)</option>
-                    <option value="CNY">CNY (¥)</option>
-                    <option value="CHF">CHF (Fr)</option>
-                    <option value="CAD">CAD (CA$)</option>
-                    <option value="AUD">AUD (A$)</option>
-                    <option value="NZD">NZD (NZ$)</option>
-                    <option value="INR">INR (₹)</option>
-                    <option value="BRL">BRL (R$)</option>
-                    <option value="RUB">RUB (₽)</option>
-                    <option value="KRW">KRW (₩)</option>
-                    <option value="SEK">SEK (kr)</option>
-                    <option value="NOK">NOK (kr)</option>
-                    <option value="DKK">DKK (kr)</option>
-                    <option value="PLN">PLN (zł)</option>
-                    <option value="MXN">MXN (MX$)</option>
-                    <option value="ARS">ARS (AR$)</option>
-                    <option value="CLP">CLP (CL$)</option>
-                    <option value="COP">COP (CO$)</option>
-                    <option value="PEN">PEN (S/)</option>
-                    <option value="TRY">TRY (₺)</option>
-                    <option value="ZAR">ZAR (R)</option>
-                    <option value="THB">THB (฿)</option>
-                    <option value="SGD">SGD (S$)</option>
-                    <option value="HKD">HKD (HK$)</option>
-                    <option value="MYR">MYR (RM)</option>
-                </select>
-            </div>
-            <div class="modal-buttons">
-                <button type="button" onclick="saveNewAccount()" style="flex: 1;">Save</button>
-                <button type="button" onclick="closeModal('newAccountModal')" style="flex: 1; background: #6c757d;">Cancel</button>
+        <div id="newAccountModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Add New Account</h3>
+                </div>
+                <div class="form-group">
+                    <label for="newAccountName">Account Name</label>
+                    <input type="text" id="newAccountName" placeholder="e.g. Main Account, Savings...">
+                </div>
+                <div class="form-group">
+                    <label for="newAccountCurrency">Currency</label>
+                    <select id="newAccountCurrency">
+                        <option value="GBP">GBP (£)</option>
+                        <option value="EUR">EUR (€)</option>
+                        <option value="USD">USD ($)</option>
+                        <option value="JPY">JPY (¥)</option>
+                        <option value="CNY">CNY (¥)</option>
+                        <option value="CHF">CHF (Fr)</option>
+                        <option value="CAD">CAD (CA$)</option>
+                        <option value="AUD">AUD (A$)</option>
+                        <option value="NZD">NZD (NZ$)</option>
+                        <option value="INR">INR (₹)</option>
+                        <option value="BRL">BRL (R$)</option>
+                        <option value="RUB">RUB (₽)</option>
+                        <option value="KRW">KRW (₩)</option>
+                        <option value="SEK">SEK (kr)</option>
+                        <option value="NOK">NOK (kr)</option>
+                        <option value="DKK">DKK (kr)</option>
+                        <option value="PLN">PLN (zł)</option>
+                        <option value="MXN">MXN (MX$)</option>
+                        <option value="ARS">ARS (AR$)</option>
+                        <option value="CLP">CLP (CL$)</option>
+                        <option value="COP">COP (CO$)</option>
+                        <option value="PEN">PEN (S/)</option>
+                        <option value="TRY">TRY (₺)</option>
+                        <option value="ZAR">ZAR (R)</option>
+                        <option value="THB">THB (฿)</option>
+                        <option value="SGD">SGD (S$)</option>
+                        <option value="HKD">HKD (HK$)</option>
+                        <option value="MYR">MYR (RM)</option>
+                    </select>
+                </div>
+                <div class="modal-buttons">
+                    <button type="button" onclick="saveNewAccount()" style="flex: 1;">Save</button>
+                    <button type="button" onclick="closeModal('newAccountModal')" style="flex: 1; background: #6c757d;">Cancel</button>
+                </div>
             </div>
         </div>
-    </div>
     
 
-    <!-- Filters Modal -->
-    <div id="filtersModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>🔍 Filters</h3>
-            </div>
-            
-            <div class="form-row">
-                <div class="form-group" style="margin-bottom: 10px;">
-                    <label for="filterStartDate" style="font-size: 14px;">From Date</label>
-                    <input type="date" id="filterStartDate" style="padding: 8px;">
+        <!-- Filters Modal -->
+        <div id="filtersModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>🔍 Filters</h3>
                 </div>
+                
+                <div class="form-row">
+                    <div class="form-group" style="margin-bottom: 10px;">
+                        <label for="filterStartDate" style="font-size: 14px;">From Date</label>
+                        <input type="date" id="filterStartDate" style="padding: 8px;">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 10px;">
+                        <label for="filterEndDate" style="font-size: 14px;">To Date</label>
+                        <input type="date" id="filterEndDate" style="padding: 8px;">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group" style="margin-bottom: 10px;">
+                        <label for="filterAccount" style="font-size: 14px;">Account</label>
+                        <select id="filterAccount" style="padding: 8px;">
+                            <option value="">All accounts</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 10px;">
+                        <label for="filterCategory" style="font-size: 14px;">Category</label>
+                        <select id="filterCategory" style="padding: 8px;">
+                            <option value="">All categories</option>
+                        </select>
+                    </div>
+                </div>
+                
                 <div class="form-group" style="margin-bottom: 10px;">
-                    <label for="filterEndDate" style="font-size: 14px;">To Date</label>
-                    <input type="date" id="filterEndDate" style="padding: 8px;">
+                    <label for="filterSearch" style="font-size: 14px;">Search (payee or note)</label>
+                    <input type="text" id="filterSearch" placeholder="Search..." style="padding: 8px;">
+                </div>
+                
+                <div class="modal-buttons">
+                    <button type="button" onclick="applyFilters(); closeModal('filtersModal')" style="flex: 1;">Apply Filters</button>
+                    <button type="button" onclick="clearFilters(); closeModal('filtersModal')" style="flex: 1; background: #6c757d;">Clear</button>
+                    <button type="button" onclick="closeModal('filtersModal')" style="flex: 1; background: #999;">Close</button>
                 </div>
             </div>
-            
-            <div class="form-row">
-                <div class="form-group" style="margin-bottom: 10px;">
-                    <label for="filterAccount" style="font-size: 14px;">Account</label>
-                    <select id="filterAccount" style="padding: 8px;">
-                        <option value="">All accounts</option>
-                    </select>
+        </div>
+
+        <!-- Bulk Edit Bar -->
+        <div id="bulkEditBar" class="bulk-edit-bar">
+            <div style="max-width: 1200px; margin: 0 auto;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3 style="margin: 0;"><span id="selectedCount">0</span> <span id="selectedType">items</span> selected</h3>
+                    <button onclick="cancelBulkEdit()" style="width: auto; padding: 8px 16px; background: #6c757d;">Cancel</button>
                 </div>
-                <div class="form-group" style="margin-bottom: 10px;">
-                    <label for="filterCategory" style="font-size: 14px;">Category</label>
-                    <select id="filterCategory" style="padding: 8px;">
-                        <option value="">All categories</option>
-                    </select>
+                
+                <!-- Transaction Edit Fields -->
+                <div id="transactionEditFields" style="display: none;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                        <div>
+                            <label style="font-size: 12px; margin-bottom: 5px;">Change Account</label>
+                            <select id="bulkAccount" style="padding: 8px;">
+                                <option value="">Don't change</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; margin-bottom: 5px;">Change Parent Category</label>
+                            <select id="bulkParentCategory" style="padding: 8px;">
+                                <option value="">Don't change</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; margin-bottom: 5px;">Change Subcategory</label>
+                            <select id="bulkCategory" style="padding: 8px;" disabled>
+                                <option value="">Select parent first...</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; margin-bottom: 5px;">Change Location</label>
+                            <select id="bulkLocation" style="padding: 8px;">
+                                <option value="">Don't change</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; margin-bottom: 5px;">Change Project</label>
+                            <select id="bulkProject" style="padding: 8px;">
+                                <option value="">Don't change</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button onclick="applyBulkEdit()" style="margin-top: 15px; width: 100%;">✅ Apply Changes to Selected Transactions</button>
                 </div>
-            </div>
-            
-            <div class="form-group" style="margin-bottom: 10px;">
-                <label for="filterSearch" style="font-size: 14px;">Search (payee or note)</label>
-                <input type="text" id="filterSearch" placeholder="Search..." style="padding: 8px;">
-            </div>
-            
-            <div class="modal-buttons">
-                <button type="button" onclick="applyFilters(); closeModal('filtersModal')" style="flex: 1;">Apply Filters</button>
-                <button type="button" onclick="clearFilters(); closeModal('filtersModal')" style="flex: 1; background: #6c757d;">Clear</button>
-                <button type="button" onclick="closeModal('filtersModal')" style="flex: 1; background: #999;">Close</button>
+                
+                <!-- Transfer Edit Fields -->
+                <div id="transferEditFields" style="display: none;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
+                        <div>
+                            <label style="font-size: 12px; margin-bottom: 5px;">Change From Account</label>
+                            <select id="bulkTransferFromAccount" style="padding: 8px;">
+                                <option value="">Don't change</option>
+                            </select>
+                            <small style="color: #666; font-size: 11px; display: block; margin-top: 3px;">Only matching currency accounts shown</small>
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; margin-bottom: 5px;">Change To Account</label>
+                            <select id="bulkTransferToAccount" style="padding: 8px;">
+                                <option value="">Don't change</option>
+                            </select>
+                            <small style="color: #666; font-size: 11px; display: block; margin-top: 3px;">Only matching currency accounts shown</small>
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; margin-bottom: 5px;">Change Note</label>
+                            <textarea id="bulkTransferNote" rows="1" style="padding: 8px; resize: vertical;" placeholder="Leave empty to keep existing notes..."></textarea>
+                        </div>
+                    </div>
+                    <div id="transferCurrencyInfo" style="color: #10b981; font-size: 12px; margin-top: 10px; display: none;"></div>
+                    <button onclick="applyBulkTransferEdit()" style="margin-top: 15px; width: 100%;">✅ Apply Changes to Selected Transfers</button>
+                </div>
             </div>
         </div>
     </div>
@@ -519,6 +644,12 @@
         let allCategories = [];
         let regularTransactions = [];
         let transferTransactions = [];
+
+        // Bulk edit variables
+        let bulkEditMode = false;
+        let selectedTransactions = [];
+        let selectedTransfers = [];
+        let currentBulkType = null; // 'transaction' or 'transfer'
         
         // Get currency symbol
         function getCurrencySymbol(currency) {
@@ -1365,8 +1496,18 @@
                 `;
             }
             
+            const transferId = `${transfer.transfer_out_id}_${transfer.transfer_in_id}`;
+            const isSelected = selectedTransfers.includes(transferId);
+            
             return `
-                <div class="transaction-item" style="background: #f0f4ff;">
+                <div class="transaction-item ${isSelected ? 'selected' : ''}" 
+                    style="background: #f0f4ff;" 
+                    data-transfer-id="${transferId}"
+                    onclick="${bulkEditMode ? `toggleTransferSelection('${transferId}')` : ''}">
+                    <div class="checkbox-column">
+                        <input type="checkbox" ${isSelected ? 'checked' : ''} 
+                            onclick="event.stopPropagation(); toggleTransferSelection('${transferId}')">
+                    </div>
                     <div class="transaction-date">${date}<br>${time}</div>
                     <div class="transaction-details">
                         <div class="transaction-payee">🔄 Transfer</div>
@@ -1377,8 +1518,8 @@
                         ${amountDisplay}
                     </div>
                     <div style="display: flex; gap: 5px; flex-direction: column;">
-                        <button onclick="editTransfer('${transfer.transfer_out_id}', '${transfer.transfer_in_id}')" style="padding: 5px 10px; font-size: 12px; background: #667eea;">✏️</button>
-                        <button onclick="deleteTransfer('${transfer.transfer_out_id}', '${transfer.transfer_in_id}')" style="padding: 5px 10px; font-size: 12px; background: #ef4444;">🗑️</button>
+                        <button onclick="event.stopPropagation(); editTransfer('${transfer.transfer_out_id}', '${transfer.transfer_in_id}')" style="padding: 5px 10px; font-size: 12px; background: #667eea;">✏️</button>
+                        <button onclick="event.stopPropagation(); deleteTransfer('${transfer.transfer_out_id}', '${transfer.transfer_in_id}')" style="padding: 5px 10px; font-size: 12px; background: #ef4444;">🗑️</button>
                     </div>
                 </div>
             `;
@@ -1391,8 +1532,16 @@
             const balanceClass = runningBalance < 0 ? 'amount-negative' : 'amount-positive';
             const currencySymbol = getCurrencySymbol(t.currency);
             
+            const isSelected = selectedTransactions.includes(t.id);
+            
             return `
-                <div class="transaction-item">
+                <div class="transaction-item ${isSelected ? 'selected' : ''}" 
+                    data-transaction-id="${t.id}"
+                    onclick="${bulkEditMode ? `toggleTransactionSelection(${t.id})` : ''}">
+                    <div class="checkbox-column">
+                        <input type="checkbox" ${isSelected ? 'checked' : ''} 
+                            onclick="event.stopPropagation(); toggleTransactionSelection(${t.id})">
+                    </div>
                     <div class="transaction-date">${date}<br>${time}</div>
                     <div class="transaction-details">
                         <div class="transaction-payee">${t.payee_name || 'No payee'}</div>
@@ -1410,13 +1559,13 @@
                         ` : ''}
                     </div>
                     <div style="display: flex; gap: 5px; flex-direction: column;">
-                        <button onclick="editTransaction(${t.id})" style="padding: 5px 10px; font-size: 12px; background: #667eea;">✏️</button>
-                        <button onclick="deleteTransaction(${t.id})" style="padding: 5px 10px; font-size: 12px; background: #ef4444;">🗑️</button>
+                        <button onclick="event.stopPropagation(); editTransaction(${t.id})" style="padding: 5px 10px; font-size: 12px; background: #667eea;">✏️</button>
+                        <button onclick="event.stopPropagation(); deleteTransaction(${t.id})" style="padding: 5px 10px; font-size: 12px; background: #ef4444;">🗑️</button>
                     </div>
                 </div>
             `;
         }
-        
+
         // Apply filters
         async function applyFilters() {
             const startDate = document.getElementById('filterStartDate').value;
@@ -2199,6 +2348,684 @@
             }
         }
 
+        // Bulk edit functions
+        function toggleBulkEditMode() {
+            bulkEditMode = !bulkEditMode;
+            const button = document.getElementById('bulkEditToggle');
+            const list = document.getElementById('transactionsList');
+            
+            if (bulkEditMode) {
+                button.textContent = '❌ Cancel Bulk Edit';
+                button.style.background = '#ef4444';
+                list.classList.add('bulk-edit-mode');
+                // Ensure all items are enabled when entering bulk edit mode
+                enableAllItems();
+            } else {
+                cancelBulkEdit();
+            }
+        }
+
+        function cancelBulkEdit() {
+            bulkEditMode = false;
+            selectedTransactions = [];
+            selectedTransfers = [];
+            currentBulkType = null;
+            
+            const button = document.getElementById('bulkEditToggle');
+            const list = document.getElementById('transactionsList');
+            const bar = document.getElementById('bulkEditBar');
+            
+            button.textContent = '📝 Bulk Edit';
+            button.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+            list.classList.remove('bulk-edit-mode');
+            bar.classList.remove('active');
+            
+            // Remove selection highlights and enable all items
+            document.querySelectorAll('.transaction-item.selected').forEach(item => {
+                item.classList.remove('selected');
+                const checkbox = item.querySelector('input[type="checkbox"]');
+                if (checkbox) checkbox.checked = false;
+            });
+            
+            // Re-enable all items
+            enableAllItems();
+        }
+
+        function toggleTransactionSelection(transactionId) {
+            if (!bulkEditMode) return;
+            
+            // If we're starting fresh or switching from transfers
+            if (currentBulkType === null) {
+                currentBulkType = 'transaction';
+                // Disable all transfers
+                disableTransfers();
+            } else if (currentBulkType === 'transfer') {
+                showError('Cannot mix transactions and transfers in bulk edit');
+                return;
+            }
+            
+            const index = selectedTransactions.indexOf(transactionId);
+            if (index > -1) {
+                selectedTransactions.splice(index, 1);
+            } else {
+                selectedTransactions.push(transactionId);
+            }
+            
+            // If no selections, reset type and enable all
+            if (selectedTransactions.length === 0 && selectedTransfers.length === 0) {
+                currentBulkType = null;
+                enableAllItems();
+            }
+            
+            // Update only the visual state of this specific item
+            const item = document.querySelector(`[data-transaction-id="${transactionId}"]`);
+            if (item) {
+                const checkbox = item.querySelector('input[type="checkbox"]');
+                if (selectedTransactions.includes(transactionId)) {
+                    item.classList.add('selected');
+                    if (checkbox) checkbox.checked = true;
+                } else {
+                    item.classList.remove('selected');
+                    if (checkbox) checkbox.checked = false;
+                }
+            }
+            
+            updateBulkEditBar();
+        }
+
+        function toggleTransferSelection(transferId) {
+            if (!bulkEditMode) return;
+            
+            // If we're starting fresh or switching from transactions
+            if (currentBulkType === null) {
+                currentBulkType = 'transfer';
+                // Disable all transactions
+                disableTransactions();
+            } else if (currentBulkType === 'transaction') {
+                showError('Cannot mix transactions and transfers in bulk edit');
+                return;
+            }
+            
+            const index = selectedTransfers.indexOf(transferId);
+            if (index > -1) {
+                selectedTransfers.splice(index, 1);
+            } else {
+                selectedTransfers.push(transferId);
+            }
+            
+            // If no selections, reset type and enable all
+            if (selectedTransactions.length === 0 && selectedTransfers.length === 0) {
+                currentBulkType = null;
+                enableAllItems();
+            }
+            
+            // Update only the visual state of this specific item
+            const item = document.querySelector(`[data-transfer-id="${transferId}"]`);
+            if (item) {
+                const checkbox = item.querySelector('input[type="checkbox"]');
+                if (selectedTransfers.includes(transferId)) {
+                    item.classList.add('selected');
+                    if (checkbox) checkbox.checked = true;
+                } else {
+                    item.classList.remove('selected');
+                    if (checkbox) checkbox.checked = false;
+                }
+            }
+            
+            updateBulkEditBar();
+        }
+
+        async function updateBulkEditBar() {
+            const bar = document.getElementById('bulkEditBar');
+            const count = document.getElementById('selectedCount');
+            const typeText = document.getElementById('selectedType');
+            const transactionFields = document.getElementById('transactionEditFields');
+            const transferFields = document.getElementById('transferEditFields');
+            
+            const totalSelected = selectedTransactions.length + selectedTransfers.length;
+            
+            if (totalSelected > 0) {
+                bar.classList.add('active');
+                count.textContent = totalSelected;
+                
+                // Show appropriate editing interface
+                if (currentBulkType === 'transfer') {
+                    typeText.textContent = selectedTransfers.length === 1 ? 'transfer' : 'transfers';
+                    transactionFields.style.display = 'none';
+                    transferFields.style.display = 'block';
+                    await populateBulkTransferAccounts();
+                } else {
+                    typeText.textContent = selectedTransactions.length === 1 ? 'transaction' : 'transactions';
+                    transactionFields.style.display = 'block';
+                    transferFields.style.display = 'none';
+                    await populateBulkEditDropdowns();
+                }
+            } else {
+                bar.classList.remove('active');
+                transactionFields.style.display = 'none';
+                transferFields.style.display = 'none';
+            }
+        }
+
+        async function populateBulkEditDropdowns() {
+            // Populate accounts
+            try {
+                const accountsResponse = await fetch(`${API_URL}/accounts`);
+                const accounts = await accountsResponse.json();
+                const bulkAccount = document.getElementById('bulkAccount');
+                bulkAccount.innerHTML = '<option value="">Don\'t change</option>';
+                accounts.forEach(account => {
+                    const option = document.createElement('option');
+                    option.value = account.id;
+                    option.textContent = `${account.name} (${account.currency})`;
+                    bulkAccount.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading bulk accounts:', error);
+            }
+            
+            // Populate parent categories
+            const bulkParentCategory = document.getElementById('bulkParentCategory');
+            bulkParentCategory.innerHTML = '<option value="">Don\'t change</option>';
+            const parentCategories = [...new Set(allCategories
+                .map(c => c.parent)
+                .filter(p => p && p.trim() !== ''))]
+                .sort();
+            parentCategories.forEach(parent => {
+                const option = document.createElement('option');
+                option.value = parent;
+                option.textContent = parent;
+                bulkParentCategory.appendChild(option);
+            });
+            
+            // Add event listener for parent category change
+            bulkParentCategory.onchange = (e) => {
+                loadBulkSubcategories(e.target.value);
+            };
+            
+            // Populate locations
+            const bulkLocation = document.getElementById('bulkLocation');
+            bulkLocation.innerHTML = '<option value="">Don\'t change</option>';
+            if (window.allLocations) {
+                const filteredLocations = window.allLocations.filter(location => 
+                    location.name !== 'Transfer In' && location.name !== 'Transfer Out'
+                );
+                filteredLocations.forEach(location => {
+                    const option = document.createElement('option');
+                    option.value = location.id;
+                    option.textContent = location.name;
+                    bulkLocation.appendChild(option);
+                });
+            }
+            
+            // Populate projects
+            try {
+                const projectsResponse = await fetch(`${API_URL}/projects`);
+                const projects = await projectsResponse.json();
+                const bulkProject = document.getElementById('bulkProject');
+                bulkProject.innerHTML = '<option value="">Don\'t change</option>';
+                projects.forEach(project => {
+                    const option = document.createElement('option');
+                    option.value = project.id;
+                    option.textContent = project.name;
+                    bulkProject.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading bulk projects:', error);
+            }
+        }
+
+        function loadBulkSubcategories(parentName) {
+            const categorySelect = document.getElementById('bulkCategory');
+            categorySelect.innerHTML = '<option value="">Don\'t change</option>';
+            
+            if (!parentName) {
+                categorySelect.disabled = true;
+                categorySelect.innerHTML = '<option value="">Select parent first...</option>';
+                return;
+            }
+            
+            const subcategories = allCategories
+                .filter(c => c.parent === parentName)
+                .sort((a, b) => a.name.localeCompare(b.name));
+            
+            if (subcategories.length === 0) {
+                categorySelect.innerHTML = '<option value="">No subcategories available</option>';
+                categorySelect.disabled = true;
+                return;
+            }
+            
+            categorySelect.disabled = false;
+            subcategories.forEach(category => {
+                const option = document.createElement('option');
+                option.value = category.id;
+                option.textContent = category.name;
+                categorySelect.appendChild(option);
+            });
+        }
+
+        async function applyBulkEdit() {
+            if (selectedTransactions.length === 0) {
+                showError('No transactions selected');
+                return;
+            }
+            
+            const accountId = document.getElementById('bulkAccount').value;
+            const categoryId = document.getElementById('bulkCategory').value;
+            const locationId = document.getElementById('bulkLocation').value;
+            const projectId = document.getElementById('bulkProject').value;
+            
+            if (!accountId && !categoryId && !locationId && !projectId) {
+                showError('Please select at least one field to change');
+                return;
+            }
+            
+            if (!confirm(`Are you sure you want to update ${selectedTransactions.length} transaction(s)?`)) {
+                return;
+            }
+            
+            let successCount = 0;
+            let errorCount = 0;
+            
+            // Store which transactions were updated
+            const updatedIds = [];
+            
+            for (const transactionId of selectedTransactions) {
+                try {
+                    // Get current transaction
+                    const response = await fetch(`${API_URL}/transactions/${transactionId}`);
+                    const transaction = await response.json();
+                    
+                    // Build update object with only changed fields
+                    const updates = {
+                        date: transaction.date,
+                        amount: transaction.amount,
+                        currency: transaction.currency,
+                        account_id: accountId ? parseInt(accountId) : transaction.account_id,
+                        category_id: categoryId ? parseInt(categoryId) : transaction.category_id,
+                        payee_id: transaction.payee_id,
+                        location_id: locationId ? parseInt(locationId) : transaction.location_id,
+                        project_id: projectId ? parseInt(projectId) : transaction.project_id,
+                        note: transaction.note
+                    };
+                    
+                    // Update transaction
+                    const updateResponse = await fetch(`${API_URL}/transactions/${transactionId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(updates)
+                    });
+                    
+                    if (updateResponse.ok) {
+                        successCount++;
+                        updatedIds.push(transactionId);
+                        
+                        // Update the transaction in the local array
+                        const localTransaction = regularTransactions.find(t => t.id === transactionId);
+                        if (localTransaction) {
+                            if (accountId) {
+                                localTransaction.account_id = parseInt(accountId);
+                                // Update account name
+                                const account = await fetch(`${API_URL}/accounts`).then(r => r.json());
+                                const selectedAccount = account.find(a => a.id === parseInt(accountId));
+                                if (selectedAccount) {
+                                    localTransaction.account_name = selectedAccount.name;
+                                    localTransaction.currency = selectedAccount.currency;
+                                }
+                            }
+                            if (categoryId) {
+                                localTransaction.category_id = parseInt(categoryId);
+                                // Update category name
+                                const category = allCategories.find(c => c.id === parseInt(categoryId));
+                                if (category) {
+                                    localTransaction.category_name = category.name;
+                                }
+                            }
+                            if (locationId) {
+                                localTransaction.location_id = parseInt(locationId);
+                                // Update location name
+                                const location = window.allLocations.find(l => l.id === parseInt(locationId));
+                                if (location) {
+                                    localTransaction.location_name = location.name;
+                                }
+                            }
+                            if (projectId) {
+                                localTransaction.project_id = parseInt(projectId);
+                                // Update project name
+                                const projects = await fetch(`${API_URL}/projects`).then(r => r.json());
+                                const project = projects.find(p => p.id === parseInt(projectId));
+                                if (project) {
+                                    localTransaction.project_name = project.name;
+                                }
+                            }
+                        }
+                    } else {
+                        errorCount++;
+                    }
+                } catch (error) {
+                    console.error(`Error updating transaction ${transactionId}:`, error);
+                    errorCount++;
+                }
+            }
+            
+            if (successCount > 0) {
+                showSuccess(`Successfully updated ${successCount} transaction(s)`);
+            }
+            if (errorCount > 0) {
+                showError(`Failed to update ${errorCount} transaction(s)`);
+            }
+            
+            // Check if filters are active
+            const startDate = document.getElementById('filterStartDate').value;
+            const endDate = document.getElementById('filterEndDate').value;
+            const accountFilter = document.getElementById('filterAccount').value;
+            const categoryFilter = document.getElementById('filterCategory').value;
+            const searchText = document.getElementById('filterSearch').value;
+            
+            const filtersActive = startDate || endDate || accountFilter || categoryFilter || searchText;
+            
+            cancelBulkEdit();
+            
+            // Re-apply filters if they were active, otherwise just redisplay
+            if (filtersActive) {
+                await applyFilters();
+            } else {
+                displayCombinedTransactions();
+            }
+        }
+
+        async function applyBulkTransferEdit() {
+            if (selectedTransfers.length === 0) {
+                showError('No transfers selected');
+                return;
+            }
+            
+            const fromAccountId = document.getElementById('bulkTransferFromAccount').value;
+            const toAccountId = document.getElementById('bulkTransferToAccount').value;
+            const note = document.getElementById('bulkTransferNote').value.trim();
+            
+            if (!fromAccountId && !toAccountId && !note) {
+                showError('Please select at least one field to change');
+                return;
+            }
+            
+            // Validate that new accounts don't conflict
+            if (fromAccountId && toAccountId && fromAccountId === toAccountId) {
+                showError('From and To accounts cannot be the same');
+                return;
+            }
+            
+            if (!confirm(`Are you sure you want to update ${selectedTransfers.length} transfer(s)?`)) {
+                return;
+            }
+            
+            // Get accounts data once
+            const accountsResponse = await fetch(`${API_URL}/accounts`);
+            const allAccounts = await accountsResponse.json();
+            
+            const newFromAccount = fromAccountId ? allAccounts.find(a => a.id === parseInt(fromAccountId)) : null;
+            const newToAccount = toAccountId ? allAccounts.find(a => a.id === parseInt(toAccountId)) : null;
+            
+            let successCount = 0;
+            let errorCount = 0;
+            let currencyMismatchCount = 0;
+            
+            for (const transferId of selectedTransfers) {
+                const [outId, inId] = transferId.split('_');
+                
+                try {
+                    // Get both transactions
+                    const outResponse = await fetch(`${API_URL}/transactions/${outId}`);
+                    const inResponse = await fetch(`${API_URL}/transactions/${inId}`);
+                    
+                    const outTransaction = await outResponse.json();
+                    const inTransaction = await inResponse.json();
+                    
+                    // Determine final account IDs
+                    let finalFromAccountId = outTransaction.account_id;
+                    let finalToAccountId = inTransaction.account_id;
+                    let finalFromCurrency = outTransaction.currency;
+                    let finalToCurrency = inTransaction.currency;
+                    
+                    // Check if we're changing from account
+                    if (fromAccountId) {
+                        if (newFromAccount.currency === outTransaction.currency) {
+                            finalFromAccountId = parseInt(fromAccountId);
+                            finalFromCurrency = newFromAccount.currency;
+                        } else {
+                            // Currency mismatch - skip this transfer
+                            currencyMismatchCount++;
+                            continue;
+                        }
+                    }
+                    
+                    // Check if we're changing to account
+                    if (toAccountId) {
+                        if (newToAccount.currency === inTransaction.currency) {
+                            finalToAccountId = parseInt(toAccountId);
+                            finalToCurrency = newToAccount.currency;
+                        } else {
+                            // Currency mismatch - skip this transfer
+                            currencyMismatchCount++;
+                            continue;
+                        }
+                    }
+                    
+                    // Verify that after changes, from and to are not the same
+                    if (finalFromAccountId === finalToAccountId) {
+                        errorCount++;
+                        console.error(`Transfer ${transferId} would have same from/to account after edit`);
+                        continue;
+                    }
+                    
+                    // Prepare updates
+                    const outUpdate = {
+                        ...outTransaction,
+                        account_id: finalFromAccountId,
+                        currency: finalFromCurrency
+                    };
+                    
+                    const inUpdate = {
+                        ...inTransaction,
+                        account_id: finalToAccountId,
+                        currency: finalToCurrency
+                    };
+                    
+                    // Add note if provided
+                    if (note) {
+                        outUpdate.note = note;
+                        inUpdate.note = note;
+                    }
+                    
+                    // Update out transaction
+                    const outUpdateResponse = await fetch(`${API_URL}/transactions/${outId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(outUpdate)
+                    });
+                    
+                    // Update in transaction
+                    const inUpdateResponse = await fetch(`${API_URL}/transactions/${inId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(inUpdate)
+                    });
+                    
+                    if (outUpdateResponse.ok && inUpdateResponse.ok) {
+                        // Update the transfer in the local array
+                        const localTransfer = transferTransactions.find(t => 
+                            `${t.transfer_out_id}_${t.transfer_in_id}` === transferId
+                        );
+                        if (localTransfer) {
+                            if (fromAccountId) {
+                                localTransfer.from_account_id = finalFromAccountId;
+                                localTransfer.from_account_name = newFromAccount.name;
+                                localTransfer.from_currency = finalFromCurrency;
+                            }
+                            if (toAccountId) {
+                                localTransfer.to_account_id = finalToAccountId;
+                                localTransfer.to_account_name = newToAccount.name;
+                                localTransfer.to_currency = finalToCurrency;
+                            }
+                            if (note) {
+                                localTransfer.note = note;
+                            }
+                        }
+                        
+                        successCount++;
+                    } else {
+                        errorCount++;
+                    }
+                } catch (error) {
+                    console.error(`Error updating transfer ${transferId}:`, error);
+                    errorCount++;
+                }
+            }
+            
+            // Show results
+            if (successCount > 0) {
+                showSuccess(`Successfully updated ${successCount} transfer(s)`);
+            }
+            if (currencyMismatchCount > 0) {
+                showError(`Skipped ${currencyMismatchCount} transfer(s) due to currency mismatch`);
+            }
+            if (errorCount > 0) {
+                showError(`Failed to update ${errorCount} transfer(s)`);
+            }
+            
+            // Clear the form
+            document.getElementById('bulkTransferFromAccount').value = '';
+            document.getElementById('bulkTransferToAccount').value = '';
+            document.getElementById('bulkTransferNote').value = '';
+            
+            // Check if filters are active
+            const startDate = document.getElementById('filterStartDate').value;
+            const endDate = document.getElementById('filterEndDate').value;
+            const accountFilter = document.getElementById('filterAccount').value;
+            const categoryFilter = document.getElementById('filterCategory').value;
+            const searchText = document.getElementById('filterSearch').value;
+            
+            const filtersActive = startDate || endDate || accountFilter || categoryFilter || searchText;
+            
+            cancelBulkEdit();
+            
+            // Re-apply filters if they were active, otherwise just redisplay
+            if (filtersActive) {
+                await applyFilters();
+            } else {
+                displayCombinedTransactions();
+            }
+        }
+
+        function disableTransfers() {
+            document.querySelectorAll('[data-transfer-id]').forEach(item => {
+                item.classList.add('disabled');
+                item.onclick = null;
+                const checkbox = item.querySelector('input[type="checkbox"]');
+                if (checkbox) {
+                    checkbox.disabled = true;
+                }
+            });
+        }
+
+        function disableTransactions() {
+            document.querySelectorAll('[data-transaction-id]').forEach(item => {
+                item.classList.add('disabled');
+                item.onclick = null;
+                const checkbox = item.querySelector('input[type="checkbox"]');
+                if (checkbox) {
+                    checkbox.disabled = true;
+                }
+            });
+        }
+
+        function enableAllItems() {
+            document.querySelectorAll('.transaction-item').forEach(item => {
+                item.classList.remove('disabled');
+                const checkbox = item.querySelector('input[type="checkbox"]');
+                if (checkbox) {
+                    checkbox.disabled = false;
+                }
+                
+                // Re-attach onclick handlers
+                if (item.hasAttribute('data-transaction-id')) {
+                    const transactionId = item.getAttribute('data-transaction-id');
+                    item.onclick = function() { toggleTransactionSelection(parseInt(transactionId)); };
+                } else if (item.hasAttribute('data-transfer-id')) {
+                    const transferId = item.getAttribute('data-transfer-id');
+                    item.onclick = function() { toggleTransferSelection(transferId); };
+                }
+            });
+        }
+
+        async function populateBulkTransferAccounts() {
+            try {
+                // Get all accounts
+                const accountsResponse = await fetch(`${API_URL}/accounts`);
+                const allAccounts = await accountsResponse.json();
+                
+                // Get the currencies used in selected transfers
+                const selectedTransferObjects = transferTransactions.filter(t => 
+                    selectedTransfers.includes(`${t.transfer_out_id}_${t.transfer_in_id}`)
+                );
+                
+                // Get unique from currencies
+                const fromCurrencies = new Set(selectedTransferObjects.map(t => t.from_currency));
+                
+                // Get unique to currencies
+                const toCurrencies = new Set(selectedTransferObjects.map(t => t.to_currency));
+                
+                // Populate From Account dropdown
+                const bulkTransferFromAccount = document.getElementById('bulkTransferFromAccount');
+                bulkTransferFromAccount.innerHTML = '<option value="">Don\'t change</option>';
+                
+                // Filter accounts that match any of the from currencies
+                const fromAccounts = allAccounts.filter(acc => fromCurrencies.has(acc.currency));
+                fromAccounts.forEach(account => {
+                    const option = document.createElement('option');
+                    option.value = account.id;
+                    option.dataset.currency = account.currency;
+                    option.textContent = `${account.name} (${account.currency})`;
+                    bulkTransferFromAccount.appendChild(option);
+                });
+                
+                // Populate To Account dropdown
+                const bulkTransferToAccount = document.getElementById('bulkTransferToAccount');
+                bulkTransferToAccount.innerHTML = '<option value="">Don\'t change</option>';
+                
+                // Filter accounts that match any of the to currencies
+                const toAccounts = allAccounts.filter(acc => toCurrencies.has(acc.currency));
+                toAccounts.forEach(account => {
+                    const option = document.createElement('option');
+                    option.value = account.id;
+                    option.dataset.currency = account.currency;
+                    option.textContent = `${account.name} (${account.currency})`;
+                    bulkTransferToAccount.appendChild(option);
+                });
+                
+                // Show info if all transfers have same currencies
+                const infoDiv = document.getElementById('transferCurrencyInfo');
+                if (fromCurrencies.size === 1 && toCurrencies.size === 1) {
+                    const fromCurrency = Array.from(fromCurrencies)[0];
+                    const toCurrency = Array.from(toCurrencies)[0];
+                    
+                    if (fromCurrency === toCurrency) {
+                        infoDiv.textContent = `✓ All selected transfers use ${fromCurrency}`;
+                        infoDiv.style.display = 'block';
+                    } else {
+                        infoDiv.textContent = `ℹ️ Selected transfers: ${fromCurrency} → ${toCurrency}`;
+                        infoDiv.style.display = 'block';
+                        infoDiv.style.color = '#667eea';
+                    }
+                } else {
+                    infoDiv.style.display = 'none';
+                }
+                
+            } catch (error) {
+                console.error('Error loading bulk transfer accounts:', error);
+                showError('Error loading accounts');
+            }
+        }
     </script>
     
 </body>
