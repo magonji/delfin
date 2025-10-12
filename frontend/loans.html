@@ -441,82 +441,6 @@
             };
             return symbols[currency] || currency;
         }
-
-        // Cache management
-        const CACHE_KEY = 'financisto_loans_cache';
-        const CACHE_VERSION_KEY = 'financisto_loans_cache_version';
-
-        function getCacheVersion() {
-            // Use last transaction date as cache version
-            // If transactions change, cache is invalidated
-            return localStorage.getItem(CACHE_VERSION_KEY) || '0';
-        }
-
-        function setCacheVersion(version) {
-            localStorage.setItem(CACHE_VERSION_KEY, version);
-        }
-
-        function getLoansCache() {
-            try {
-                const cached = localStorage.getItem(CACHE_KEY);
-                if (!cached) return null;
-                
-                const data = JSON.parse(cached);
-                
-                // Check if cache is still valid
-                if (data.version !== getCacheVersion()) {
-                    return null;
-                }
-                
-                // Convert date strings back to Date objects
-                data.loans.forEach(loan => {
-                    loan.openDate = new Date(loan.openDate);
-                    if (loan.closeDate) {
-                        loan.closeDate = new Date(loan.closeDate);
-                    }
-                    loan.transactions.forEach(t => {
-                        t.date = new Date(t.date);
-                    });
-                });
-                
-                return data.loans;
-            } catch (error) {
-                console.error('Error reading cache:', error);
-                return null;
-            }
-        }
-
-        function setLoansCache(loans) {
-            try {
-                const data = {
-                    version: getCacheVersion(),
-                    loans: loans,
-                    timestamp: new Date().toISOString()
-                };
-                localStorage.setItem(CACHE_KEY, JSON.stringify(data));
-            } catch (error) {
-                console.error('Error saving cache:', error);
-            }
-        }
-
-        function invalidateCache() {
-            localStorage.removeItem(CACHE_KEY);
-        }
-
-        async function updateCacheVersion() {
-            // Get the most recent transaction date
-            try {
-                const response = await fetch(`${API_URL}/transactions?limit=1`);
-                const transactions = await response.json();
-                
-                if (transactions.length > 0) {
-                    const latestDate = new Date(transactions[0].date).getTime();
-                    setCacheVersion(latestDate.toString());
-                }
-            } catch (error) {
-                console.error('Error updating cache version:', error);
-            }
-        }
         
         // Load initial data
         document.addEventListener('DOMContentLoaded', async () => {
@@ -580,30 +504,11 @@
             }
         }
 
-        // Load and identify loan accounts (with caching)
+        // Load and identify loan accounts (without caching)
         async function loadLoans() {
             try {
                 document.getElementById('loadingSpinner').style.display = 'block';
                 document.getElementById('loansList').style.display = 'none';
-                
-                // Update cache version first
-                await updateCacheVersion();
-                
-                // Try to get from cache
-                const cachedLoans = getLoansCache();
-                if (cachedLoans && cachedLoans.length > 0) {
-                    console.log('Loading loans from cache');
-                    loanAccounts = cachedLoans;
-                    
-                    document.getElementById('loadingSpinner').style.display = 'none';
-                    document.getElementById('loansList').style.display = 'block';
-                    
-                    displayLoans();
-                    updateStatistics();
-                    return;
-                }
-                
-                console.log('Cache miss - calculating loans from scratch');
                 
                 const response = await fetch(`${API_URL}/accounts`);
                 const accounts = await response.json();
@@ -649,9 +554,6 @@
                 // Wait for all accounts to be processed
                 const results = await Promise.all(loanPromises);
                 loanAccounts = results.filter(loan => loan !== null);
-                
-                // Save to cache
-                setLoansCache(loanAccounts);
                 
                 document.getElementById('loadingSpinner').style.display = 'none';
                 document.getElementById('loansList').style.display = 'block';
@@ -961,10 +863,6 @@
                 showSuccess('Loan created successfully!');
                 closeModal('newLoanModal');
 
-                // Invalidate cache and reload
-                invalidateCache();
-                await updateCacheVersion();
-                
                 // Reload data
                 await loadTransactions();
                 await loadLoans();

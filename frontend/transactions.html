@@ -1693,7 +1693,6 @@
             }
         }
         
-        // Delete transaction
         async function deleteTransaction(transactionId) {
             if (!confirm('Are you sure you want to delete this transaction? This cannot be undone.')) {
                 return;
@@ -1715,6 +1714,38 @@
                 showError('Error: ' + error.message);
             }
         }
+
+        document.getElementById('transactionForm').addEventListener('submit', async (e) => {
+            e.preventDefault();            
+            try {
+                let response;
+                
+                if (isEditing) {
+                    response = await fetch(`${API_URL}/transactions/${isEditing}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(transaction)
+                    });
+                } else {
+                    response = await fetch(`${API_URL}/transactions`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(transaction)
+                    });
+                }
+                
+                if (response.ok) {
+                    showSuccess(isEditing ? 'Transaction updated successfully!' : 'Transaction saved successfully!');
+                    cancelEdit();
+                    await loadRecentTransactions();
+                    await loadPayees();
+                } else {
+                    showError('Failed to save transaction');
+                }
+            } catch (error) {
+                showError('Error: ' + error.message);
+            }
+        });
         
         // Cancel edit mode
         function cancelEdit() {
