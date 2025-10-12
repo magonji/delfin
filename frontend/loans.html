@@ -305,6 +305,11 @@
         .radio-option input[type="radio"] {
             width: auto;
         }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
     <script src="navbar.js"></script>
 </head>
@@ -312,6 +317,11 @@
     <div class="container">
         <div id="successMessage" class="success-message"></div>
         <div id="errorMessage" class="error-message"></div>
+
+        <div id="loadingSpinner" style="display: none; text-align: center; padding: 40px;">
+            <div style="display: inline-block; width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid #667eea; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+            <p style="color: white; margin-top: 20px; font-size: 18px;">Loading loans...</p>
+        </div>
         
         <!-- Statistics -->
         <div class="stats-grid">
@@ -431,14 +441,98 @@
             };
             return symbols[currency] || currency;
         }
+
+        // Cache management
+        const CACHE_KEY = 'financisto_loans_cache';
+        const CACHE_VERSION_KEY = 'financisto_loans_cache_version';
+
+        function getCacheVersion() {
+            // Use last transaction date as cache version
+            // If transactions change, cache is invalidated
+            return localStorage.getItem(CACHE_VERSION_KEY) || '0';
+        }
+
+        function setCacheVersion(version) {
+            localStorage.setItem(CACHE_VERSION_KEY, version);
+        }
+
+        function getLoansCache() {
+            try {
+                const cached = localStorage.getItem(CACHE_KEY);
+                if (!cached) return null;
+                
+                const data = JSON.parse(cached);
+                
+                // Check if cache is still valid
+                if (data.version !== getCacheVersion()) {
+                    return null;
+                }
+                
+                // Convert date strings back to Date objects
+                data.loans.forEach(loan => {
+                    loan.openDate = new Date(loan.openDate);
+                    if (loan.closeDate) {
+                        loan.closeDate = new Date(loan.closeDate);
+                    }
+                    loan.transactions.forEach(t => {
+                        t.date = new Date(t.date);
+                    });
+                });
+                
+                return data.loans;
+            } catch (error) {
+                console.error('Error reading cache:', error);
+                return null;
+            }
+        }
+
+        function setLoansCache(loans) {
+            try {
+                const data = {
+                    version: getCacheVersion(),
+                    loans: loans,
+                    timestamp: new Date().toISOString()
+                };
+                localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+            } catch (error) {
+                console.error('Error saving cache:', error);
+            }
+        }
+
+        function invalidateCache() {
+            localStorage.removeItem(CACHE_KEY);
+        }
+
+        async function updateCacheVersion() {
+            // Get the most recent transaction date
+            try {
+                const response = await fetch(`${API_URL}/transactions?limit=1`);
+                const transactions = await response.json();
+                
+                if (transactions.length > 0) {
+                    const latestDate = new Date(transactions[0].date).getTime();
+                    setCacheVersion(latestDate.toString());
+                }
+            } catch (error) {
+                console.error('Error updating cache version:', error);
+            }
+        }
         
         // Load initial data
         document.addEventListener('DOMContentLoaded', async () => {
-            await loadAccounts();
-            await loadTransactions();
+            // Show loading immediately
+            document.getElementById('loadingSpinner').style.display = 'block';
+            
+            // Load in parallel
+            await Promise.all([
+                loadAccounts(),
+                loadTransactions()
+            ]);
+            
+            // Then load loans (which depends on above data)
             await loadLoans();
             
-            // Toggle between transfer and transaction type
+            // Setup event listeners
             document.querySelectorAll('input[name="loanType"]').forEach(radio => {
                 radio.addEventListener('change', function() {
                     const isTransfer = this.value === 'transfer';
@@ -475,114 +569,155 @@
             }
         }
         
-        // Load all transactions
+        // Load only transfers (much faster than all transactions)
         async function loadTransactions() {
             try {
-                const transResponse = await fetch(`${API_URL}/transactions?limit=100000`);
-                allTransactions = await transResponse.json();
-                
+                // Only load transfers, not all transactions
                 const transferResponse = await fetch(`${API_URL}/transactions/transfers`);
                 allTransfers = await transferResponse.json();
             } catch (error) {
                 console.error('Error loading transactions:', error);
             }
         }
-        
-        // Load and identify loan accounts
+
+        // Load and identify loan accounts (with caching)
         async function loadLoans() {
             try {
+                document.getElementById('loadingSpinner').style.display = 'block';
+                document.getElementById('loansList').style.display = 'none';
+                
+                // Update cache version first
+                await updateCacheVersion();
+                
+                // Try to get from cache
+                const cachedLoans = getLoansCache();
+                if (cachedLoans && cachedLoans.length > 0) {
+                    console.log('Loading loans from cache');
+                    loanAccounts = cachedLoans;
+                    
+                    document.getElementById('loadingSpinner').style.display = 'none';
+                    document.getElementById('loansList').style.display = 'block';
+                    
+                    displayLoans();
+                    updateStatistics();
+                    return;
+                }
+                
+                console.log('Cache miss - calculating loans from scratch');
+                
                 const response = await fetch(`${API_URL}/accounts`);
                 const accounts = await response.json();
                 
-                // Identify loan accounts (those that have never had positive balance)
+                // Identify potential loan accounts
                 loanAccounts = [];
                 
-                for (const account of accounts) {
-                    const accountTransactions = allTransactions.filter(t => t.account_id === account.id);
-                    
-                    if (accountTransactions.length === 0) continue;
-                    
-                    // Calculate balance over time
-                    let hasBeenPositive = false;
-                    let balance = 0;
-                    
-                    accountTransactions.sort((a, b) => new Date(a.date) - new Date(b.date));
-                    
-                    for (const trans of accountTransactions) {
-                        balance += trans.amount;
-                        if (balance > 0) {
-                            hasBeenPositive = true;
-                            break;
+                // Process accounts in parallel for better performance
+                const loanPromises = accounts.map(async (account) => {
+                    try {
+                        // Load transactions only for this specific account
+                        const accountTransResponse = await fetch(`${API_URL}/transactions?account_id=${account.id}&limit=10000`);
+                        const accountTransactions = await accountTransResponse.json();
+                        
+                        if (accountTransactions.length === 0) return null;
+                        
+                        // Quick check: if account ever had positive balance, not a loan
+                        let hasBeenPositive = false;
+                        let balance = 0;
+                        
+                        accountTransactions.sort((a, b) => new Date(a.date) - new Date(b.date));
+                        
+                        for (const trans of accountTransactions) {
+                            balance += trans.amount;
+                            if (balance > 0) {
+                                hasBeenPositive = true;
+                                break;
+                            }
                         }
+                        
+                        // If never positive and has transactions, it's a loan account
+                        if (!hasBeenPositive) {
+                            return await calculateLoanData(account, accountTransactions);
+                        }
+                        
+                        return null;
+                    } catch (error) {
+                        console.error(`Error processing account ${account.name}:`, error);
+                        return null;
                     }
-                    
-                    // If never positive and has transactions, it's a loan account
-                    if (!hasBeenPositive) {
-                        const loanData = await calculateLoanData(account, accountTransactions);
-                        loanAccounts.push(loanData);
-                    }
-                }
+                });
+                
+                // Wait for all accounts to be processed
+                const results = await Promise.all(loanPromises);
+                loanAccounts = results.filter(loan => loan !== null);
+                
+                // Save to cache
+                setLoansCache(loanAccounts);
+                
+                document.getElementById('loadingSpinner').style.display = 'none';
+                document.getElementById('loansList').style.display = 'block';
                 
                 displayLoans();
                 updateStatistics();
                 
             } catch (error) {
                 console.error('Error loading loans:', error);
+                document.getElementById('loadingSpinner').style.display = 'none';
+                showError('Error loading loans');
             }
         }
         
         // Calculate loan statistics
         async function calculateLoanData(account, transactions) {
-            transactions.sort((a, b) => new Date(a.date) - new Date(b.date));
+            // Pre-sort once
+            const sortedTransactions = [...transactions].sort((a, b) => new Date(a.date) - new Date(b.date));
             
             // First transaction is the loan origin
-            const firstTrans = transactions[0];
+            const firstTrans = sortedTransactions[0];
             const openDate = new Date(firstTrans.date);
-            
-            // Calculate borrowed amount (first negative transaction or transfer out)
             const borrowed = Math.abs(firstTrans.amount);
             
-            // Calculate current balance
+            // Single pass through transactions for all calculations
             let balance = 0;
             let closeDate = null;
+            let repaid = 0;
+            let interest = 0;
+            let lenderName = 'Unknown';
             
-            for (const trans of transactions) {
+            // Build transfer IDs set once
+            const transferIds = new Set();
+            allTransfers.forEach(t => {
+                if (t.transfer_out_id) transferIds.add(t.transfer_out_id);
+                if (t.transfer_in_id) transferIds.add(t.transfer_in_id);
+            });
+            
+            // Single loop through all transactions
+            for (let i = 0; i < sortedTransactions.length; i++) {
+                const trans = sortedTransactions[i];
                 balance += trans.amount;
+                
+                // Check for close date
                 if (balance >= -0.01 && closeDate === null) {
                     closeDate = new Date(trans.date);
+                }
+                
+                // Calculate repaid
+                if (trans.amount > 0) {
+                    repaid += trans.amount;
+                }
+                
+                // Calculate interest and find lender
+                if (trans.amount < 0 && !transferIds.has(trans.id) && trans.id !== firstTrans.id) {
+                    interest += Math.abs(trans.amount);
+                    
+                    // Get lender name from first interest payment
+                    if (lenderName === 'Unknown' && trans.payee_name) {
+                        lenderName = trans.payee_name;
+                    }
                 }
             }
             
             const currentOwed = Math.abs(Math.min(balance, 0));
             const isCompleted = balance >= -0.01;
-            
-            // Calculate repaid amount (sum of positive transactions/transfers in)
-            const repaid = transactions
-                .filter(t => t.amount > 0)
-                .reduce((sum, t) => sum + t.amount, 0);
-            
-            // Calculate interest (sum of negative transactions that aren't transfers)
-            const transferIds = new Set();
-            allTransfers.forEach(t => {
-                transferIds.add(t.transfer_out_id);
-                transferIds.add(t.transfer_in_id);
-            });
-            
-            const interest = transactions
-                .filter(t => t.amount < 0 && !transferIds.has(t.id) && t.id !== firstTrans.id)
-                .reduce((sum, t) => sum + Math.abs(t.amount), 0);
-            
-            // Get lender name from first interest payment (negative transaction that isn't a transfer)
-            
-            // Find first interest/fee payment (negative transaction that isn't transfer and isn't the first transaction)
-            const firstInterestPayment = transactions.find(t => 
-                t.amount < 0 && 
-                !transferIds.has(t.id) && 
-                t.id !== firstTrans.id &&
-                t.payee_name
-            );
-            
-            const lenderName = firstInterestPayment?.payee_name || 'Unknown';
             
             return {
                 account,
@@ -594,9 +729,9 @@
                 currentOwed,
                 isCompleted,
                 lenderName,
-                transactions
+                transactions: sortedTransactions
             };
-        }
+}
         
         // Display loans
         function displayLoans() {
@@ -825,6 +960,10 @@
                 
                 showSuccess('Loan created successfully!');
                 closeModal('newLoanModal');
+
+                // Invalidate cache and reload
+                invalidateCache();
+                await updateCacheVersion();
                 
                 // Reload data
                 await loadTransactions();
