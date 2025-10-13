@@ -650,6 +650,16 @@
         let selectedTransactions = [];
         let selectedTransfers = [];
         let currentBulkType = null; // 'transaction' or 'transfer'
+
+        // Filter state variables
+        let activeFilters = {
+            startDate: null,
+            endDate: null,
+            accountId: null,
+            categoryId: null,
+            searchText: null
+        };
+        let filtersActive = false;
         
         // Get currency symbol
         function getCurrencySymbol(currency) {
@@ -1425,7 +1435,8 @@
                     account_name: t.from_account_name,
                     currency: t.from_currency,
                     type: 'transfer_out',
-                    original_transaction_id: t.transfer_out_id
+                    original_transaction_id: t.transfer_out_id,
+                    transfer_composite_id: `${t.transfer_out_id}_${t.transfer_in_id}`
                 });
                 
                 // Transfer in (positive)
@@ -1437,7 +1448,8 @@
                     account_name: t.to_account_name,
                     currency: t.to_currency,
                     type: 'transfer_in',
-                    original_transaction_id: t.transfer_in_id
+                    original_transaction_id: t.transfer_in_id,
+                    transfer_composite_id: `${t.transfer_out_id}_${t.transfer_in_id}`
                 });
             });
             
@@ -1458,22 +1470,40 @@
             
             // Create lookup for balances by original transaction id
             const balanceLookup = {};
+            const transferBalanceLookup = {};
+            
             transactionsWithBalance.forEach(t => {
                 if (t.type === 'transaction') {
                     balanceLookup[t.id] = t.runningBalance;
+                } else if (t.type === 'transfer_out' || t.type === 'transfer_in') {
+                    // Store balance info for transfers
+                    if (!transferBalanceLookup[t.transfer_composite_id]) {
+                        transferBalanceLookup[t.transfer_composite_id] = {};
+                    }
+                    
+                    if (t.type === 'transfer_out') {
+                        transferBalanceLookup[t.transfer_composite_id].fromBalance = t.runningBalance;
+                        transferBalanceLookup[t.transfer_composite_id].fromAccountName = t.account_name;
+                        transferBalanceLookup[t.transfer_composite_id].fromCurrency = t.currency;
+                    } else {
+                        transferBalanceLookup[t.transfer_composite_id].toBalance = t.runningBalance;
+                        transferBalanceLookup[t.transfer_composite_id].toAccountName = t.account_name;
+                        transferBalanceLookup[t.transfer_composite_id].toCurrency = t.currency;
+                    }
                 }
             });
             
             list.innerHTML = items.map(item => {
                 if (item.type === 'transfer') {
-                    return displayTransferItem(item);
+                    const transferId = `${item.transfer_out_id}_${item.transfer_in_id}`;
+                    return displayTransferItem(item, transferBalanceLookup[transferId]);
                 } else {
                     return displayRegularTransaction(item, balanceLookup[item.id]);
                 }
             }).join('');
         }
         
-        function displayTransferItem(transfer) {
+        function displayTransferItem(transfer, balanceInfo) {
             const date = new Date(transfer.date).toLocaleDateString('en-GB');
             const time = new Date(transfer.date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
             
@@ -1492,6 +1522,23 @@
                     </div>
                     <div style="font-size: 11px; color: #888; margin-top: 2px;">
                         Rate: 1 ${transfer.from_currency} = ${exchangeRate} ${transfer.to_currency}
+                    </div>
+                `;
+            }
+            
+            // Add balance information if available
+            if (balanceInfo) {
+                const fromBalanceClass = balanceInfo.fromBalance < 0 ? 'amount-negative' : 'amount-positive';
+                const toBalanceClass = balanceInfo.toBalance < 0 ? 'amount-negative' : 'amount-positive';
+                
+                amountDisplay += `
+                    <div style="font-size: 13px; margin-top: 8px; opacity: 0.9; line-height: 1.4;">
+                        <div class="${fromBalanceClass}">
+                            <b>${transfer.from_account_name}:</b> ${fromSymbol}${balanceInfo.fromBalance.toFixed(2)}
+                        </div>
+                        <div class="${toBalanceClass}" style="margin-top: 2px;">
+                            <b>${transfer.to_account_name}:</b> ${toSymbol}${balanceInfo.toBalance.toFixed(2)}
+                        </div>
                     </div>
                 `;
             }
@@ -1574,7 +1621,17 @@
             const categoryId = document.getElementById('filterCategory').value;
             const searchText = document.getElementById('filterSearch').value.toLowerCase();
             
-            // Filter regular transactions
+            // Save filter state
+            activeFilters = {
+                startDate: startDate,
+                endDate: endDate,
+                accountId: accountId,
+                categoryId: categoryId,
+                searchText: searchText
+            };
+            filtersActive = !!(startDate || endDate || accountId || categoryId || searchText);
+            
+            // Filter regular transactions FOR DISPLAY
             let filtered = [...regularTransactions];
             
             if (startDate) {
@@ -1597,7 +1654,7 @@
                 });
             }
             
-            // Filter transfers
+            // Filter transfers FOR DISPLAY
             let filteredTransfers = [...transferTransactions];
             
             if (startDate) {
@@ -1622,26 +1679,63 @@
                     return note.includes(searchText);
                 });
             }
-            if (searchText) {
-                filteredTransfers = filteredTransfers.filter(t => {
-                    const note = (t.note || '').toLowerCase();
-                    return note.includes(searchText);
+            
+            // ============================================================================
+            // CALCULATE BALANCES USING ALL TRANSACTIONS (not just filtered ones)
+            // This ensures balances are accurate regardless of filters
+            // ============================================================================
+            
+            // Step 1: Combine ALL transactions and transfers for balance calculation
+            const allForBalance = [];
+            
+            // Add ALL regular transactions
+            regularTransactions.forEach(t => {
+                allForBalance.push({
+                    id: t.id,
+                    date: new Date(t.date),
+                    account_id: t.account_id,
+                    amount: t.amount,
+                    account_name: t.account_name,
+                    currency: t.currency,
+                    type: 'transaction'
                 });
-            }
+            });
             
-            // Combine and display
-            const combined = [
-                ...filtered.map(t => ({...t, type: 'transaction'})),
-                ...filteredTransfers.map(t => ({...t, type: 'transfer'}))
-            ].sort((a, b) => new Date(b.date) - new Date(a.date));
+            // Add ALL transfers as two separate balance entries
+            transferTransactions.forEach(t => {
+                // Transfer out (negative)
+                allForBalance.push({
+                    id: `transfer_out_${t.transfer_out_id}`,
+                    date: new Date(t.date),
+                    account_id: t.from_account_id,
+                    amount: -t.from_amount,
+                    account_name: t.from_account_name,
+                    currency: t.from_currency,
+                    type: 'transfer_out',
+                    original_transaction_id: t.transfer_out_id,
+                    transfer_composite_id: `${t.transfer_out_id}_${t.transfer_in_id}`
+                });
+                
+                // Transfer in (positive)
+                allForBalance.push({
+                    id: `transfer_in_${t.transfer_in_id}`,
+                    date: new Date(t.date),
+                    account_id: t.to_account_id,
+                    amount: t.to_amount,
+                    account_name: t.to_account_name,
+                    currency: t.to_currency,
+                    type: 'transfer_in',
+                    original_transaction_id: t.transfer_in_id,
+                    transfer_composite_id: `${t.transfer_out_id}_${t.transfer_in_id}`
+                });
+            });
             
-            // Calculate balances for filtered regular transactions
+            // Step 2: Sort by date (oldest first) for chronological balance calculation
+            allForBalance.sort((a, b) => a.date - b.date);
+            
+            // Step 3: Calculate running balances for ALL transactions
             const accountBalances = {};
-            const sortedFiltered = [...filtered].sort((a, b) => 
-                new Date(a.date) - new Date(b.date)
-            );
-            
-            const transactionsWithBalance = sortedFiltered.map(t => {
+            const transactionsWithBalance = allForBalance.map(t => {
                 if (!accountBalances[t.account_id]) {
                     accountBalances[t.account_id] = 0;
                 }
@@ -1652,25 +1746,55 @@
                 };
             });
             
-            transactionsWithBalance.reverse();
+            // Step 4: Create lookup tables for balances
+            const balanceLookup = {}; // For regular transactions
+            const transferBalanceLookup = {}; // For transfers
             
-            // Create lookup
-            const balanceLookup = {};
             transactionsWithBalance.forEach(t => {
-                balanceLookup[t.id] = t.runningBalance;
+                if (t.type === 'transaction') {
+                    balanceLookup[t.id] = t.runningBalance;
+                } else if (t.type === 'transfer_out' || t.type === 'transfer_in') {
+                    // Store balance info for transfers
+                    if (!transferBalanceLookup[t.transfer_composite_id]) {
+                        transferBalanceLookup[t.transfer_composite_id] = {};
+                    }
+                    
+                    if (t.type === 'transfer_out') {
+                        transferBalanceLookup[t.transfer_composite_id].fromBalance = t.runningBalance;
+                        transferBalanceLookup[t.transfer_composite_id].fromAccountName = t.account_name;
+                        transferBalanceLookup[t.transfer_composite_id].fromCurrency = t.currency;
+                    } else {
+                        transferBalanceLookup[t.transfer_composite_id].toBalance = t.runningBalance;
+                        transferBalanceLookup[t.transfer_composite_id].toAccountName = t.account_name;
+                        transferBalanceLookup[t.transfer_composite_id].toCurrency = t.currency;
+                    }
+                }
             });
             
-            // Display
+            // ============================================================================
+            // DISPLAY FILTERED ITEMS (but with balances calculated from ALL transactions)
+            // ============================================================================
+            
+            // Combine filtered items for display
+            const combined = [
+                ...filtered.map(t => ({...t, type: 'transaction'})),
+                ...filteredTransfers.map(t => ({...t, type: 'transfer'}))
+            ].sort((a, b) => new Date(b.date) - new Date(a.date));
+            
             const list = document.getElementById('transactionsList');
+            
             if (combined.length === 0) {
                 list.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">No transactions found</p>';
                 return;
             }
             
+            // Display using the balance lookups we calculated from ALL transactions
             list.innerHTML = combined.map(item => {
                 if (item.type === 'transfer') {
-                    return displayTransferItem(item);
+                    const transferId = `${item.transfer_out_id}_${item.transfer_in_id}`;
+                    return displayTransferItem(item, transferBalanceLookup[transferId]);
                 } else {
+                    // Use the balance from the lookup table (calculated from ALL transactions)
                     return displayRegularTransaction(item, balanceLookup[item.id]);
                 }
             }).join('');
@@ -1684,7 +1808,34 @@
             document.getElementById('filterCategory').value = '';
             document.getElementById('filterSearch').value = '';
             
+            // Clear saved filter state
+            activeFilters = {
+                startDate: null,
+                endDate: null,
+                accountId: null,
+                categoryId: null,
+                searchText: null
+            };
+            filtersActive = false;
+            
             displayCombinedTransactions();
+        }
+
+        // Reload transactions and reapply filters if active
+        async function reloadTransactionsWithFilters() {
+            await loadRecentTransactions();
+            
+            if (filtersActive) {
+                // Restore filter values in the UI
+                document.getElementById('filterStartDate').value = activeFilters.startDate || '';
+                document.getElementById('filterEndDate').value = activeFilters.endDate || '';
+                document.getElementById('filterAccount').value = activeFilters.accountId || '';
+                document.getElementById('filterCategory').value = activeFilters.categoryId || '';
+                document.getElementById('filterSearch').value = activeFilters.searchText || '';
+                
+                // Reapply filters
+                await applyFilters();
+            }
         }
         
         // Delete transfer
@@ -1698,7 +1849,7 @@
                 await fetch(`${API_URL}/transactions/${inId}`, { method: 'DELETE' });
                 
                 showSuccess('Transfer deleted successfully!');
-                await loadRecentTransactions();
+                await reloadTransactionsWithFilters();
             } catch (error) {
                 console.error('Error deleting transfer:', error);
                 showError('Error deleting transfer');
@@ -1854,7 +2005,7 @@
                 
                 if (response.ok) {
                     showSuccess('Transaction deleted successfully!');
-                    await loadRecentTransactions();
+                    await reloadTransactionsWithFilters();
                 } else {
                     showError('Failed to delete transaction');
                 }
@@ -1863,38 +2014,6 @@
                 showError('Error: ' + error.message);
             }
         }
-
-        document.getElementById('transactionForm').addEventListener('submit', async (e) => {
-            e.preventDefault();            
-            try {
-                let response;
-                
-                if (isEditing) {
-                    response = await fetch(`${API_URL}/transactions/${isEditing}`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(transaction)
-                    });
-                } else {
-                    response = await fetch(`${API_URL}/transactions`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(transaction)
-                    });
-                }
-                
-                if (response.ok) {
-                    showSuccess(isEditing ? 'Transaction updated successfully!' : 'Transaction saved successfully!');
-                    cancelEdit();
-                    await loadRecentTransactions();
-                    await loadPayees();
-                } else {
-                    showError('Failed to save transaction');
-                }
-            } catch (error) {
-                showError('Error: ' + error.message);
-            }
-        });
         
         // Cancel edit mode
         function cancelEdit() {
@@ -1980,7 +2099,7 @@
                 if (response.ok) {
                     showSuccess(isEditing ? 'Transaction updated successfully!' : 'Transaction saved successfully!');
                     cancelEdit();
-                    await loadRecentTransactions();
+                    await reloadTransactionsWithFilters();
                     await loadPayees();
                 } else {
                     showError('Failed to save transaction');
@@ -2039,7 +2158,7 @@
                 if (response.ok) {
                     showSuccess(isEditing ? 'Transfer updated successfully!' : 'Transfer created successfully!');
                     cancelTransferEdit();
-                    await loadRecentTransactions();
+                    await reloadTransactionsWithFilters();
                 } else {
                     showError('Failed to save transfer');
                 }
@@ -2716,22 +2835,8 @@
             }
             
             // Check if filters are active
-            const startDate = document.getElementById('filterStartDate').value;
-            const endDate = document.getElementById('filterEndDate').value;
-            const accountFilter = document.getElementById('filterAccount').value;
-            const categoryFilter = document.getElementById('filterCategory').value;
-            const searchText = document.getElementById('filterSearch').value;
-            
-            const filtersActive = startDate || endDate || accountFilter || categoryFilter || searchText;
-            
             cancelBulkEdit();
-            
-            // Re-apply filters if they were active, otherwise just redisplay
-            if (filtersActive) {
-                await applyFilters();
-            } else {
-                displayCombinedTransactions();
-            }
+            await reloadTransactionsWithFilters();
         }
 
         async function applyBulkTransferEdit() {
@@ -2898,23 +3003,8 @@
             document.getElementById('bulkTransferToAccount').value = '';
             document.getElementById('bulkTransferNote').value = '';
             
-            // Check if filters are active
-            const startDate = document.getElementById('filterStartDate').value;
-            const endDate = document.getElementById('filterEndDate').value;
-            const accountFilter = document.getElementById('filterAccount').value;
-            const categoryFilter = document.getElementById('filterCategory').value;
-            const searchText = document.getElementById('filterSearch').value;
-            
-            const filtersActive = startDate || endDate || accountFilter || categoryFilter || searchText;
-            
             cancelBulkEdit();
-            
-            // Re-apply filters if they were active, otherwise just redisplay
-            if (filtersActive) {
-                await applyFilters();
-            } else {
-                displayCombinedTransactions();
-            }
+            await reloadTransactionsWithFilters();
         }
 
         function disableTransfers() {
