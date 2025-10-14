@@ -115,6 +115,11 @@ def create_payee(
     """
     Create a new payee.
     """
+    # Check if payee already exists
+    existing_payee = db.query(models.Payee).filter(models.Payee.name == payee.name).first()
+    if existing_payee:
+        return existing_payee  # Return existing instead of error
+    
     db_payee = models.Payee(**payee.dict())
     db.add(db_payee)
     db.commit()

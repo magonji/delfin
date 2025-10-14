@@ -1019,11 +1019,16 @@
         
         function showError(message) {
             const element = document.getElementById('errorMessage');
-            element.textContent = message;
+            element.innerHTML = message.replace(/\n/g, '<br>'); // Convert newlines to HTML breaks
             element.style.display = 'block';
+            element.style.fontSize = '14px';
+            element.style.whiteSpace = 'pre-wrap'; // Preserve formatting
+            element.style.maxHeight = '300px';
+            element.style.overflowY = 'auto';
+            
             setTimeout(() => {
                 element.style.display = 'none';
-            }, 5000);
+            }, 10000); // Show for 10 seconds instead of 5
         }
         
         // Close modal when clicking outside
@@ -1103,15 +1108,25 @@
                 
             } catch (error) {
                 console.error('Error processing file:', error);
-                showError('Error processing file: ' + error.message);
+                // Show detailed error message
+                showError('Error processing file: ' + error.message + '\n\nCheck browser console (F12) for more details');
                 event.target.value = '';
+                
+                // Also log the full error to console
+                console.error('Full error details:', error);
+                console.error('Error stack:', error.stack);
             }
         }
 
         // Parse CSV file
         async function parseCSV(file, accountId) {
+            console.log('Starting CSV parse for file:', file.name);
+            
             const text = await file.text();
+            console.log('File text length:', text.length);
+            
             const lines = text.split('\n');
+            console.log('Total lines:', lines.length);
             
             if (lines.length < 2) {
                 throw new Error('CSV file is empty or invalid');
@@ -1119,18 +1134,26 @@
             
             // Get headers
             const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+            console.log('Headers found:', headers);
             
             // Detect bank type and parse accordingly
             if (headers.includes('Transaction ID') && headers.includes('Emoji')) {
+                console.log('Detected format: Monzo');
                 // Monzo format
                 parseMonzoCSV(lines, headers, accountId);
-            } else if (headers.includes('Transaction Date') && headers.includes('Transaction Description') && headers.includes('Debit Amount')) {
+            } else if (headers.some(h => h.toLowerCase().includes('transaction date')) && 
+                    headers.some(h => h.toLowerCase().includes('transaction description')) && 
+                    headers.some(h => h.toLowerCase().includes('debit amount'))) {
+                console.log('Detected format: Bank of Scotland');
                 // Bank of Scotland CSV export format
                 parseBankOfScotlandCSV(lines, headers, accountId);
             } else {
+                console.log('Detected format: Generic');
                 // Generic format
                 parseGenericCSV(lines, headers, accountId);
             }
+            
+            console.log('Parsed transactions count:', parsedTransactions.length);
         }
 
         // Parse Monzo CSV format
@@ -1716,137 +1739,193 @@
 
         // Import transactions
         async function importTransactions() {
-            const newTransactions = parsedTransactions.filter(t => !t.isDuplicate);
+            const transactionsToImport = parsedTransactions.filter(t => !t.isDuplicate && !t.skip);
             
-            if (newTransactions.length === 0) {
+            if (transactionsToImport.length === 0) {
                 showError('No new transactions to import');
                 return;
             }
             
-            if (!confirm(`Import ${newTransactions.length} transactions?`)) {
+            if (!confirm(`Import ${transactionsToImport.length} transactions?`)) {
                 return;
             }
             
             try {
                 let successCount = 0;
                 let errorCount = 0;
+                const errors = [];
                 
                 for (let i = 0; i < parsedTransactions.length; i++) {
                     const trans = parsedTransactions[i];
                     
                     if (trans.isDuplicate || trans.skip) continue;
                     
-                    // Get values from form
-                    const type = document.getElementById(`type_${i}`).value;
-                    
-                    if (type === 'transfer') {
-                        // Handle transfer
-                        const toAccountId = document.getElementById(`account_${i}`).value;
+                    try {
+                        // Get values from form
+                        const type = document.getElementById(`type_${i}`).value;
                         
-                        if (!toAccountId) {
-                            errorCount++;
-                            continue;
-                        }
-                        
-                        // Check if there's a converted amount
-                        let toAmount = null;
-                        if (trans.convertedAmount) {
-                            toAmount = trans.convertedAmount;
-                        }
-                        
-                        const transferData = {
-                            date: trans.date,
-                            from_account_id: trans.amount < 0 ? trans.account_id : parseInt(toAccountId),
-                            to_account_id: trans.amount < 0 ? parseInt(toAccountId) : trans.account_id,
-                            from_amount: Math.abs(trans.amount),
-                            to_amount: toAmount,
-                            note: trans.note
-                        };
-                        
-                        const response = await fetch(`${API_URL}/transactions/transfer`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(transferData)
-                        });
-                        
-                        if (response.ok) {
-                            successCount++;
-                        } else {
-                            errorCount++;
-                        }
-                        
-                    } else {
-                        // Handle regular transaction
-                        const payeeInput = document.getElementById(`payee_${i}`).value.trim();
-                        let payeeId = null;
-                        
-                        // Create payee if doesn't exist
-                        if (payeeInput) {
-                            let payee = allPayees.find(p => p.name.toLowerCase() === payeeInput.toLowerCase());
+                        if (type === 'transfer') {
+                            // Handle transfer
+                            const toAccountId = document.getElementById(`account_${i}`).value;
                             
-                            if (!payee) {
-                                const createResponse = await fetch(`${API_URL}/payees`, {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ name: payeeInput })
-                                });
-                                
-                                if (createResponse.ok) {
-                                    payee = await createResponse.json();
-                                    allPayees.push(payee);
+                            if (!toAccountId) {
+                                errors.push(`Transaction ${i + 1}: No destination account selected`);
+                                errorCount++;
+                                continue;
+                            }
+                            
+                            // Check if there's a converted amount
+                            let toAmount = null;
+                            const convertedAmountInput = document.getElementById(`convertedAmount_${i}`);
+                            if (convertedAmountInput) {
+                                const value = parseFloat(convertedAmountInput.value);
+                                if (!isNaN(value) && value > 0) {
+                                    toAmount = value;
                                 }
                             }
                             
-                            if (payee) {
-                                payeeId = payee.id;
+                            const transferData = {
+                                date: trans.date,
+                                from_account_id: trans.amount < 0 ? trans.account_id : parseInt(toAccountId),
+                                to_account_id: trans.amount < 0 ? parseInt(toAccountId) : trans.account_id,
+                                from_amount: Math.abs(trans.amount),
+                                to_amount: toAmount,
+                                note: trans.note
+                            };
+                            
+                            const response = await fetch(`${API_URL}/transactions/transfer`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(transferData)
+                            });
+                            
+                            if (response.ok) {
+                                successCount++;
+                            } else {
+                                const errorText = await response.text();
+                                errors.push(`Transaction ${i + 1} (transfer): ${errorText}`);
+                                errorCount++;
+                            }
+                            
+                        } else {
+                            // Handle regular transaction
+                            const payeeInput = document.getElementById(`payee_${i}`).value.trim();
+                            let payeeId = null;
+                            
+                            // Create payee if doesn't exist
+                            if (payeeInput) {
+                                let payee = allPayees.find(p => p.name.toLowerCase() === payeeInput.toLowerCase());
+                                
+                                if (!payee) {
+                                    console.log('Creating new payee:', payeeInput);
+                                    
+                                    try {
+                                        const createResponse = await fetch(`${API_URL}/payees`, {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ name: payeeInput })
+                                        });
+                                        
+                                        if (createResponse.ok) {
+                                            payee = await createResponse.json();
+                                            allPayees.push(payee);
+                                            console.log('Payee created successfully:', payee);
+                                        } else {
+                                            const errorText = await createResponse.text();
+                                            console.error('Error creating payee:', errorText);
+                                            
+                                            // Try to parse error message
+                                            try {
+                                                const errorJson = JSON.parse(errorText);
+                                                errors.push(`Transaction ${i + 1}: Failed to create payee "${payeeInput}": ${errorJson.detail || errorText}`);
+                                            } catch {
+                                                errors.push(`Transaction ${i + 1}: Failed to create payee "${payeeInput}": ${errorText}`);
+                                            }
+                                            
+                                            errorCount++;
+                                            continue;
+                                        }
+                                    } catch (payeeError) {
+                                        console.error('Exception creating payee:', payeeError);
+                                        errors.push(`Transaction ${i + 1}: Exception creating payee "${payeeInput}": ${payeeError.message}`);
+                                        errorCount++;
+                                        continue;
+                                    }
+                                }
+                                
+                                if (payee) {
+                                    payeeId = payee.id;
+                                }
+                            }
+                            
+                            const categoryId = document.getElementById(`category_${i}`).value;
+                            const locationId = document.getElementById(`location_${i}`).value;
+                            const projectId = document.getElementById(`project_${i}`).value;
+                            
+                            const transactionData = {
+                                date: trans.date,
+                                amount: trans.amount,
+                                currency: 'GBP',
+                                account_id: trans.account_id,
+                                category_id: categoryId ? parseInt(categoryId) : null,
+                                payee_id: payeeId,
+                                location_id: locationId ? parseInt(locationId) : null,
+                                project_id: projectId ? parseInt(projectId) : null,
+                                note: trans.note
+                            };
+                            
+                            const response = await fetch(`${API_URL}/transactions`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(transactionData)
+                            });
+                            
+                            if (response.ok) {
+                                successCount++;
+                            } else {
+                                const errorText = await response.text();
+                                errors.push(`Transaction ${i + 1}: ${errorText}`);
+                                errorCount++;
                             }
                         }
-                        
-                        const categoryId = document.getElementById(`category_${i}`).value;
-                        const locationId = document.getElementById(`location_${i}`).value;
-                        const projectId = document.getElementById(`project_${i}`).value;
-                        
-                        const transactionData = {
-                            date: trans.date,
-                            amount: trans.amount,
-                            currency: 'GBP',
-                            account_id: trans.account_id,
-                            category_id: categoryId ? parseInt(categoryId) : null,
-                            payee_id: payeeId,
-                            location_id: locationId ? parseInt(locationId) : null,
-                            project_id: projectId ? parseInt(projectId) : null,
-                            note: trans.note
-                        };
-                        
-                        const response = await fetch(`${API_URL}/transactions`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(transactionData)
-                        });
-                        
-                        if (response.ok) {
-                            successCount++;
-                        } else {
-                            errorCount++;
-                        }
+                    } catch (transError) {
+                        console.error(`Error processing transaction ${i}:`, transError);
+                        errors.push(`Transaction ${i + 1}: ${transError.message}`);
+                        errorCount++;
                     }
                 }
                 
+                // Show results
+                let message = '';
                 if (successCount > 0) {
-                    showSuccess(`Successfully imported ${successCount} transactions!`);
+                    message += `✅ Successfully imported ${successCount} transactions!\n`;
                 }
                 
                 if (errorCount > 0) {
-                    showError(`Failed to import ${errorCount} transactions`);
+                    message += `\n❌ Failed to import ${errorCount} transactions:\n`;
+                    message += errors.slice(0, 5).join('\n'); // Show first 5 errors
+                    if (errors.length > 5) {
+                        message += `\n... and ${errors.length - 5} more errors`;
+                    }
+                    message += '\n\nCheck browser console (F12) for full details.';
+                    console.error('Import errors:', errors);
                 }
                 
-                // Close modal and reset
-                closeModal('importModal');
-                cancelImport();
+                if (successCount > 0 && errorCount === 0) {
+                    showSuccess(message);
+                    // Close modal and reset
+                    closeModal('importModal');
+                    cancelImport();
+                } else if (successCount > 0 && errorCount > 0) {
+                    showError(message);
+                    // Don't close modal so user can review
+                } else {
+                    showError(message);
+                }
                 
             } catch (error) {
                 console.error('Error importing transactions:', error);
-                showError('Error importing transactions: ' + error.message);
+                showError('Error importing transactions: ' + error.message + '\n\nCheck browser console (F12) for details');
             }
         }
 
@@ -1937,43 +2016,95 @@
 
         // Parse Bank of Scotland CSV format
         function parseBankOfScotlandCSV(lines, headers, accountId) {
+            console.log('=== Starting Bank of Scotland CSV Parse ===');
+            console.log('Headers:', headers);
+            
             parsedTransactions = [];
             
-            const dateIdx = headers.indexOf('Transaction Date');
-            const typeIdx = headers.indexOf('Transaction Type');
-            const descIdx = headers.indexOf('Transaction Description');
-            const debitIdx = headers.indexOf('Debit Amount');
-            const creditIdx = headers.indexOf('Credit Amount');
-            const balanceIdx = headers.indexOf('Balance');
+            // Bank of Scotland CSV includes Sort Code and Account Number columns
+            // Find indices dynamically to handle column order
+            const dateIdx = headers.findIndex(h => h.toLowerCase().includes('transaction date'));
+            const typeIdx = headers.findIndex(h => h.toLowerCase().includes('transaction type'));
+            const descIdx = headers.findIndex(h => h.toLowerCase().includes('transaction description'));
+            const debitIdx = headers.findIndex(h => h.toLowerCase().includes('debit amount'));
+            const creditIdx = headers.findIndex(h => h.toLowerCase().includes('credit amount'));
+            const balanceIdx = headers.findIndex(h => h.toLowerCase().includes('balance'));
+            
+            console.log('Column indices found:');
+            console.log('  Date:', dateIdx);
+            console.log('  Type:', typeIdx);
+            console.log('  Description:', descIdx);
+            console.log('  Debit:', debitIdx);
+            console.log('  Credit:', creditIdx);
+            console.log('  Balance:', balanceIdx);
+            
+            // Validate that we found all required columns
+            if (dateIdx === -1 || descIdx === -1 || debitIdx === -1 || creditIdx === -1) {
+                const missingColumns = [];
+                if (dateIdx === -1) missingColumns.push('Transaction Date');
+                if (descIdx === -1) missingColumns.push('Transaction Description');
+                if (debitIdx === -1) missingColumns.push('Debit Amount');
+                if (creditIdx === -1) missingColumns.push('Credit Amount');
+                
+                throw new Error('Could not find required columns: ' + missingColumns.join(', ') + 
+                            '\n\nFound headers: ' + headers.join(', '));
+            }
             
             // Track time for transactions on same day
             let lastDate = null;
             let timeCounter = 0;
+            let successCount = 0;
+            let skipCount = 0;
             
             for (let i = 1; i < lines.length; i++) {
                 const line = lines[i].trim();
-                if (!line) continue;
+                if (!line) {
+                    skipCount++;
+                    continue;
+                }
                 
-                const values = parseCSVLine(line);
-                
-                if (values.length < headers.length) continue;
-                
-                const dateStr = values[dateIdx];
-                const type = values[typeIdx];
-                const description = values[descIdx];
-                const debit = values[debitIdx] ? parseFloat(values[debitIdx]) : 0;
-                const credit = values[creditIdx] ? parseFloat(values[creditIdx]) : 0;
-                
-                if (!dateStr) continue;
-                
-                // Calculate amount (credit is positive, debit is negative)
-                const amount = credit > 0 ? credit : -debit;
-                
-                if (amount === 0) continue;
-                
-                // Parse date (format: DD/MM/YYYY)
-                let date;
                 try {
+                    const values = parseCSVLine(line);
+                    
+                    // Log first transaction for debugging
+                    if (i === 1) {
+                        console.log('First data line values:', values);
+                    }
+                    
+                    // Skip if we don't have enough values
+                    const maxIdx = Math.max(dateIdx, typeIdx, descIdx, debitIdx, creditIdx, balanceIdx);
+                    if (values.length <= maxIdx) {
+                        console.warn(`Line ${i}: Not enough values (${values.length} vs required ${maxIdx + 1})`);
+                        skipCount++;
+                        continue;
+                    }
+                    
+                    const dateStr = values[dateIdx];
+                    const type = typeIdx !== -1 ? values[typeIdx] : '';
+                    const description = values[descIdx];
+                    
+                    // Parse debit and credit amounts, removing any quotes
+                    const debitStr = values[debitIdx].replace(/['"]/g, '').trim();
+                    const creditStr = values[creditIdx].replace(/['"]/g, '').trim();
+                    
+                    const debit = debitStr ? parseFloat(debitStr) : 0;
+                    const credit = creditStr ? parseFloat(creditStr) : 0;
+                    
+                    if (!dateStr) {
+                        skipCount++;
+                        continue;
+                    }
+                    
+                    // Calculate amount (credit is positive, debit is negative)
+                    const amount = credit > 0 ? credit : -debit;
+                    
+                    if (amount === 0) {
+                        skipCount++;
+                        continue;
+                    }
+                    
+                    // Parse date (format: DD/MM/YYYY)
+                    let date;
                     const dateParts = dateStr.split('/');
                     if (dateParts.length === 3) {
                         const day = dateParts[0].padStart(2, '0');
@@ -1981,51 +2112,65 @@
                         const year = dateParts[2];
                         
                         date = new Date(`${year}-${month}-${day}`);
+                        
+                        if (isNaN(date.getTime())) {
+                            throw new Error(`Invalid date: ${dateStr}`);
+                        }
                     } else {
-                        continue;
+                        throw new Error(`Invalid date format: ${dateStr} (expected DD/MM/YYYY)`);
                     }
-                } catch (e) {
-                    console.error('Error parsing date:', dateStr, e);
-                    continue;
+                    
+                    // Handle time assignment
+                    const dateOnly = date.toDateString();
+                    if (dateOnly !== lastDate) {
+                        lastDate = dateOnly;
+                        timeCounter = 0;
+                    }
+                    
+                    const hours = 12;
+                    const minutes = timeCounter;
+                    timeCounter++;
+                    
+                    const datetime = new Date(date);
+                    datetime.setHours(hours, minutes, 0, 0);
+                    
+                    // Combine type and description for better context
+                    const fullDescription = type && description ? `${type} - ${description}` : (description || type || '');
+                    
+                    parsedTransactions.push({
+                        date: datetime.toISOString().slice(0, 19),
+                        description: fullDescription,
+                        amount: amount,
+                        note: '',
+                        account_id: parseInt(accountId),
+                        isDuplicate: false,
+                        type: 'transaction',
+                        payee_id: null,
+                        category_id: null,
+                        location_id: null,
+                        project_id: null
+                    });
+                    
+                    successCount++;
+                    
+                } catch (error) {
+                    console.error(`Error parsing line ${i}:`, error.message);
+                    console.error('Line content:', line);
+                    // Continue processing other lines instead of failing completely
+                    skipCount++;
                 }
-                
-                // Handle time assignment
-                const dateOnly = date.toDateString();
-                if (dateOnly !== lastDate) {
-                    lastDate = dateOnly;
-                    timeCounter = 0;
-                }
-                
-                const hours = 12;
-                const minutes = timeCounter;
-                timeCounter++;
-                
-                const datetime = new Date(date);
-                datetime.setHours(hours, minutes, 0, 0);
-                
-                // Combine type and description for better context
-                const fullDescription = type && description ? `${type} - ${description}` : (description || type || '');
-                
-                parsedTransactions.push({
-                    date: datetime.toISOString().slice(0, 19),
-                    description: fullDescription,
-                    amount: amount,
-                    note: '',
-                    account_id: parseInt(accountId),
-                    isDuplicate: false,
-                    type: 'transaction',
-                    payee_id: null,
-                    category_id: null,
-                    location_id: null,
-                    project_id: null
-                });
             }
+            
+            console.log(`Parse complete: ${successCount} successful, ${skipCount} skipped`);
             
             checkDuplicates();
             
             if (parsedTransactions.length === 0) {
-                throw new Error('No transactions found in CSV. Please check the file format.');
+                throw new Error('No transactions found in CSV. Please check the file format.\n\n' +
+                            `Processed ${lines.length - 1} lines, but none were valid transactions.`);
             }
+            
+            console.log('=== Bank of Scotland CSV Parse Complete ===');
         }
 
         // Load data for export

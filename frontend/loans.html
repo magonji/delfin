@@ -442,6 +442,11 @@
             return symbols[currency] || currency;
         }
         
+        // Format number with commas for thousands
+        function formatNumber(number) {
+            return number.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        }
+
         // Load initial data
         document.addEventListener('DOMContentLoaded', async () => {
             // Show loading immediately
@@ -504,7 +509,7 @@
             }
         }
 
-        // Load and identify loan accounts (without caching)
+        // Load and identify loan accounts 
         async function loadLoans() {
             try {
                 document.getElementById('loadingSpinner').style.display = 'block';
@@ -533,7 +538,11 @@
                         
                         for (const trans of accountTransactions) {
                             balance += trans.amount;
-                            if (balance > 0) {
+                            // Round to avoid floating point errors
+                            balance = Math.round(balance * 100) / 100;
+                            
+                            // Changed from > 0 to > 0.5 to handle edge cases
+                            if (balance > 0.5) {
                                 hasBeenPositive = true;
                                 break;
                             }
@@ -597,8 +606,9 @@
                 const trans = sortedTransactions[i];
                 balance += trans.amount;
                 
-                // Check for close date
-                if (balance >= -0.01 && closeDate === null) {
+                // Check for close date - use larger tolerance for floating point errors
+                // Changed from -0.01 to 0.5 to handle rounding errors better
+                if (balance >= -0.5 && closeDate === null) {
                     closeDate = new Date(trans.date);
                 }
                 
@@ -618,8 +628,12 @@
                 }
             }
             
+            // Round balance to 2 decimal places to avoid floating point precision issues
+            balance = Math.round(balance * 100) / 100;
+            
             const currentOwed = Math.abs(Math.min(balance, 0));
-            const isCompleted = balance >= -0.01;
+            // Changed tolerance here too - loan is completed if balance is >= -0.5
+            const isCompleted = balance >= -0.5;
             
             return {
                 account,
@@ -633,7 +647,7 @@
                 lenderName,
                 transactions: sortedTransactions
             };
-}
+        }
         
         // Display loans
         function displayLoans() {
@@ -644,58 +658,92 @@
                 return;
             }
             
-            list.innerHTML = loanAccounts.map(loan => {
-                const totalToRepay = loan.borrowed + loan.interest;
-                const progress = totalToRepay > 0 ? ((loan.repaid / totalToRepay) * 100) : 0;
-                const symbol = getCurrencySymbol(loan.account.currency);
-                
-                return `
-                    <div class="loan-card">
-                        <div class="loan-header" onclick="toggleLoan(${loan.account.id})">
-                            <div class="loan-title">${loan.account.name}</div>
-                            <span class="loan-toggle" id="toggle-${loan.account.id}">▼</span>
-                        </div>
-                        
-                        <div class="loan-info">
-                            <div><strong>Lender:</strong> ${loan.lenderName}</div>
-                            <div><strong>Opened:</strong> ${loan.openDate.toLocaleDateString('en-GB')}</div>
-                            ${loan.closeDate ? `<div><strong>Closed:</strong> ${loan.closeDate.toLocaleDateString('en-GB')}</div>` : ''}
-                        </div>
-                        
-                        <div class="progress-bar-container" style="position: relative;">
-                            <div class="progress-bar ${loan.isCompleted ? 'completed' : ''}" style="width: ${Math.min(progress, 100)}%"></div>
-                            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-weight: bold; font-size: 14px; color: #333; text-shadow: 0 0 3px white;">${progress.toFixed(1)}%</div>
-                        </div>
-                        
-                        <div class="loan-stats">
-                            <div class="loan-stat">
-                                <div class="loan-stat-label">Borrowed</div>
-                                <div class="loan-stat-value">${symbol}${loan.borrowed.toFixed(2)}</div>
-                            </div>
-                            <div class="loan-stat">
-                                <div class="loan-stat-label">Repaid</div>
-                                <div class="loan-stat-value">${symbol}${loan.repaid.toFixed(2)}</div>
-                            </div>
-                            <div class="loan-stat">
-                                <div class="loan-stat-label">Interest Paid</div>
-                                <div class="loan-stat-value">${symbol}${loan.interest.toFixed(2)}</div>
-                            </div>
-                            <div class="loan-stat">
-                                <div class="loan-stat-label">Total to Repay</div>
-                                <div class="loan-stat-value">${symbol}${(loan.borrowed + loan.interest).toFixed(2)}</div>
-                            </div>
-                            <div class="loan-stat">
-                                <div class="loan-stat-label">Remaining</div>
-                                <div class="loan-stat-value" style="color: ${loan.isCompleted ? '#10b981' : '#ef4444'}">${symbol}${loan.currentOwed.toFixed(2)}</div>
-                            </div>
-                        </div>
-                        
-                        <div class="loan-transactions" id="transactions-${loan.account.id}">
-                            ${displayLoanTransactions(loan.transactions, loan.account.currency)}
-                        </div>
+            // Separate and sort loans
+            const openLoans = loanAccounts
+                .filter(l => !l.isCompleted)
+                .sort((a, b) => a.openDate - b.openDate); // Oldest first
+            
+            const closedLoans = loanAccounts
+                .filter(l => l.isCompleted)
+                .sort((a, b) => a.openDate - b.openDate); // Oldest first
+            
+            let html = '';
+            
+            // Display open loans section
+            if (openLoans.length > 0) {
+                html += `
+                    <div class="card" style="background: linear-gradient(135deg, #fff5f5 0%, #ffe5e5 100%); margin-bottom: 30px;">
+                        <h2 style="color: #8B0000; margin-bottom: 20px;">🔴 Open Loans (${openLoans.length})</h2>
                     </div>
                 `;
-            }).join('');
+                html += openLoans.map(loan => displayLoanCard(loan)).join('');
+            }
+            
+            // Display closed loans section
+            if (closedLoans.length > 0) {
+                html += `
+                    <div class="card" style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); margin-bottom: 30px; margin-top: 40px;">
+                        <h2 style="color: #10b981; margin-bottom: 20px;">✅ Closed Loans (${closedLoans.length})</h2>
+                    </div>
+                `;
+                html += closedLoans.map(loan => displayLoanCard(loan)).join('');
+            }
+            
+            list.innerHTML = html;
+        }
+
+        // Display individual loan card
+        function displayLoanCard(loan) {
+            const totalToRepay = loan.borrowed + loan.interest;
+            const progress = totalToRepay > 0 ? ((loan.repaid / totalToRepay) * 100) : 0;
+            const symbol = getCurrencySymbol(loan.account.currency);
+            
+            return `
+                <div class="loan-card">
+                    <div class="loan-header" onclick="toggleLoan(${loan.account.id})">
+                        <div class="loan-title">${loan.account.name}</div>
+                        <span class="loan-toggle" id="toggle-${loan.account.id}">▼</span>
+                    </div>
+                    
+                    <div class="loan-info">
+                        <div><strong>Lender:</strong> ${loan.lenderName}</div>
+                        <div><strong>Opened:</strong> ${loan.openDate.toLocaleDateString('en-GB')}</div>
+                        ${loan.closeDate ? `<div><strong>Closed:</strong> ${loan.closeDate.toLocaleDateString('en-GB')}</div>` : ''}
+                    </div>
+                    
+                    <div class="progress-bar-container" style="position: relative;">
+                        <div class="progress-bar ${loan.isCompleted ? 'completed' : ''}" style="width: ${Math.min(progress, 100)}%"></div>
+                        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-weight: bold; font-size: 14px; color: #333; text-shadow: 0 0 3px white;">${progress.toFixed(1)}%</div>
+                    </div>
+                    
+                    <div class="loan-stats">
+                        <div class="loan-stat">
+                            <div class="loan-stat-label">Borrowed</div>
+                            <div class="loan-stat-value">${symbol}${formatNumber(loan.borrowed)}</div>
+                        </div>
+                        <div class="loan-stat">
+                            <div class="loan-stat-label">Repaid</div>
+                            <div class="loan-stat-value">${symbol}${formatNumber(loan.repaid)}</div>
+                        </div>
+                        <div class="loan-stat">
+                            <div class="loan-stat-label">Interest Paid</div>
+                            <div class="loan-stat-value">${symbol}${formatNumber(loan.interest)}</div>
+                        </div>
+                        <div class="loan-stat">
+                            <div class="loan-stat-label">Total to Repay</div>
+                            <div class="loan-stat-value">${symbol}${formatNumber(loan.borrowed + loan.interest)}</div>
+                        </div>
+                        <div class="loan-stat">
+                            <div class="loan-stat-label">Remaining</div>
+                            <div class="loan-stat-value" style="color: ${loan.isCompleted ? '#10b981' : '#ef4444'}">${symbol}${formatNumber(loan.currentOwed)}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="loan-transactions" id="transactions-${loan.account.id}">
+                        ${displayLoanTransactions(loan.transactions, loan.account.currency)}
+                    </div>
+                </div>
+            `;
         }
         
         // Display loan transactions
@@ -721,7 +769,7 @@
                             ${t.payee_name ? `<div class="transaction-note">${t.payee_name}</div>` : ''}
                         </div>
                         <div class="transaction-amount ${amountClass}">
-                            ${symbol}${Math.abs(t.amount).toFixed(2)}
+                            ${symbol}${formatNumber(Math.abs(t.amount))}
                         </div>
                     </div>
                 `;
@@ -753,8 +801,8 @@
             
             document.getElementById('openLoans').textContent = openLoans;
             document.getElementById('closedLoans').textContent = closedLoans;
-            document.getElementById('totalOwed').textContent = '£' + totalOwed.toFixed(2);
-            document.getElementById('totalInterest').textContent = '£' + totalInterest.toFixed(2);
+            document.getElementById('totalOwed').textContent = '£' + formatNumber(totalOwed);
+            document.getElementById('totalInterest').textContent = '£' + formatNumber(totalInterest);
         }
         
         // Create new loan
