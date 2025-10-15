@@ -388,6 +388,8 @@
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                 <h2 style="margin: 0;">📊 Transactions</h2>
                 <div style="display: flex; gap: 10px;">
+                    <button id="selectAllButton" onclick="selectAllVisible()" style="width: auto; padding: 10px 20px; display: none; background: #10b981;">✓ Select All</button>
+                    <button id="deselectAllButton" onclick="deselectAll()" style="width: auto; padding: 10px 20px; display: none; background: #f59e0b;">✗ Deselect All</button>
                     <button id="bulkEditToggle" onclick="toggleBulkEditMode()" style="width: auto; padding: 10px 20px;">📝 Bulk Edit</button>
                     <button onclick="openModal('filtersModal')" style="width: auto; padding: 10px 20px;">🔍 Filters</button>
                 </div>
@@ -574,6 +576,11 @@
                 <!-- Transaction Edit Fields -->
                 <div id="transactionEditFields" style="display: none;">
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                        <div>
+                            <label style="font-size: 12px; margin-bottom: 5px;">Change Payee</label>
+                            <input type="text" id="bulkPayee" list="bulkPayeeList" style="padding: 8px;" placeholder="Leave empty to keep existing">
+                            <datalist id="bulkPayeeList"></datalist>
+                        </div>
                         <div>
                             <label style="font-size: 12px; margin-bottom: 5px;">Change Account</label>
                             <select id="bulkAccount" style="padding: 8px;">
@@ -2472,14 +2479,20 @@
             bulkEditMode = !bulkEditMode;
             const button = document.getElementById('bulkEditToggle');
             const list = document.getElementById('transactionsList');
+            const selectAllBtn = document.getElementById('selectAllButton');
+            const deselectAllBtn = document.getElementById('deselectAllButton');
             
             if (bulkEditMode) {
                 button.textContent = '❌ Cancel Bulk Edit';
                 button.style.background = '#ef4444';
                 list.classList.add('bulk-edit-mode');
+                selectAllBtn.style.display = 'block';
+                deselectAllBtn.style.display = 'block';
                 // Ensure all items are enabled when entering bulk edit mode
                 enableAllItems();
             } else {
+                selectAllBtn.style.display = 'none';
+                deselectAllBtn.style.display = 'none';
                 cancelBulkEdit();
             }
         }
@@ -2493,9 +2506,14 @@
             const button = document.getElementById('bulkEditToggle');
             const list = document.getElementById('transactionsList');
             const bar = document.getElementById('bulkEditBar');
-            
+
+            const selectAllBtn = document.getElementById('selectAllButton');
+            const deselectAllBtn = document.getElementById('deselectAllButton');
+
             button.textContent = '📝 Bulk Edit';
             button.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+            selectAllBtn.style.display = 'none';
+            deselectAllBtn.style.display = 'none';
             list.classList.remove('bulk-edit-mode');
             bar.classList.remove('active');
             
@@ -2627,6 +2645,20 @@
         }
 
         async function populateBulkEditDropdowns() {
+            // Populate payees for autocomplete
+            try {
+                const payeesResponse = await fetch(`${API_URL}/payees`);
+                const payees = await payeesResponse.json();
+                const bulkPayeeList = document.getElementById('bulkPayeeList');
+                bulkPayeeList.innerHTML = '';
+                payees.forEach(payee => {
+                    const option = document.createElement('option');
+                    option.value = payee.name;
+                    bulkPayeeList.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading bulk payees:', error);
+            }
             // Populate accounts
             try {
                 const accountsResponse = await fetch(`${API_URL}/accounts`);
@@ -2729,12 +2761,13 @@
                 return;
             }
             
+            const payeeName = document.getElementById('bulkPayee').value.trim();
             const accountId = document.getElementById('bulkAccount').value;
             const categoryId = document.getElementById('bulkCategory').value;
             const locationId = document.getElementById('bulkLocation').value;
             const projectId = document.getElementById('bulkProject').value;
             
-            if (!accountId && !categoryId && !locationId && !projectId) {
+            if (!payeeName && !accountId && !categoryId && !locationId && !projectId) {
                 showError('Please select at least one field to change');
                 return;
             }
@@ -2754,6 +2787,30 @@
                     // Get current transaction
                     const response = await fetch(`${API_URL}/transactions/${transactionId}`);
                     const transaction = await response.json();
+
+                    // Handle payee if provided
+                    let newPayeeId = transaction.payee_id;
+                    if (payeeName) {
+                        try {
+                            const payeesResponse = await fetch(`${API_URL}/payees`);
+                            const payees = await payeesResponse.json();
+                            const existingPayee = payees.find(p => p.name.toLowerCase() === payeeName.toLowerCase());
+                            
+                            if (existingPayee) {
+                                newPayeeId = existingPayee.id;
+                            } else {
+                                const createResponse = await fetch(`${API_URL}/payees`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ name: payeeName })
+                                });
+                                const newPayee = await createResponse.json();
+                                newPayeeId = newPayee.id;
+                            }
+                        } catch (error) {
+                            console.error('Error handling payee:', error);
+                        }
+                    }
                     
                     // Build update object with only changed fields
                     const updates = {
@@ -2762,7 +2819,7 @@
                         currency: transaction.currency,
                         account_id: accountId ? parseInt(accountId) : transaction.account_id,
                         category_id: categoryId ? parseInt(categoryId) : transaction.category_id,
-                        payee_id: transaction.payee_id,
+                        payee_id: newPayeeId,
                         location_id: locationId ? parseInt(locationId) : transaction.location_id,
                         project_id: projectId ? parseInt(projectId) : transaction.project_id,
                         note: transaction.note
@@ -2816,6 +2873,11 @@
                                 if (project) {
                                     localTransaction.project_name = project.name;
                                 }
+                            }
+
+                            if (payeeName && newPayeeId) {
+                                localTransaction.payee_id = newPayeeId;
+                                localTransaction.payee_name = payeeName;
                             }
                         }
                     } else {
@@ -3115,6 +3177,62 @@
                 console.error('Error loading bulk transfer accounts:', error);
                 showError('Error loading accounts');
             }
+        }
+
+        // Select all visible transactions/transfers
+        function selectAllVisible() {
+            if (!bulkEditMode) return;
+            
+            const visibleItems = document.querySelectorAll('.transaction-item:not(.disabled)');
+            
+            visibleItems.forEach(item => {
+                const transactionId = item.getAttribute('data-transaction-id');
+                const transferId = item.getAttribute('data-transfer-id');
+                
+                if (transactionId) {
+                    const id = parseInt(transactionId);
+                    if (currentBulkType === null) {
+                        currentBulkType = 'transaction';
+                        disableTransfers();
+                    }
+                    if (currentBulkType === 'transaction' && !selectedTransactions.includes(id)) {
+                        selectedTransactions.push(id);
+                        item.classList.add('selected');
+                        const checkbox = item.querySelector('input[type="checkbox"]');
+                        if (checkbox) checkbox.checked = true;
+                    }
+                } else if (transferId) {
+                    if (currentBulkType === null) {
+                        currentBulkType = 'transfer';
+                        disableTransactions();
+                    }
+                    if (currentBulkType === 'transfer' && !selectedTransfers.includes(transferId)) {
+                        selectedTransfers.push(transferId);
+                        item.classList.add('selected');
+                        const checkbox = item.querySelector('input[type="checkbox"]');
+                        if (checkbox) checkbox.checked = true;
+                    }
+                }
+            });
+            
+            updateBulkEditBar();
+            showSuccess(`Selected ${selectedTransactions.length + selectedTransfers.length} items`);
+        }
+
+        // Deselect all
+        function deselectAll() {
+            selectedTransactions = [];
+            selectedTransfers = [];
+            currentBulkType = null;
+            
+            document.querySelectorAll('.transaction-item.selected').forEach(item => {
+                item.classList.remove('selected');
+                const checkbox = item.querySelector('input[type="checkbox"]');
+                if (checkbox) checkbox.checked = false;
+            });
+            
+            enableAllItems();
+            updateBulkEditBar();
         }
     </script>
     

@@ -430,7 +430,42 @@
         </div>
         
         <div class="card">
-            <h2 style="margin-bottom: 20px;">📈 Monthly Trend</h2>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+                <h2 style="margin: 0;">📈 Monthly Trend</h2>
+                <select id="monthlyPeriodSelector" style="padding: 8px 12px; border: 2px solid #667eea; border-radius: 8px; font-size: 14px; cursor: pointer; background: white; font-weight: 600;">
+                    <option value="all">All Time</option>
+                    <option value="3years">Last 3 Years</option>
+                    <option value="2years">Last 2 Years</option>
+                    <option value="year" selected>Last Year</option>
+                    <option value="6months">Last 6 Months</option>
+                    <option value="3months">Last 3 Months</option>
+                </select>
+            </div>
+            
+            <!-- Summary Stats -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 10px;">
+                <div style="text-align: center;">
+                    <div style="font-size: 12px; color: #666; margin-bottom: 5px;">Avg. Monthly Income</div>
+                    <div id="avgMonthlyIncome" style="font-size: 16px; font-weight: bold; color: #10b981;">-</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="font-size: 12px; color: #666; margin-bottom: 5px;">Avg. Monthly Expenses</div>
+                    <div id="avgMonthlyExpenses" style="font-size: 16px; font-weight: bold; color: #ef4444;">-</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="font-size: 12px; color: #666; margin-bottom: 5px;">Avg. Net Savings</div>
+                    <div id="avgNetSavings" style="font-size: 16px; font-weight: bold;">-</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="font-size: 12px; color: #666; margin-bottom: 5px;">Best Month</div>
+                    <div id="bestMonth" style="font-size: 16px; font-weight: bold; color: #10b981;">-</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="font-size: 12px; color: #666; margin-bottom: 5px;">Worst Month</div>
+                    <div id="worstMonth" style="font-size: 16px; font-weight: bold; color: #ef4444;">-</div>
+                </div>
+            </div>
+            
             <canvas id="monthlyChart"></canvas>
         </div>
         
@@ -456,6 +491,8 @@
         // Global variables
         let excludedAccountIds = new Set();
         let allAccounts = [];
+        // Global variable for monthly chart
+        let monthlyChartInstance = null;
 
         // Get currency symbol helper function
         function getCurrencySymbol(currency) {
@@ -1298,11 +1335,25 @@
             }
         }
 
-        // Monthly Trend (with conversion)
-        async function loadMonthlyChart() {
+        // Monthly Trend with period selector and net savings line
+        async function loadMonthlyChart(period = 'year') {
             try {
                 const response = await fetch(`${API_URL}/transactions?limit=100000`);
-                const transactions = await response.json();
+                const allTransactions = await response.json();
+                
+                // Get transfers to exclude them
+                const transferResponse = await fetch(`${API_URL}/transactions/transfers`);
+                const transfers = await transferResponse.json();
+                
+                // Create set of transfer transaction IDs
+                const transferIds = new Set();
+                transfers.forEach(t => {
+                    if (t.transfer_out_id) transferIds.add(t.transfer_out_id);
+                    if (t.transfer_in_id) transferIds.add(t.transfer_in_id);
+                });
+                
+                // Filter out transfer transactions
+                const transactions = allTransactions.filter(t => !transferIds.has(t.id));
                 
                 // Group by month with currency conversion
                 const monthlyData = {};
@@ -1323,43 +1374,228 @@
                     }
                 });
                 
-                // Sort by date and get last 12 months
-                const sorted = Object.entries(monthlyData)
-                    .sort((a, b) => a[0].localeCompare(b[0]))
-                    .slice(-12);
+                // Sort by date
+                let sortedMonths = Object.entries(monthlyData).sort((a, b) => a[0].localeCompare(b[0]));
                 
+                // Filter by selected period
+                if (period !== 'all') {
+                    const now = new Date();
+                    const startDate = new Date();
+                    
+                    switch(period) {
+                        case '3months':
+                            startDate.setMonth(now.getMonth() - 3);
+                            break;
+                        case '6months':
+                            startDate.setMonth(now.getMonth() - 6);
+                            break;
+                        case 'year':
+                            startDate.setFullYear(now.getFullYear() - 1);
+                            break;
+                        case '2years':
+                            startDate.setFullYear(now.getFullYear() - 2);
+                            break;
+                        case '3years':
+                            startDate.setFullYear(now.getFullYear() - 3);
+                            break;
+                    }
+                    
+                    const startKey = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}`;
+                    sortedMonths = sortedMonths.filter(([month]) => month >= startKey);
+                }
+                
+                // Calculate statistics
+                const incomes = sortedMonths.map(([, data]) => data.income);
+                const expenses = sortedMonths.map(([, data]) => data.expenses);
+                const netSavings = sortedMonths.map(([, data]) => data.income - data.expenses);
+                
+                const avgIncome = incomes.reduce((a, b) => a + b, 0) / incomes.length;
+                const avgExpenses = expenses.reduce((a, b) => a + b, 0) / expenses.length;
+                const avgNet = avgIncome - avgExpenses;
+                
+                const maxNet = Math.max(...netSavings);
+                const minNet = Math.min(...netSavings);
+                const bestMonthIndex = netSavings.indexOf(maxNet);
+                const worstMonthIndex = netSavings.indexOf(minNet);
+                const bestMonthKey = sortedMonths[bestMonthIndex]?.[0];
+                const worstMonthKey = sortedMonths[worstMonthIndex]?.[0];
+                
+                // Update statistics
+                const currencySymbol = getCurrencySymbol(baseCurrency);
+                
+                document.getElementById('avgMonthlyIncome').textContent = 
+                    `${currencySymbol}${avgIncome.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                
+                document.getElementById('avgMonthlyExpenses').textContent = 
+                    `${currencySymbol}${avgExpenses.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                
+                const netClass = avgNet >= 0 ? 'balance-positive' : 'balance-negative';
+                const netSign = avgNet >= 0 ? '+' : '';
+                document.getElementById('avgNetSavings').innerHTML = 
+                    `<span class="${netClass}">${netSign}${currencySymbol}${avgNet.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>`;
+                
+                if (bestMonthKey) {
+                    const [year, month] = bestMonthKey.split('-');
+                    const date = new Date(year, parseInt(month) - 1);
+                    const monthName = date.toLocaleDateString('en-GB', { year: 'numeric', month: 'short' });
+                    document.getElementById('bestMonth').innerHTML = 
+                        `${monthName}<br><span style="font-size: 13px;">+${currencySymbol}${maxNet.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</span>`;
+                }
+                
+                if (worstMonthKey) {
+                    const [year, month] = worstMonthKey.split('-');
+                    const date = new Date(year, parseInt(month) - 1);
+                    const monthName = date.toLocaleDateString('en-GB', { year: 'numeric', month: 'short' });
+                    document.getElementById('worstMonth').innerHTML = 
+                        `${monthName}<br><span style="font-size: 13px;">${currencySymbol}${minNet.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</span>`;
+                }
+                
+                // Prepare chart data
+                const labels = sortedMonths.map(([month]) => {
+                    const [year, monthNum] = month.split('-');
+                    const date = new Date(year, parseInt(monthNum) - 1);
+                    return date.toLocaleDateString('en-GB', { year: 'numeric', month: 'short' });
+                });
+                
+                const incomeData = sortedMonths.map(([, data]) => data.income.toFixed(2));
+                const expenseData = sortedMonths.map(([, data]) => data.expenses.toFixed(2));
+                const netData = sortedMonths.map(([, data]) => (data.income - data.expenses).toFixed(2));
+                
+                // Destroy previous chart instance
+                if (monthlyChartInstance) {
+                    monthlyChartInstance.destroy();
+                }
+                
+                // Create chart
                 const ctx = document.getElementById('monthlyChart');
-                new Chart(ctx, {
+                monthlyChartInstance = new Chart(ctx, {
                     type: 'line',
                     data: {
-                        labels: sorted.map(([month]) => month),
+                        labels: labels,
                         datasets: [
                             {
                                 label: 'Income',
-                                data: sorted.map(([, data]) => data.income.toFixed(2)),
+                                data: incomeData,
                                 borderColor: '#10b981',
                                 backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                                tension: 0.4
+                                tension: 0.4,
+                                borderWidth: 2,
+                                pointRadius: 4,
+                                pointHoverRadius: 6,
+                                fill: false
                             },
                             {
                                 label: 'Expenses',
-                                data: sorted.map(([, data]) => data.expenses.toFixed(2)),
+                                data: expenseData,
                                 borderColor: '#ef4444',
                                 backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                                tension: 0.4
+                                tension: 0.4,
+                                borderWidth: 2,
+                                pointRadius: 4,
+                                pointHoverRadius: 6,
+                                fill: false
+                            },
+                            {
+                                label: 'Net Savings',
+                                data: netData,
+                                borderColor: '#667eea',
+                                backgroundColor: (context) => {
+                                    const chart = context.chart;
+                                    const {ctx, chartArea} = chart;
+                                    if (!chartArea) return null;
+                                    
+                                    // Create gradient from zero line
+                                    const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+                                    
+                                    // Find where zero would be on the chart
+                                    const yScale = chart.scales.y;
+                                    const zeroPixel = yScale.getPixelForValue(0);
+                                    const topPixel = chartArea.top;
+                                    const bottomPixel = chartArea.bottom;
+                                    
+                                    // Calculate percentage for zero position
+                                    const zeroPercent = (zeroPixel - topPixel) / (bottomPixel - topPixel);
+                                    
+                                    // Green above zero, red below zero
+                                    gradient.addColorStop(0, 'rgba(16, 185, 129, 0.3)');
+                                    gradient.addColorStop(Math.max(0, Math.min(1, zeroPercent)), 'rgba(102, 126, 234, 0.05)');
+                                    gradient.addColorStop(1, 'rgba(239, 68, 68, 0.3)');
+                                    
+                                    return gradient;
+                                },
+                                tension: 0.4,
+                                borderWidth: 3,
+                                pointRadius: 5,
+                                pointHoverRadius: 8,
+                                fill: 'origin',  // Fill to the zero line
+                                order: 1  // Draw this line on top
                             }
                         ]
                     },
                     options: {
                         responsive: true,
+                        maintainAspectRatio: true,
+                        interaction: {
+                            intersect: false,
+                            mode: 'index'
+                        },
                         plugins: {
-                            legend: { position: 'top' }
+                            legend: { 
+                                position: 'top',
+                                labels: {
+                                    usePointStyle: true,
+                                    padding: 15
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const value = parseFloat(context.raw);
+                                        const label = context.dataset.label;
+                                        
+                                        if (label === 'Net Savings') {
+                                            const sign = value >= 0 ? '+' : '';
+                                            return `${label}: ${sign}${currencySymbol}${value.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+                                        }
+                                        
+                                        return `${label}: ${currencySymbol}${value.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+                                    }
+                                }
+                            }
                         },
                         scales: {
-                            y: { beginAtZero: true }
+                            y: { 
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: function(value) {
+                                        return currencySymbol + value.toLocaleString();
+                                    }
+                                },
+                                grid: {
+                                    color: (context) => {
+                                        if (context.tick.value === 0) {
+                                            return '#333';  // Darker line at zero
+                                        }
+                                        return '#e0e0e0';
+                                    },
+                                    lineWidth: (context) => {
+                                        if (context.tick.value === 0) {
+                                            return 2;  // Thicker line at zero
+                                        }
+                                        return 1;
+                                    }
+                                }
+                            },
+                            x: {
+                                ticks: {
+                                    maxRotation: 45,
+                                    minRotation: 45
+                                }
+                            }
                         }
                     }
                 });
+                
             } catch (error) {
                 console.error('Error loading monthly chart:', error);
             }
@@ -1443,6 +1679,11 @@
             // Add period selector event listener
             document.getElementById('periodSelector').addEventListener('change', (e) => {
                 loadNetWorthChart(e.target.value);
+            });
+
+            // Add period selector event listener for Monthly Trend chart
+            document.getElementById('monthlyPeriodSelector').addEventListener('change', (e) => {
+                loadMonthlyChart(e.target.value);
             });
             
             console.log('✅ Dashboard loaded successfully!');
