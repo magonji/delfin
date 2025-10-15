@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Financisto Manager - Dashboard</title>
+    <link rel="icon" href="favicon.ico">
     <style>
         * {
             margin: 0;
@@ -330,6 +331,221 @@
             font-weight: bold;
             margin-left: 5px;
         }
+
+        /* Category selector dropdown styling */
+        .category-selector-wrapper {
+            position: relative;
+        }
+
+        #selectCategoriesButton:hover {
+            border-color: #764ba2;
+            background: #f8f9fa;
+        }
+
+        .categories-dropdown {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            margin-top: 5px;
+            background: white;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            z-index: 1000;
+            min-width: 320px;
+        }
+
+        .categories-dropdown.show {
+            display: block;
+        }
+
+        .category-checkbox-item {
+            padding: 10px 15px;
+            border-bottom: 1px solid #f0f0f0;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .category-checkbox-item:last-child {
+            border-bottom: none;
+        }
+
+        .category-checkbox-item:hover {
+            background: #f8f9fa;
+        }
+
+        .category-checkbox-item label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            font-size: 14px;
+            width: 100%;
+        }
+
+        .category-checkbox-item input[type="checkbox"] {
+            cursor: pointer;
+            width: 16px;
+            height: 16px;
+            accent-color: #667eea;
+        }
+
+        .category-checkbox-item .category-name {
+            flex: 1;
+            color: #333;
+        }
+
+        .category-checkbox-item .category-parent {
+            color: #999;
+            font-size: 11px;
+            font-style: italic;
+            margin-left: 5px;
+        }
+
+        .category-checkbox-item.checked {
+            background: #f0f4ff;
+        }
+
+        .category-checkbox-item.has-parent {
+            padding-left: 30px;
+        }
+
+        .category-checkbox-item.has-parent::before {
+            content: "└";
+            position: absolute;
+            left: 15px;
+            color: #ccc;
+        }
+
+        #selectCategoriesLabel.has-selected {
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        #selectCategoriesButton .selected-count {
+            background: #667eea;
+            color: white;
+            border-radius: 10px;
+            padding: 2px 8px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-left: 5px;
+        }
+
+        /* Top Payees and Expenses Tables */
+        .top-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .top-table thead {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background: white;
+        }
+
+        .top-table th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 10px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 12px;
+            border-bottom: 2px solid #764ba2;
+        }
+
+        .top-table td {
+            padding: 12px 10px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .top-table tbody tr:hover {
+            background: #f8f9fa;
+        }
+
+        .top-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .rank-badge {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 12px;
+        }
+
+        .rank-badge.top-3 {
+            background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
+            color: #333;
+            box-shadow: 0 2px 8px rgba(255, 215, 0, 0.3);
+        }
+
+        .payee-name {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .transaction-count {
+            background: #e0e7ff;
+            color: #667eea;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            display: inline-block;
+        }
+
+        .amount-cell {
+            text-align: right;
+            font-weight: 600;
+            color: #ef4444;
+            font-size: 14px;
+        }
+
+        .category-badge {
+            background: #e0e7ff;
+            color: #667eea;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            display: inline-block;
+        }
+
+        .date-cell {
+            color: #666;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+
+        .note-text {
+            font-size: 11px;
+            color: #888;
+            margin-top: 3px;
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .account-badge {
+            background: #f0f0f0;
+            color: #666;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            display: inline-block;
+            margin-top: 2px;
+        }
+
     </style>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="navbar.js"></script>
@@ -468,10 +684,90 @@
             
             <canvas id="monthlyChart"></canvas>
         </div>
-        
+
+        <!-- Category Spending Evolution -->
         <div class="card">
-            <h2 style="margin-bottom: 20px;">🔝 Top 20 Payees</h2>
-            <canvas id="topPayeesChart"></canvas>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+                <h2 style="margin: 0;">🏷️ Category Spending Evolution</h2>
+                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                    <div class="category-selector-wrapper">
+                        <button id="selectCategoriesButton" type="button" style="padding: 8px 12px; border: 2px solid #667eea; border-radius: 8px; font-size: 14px; cursor: pointer; background: white; color: #333; font-weight: 500; display: flex; align-items: center; gap: 8px; min-width: 220px; justify-content: space-between;">
+                            <span id="selectCategoriesLabel">Select categories</span>
+                            <span style="font-size: 10px;">▼</span>
+                        </button>
+                        <div id="selectCategoriesDropdown" class="categories-dropdown">
+                            <div style="padding: 10px; border-bottom: 1px solid #e0e0e0; background: #f8f9fa;">
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; font-size: 13px;">
+                                    <input type="checkbox" id="selectAllCategories" style="cursor: pointer;">
+                                    <span>Select/Deselect All</span>
+                                </label>
+                            </div>
+                            <div style="padding: 10px; border-bottom: 1px solid #e0e0e0; background: #fff;">
+                                <input type="text" id="categorySearchInput" placeholder="Search categories..." style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px;">
+                            </div>
+                            <div id="categoryCheckboxList" style="max-height: 300px; overflow-y: auto;">
+                                <!-- Checkboxes will be populated here -->
+                            </div>
+                        </div>
+                    </div>
+                    <select id="categoryPeriodSelector" style="padding: 8px 12px; border: 2px solid #667eea; border-radius: 8px; font-size: 14px; cursor: pointer; background: white; font-weight: 600;">
+                        <option value="all">All Time</option>
+                        <option value="3years">Last 3 Years</option>
+                        <option value="2years">Last 2 Years</option>
+                        <option value="year" selected>Last Year</option>
+                        <option value="6months">Last 6 Months</option>
+                        <option value="3months">Last 3 Months</option>
+                    </select>
+                </div>
+            </div>
+            
+            <!-- Summary Stats -->
+            <div id="categoryStatsContainer" style="display: none; margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 10px;">
+                <div id="categoryStatsGrid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px;">
+                    <!-- Stats will be populated here -->
+                </div>
+            </div>
+            
+            <div id="categoryChartContainer">
+                <div style="text-align: center; padding: 60px 20px; color: #666;">
+                    <div style="font-size: 48px; margin-bottom: 10px;">📊</div>
+                    <p style="font-size: 16px; margin: 0;">Select one or more categories to view spending trends</p>
+                </div>
+            </div>
+            <canvas id="categorySpendingChart" style="display: none;"></canvas>
+        </div>
+        
+        <!-- Top Payees and Expenses Tables -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+            <!-- Top 20 Payees -->
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2 style="margin: 0;">🏪 Top 20 Payees</h2>
+                    <select id="topPayeesPeriodSelector" style="padding: 8px 12px; border: 2px solid #667eea; border-radius: 8px; font-size: 14px; cursor: pointer; background: white; font-weight: 600;">
+                        <option value="all" selected>All Time</option>
+                        <option value="year">Last Year</option>
+                        <option value="6months">Last 6 Months</option>
+                        <option value="3months">Last 3 Months</option>
+                        <option value="month">Last Month</option>
+                    </select>
+                </div>
+                <div id="topPayeesTable" style="overflow-x: auto; max-height: 600px; overflow-y: auto;"></div>
+            </div>
+            
+            <!-- Top 20 Individual Expenses -->
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2 style="margin: 0;">💸 Top 20 Individual Expenses</h2>
+                    <select id="topExpensesPeriodSelector" style="padding: 8px 12px; border: 2px solid #667eea; border-radius: 8px; font-size: 14px; cursor: pointer; background: white; font-weight: 600;">
+                        <option value="all" selected>All Time</option>
+                        <option value="year">Last Year</option>
+                        <option value="6months">Last 6 Months</option>
+                        <option value="3months">Last 3 Months</option>
+                        <option value="month">Last Month</option>
+                    </select>
+                </div>
+                <div id="topIndividualExpensesTable" style="overflow-x: auto; max-height: 600px; overflow-y: auto;"></div>
+            </div>
         </div>
 
         <div class="card" style="text-align: center; padding: 15px;">
@@ -493,6 +789,10 @@
         let allAccounts = [];
         // Global variable for monthly chart
         let monthlyChartInstance = null;
+        // Global variables for category spending chart
+        let selectedCategoryIds = new Set();
+        let allCategories = [];
+        let categorySpendingChartInstance = null;
 
         // Get currency symbol helper function
         function getCurrencySymbol(currency) {
@@ -952,13 +1252,477 @@
             }
         }
 
+        // Populate categories dropdown with checkboxes
+        async function populateCategoriesDropdown() {
+            try {
+                const response = await fetch(`${API_URL}/categories`);
+                allCategories = await response.json();
+                
+                // Group categories by parent
+                const parentCategories = allCategories.filter(cat => !cat.parent);
+                const childCategories = allCategories.filter(cat => cat.parent);
+                
+                const checkboxList = document.getElementById('categoryCheckboxList');
+                checkboxList.innerHTML = '';
+                
+                // Add parent categories and their children
+                parentCategories.forEach(parent => {
+                    // Add parent category
+                    addCategoryCheckbox(parent, false, checkboxList);
+                    
+                    // Add child categories
+                    const children = childCategories.filter(child => child.parent === parent.name);
+                    children.forEach(child => {
+                        addCategoryCheckbox(child, true, checkboxList);
+                    });
+                });
+                
+                // Add categories without parent
+                const orphanCategories = childCategories.filter(cat => 
+                    !parentCategories.some(parent => parent.name === cat.parent)
+                );
+                orphanCategories.forEach(cat => {
+                    addCategoryCheckbox(cat, false, checkboxList);
+                });
+                
+                // Add event listeners to checkboxes
+                const checkboxes = checkboxList.querySelectorAll('input[type="checkbox"]');
+                checkboxes.forEach(checkbox => {
+                    checkbox.addEventListener('change', (e) => {
+                        const categoryId = parseInt(e.target.value);
+                        const itemDiv = e.target.closest('.category-checkbox-item');
+                        
+                        if (e.target.checked) {
+                            selectedCategoryIds.add(categoryId);
+                            itemDiv.classList.add('checked');
+                        } else {
+                            selectedCategoryIds.delete(categoryId);
+                            itemDiv.classList.remove('checked');
+                        }
+                        
+                        updateCategoryButtonLabel();
+                        loadCategorySpendingChart();
+                    });
+                });
+                
+                // Toggle dropdown visibility
+                const button = document.getElementById('selectCategoriesButton');
+                const dropdown = document.getElementById('selectCategoriesDropdown');
+                
+                button.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    dropdown.classList.toggle('show');
+                });
+                
+                // Close dropdown when clicking outside
+                document.addEventListener('click', (e) => {
+                    if (!dropdown.contains(e.target) && e.target !== button) {
+                        dropdown.classList.remove('show');
+                    }
+                });
+                
+                // Prevent dropdown from closing when clicking inside
+                dropdown.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                });
+                
+                // Select/Deselect all functionality
+                const selectAllCheckbox = document.getElementById('selectAllCategories');
+                selectAllCheckbox.addEventListener('change', (e) => {
+                    const checkboxes = checkboxList.querySelectorAll('input[type="checkbox"]');
+                    const allItems = checkboxList.querySelectorAll('.category-checkbox-item');
+                    
+                    checkboxes.forEach((checkbox, index) => {
+                        checkbox.checked = e.target.checked;
+                        const categoryId = parseInt(checkbox.value);
+                        
+                        if (e.target.checked) {
+                            selectedCategoryIds.add(categoryId);
+                            allItems[index].classList.add('checked');
+                        } else {
+                            selectedCategoryIds.delete(categoryId);
+                            allItems[index].classList.remove('checked');
+                        }
+                    });
+                    
+                    updateCategoryButtonLabel();
+                    loadCategorySpendingChart();
+                });
+                
+                // Search functionality
+                const searchInput = document.getElementById('categorySearchInput');
+                searchInput.addEventListener('input', (e) => {
+                    const searchTerm = e.target.value.toLowerCase();
+                    const items = checkboxList.querySelectorAll('.category-checkbox-item');
+                    
+                    items.forEach(item => {
+                        const categoryName = item.querySelector('.category-name').textContent.toLowerCase();
+                        const parentName = item.querySelector('.category-parent')?.textContent.toLowerCase() || '';
+                        
+                        if (categoryName.includes(searchTerm) || parentName.includes(searchTerm)) {
+                            item.style.display = '';
+                        } else {
+                            item.style.display = 'none';
+                        }
+                    });
+                });
+                
+            } catch (error) {
+                console.error('Error loading categories for dropdown:', error);
+            }
+        }
+
+        // Helper function to add category checkbox
+        function addCategoryCheckbox(category, isChild, container) {
+            const itemDiv = document.createElement('div');
+            itemDiv.className = `category-checkbox-item ${isChild ? 'has-parent' : ''}`;
+            
+            const parentText = category.parent ? `<span class="category-parent">(${category.parent})</span>` : '';
+            
+            itemDiv.innerHTML = `
+                <label>
+                    <input type="checkbox" 
+                        value="${category.id}" 
+                        data-category-name="${category.name}">
+                    <span class="category-name">${category.name}</span>
+                    ${parentText}
+                </label>
+            `;
+            
+            container.appendChild(itemDiv);
+        }
+
+        // Update the button label to show how many categories are selected
+        function updateCategoryButtonLabel() {
+            const label = document.getElementById('selectCategoriesLabel');
+            const button = document.getElementById('selectCategoriesButton');
+            
+            // Remove any existing count badge
+            const existingBadge = button.querySelector('.selected-count');
+            if (existingBadge) {
+                existingBadge.remove();
+            }
+            
+            if (selectedCategoryIds.size === 0) {
+                label.textContent = 'Select categories';
+                label.classList.remove('has-selected');
+            } else {
+                label.textContent = 'Select categories';
+                label.classList.add('has-selected');
+                
+                // Add count badge
+                const countBadge = document.createElement('span');
+                countBadge.className = 'selected-count';
+                countBadge.textContent = selectedCategoryIds.size;
+                button.insertBefore(countBadge, button.lastElementChild);
+            }
+        }
+
+        // Load Category Spending Evolution Chart
+        async function loadCategorySpendingChart(period = 'year') {
+            try {
+                const chartCanvas = document.getElementById('categorySpendingChart');
+                const chartContainer = document.getElementById('categoryChartContainer');
+                const statsContainer = document.getElementById('categoryStatsContainer');
+                
+                // If no categories selected, show placeholder
+                if (selectedCategoryIds.size === 0) {
+                    chartCanvas.style.display = 'none';
+                    chartContainer.style.display = 'block';
+                    statsContainer.style.display = 'none';
+                    
+                    if (categorySpendingChartInstance) {
+                        categorySpendingChartInstance.destroy();
+                        categorySpendingChartInstance = null;
+                    }
+                    return;
+                }
+                
+                // Hide placeholder, show chart
+                chartCanvas.style.display = 'block';
+                chartContainer.style.display = 'none';
+                statsContainer.style.display = 'block';
+                
+                const response = await fetch(`${API_URL}/transactions?limit=100000`);
+                const allTransactions = await response.json();
+                
+                // Get transfers to exclude them
+                const transferResponse = await fetch(`${API_URL}/transactions/transfers`);
+                const transfers = await transferResponse.json();
+                
+                // Create set of transfer transaction IDs
+                const transferIds = new Set();
+                transfers.forEach(t => {
+                    if (t.transfer_out_id) transferIds.add(t.transfer_out_id);
+                    if (t.transfer_in_id) transferIds.add(t.transfer_in_id);
+                });
+                
+                // Filter transactions: only expenses, not transfers, and in selected categories
+                const transactions = allTransactions.filter(t => 
+                    !transferIds.has(t.id) && 
+                    t.amount < 0 && 
+                    t.category_id && 
+                    selectedCategoryIds.has(t.category_id)
+                );
+                
+                // Group by month and category
+                const monthlyData = {};
+                
+                transactions.forEach(t => {
+                    const date = new Date(t.date);
+                    const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                    
+                    if (!monthlyData[monthKey]) {
+                        monthlyData[monthKey] = {};
+                    }
+                    
+                    const categoryName = t.category_name || 'Uncategorised';
+                    if (!monthlyData[monthKey][categoryName]) {
+                        monthlyData[monthKey][categoryName] = 0;
+                    }
+                    
+                    const convertedAmount = convertToBaseCurrency(Math.abs(t.amount), t.currency);
+                    monthlyData[monthKey][categoryName] += convertedAmount;
+                });
+                
+                // Sort by date
+                let sortedMonths = Object.keys(monthlyData).sort();
+                
+                // Filter by selected period
+                if (period !== 'all') {
+                    const now = new Date();
+                    const startDate = new Date();
+                    
+                    switch(period) {
+                        case '3months':
+                            startDate.setMonth(now.getMonth() - 3);
+                            break;
+                        case '6months':
+                            startDate.setMonth(now.getMonth() - 6);
+                            break;
+                        case 'year':
+                            startDate.setFullYear(now.getFullYear() - 1);
+                            break;
+                        case '2years':
+                            startDate.setFullYear(now.getFullYear() - 2);
+                            break;
+                        case '3years':
+                            startDate.setFullYear(now.getFullYear() - 3);
+                            break;
+                    }
+                    
+                    const startKey = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}`;
+                    sortedMonths = sortedMonths.filter(month => month >= startKey);
+                }
+                
+                // Get all unique categories from selected
+                const selectedCategoryNames = new Set();
+                transactions.forEach(t => {
+                    if (t.category_name) {
+                        selectedCategoryNames.add(t.category_name);
+                    }
+                });
+                
+                // Prepare datasets (one per category)
+                const datasets = [];
+                const categoryColors = [
+                    '#667eea', '#764ba2', '#f093fb', '#4facfe',
+                    '#43e97b', '#fa709a', '#fee140', '#30cfd0',
+                    '#a8edea', '#fed6e3', '#ff6b6b', '#4ecdc4',
+                    '#45b7d1', '#f38181', '#aa96da', '#fcbad3',
+                    '#a8e6cf', '#ffd3b6', '#ffaaa5', '#ff8b94'
+                ];
+                
+                let colorIndex = 0;
+                selectedCategoryNames.forEach(categoryName => {
+                    const data = sortedMonths.map(month => {
+                        return (monthlyData[month][categoryName] || 0).toFixed(2);
+                    });
+                    
+                    datasets.push({
+                        label: categoryName,
+                        data: data,
+                        borderColor: categoryColors[colorIndex % categoryColors.length],
+                        backgroundColor: categoryColors[colorIndex % categoryColors.length] + '20',
+                        tension: 0.4,
+                        borderWidth: 2,
+                        pointRadius: 4,
+                        pointHoverRadius: 6,
+                        fill: false
+                    });
+                    
+                    colorIndex++;
+                });
+                
+                // Calculate statistics
+                const categoryTotals = {};
+                const categoryAverages = {};
+                
+                selectedCategoryNames.forEach(categoryName => {
+                    let total = 0;
+                    sortedMonths.forEach(month => {
+                        total += (monthlyData[month][categoryName] || 0);
+                    });
+                    categoryTotals[categoryName] = total;
+                    categoryAverages[categoryName] = total / sortedMonths.length;
+                });
+                
+                const grandTotal = Object.values(categoryTotals).reduce((sum, val) => sum + val, 0);
+                const overallAverage = grandTotal / sortedMonths.length;
+                
+                // Find peak month and amount
+                let peakMonth = '';
+                let peakAmount = 0;
+                sortedMonths.forEach(month => {
+                    const monthTotal = Object.values(monthlyData[month]).reduce((sum, val) => sum + val, 0);
+                    if (monthTotal > peakAmount) {
+                        peakAmount = monthTotal;
+                        peakMonth = month;
+                    }
+                });
+                
+                // Update statistics
+                const currencySymbol = getCurrencySymbol(baseCurrency);
+                const statsGrid = document.getElementById('categoryStatsGrid');
+                
+                let statsHTML = `
+                    <div style="text-align: center;">
+                        <div style="font-size: 12px; color: #666; margin-bottom: 5px;">Total Spent</div>
+                        <div style="font-size: 16px; font-weight: bold; color: #ef4444;">
+                            ${currencySymbol}${grandTotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                        </div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div style="font-size: 12px; color: #666; margin-bottom: 5px;">Avg. Monthly</div>
+                        <div style="font-size: 16px; font-weight: bold; color: #667eea;">
+                            ${currencySymbol}${overallAverage.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                        </div>
+                    </div>
+                `;
+                
+                if (peakMonth) {
+                    const [year, month] = peakMonth.split('-');
+                    const date = new Date(year, parseInt(month) - 1);
+                    const monthName = date.toLocaleDateString('en-GB', { year: 'numeric', month: 'short' });
+                    statsHTML += `
+                        <div style="text-align: center;">
+                            <div style="font-size: 12px; color: #666; margin-bottom: 5px;">Peak Month</div>
+                            <div style="font-size: 16px; font-weight: bold; color: #764ba2;">
+                                ${monthName}<br>
+                                <span style="font-size: 13px;">${currencySymbol}${peakAmount.toLocaleString(undefined, {minimumFractionDigits: 0})}</span>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                // Add top category if multiple selected
+                if (selectedCategoryNames.size > 1) {
+                    const topCategory = Object.entries(categoryTotals)
+                        .sort((a, b) => b[1] - a[1])[0];
+                    
+                    if (topCategory) {
+                        const percentage = (topCategory[1] / grandTotal * 100).toFixed(1);
+                        statsHTML += `
+                            <div style="text-align: center;">
+                                <div style="font-size: 12px; color: #666; margin-bottom: 5px;">Top Category</div>
+                                <div style="font-size: 14px; font-weight: bold; color: #10b981;">
+                                    ${topCategory[0]}<br>
+                                    <span style="font-size: 13px;">${percentage}%</span>
+                                </div>
+                            </div>
+                        `;
+                    }
+                }
+                
+                statsGrid.innerHTML = statsHTML;
+                
+                // Prepare chart labels
+                const labels = sortedMonths.map(month => {
+                    const [year, monthNum] = month.split('-');
+                    const date = new Date(year, parseInt(monthNum) - 1);
+                    return date.toLocaleDateString('en-GB', { year: 'numeric', month: 'short' });
+                });
+                
+                // Destroy previous chart instance
+                if (categorySpendingChartInstance) {
+                    categorySpendingChartInstance.destroy();
+                }
+                
+                // Create chart
+                const ctx = chartCanvas;
+                categorySpendingChartInstance = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: datasets
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        interaction: {
+                            intersect: false,
+                            mode: 'index'
+                        },
+                        plugins: {
+                            legend: { 
+                                position: 'top',
+                                labels: {
+                                    usePointStyle: true,
+                                    padding: 15,
+                                    font: {
+                                        size: 12
+                                    }
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const value = parseFloat(context.raw);
+                                        return `${context.dataset.label}: ${currencySymbol}${value.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+                                    },
+                                    footer: function(tooltipItems) {
+                                        let total = 0;
+                                        tooltipItems.forEach(item => {
+                                            total += parseFloat(item.raw);
+                                        });
+                                        return `Total: ${currencySymbol}${total.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: { 
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: function(value) {
+                                        return currencySymbol + value.toLocaleString();
+                                    }
+                                }
+                            },
+                            x: {
+                                ticks: {
+                                    maxRotation: 45,
+                                    minRotation: 45
+                                }
+                            }
+                        }
+                    }
+                });
+                
+            } catch (error) {
+                console.error('Error loading category spending chart:', error);
+            }
+        }
+
         // Load all charts
         async function loadCharts() {
             await loadNetWorthChart();
             await loadCategoryChart();
             await loadAccountBalanceTable();  
             await loadMonthlyChart();
-            await loadTopPayeesChart();
+            await populateCategoriesDropdown();
+            await loadTopPayeesTable(); 
+            await loadTopIndividualExpensesTable();
         }
 
         // Global variables for month selection
@@ -1601,52 +2365,246 @@
             }
         }
 
-        // Top Payees (with conversion)
-        async function loadTopPayeesChart() {
+        // Load Top 20 Payees Table
+        async function loadTopPayeesTable(period = 'all') {
             try {
                 const response = await fetch(`${API_URL}/transactions?limit=100000`);
-                const transactions = await response.json();
+                const allTransactions = await response.json();
                 
-                // Group by payee with currency conversion
-                const payeeTotals = {};
-                transactions.forEach(t => {
-                    if (t.amount < 0 && t.payee_name) { // Only expenses with payee
-                        const convertedAmount = convertToBaseCurrency(Math.abs(t.amount), t.currency);
-                        payeeTotals[t.payee_name] = (payeeTotals[t.payee_name] || 0) + convertedAmount;
-                    }
+                // Get transfers to exclude them
+                const transferResponse = await fetch(`${API_URL}/transactions/transfers`);
+                const transfers = await transferResponse.json();
+                
+                // Create set of transfer transaction IDs
+                const transferIds = new Set();
+                transfers.forEach(t => {
+                    if (t.transfer_out_id) transferIds.add(t.transfer_out_id);
+                    if (t.transfer_in_id) transferIds.add(t.transfer_in_id);
                 });
                 
-                // Sort and get top 10
-                const sorted = Object.entries(payeeTotals)
-                    .sort((a, b) => b[1] - a[1])
+                // Filter transactions
+                let transactions = allTransactions.filter(t => !transferIds.has(t.id) && t.amount < 0 && t.payee_name);
+                
+                // Filter by period
+                if (period !== 'all') {
+                    const now = new Date();
+                    const startDate = new Date();
+                    
+                    switch(period) {
+                        case 'month':
+                            startDate.setMonth(now.getMonth() - 1);
+                            break;
+                        case '3months':
+                            startDate.setMonth(now.getMonth() - 3);
+                            break;
+                        case '6months':
+                            startDate.setMonth(now.getMonth() - 6);
+                            break;
+                        case 'year':
+                            startDate.setFullYear(now.getFullYear() - 1);
+                            break;
+                    }
+                    
+                    transactions = transactions.filter(t => new Date(t.date) >= startDate);
+                }
+                
+                // Group by payee
+                const payeeData = {};
+                transactions.forEach(t => {
+                    if (!payeeData[t.payee_name]) {
+                        payeeData[t.payee_name] = {
+                            total: 0,
+                            count: 0,
+                            transactions: []
+                        };
+                    }
+                    
+                    const convertedAmount = convertToBaseCurrency(Math.abs(t.amount), t.currency);
+                    payeeData[t.payee_name].total += convertedAmount;
+                    payeeData[t.payee_name].count += 1;
+                    payeeData[t.payee_name].transactions.push(t);
+                });
+                
+                // Sort and get top 20
+                const sortedPayees = Object.entries(payeeData)
+                    .sort((a, b) => b[1].total - a[1].total)
                     .slice(0, 20);
+                
+                const tableContainer = document.getElementById('topPayeesTable');
+                
+                if (sortedPayees.length === 0) {
+                    tableContainer.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No payees found for this period</p>';
+                    return;
+                }
                 
                 const currencySymbol = getCurrencySymbol(baseCurrency);
                 
-                const ctx = document.getElementById('topPayeesChart');
-                new Chart(ctx, {
-                    type: 'bar',
-                    data: {
-                        labels: sorted.map(([name]) => name),
-                        datasets: [{
-                            label: `Total Spent (${currencySymbol})`,
-                            data: sorted.map(([, total]) => total.toFixed(2)),
-                            backgroundColor: '#764ba2'
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        indexAxis: 'y',
-                        plugins: {
-                            legend: { display: false }
-                        },
-                        scales: {
-                            x: { beginAtZero: true }
-                        }
-                    }
+                let tableHTML = `
+                    <table class="top-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 50px;">#</th>
+                                <th>Payee</th>
+                                <th style="text-align: center; width: 80px;">Transactions</th>
+                                <th style="text-align: right; width: 120px;">Total Spent</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+                
+                sortedPayees.forEach(([payeeName, data], index) => {
+                    const rankClass = index < 3 ? 'rank-badge top-3' : 'rank-badge';
+                    const avgPerTransaction = data.total / data.count;
+                    
+                    tableHTML += `
+                        <tr>
+                            <td style="text-align: center;">
+                                <span class="${rankClass}">${index + 1}</span>
+                            </td>
+                            <td>
+                                <div class="payee-name">${payeeName}</div>
+                                <div style="font-size: 11px; color: #888; margin-top: 2px;">
+                                    Avg: ${currencySymbol}${avgPerTransaction.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                </div>
+                            </td>
+                            <td style="text-align: center;">
+                                <span class="transaction-count">${data.count}</span>
+                            </td>
+                            <td class="amount-cell">
+                                ${currencySymbol}${data.total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                            </td>
+                        </tr>
+                    `;
                 });
+                
+                tableHTML += `
+                        </tbody>
+                    </table>
+                `;
+                
+                tableContainer.innerHTML = tableHTML;
+                
             } catch (error) {
-                console.error('Error loading top payees chart:', error);
+                console.error('Error loading top payees table:', error);
+                document.getElementById('topPayeesTable').innerHTML = 
+                    '<p style="text-align: center; color: #ef4444; padding: 20px;">Failed to load top payees</p>';
+            }
+        }
+
+        // Load Top 20 Individual Expenses Table
+        async function loadTopIndividualExpensesTable(period = 'all') {
+            try {
+                const response = await fetch(`${API_URL}/transactions?limit=100000`);
+                const allTransactions = await response.json();
+                
+                // Get transfers to exclude them
+                const transferResponse = await fetch(`${API_URL}/transactions/transfers`);
+                const transfers = await transferResponse.json();
+                
+                // Create set of transfer transaction IDs
+                const transferIds = new Set();
+                transfers.forEach(t => {
+                    if (t.transfer_out_id) transferIds.add(t.transfer_out_id);
+                    if (t.transfer_in_id) transferIds.add(t.transfer_in_id);
+                });
+                
+                // Filter transactions
+                let transactions = allTransactions.filter(t => !transferIds.has(t.id) && t.amount < 0);
+                
+                // Filter by period
+                if (period !== 'all') {
+                    const now = new Date();
+                    const startDate = new Date();
+                    
+                    switch(period) {
+                        case 'month':
+                            startDate.setMonth(now.getMonth() - 1);
+                            break;
+                        case '3months':
+                            startDate.setMonth(now.getMonth() - 3);
+                            break;
+                        case '6months':
+                            startDate.setMonth(now.getMonth() - 6);
+                            break;
+                        case 'year':
+                            startDate.setFullYear(now.getFullYear() - 1);
+                            break;
+                    }
+                    
+                    transactions = transactions.filter(t => new Date(t.date) >= startDate);
+                }
+                
+                // Convert amounts and sort
+                const expensesWithConverted = transactions.map(t => ({
+                    ...t,
+                    convertedAmount: convertToBaseCurrency(Math.abs(t.amount), t.currency)
+                })).sort((a, b) => b.convertedAmount - a.convertedAmount).slice(0, 20);
+                
+                const tableContainer = document.getElementById('topIndividualExpensesTable');
+                
+                if (expensesWithConverted.length === 0) {
+                    tableContainer.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No expenses found for this period</p>';
+                    return;
+                }
+                
+                const currencySymbol = getCurrencySymbol(baseCurrency);
+                
+                let tableHTML = `
+                    <table class="top-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 50px;">#</th>
+                                <th style="width: 90px;">Date</th>
+                                <th>Description</th>
+                                <th style="text-align: right; width: 120px;">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+                
+                expensesWithConverted.forEach((expense, index) => {
+                    const date = new Date(expense.date);
+                    const dateStr = date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+                    const rankClass = index < 3 ? 'rank-badge top-3' : 'rank-badge';
+                    const originalSymbol = getCurrencySymbol(expense.currency);
+                    
+                    tableHTML += `
+                        <tr>
+                            <td style="text-align: center;">
+                                <span class="${rankClass}">${index + 1}</span>
+                            </td>
+                            <td class="date-cell">${dateStr}</td>
+                            <td>
+                                <div>
+                                    ${expense.payee_name ? `<span class="payee-name">${expense.payee_name}</span>` : '<span style="color: #999;">No payee</span>'}
+                                    ${expense.category_name ? `<span class="category-badge" style="margin-left: 8px;">${expense.category_name}</span>` : ''}
+                                </div>
+                                ${expense.note ? `<div class="note-text" title="${expense.note}">${expense.note}</div>` : ''}
+                                <div>
+                                    <span class="account-badge">${expense.account_name}</span>
+                                </div>
+                            </td>
+                            <td class="amount-cell">
+                                <div>${currencySymbol}${expense.convertedAmount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+                                ${expense.currency !== baseCurrency ? 
+                                    `<div style="font-size: 11px; color: #888;">(${originalSymbol}${Math.abs(expense.amount).toFixed(2)})</div>` 
+                                    : ''}
+                            </td>
+                        </tr>
+                    `;
+                });
+                
+                tableHTML += `
+                        </tbody>
+                    </table>
+                `;
+                
+                tableContainer.innerHTML = tableHTML;
+                
+            } catch (error) {
+                console.error('Error loading top individual expenses table:', error);
+                document.getElementById('topIndividualExpensesTable').innerHTML = 
+                    '<p style="text-align: center; color: #ef4444; padding: 20px;">Failed to load top expenses</p>';
             }
         }
 
@@ -1672,18 +2630,32 @@
         document.addEventListener('DOMContentLoaded', async () => {
             console.log('🚀 Loading dashboard...');
             await loadExchangeRates();
-            await populateExcludeAccountsDropdown(); 
+            await populateExcludeAccountsDropdown();
             await loadStats();
             await loadCharts();
             
-            // Add period selector event listener
+            // Add period selector event listener for Net Worth chart
             document.getElementById('periodSelector').addEventListener('change', (e) => {
                 loadNetWorthChart(e.target.value);
             });
-
+            
             // Add period selector event listener for Monthly Trend chart
             document.getElementById('monthlyPeriodSelector').addEventListener('change', (e) => {
                 loadMonthlyChart(e.target.value);
+            });
+            
+            // Add period selector event listener for Category Spending chart
+            document.getElementById('categoryPeriodSelector').addEventListener('change', (e) => {
+                loadCategorySpendingChart(e.target.value);
+            });
+            
+            // Add period selector event listeners for Top Payees and Expenses tables
+            document.getElementById('topPayeesPeriodSelector').addEventListener('change', (e) => {
+                loadTopPayeesTable(e.target.value);
+            });
+            
+            document.getElementById('topExpensesPeriodSelector').addEventListener('change', (e) => {
+                loadTopIndividualExpensesTable(e.target.value);
             });
             
             console.log('✅ Dashboard loaded successfully!');
