@@ -1093,7 +1093,7 @@
             }
             
             try {
-                if (file.name.endsWith('.csv')) {
+                if (file.name.toLowerCase().endsWith('.csv')) {
                     await parseCSV(file, accountId);
                 } else {
                     showError('Unsupported file format');
@@ -1140,17 +1140,21 @@
             // Detect bank type and parse accordingly
             if (headers.includes('Transaction ID') && headers.includes('Emoji')) {
                 console.log('Detected format: Monzo');
-                // Monzo format
                 parseMonzoCSV(lines, headers, accountId);
             } else if (headers.some(h => h.toLowerCase().includes('transaction date')) && 
                     headers.some(h => h.toLowerCase().includes('transaction description')) && 
                     headers.some(h => h.toLowerCase().includes('debit amount'))) {
                 console.log('Detected format: Bank of Scotland');
-                // Bank of Scotland CSV export format
                 parseBankOfScotlandCSV(lines, headers, accountId);
+            } else if (headers.some(h => h.toLowerCase() === 'date') &&
+                    headers.some(h => h.toLowerCase() === 'time') &&
+                    headers.some(h => h.toLowerCase() === 'gross') &&
+                    headers.some(h => h.toLowerCase() === 'fee') &&
+                    headers.some(h => h.toLowerCase() === 'transaction id')) {
+                console.log('Detected format: PayPal');
+                parsePayPalCSV(lines, headers, accountId);
             } else {
                 console.log('Detected format: Generic');
-                // Generic format
                 parseGenericCSV(lines, headers, accountId);
             }
             
@@ -2172,6 +2176,171 @@
             }
             
             console.log('=== Bank of Scotland CSV Parse Complete ===');
+        }
+
+        // Parse PayPal CSV format
+        function parsePayPalCSV(lines, headers, accountId) {
+            console.log('=== Starting PayPal CSV Parse ===');
+            console.log('Headers:', headers);
+            
+            parsedTransactions = [];
+            
+            // Find column indices
+            const dateIdx = headers.findIndex(h => h.toLowerCase() === 'date');
+            const timeIdx = headers.findIndex(h => h.toLowerCase() === 'time');
+            const descriptionIdx = headers.findIndex(h => h.toLowerCase() === 'description');
+            const currencyIdx = headers.findIndex(h => h.toLowerCase() === 'currency');
+            const grossIdx = headers.findIndex(h => h.toLowerCase() === 'gross');
+            const feeIdx = headers.findIndex(h => h.toLowerCase() === 'fee');
+            const netIdx = headers.findIndex(h => h.toLowerCase() === 'net');
+            const nameIdx = headers.findIndex(h => h.toLowerCase() === 'name');
+            const invoiceIdx = headers.findIndex(h => h.toLowerCase() === 'invoice id');
+            
+            console.log('Column indices found:');
+            console.log('  Date:', dateIdx);
+            console.log('  Time:', timeIdx);
+            console.log('  Description:', descriptionIdx);
+            console.log('  Currency:', currencyIdx);
+            console.log('  Gross:', grossIdx);
+            console.log('  Fee:', feeIdx);
+            console.log('  Net:', netIdx);
+            console.log('  Name:', nameIdx);
+            console.log('  Invoice:', invoiceIdx);
+            
+            // Validate required columns
+            if (dateIdx === -1 || timeIdx === -1 || grossIdx === -1 || descriptionIdx === -1) {
+                const missingColumns = [];
+                if (dateIdx === -1) missingColumns.push('Date');
+                if (timeIdx === -1) missingColumns.push('Time');
+                if (grossIdx === -1) missingColumns.push('Gross');
+                if (descriptionIdx === -1) missingColumns.push('Description');
+                
+                throw new Error('Could not find required PayPal columns: ' + missingColumns.join(', ') + 
+                            '\n\nFound headers: ' + headers.join(', '));
+            }
+            
+            let successCount = 0;
+            let skipCount = 0;
+            
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) {
+                    skipCount++;
+                    continue;
+                }
+                
+                try {
+                    const values = parseCSVLine(line);
+                    
+                    // Log first transaction for debugging
+                    if (i === 1) {
+                        console.log('First data line values:', values);
+                    }
+                    
+                    const maxIdx = Math.max(dateIdx, timeIdx, descriptionIdx, grossIdx, nameIdx, invoiceIdx);
+                    if (values.length <= maxIdx) {
+                        console.warn(`Line ${i}: Not enough values (${values.length} vs required ${maxIdx + 1})`);
+                        skipCount++;
+                        continue;
+                    }
+                    
+                    const dateStr = values[dateIdx].replace(/"/g, '');
+                    const timeStr = values[timeIdx].replace(/"/g, '');
+                    const description = values[descriptionIdx].replace(/"/g, '');
+                    const grossStr = values[grossIdx].replace(/"/g, '').trim();
+                    const feeStr = feeIdx !== -1 ? values[feeIdx].replace(/"/g, '').trim() : '0.00';
+                    const merchantName = nameIdx !== -1 ? values[nameIdx].replace(/"/g, '').trim() : '';
+                    const invoiceId = invoiceIdx !== -1 ? values[invoiceIdx].replace(/"/g, '').trim() : '';
+                    
+                    // Skip "BML Credit" entries as they're just funding transactions
+                    if (description.includes('BML Credit') || description.includes('Transfer from BML')) {
+                        skipCount++;
+                        continue;
+                    }
+                    
+                    if (!dateStr || !grossStr) {
+                        skipCount++;
+                        continue;
+                    }
+                    
+                    const gross = parseFloat(grossStr);
+                    const fee = parseFloat(feeStr);
+                    
+                    if (isNaN(gross)) {
+                        skipCount++;
+                        continue;
+                    }
+                    
+                    // Parse date (format: DD/MM/YYYY)
+                    let date;
+                    const dateParts = dateStr.split('/');
+                    if (dateParts.length === 3) {
+                        const day = dateParts[0].padStart(2, '0');
+                        const month = dateParts[1].padStart(2, '0');
+                        const year = dateParts[2];
+                        
+                        // Parse time (format: HH:MM:SS)
+                        const time = timeStr || '12:00:00';
+                        
+                        // Create ISO format datetime
+                        const datetime = `${year}-${month}-${day}T${time}`;
+                        
+                        // Build description combining merchant name and transaction type
+                        let fullDescription = '';
+                        if (merchantName) {
+                            fullDescription = merchantName;
+                            if (description && !description.includes('Express Checkout')) {
+                                fullDescription += ` (${description})`;
+                            }
+                        } else {
+                            fullDescription = description;
+                        }
+                        
+                        // Build note with additional info
+                        let note = '';
+                        if (invoiceId) {
+                            note = `Invoice: ${invoiceId}`;
+                        }
+                        if (fee !== 0) {
+                            note += (note ? ' | ' : '') + `Fee: £${fee.toFixed(2)}`;
+                        }
+                        
+                        parsedTransactions.push({
+                            date: datetime,
+                            description: fullDescription,
+                            amount: gross,
+                            note: note,
+                            account_id: parseInt(accountId),
+                            isDuplicate: false,
+                            type: 'transaction',
+                            payee_id: null,
+                            category_id: null,
+                            location_id: null,
+                            project_id: null
+                        });
+                        
+                        successCount++;
+                    } else {
+                        throw new Error(`Invalid date format: ${dateStr} (expected DD/MM/YYYY)`);
+                    }
+                    
+                } catch (error) {
+                    console.error(`Error parsing line ${i}:`, error.message);
+                    console.error('Line content:', line);
+                    skipCount++;
+                }
+            }
+            
+            console.log(`Parse complete: ${successCount} successful, ${skipCount} skipped`);
+            
+            checkDuplicates();
+            
+            if (parsedTransactions.length === 0) {
+                throw new Error('No transactions found in CSV. Please check the file format.\n\n' +
+                            `Processed ${lines.length - 1} lines, but none were valid transactions.`);
+            }
+            
+            console.log('=== PayPal CSV Parse Complete ===');
         }
 
         // Load data for export

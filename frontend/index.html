@@ -685,11 +685,55 @@
             <canvas id="monthlyChart"></canvas>
         </div>
 
+        <!-- Yearly Trend -->
+        <div class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="margin: 0;">📅 Yearly Trend</h2>
+            </div>
+            
+            <!-- Summary Stats -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 10px;">
+                <div style="text-align: center;">
+                    <div style="font-size: 12px; color: #666; margin-bottom: 5px;">Avg. Yearly Income</div>
+                    <div id="avgYearlyIncome" style="font-size: 16px; font-weight: bold; color: #10b981;">-</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="font-size: 12px; color: #666; margin-bottom: 5px;">Avg. Yearly Expenses</div>
+                    <div id="avgYearlyExpenses" style="font-size: 16px; font-weight: bold; color: #ef4444;">-</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="font-size: 12px; color: #666; margin-bottom: 5px;">Avg. Net Savings</div>
+                    <div id="avgYearlyNet" style="font-size: 16px; font-weight: bold;">-</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="font-size: 12px; color: #666; margin-bottom: 5px;">Best Year</div>
+                    <div id="bestYear" style="font-size: 16px; font-weight: bold; color: #10b981;">-</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="font-size: 12px; color: #666; margin-bottom: 5px;">Worst Year</div>
+                    <div id="worstYear" style="font-size: 16px; font-weight: bold; color: #ef4444;">-</div>
+                </div>
+            </div>
+            
+            <canvas id="yearlyChart"></canvas>
+        </div>
+
         <!-- Category Spending Evolution -->
         <div class="card">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
                 <h2 style="margin: 0;">🏷️ Category Spending Evolution</h2>
                 <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                    <label style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 2px solid #667eea; border-radius: 8px; cursor: pointer; background: white; font-size: 14px;">
+                        <input type="checkbox" id="showTrendLines" style="cursor: pointer; width: 16px; height: 16px; accent-color: #667eea;">
+                        <span style="font-weight: 500; color: #333;">Show HP trend</span>
+                    </label>
+                    <select id="lambdaSelector" style="padding: 8px 12px; border: 2px solid #667eea; border-radius: 8px; font-size: 14px; cursor: pointer; background: white; font-weight: 600; display: none;">
+                        <option value="100">Very Smooth (λ=100)</option>
+                        <option value="400">Smooth (λ=400)</option>
+                        <option value="1600" selected>Normal (λ=1600)</option>
+                        <option value="6400">Detailed (λ=6400)</option>
+                        <option value="14400">Very Detailed (λ=14400)</option>
+                    </select>
                     <div class="category-selector-wrapper">
                         <button id="selectCategoriesButton" type="button" style="padding: 8px 12px; border: 2px solid #667eea; border-radius: 8px; font-size: 14px; cursor: pointer; background: white; color: #333; font-weight: 500; display: flex; align-items: center; gap: 8px; min-width: 220px; justify-content: space-between;">
                             <span id="selectCategoriesLabel">Select categories</span>
@@ -720,6 +764,7 @@
                     </select>
                 </div>
             </div>
+
             
             <!-- Summary Stats -->
             <div id="categoryStatsContainer" style="display: none; margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 10px;">
@@ -787,12 +832,14 @@
         // Global variables
         let excludedAccountIds = new Set();
         let allAccounts = [];
-        // Global variable for monthly chart
+        // Global variable for monthly / yearly chart
         let monthlyChartInstance = null;
+        let yearlyChartInstance = null;
         // Global variables for category spending chart
         let selectedCategoryIds = new Set();
         let allCategories = [];
         let categorySpendingChartInstance = null;
+
 
         // Get currency symbol helper function
         function getCurrencySymbol(currency) {
@@ -1303,6 +1350,20 @@
                         updateCategoryButtonLabel();
                         loadCategorySpendingChart();
                     });
+
+                // Trend lines checkbox event listener
+                const trendCheckbox = document.getElementById('showTrendLines');
+                trendCheckbox.addEventListener('change', () => {
+                    loadCategorySpendingChart(document.getElementById('categoryPeriodSelector').value);
+                });
+                
+                // Lambda selector event listener
+                const lambdaSelector = document.getElementById('lambdaSelector');
+                lambdaSelector.addEventListener('change', () => {
+                    if (document.getElementById('showTrendLines').checked) {
+                        loadCategorySpendingChart(document.getElementById('categoryPeriodSelector').value);
+                    }
+                });
                 });
                 
                 // Toggle dropdown visibility
@@ -1418,6 +1479,99 @@
             }
         }
 
+        // Hodrick-Prescott Filter implementation
+        function hodrickPrescottFilter(data, lambda = 1600) {
+            const n = data.length;
+            
+            if (n < 3) {
+                return data; // Not enough data points
+            }
+            
+            // Convert data to numbers
+            const y = data.map(d => parseFloat(d));
+            
+            // Build the H matrix
+            const H = Array(n).fill(0).map(() => Array(n).fill(0));
+            
+            // First row
+            H[0][0] = 1 + lambda;
+            H[0][1] = -2 * lambda;
+            if (n > 2) H[0][2] = lambda;
+            
+            // Second row
+            H[1][0] = -2 * lambda;
+            H[1][1] = 1 + 5 * lambda;
+            H[1][2] = -4 * lambda;
+            if (n > 3) H[1][3] = lambda;
+            
+            // Middle rows
+            for (let i = 2; i < n - 2; i++) {
+                H[i][i - 2] = lambda;
+                H[i][i - 1] = -4 * lambda;
+                H[i][i] = 1 + 6 * lambda;
+                H[i][i + 1] = -4 * lambda;
+                H[i][i + 2] = lambda;
+            }
+            
+            // Second to last row
+            if (n > 3) {
+                H[n - 2][n - 4] = lambda;
+                H[n - 2][n - 3] = -4 * lambda;
+                H[n - 2][n - 2] = 1 + 5 * lambda;
+                H[n - 2][n - 1] = -2 * lambda;
+            }
+            
+            // Last row
+            if (n > 2) H[n - 1][n - 3] = lambda;
+            H[n - 1][n - 2] = -2 * lambda;
+            H[n - 1][n - 1] = 1 + lambda;
+            
+            // Solve the system using Gaussian elimination
+            const trend = gaussianElimination(H, y);
+            
+            return trend.map(t => t.toFixed(2));
+        }
+
+        // Gaussian elimination for solving linear systems
+        function gaussianElimination(A, b) {
+            const n = b.length;
+            const Ab = A.map((row, i) => [...row, b[i]]);
+            
+            // Forward elimination
+            for (let i = 0; i < n; i++) {
+                // Find pivot
+                let maxRow = i;
+                for (let k = i + 1; k < n; k++) {
+                    if (Math.abs(Ab[k][i]) > Math.abs(Ab[maxRow][i])) {
+                        maxRow = k;
+                    }
+                }
+                
+                // Swap rows
+                [Ab[i], Ab[maxRow]] = [Ab[maxRow], Ab[i]];
+                
+                // Make all rows below this one 0 in current column
+                for (let k = i + 1; k < n; k++) {
+                    const factor = Ab[k][i] / Ab[i][i];
+                    for (let j = i; j <= n; j++) {
+                        Ab[k][j] -= factor * Ab[i][j];
+                    }
+                }
+            }
+            
+            // Back substitution
+            const x = Array(n).fill(0);
+            for (let i = n - 1; i >= 0; i--) {
+                x[i] = Ab[i][n];
+                for (let j = i + 1; j < n; j++) {
+                    x[i] -= Ab[i][j] * x[j];
+                }
+                x[i] /= Ab[i][i];
+            }
+            
+            return x;
+        }
+
         // Load Category Spending Evolution Chart
         async function loadCategorySpendingChart(period = 'year') {
             try {
@@ -1523,6 +1677,13 @@
                     }
                 });
                 
+                // Check if trend lines should be shown
+                const showTrendLines = document.getElementById('showTrendLines').checked;
+                const lambda = parseInt(document.getElementById('lambdaSelector').value) || 1600;
+                
+                // Show/hide lambda selector based on checkbox
+                document.getElementById('lambdaSelector').style.display = showTrendLines ? 'block' : 'none';
+        
                 // Prepare datasets (one per category)
                 const datasets = [];
                 const categoryColors = [
@@ -1539,17 +1700,38 @@
                         return (monthlyData[month][categoryName] || 0).toFixed(2);
                     });
                     
+                    const color = categoryColors[colorIndex % categoryColors.length];
+                    
+                    // Add main data line
                     datasets.push({
                         label: categoryName,
                         data: data,
-                        borderColor: categoryColors[colorIndex % categoryColors.length],
-                        backgroundColor: categoryColors[colorIndex % categoryColors.length] + '20',
+                        borderColor: color,
+                        backgroundColor: color + '20',
                         tension: 0.4,
                         borderWidth: 2,
                         pointRadius: 4,
                         pointHoverRadius: 6,
                         fill: false
                     });
+                    
+                    // Add HP trend line if enabled
+                    if (showTrendLines && data.length >= 3) {
+                        const trendData = hodrickPrescottFilter(data, lambda);
+                        datasets.push({
+                            label: `${categoryName} (HP trend)`,
+                            data: trendData,
+                            borderColor: color,
+                            backgroundColor: 'transparent',
+                            tension: 0.4,
+                            borderWidth: 3,
+                            borderDash: [],
+                            pointRadius: 0,
+                            pointHoverRadius: 0,
+                            fill: false,
+                            hidden: false
+                        });
+                    }
                     
                     colorIndex++;
                 });
@@ -1671,22 +1853,72 @@
                                     padding: 15,
                                     font: {
                                         size: 12
+                                    },
+                                    filter: function(item) {
+                                        return true;
+                                    },
+                                    generateLabels: function(chart) {
+                                        const original = Chart.defaults.plugins.legend.labels.generateLabels;
+                                        const labels = original.call(this, chart);
+                                        
+                                        // Customize HP trend line labels
+                                        labels.forEach(label => {
+                                            if (label.text.includes('(HP trend)')) {
+                                                label.pointStyle = 'line';
+                                                label.strokeStyle = label.strokeStyle || label.fillStyle;
+                                            }
+                                        });
+                                        
+                                        return labels;
                                     }
+                                },
+                                onClick: function(e, legendItem, legend) {
+                                    const index = legendItem.datasetIndex;
+                                    const chart = legend.chart;
+                                    const meta = chart.getDatasetMeta(index);
+                                    
+                                    // Toggle visibility
+                                    meta.hidden = meta.hidden === null ? !chart.data.datasets[index].hidden : null;
+                                    
+                                    // If toggling a main line, also toggle its HP trend line
+                                    const label = chart.data.datasets[index].label;
+                                    if (!label.includes('(HP trend)')) {
+                                        // Find corresponding HP trend line
+                                        const trendLabel = `${label} (HP trend)`;
+                                        chart.data.datasets.forEach((dataset, i) => {
+                                            if (dataset.label === trendLabel) {
+                                                const trendMeta = chart.getDatasetMeta(i);
+                                                trendMeta.hidden = meta.hidden;
+                                            }
+                                        });
+                                    }
+                                    
+                                    chart.update();
                                 }
                             },
                             tooltip: {
                                 callbacks: {
                                     label: function(context) {
+                                        // Don't show tooltip for HP trend lines
+                                        if (context.dataset.label.includes('(HP trend)')) {
+                                            return null;
+                                        }
                                         const value = parseFloat(context.raw);
                                         return `${context.dataset.label}: ${currencySymbol}${value.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
                                     },
                                     footer: function(tooltipItems) {
                                         let total = 0;
                                         tooltipItems.forEach(item => {
-                                            total += parseFloat(item.raw);
+                                            if (!item.dataset.label.includes('(HP trend)')) {
+                                                total += parseFloat(item.raw);
+                                            }
                                         });
                                         return `Total: ${currencySymbol}${total.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
                                     }
+                                },
+                                filter: function(tooltipItem) {
+                                    // Don't show tooltips for HP trend lines
+                                    return !tooltipItem.dataset.label.includes('(HP trend)');
                                 }
                             }
                         },
@@ -1720,6 +1952,7 @@
             await loadCategoryChart();
             await loadAccountBalanceTable();  
             await loadMonthlyChart();
+            await loadYearlyChart();
             await populateCategoriesDropdown();
             await loadTopPayeesTable(); 
             await loadTopIndividualExpensesTable();
@@ -2225,74 +2458,50 @@
                 const expenseData = sortedMonths.map(([, data]) => data.expenses.toFixed(2));
                 const netData = sortedMonths.map(([, data]) => (data.income - data.expenses).toFixed(2));
                 
-                // Destroy previous chart instance
+               // Destroy previous chart instance
                 if (monthlyChartInstance) {
                     monthlyChartInstance.destroy();
                 }
                 
-                // Create chart
+                // Create chart with bars
                 const ctx = document.getElementById('monthlyChart');
                 monthlyChartInstance = new Chart(ctx, {
-                    type: 'line',
+                    type: 'bar',
                     data: {
                         labels: labels,
                         datasets: [
                             {
                                 label: 'Income',
                                 data: incomeData,
+                                backgroundColor: 'rgba(16, 185, 129, 0.8)',
                                 borderColor: '#10b981',
-                                backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                                tension: 0.4,
                                 borderWidth: 2,
-                                pointRadius: 4,
-                                pointHoverRadius: 6,
-                                fill: false
+                                borderRadius: 6,
+                                borderSkipped: false,
+                                order:1
                             },
                             {
                                 label: 'Expenses',
                                 data: expenseData,
+                                backgroundColor: 'rgba(239, 68, 68, 0.8)',
                                 borderColor: '#ef4444',
-                                backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                                tension: 0.4,
                                 borderWidth: 2,
-                                pointRadius: 4,
-                                pointHoverRadius: 6,
-                                fill: false
+                                borderRadius: 6,
+                                borderSkipped: false,
+                                order:1
                             },
                             {
                                 label: 'Net Savings',
                                 data: netData,
+                                type: 'scatter',  // Changed to scatter
+                                backgroundColor: '#667eea',
                                 borderColor: '#667eea',
-                                backgroundColor: (context) => {
-                                    const chart = context.chart;
-                                    const {ctx, chartArea} = chart;
-                                    if (!chartArea) return null;
-                                    
-                                    // Create gradient from zero line
-                                    const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-                                    
-                                    // Find where zero would be on the chart
-                                    const yScale = chart.scales.y;
-                                    const zeroPixel = yScale.getPixelForValue(0);
-                                    const topPixel = chartArea.top;
-                                    const bottomPixel = chartArea.bottom;
-                                    
-                                    // Calculate percentage for zero position
-                                    const zeroPercent = (zeroPixel - topPixel) / (bottomPixel - topPixel);
-                                    
-                                    // Green above zero, red below zero
-                                    gradient.addColorStop(0, 'rgba(16, 185, 129, 0.3)');
-                                    gradient.addColorStop(Math.max(0, Math.min(1, zeroPercent)), 'rgba(102, 126, 234, 0.05)');
-                                    gradient.addColorStop(1, 'rgba(239, 68, 68, 0.3)');
-                                    
-                                    return gradient;
-                                },
-                                tension: 0.4,
-                                borderWidth: 3,
-                                pointRadius: 5,
-                                pointHoverRadius: 8,
-                                fill: 'origin',  // Fill to the zero line
-                                order: 1  // Draw this line on top
+                                borderWidth: 4,
+                                pointStyle: 'line',  // Horizontal line marker
+                                pointRadius: 12,  // Length of the horizontal line
+                                pointHoverRadius: 10,
+                                rotation: 0,  // 0 = horizontal, 90 = vertical
+                                order:-1  // Draw on top of bars
                             }
                         ]
                     },
@@ -2308,7 +2517,24 @@
                                 position: 'top',
                                 labels: {
                                     usePointStyle: true,
-                                    padding: 15
+                                    padding: 15,
+                                    generateLabels: function(chart) {
+                                        const original = Chart.defaults.plugins.legend.labels.generateLabels;
+                                        const labels = original.call(this, chart);
+                                        
+                                        // Customize label styles
+                                        labels.forEach((label, index) => {
+                                            if (index === 0) {
+                                                label.pointStyle = 'line';
+                                            } else if (index === 1) {
+                                                label.pointStyle = 'rect';
+                                            } else {
+                                                label.pointStyle = 'rect';
+                                            }
+                                        });
+                                        
+                                        return labels;
+                                    }
                                 }
                             },
                             tooltip: {
@@ -2338,19 +2564,22 @@
                                 grid: {
                                     color: (context) => {
                                         if (context.tick.value === 0) {
-                                            return '#333';  // Darker line at zero
+                                            return '#333';
                                         }
                                         return '#e0e0e0';
                                     },
                                     lineWidth: (context) => {
                                         if (context.tick.value === 0) {
-                                            return 2;  // Thicker line at zero
+                                            return 2;
                                         }
                                         return 1;
                                     }
                                 }
                             },
                             x: {
+                                grid: {
+                                    display: false
+                                },
                                 ticks: {
                                     maxRotation: 45,
                                     minRotation: 45
@@ -2362,6 +2591,236 @@
                 
             } catch (error) {
                 console.error('Error loading monthly chart:', error);
+            }
+        }
+
+        // Yearly Trend with same style as monthly
+        async function loadYearlyChart() {
+            try {
+                const response = await fetch(`${API_URL}/transactions?limit=100000`);
+                const allTransactions = await response.json();
+                
+                // Get transfers to exclude them
+                const transferResponse = await fetch(`${API_URL}/transactions/transfers`);
+                const transfers = await transferResponse.json();
+                
+                // Create set of transfer transaction IDs
+                const transferIds = new Set();
+                transfers.forEach(t => {
+                    if (t.transfer_out_id) transferIds.add(t.transfer_out_id);
+                    if (t.transfer_in_id) transferIds.add(t.transfer_in_id);
+                });
+                
+                // Filter out transfer transactions
+                const transactions = allTransactions.filter(t => !transferIds.has(t.id));
+                
+                // Group by year with currency conversion
+                const yearlyData = {};
+                transactions.forEach(t => {
+                    const date = new Date(t.date);
+                    const year = date.getFullYear().toString();
+                    
+                    if (!yearlyData[year]) {
+                        yearlyData[year] = { income: 0, expenses: 0 };
+                    }
+                    
+                    const convertedAmount = convertToBaseCurrency(t.amount, t.currency);
+                    
+                    if (convertedAmount > 0) {
+                        yearlyData[year].income += convertedAmount;
+                    } else {
+                        yearlyData[year].expenses += Math.abs(convertedAmount);
+                    }
+                });
+                
+                // Sort by year
+                const sortedYears = Object.entries(yearlyData).sort((a, b) => a[0].localeCompare(b[0]));
+                
+                if (sortedYears.length === 0) {
+                    console.warn('No data for yearly chart');
+                    return;
+                }
+                
+                // Calculate statistics
+                const incomes = sortedYears.map(([, data]) => data.income);
+                const expenses = sortedYears.map(([, data]) => data.expenses);
+                const netSavings = sortedYears.map(([, data]) => data.income - data.expenses);
+                
+                const avgIncome = incomes.reduce((a, b) => a + b, 0) / incomes.length;
+                const avgExpenses = expenses.reduce((a, b) => a + b, 0) / expenses.length;
+                const avgNet = avgIncome - avgExpenses;
+                
+                const maxNet = Math.max(...netSavings);
+                const minNet = Math.min(...netSavings);
+                const bestYearIndex = netSavings.indexOf(maxNet);
+                const worstYearIndex = netSavings.indexOf(minNet);
+                const bestYearKey = sortedYears[bestYearIndex]?.[0];
+                const worstYearKey = sortedYears[worstYearIndex]?.[0];
+                
+                // Update statistics
+                const currencySymbol = getCurrencySymbol(baseCurrency);
+                
+                document.getElementById('avgYearlyIncome').textContent = 
+                    `${currencySymbol}${avgIncome.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}`;
+                
+                document.getElementById('avgYearlyExpenses').textContent = 
+                    `${currencySymbol}${avgExpenses.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}`;
+                
+                const netClass = avgNet >= 0 ? 'balance-positive' : 'balance-negative';
+                const netSign = avgNet >= 0 ? '+' : '';
+                document.getElementById('avgYearlyNet').innerHTML = 
+                    `<span class="${netClass}">${netSign}${currencySymbol}${avgNet.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</span>`;
+                
+                if (bestYearKey) {
+                    document.getElementById('bestYear').innerHTML = 
+                        `${bestYearKey}<br><span style="font-size: 13px;">+${currencySymbol}${maxNet.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</span>`;
+                }
+                
+                if (worstYearKey) {
+                    document.getElementById('worstYear').innerHTML = 
+                        `${worstYearKey}<br><span style="font-size: 13px;">${currencySymbol}${minNet.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</span>`;
+                }
+                
+                // Prepare chart data
+                const labels = sortedYears.map(([year]) => year);
+                const incomeData = sortedYears.map(([, data]) => data.income.toFixed(2));
+                const expenseData = sortedYears.map(([, data]) => data.expenses.toFixed(2));
+                const netData = sortedYears.map(([, data]) => (data.income - data.expenses).toFixed(2));
+                
+                // Destroy previous chart instance
+                if (yearlyChartInstance) {
+                    yearlyChartInstance.destroy();
+                }
+                
+                // Create chart
+                const ctx = document.getElementById('yearlyChart');
+                yearlyChartInstance = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: 'Income',
+                                data: incomeData,
+                                backgroundColor: 'rgba(16, 185, 129, 0.8)',
+                                borderColor: '#10b981',
+                                borderWidth: 2,
+                                borderRadius: 6,
+                                borderSkipped: false,
+                                order: 1
+                            },
+                            {
+                                label: 'Expenses',
+                                data: expenseData,
+                                backgroundColor: 'rgba(239, 68, 68, 0.8)',
+                                borderColor: '#ef4444',
+                                borderWidth: 2,
+                                borderRadius: 6,
+                                borderSkipped: false,
+                                order: 1
+                            },
+                            {
+                                label: 'Net Savings',
+                                data: netData,
+                                type: 'scatter',
+                                backgroundColor:'#667eea',
+                                borderColor: '#667eea',
+                                borderWidth: 2,
+                                pointStyle: 'line',
+                                pointRadius: 8,
+                                pointHoverRadius: 10,
+                                rotation: 0,
+                                order: -1
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        interaction: {
+                            intersect: false,
+                            mode: 'index'
+                        },
+                        plugins: {
+                            legend: { 
+                                position: 'top',
+                                labels: {
+                                    usePointStyle: true,
+                                    padding: 15,
+                                    generateLabels: function(chart) {
+                                        const original = Chart.defaults.plugins.legend.labels.generateLabels;
+                                        const labels = original.call(this, chart);
+                                        
+                                        // Customize label styles
+                                        labels.forEach((label, index) => {
+                                            if (index === 0 || index === 1) {
+                                                // Income and Expenses as rectangles
+                                                label.pointStyle = 'rect';
+                                            } else {
+                                                // Net Savings as a horizontal line
+                                                label.pointStyle = 'line';
+                                            }
+                                        });
+                                        
+                                        return labels;
+                                    }
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const value = parseFloat(context.raw);
+                                        const label = context.dataset.label;
+                                        
+                                        if (label === 'Net Savings') {
+                                            const sign = value >= 0 ? '+' : '';
+                                            return `${label}: ${sign}${currencySymbol}${value.toLocaleString(undefined, {minimumFractionDigits: 0})}`;
+                                        }
+                                        
+                                        return `${label}: ${currencySymbol}${value.toLocaleString(undefined, {minimumFractionDigits: 0})}`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: { 
+                                min: -7000, 
+                                max: 70000, 
+                                ticks: {
+                                    callback: function(value) {
+                                        return currencySymbol + value.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0});
+                                    }
+                                },
+                                grid: {
+                                    color: (context) => {
+                                        if (context.tick.value === 0) {
+                                            return '#333';
+                                        }
+                                        return '#e0e0e0';
+                                    },
+                                    lineWidth: (context) => {
+                                        if (context.tick.value === 0) {
+                                            return 2;
+                                        }
+                                        return 1;
+                                    }
+                                }
+                            },
+                            x: {
+                                grid: {
+                                    display: false
+                                },
+                                ticks: {
+                                    maxRotation: 0,
+                                    minRotation: 0
+                                }
+                            }
+                        }
+                    }
+                });
+                
+            } catch (error) {
+                console.error('Error loading yearly chart:', error);
             }
         }
 
