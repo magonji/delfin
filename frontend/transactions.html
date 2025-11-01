@@ -929,14 +929,30 @@
                 parentSelect.remove(1);
             }
             
-            // Get unique parent categories from allCategories
-            const parentCategories = [...new Set(allCategories
-                .map(c => c.parent)
-                .filter(p => p && p.trim() !== ''))]
-                .sort();
+            // Create a Set to collect all parent category names
+            const parentCategoryNames = new Set();
             
-            // Add parent categories
-            parentCategories.forEach(parent => {
+            // Method 1: Get parent names that are referenced by subcategories
+            allCategories.forEach(cat => {
+                if (cat.parent && cat.parent.trim() !== '') {
+                    parentCategoryNames.add(cat.parent);
+                }
+            });
+            
+            // Method 2: Get standalone categories (categories without a parent)
+            // These are parent-level categories that might not have subcategories
+            allCategories.forEach(cat => {
+                if (!cat.parent || cat.parent.trim() === '') {
+                    // This is a top-level category
+                    parentCategoryNames.add(cat.name);
+                }
+            });
+            
+            // Convert Set to sorted array
+            const sortedParents = Array.from(parentCategoryNames).sort();
+            
+            // Add parent categories to dropdown
+            sortedParents.forEach(parent => {
                 const option = document.createElement('option');
                 option.value = parent;
                 option.textContent = parent;
@@ -955,7 +971,7 @@
         // Load subcategories based on parent
         function loadSubcategories(parentName) {
             const categorySelect = document.getElementById('category');
-            categorySelect.innerHTML = '<option value="">Select subcategory...</option>';
+            categorySelect.innerHTML = '<option value="">Select category...</option>';
             
             if (!parentName) {
                 categorySelect.disabled = true;
@@ -967,12 +983,29 @@
                 .filter(c => c.parent === parentName)
                 .sort((a, b) => a.name.localeCompare(b.name));
             
+            // NEW: If no subcategories exist, look for the parent category itself
             if (subcategories.length === 0) {
-                categorySelect.innerHTML = '<option value="">No subcategories available</option>';
-                categorySelect.disabled = true;
+                // Find the parent category (category without parent, matching name)
+                const parentCategory = allCategories.find(c => !c.parent && c.name === parentName);
+                
+                if (parentCategory) {
+                    // Allow selecting the parent category directly
+                    categorySelect.disabled = false;
+                    const option = document.createElement('option');
+                    option.value = parentCategory.id;
+                    option.textContent = `${parentName} (no subcategories)`;
+                    categorySelect.appendChild(option);
+                    
+                    // Auto-select it since it's the only option
+                    categorySelect.value = parentCategory.id;
+                } else {
+                    categorySelect.innerHTML = '<option value="">No categories available</option>';
+                    categorySelect.disabled = true;
+                }
                 return;
             }
             
+            // Normal case: subcategories exist
             categorySelect.disabled = false;
             subcategories.forEach(category => {
                 const option = document.createElement('option');
@@ -1265,7 +1298,6 @@
             }
         }
         
-        // Populate filter dropdowns
         async function populateFilterDropdowns() {
             // Populate accounts filter
             try {
@@ -1291,8 +1323,20 @@
                     filterCategory.remove(1);
                 }
 
+                // FIX: Remove duplicate categories by using a Map with category ID as key
+                // This ensures each category appears only once
+                const uniqueCategories = new Map();
+                allCategories.forEach(category => {
+                    if (!uniqueCategories.has(category.id)) {
+                        uniqueCategories.set(category.id, category);
+                    }
+                });
+
+                // Convert Map back to array
+                const uniqueCategoriesArray = Array.from(uniqueCategories.values());
+
                 // Sort categories alphabetically by full name (parent > name)
-                const sortedCategories = [...allCategories].sort((a, b) => {
+                const sortedCategories = uniqueCategoriesArray.sort((a, b) => {
                     const nameA = a.parent ? `${a.parent} > ${a.name}` : a.name;
                     const nameB = b.parent ? `${b.parent} > ${b.name}` : b.name;
                     return nameA.localeCompare(nameB);
