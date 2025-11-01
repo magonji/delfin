@@ -1,4 +1,4 @@
-# 💰 Financisto Manager
+# 🐬 Delfin
 
 A personal finance management system built with Python FastAPI and vanilla JavaScript. Import your Financisto data and manage your finances from your computer with a modern web interface.
 
@@ -26,7 +26,28 @@ A personal finance management system built with Python FastAPI and vanilla JavaS
 - 📍 **Location & Project Tracking**: Organise transactions by location and project
 - 🔍 **Advanced Filters**: Filter by date range, account, category, or search text
 - ✏️ **Edit & Delete**: Modify or remove transactions directly from the interface
-- 📊 **Recent Transactions List**: View all your transactions with running balances and currency conversion
+- ✏️ **Bulk Edit**: Select multiple transactions or transfers to edit them all at once
+- 📊 **Transaction List**: View all your transactions with running balances per account and total balance
+
+### Loans & Credit Cards
+
+- 💳 **Automatic Detection**: Distinguishes credit cards (3+ unique payees) from traditional loans
+- 📋 **Loan Tracking**: Monitor borrowed amount, repaid amount, interest, and remaining balance
+- 💰 **Credit Card Management**: Separate tracking of charges, fees/interest, and payments
+- 📊 **Smart Categorisation**: Interest and fees identified by category ("Intereses y comisiones")
+- ✅ **Completion Tracking**: Loans show paid-off status with green indicators
+- 📈 **Progress Bars**: Visual representation of repayment progress
+
+### Tools & Management
+
+- 📁 **Category Management**: Edit parent categories and subcategories
+- 💳 **Account Management**: Edit account names and currencies
+- 👤 **Payee Management**: Edit and merge payee names
+- 📍 **Location Management**: Organise transaction locations
+- 📋 **Project Management**: Track projects across transactions
+- 📥 **Bank Statement Import**: Import transactions from CSV bank statements (Bank of Scotland, PayPal)
+- 📤 **Export to CSV**: Export your transactions with flexible filters
+- 💾 **Database Backup**: Download timestamped backups of your complete database
 
 ### Currency Management
 
@@ -39,6 +60,7 @@ A personal finance management system built with Python FastAPI and vanilla JavaS
 ## 🛠️ Technology Stack
 
 ### Backend
+
 - **FastAPI**: Modern Python web framework for building APIs
 - **SQLAlchemy**: SQL toolkit and ORM
 - **SQLite**: Lightweight database
@@ -47,6 +69,7 @@ A personal finance management system built with Python FastAPI and vanilla JavaS
 - **Uvicorn**: ASGI server
 
 ### Frontend
+
 - **Vanilla JavaScript**: No frameworks, just pure JS
 - **Chart.js**: Beautiful, responsive charts
 - **HTML5 & CSS3**: Modern, gradient-based design
@@ -54,16 +77,19 @@ A personal finance management system built with Python FastAPI and vanilla JavaS
 ## 📁 Project Structure
 
 ```
-financisto-manager/
+delfin/
 ├── backend/
 │   ├── __init__.py
 │   ├── main.py                    # FastAPI application
 │   ├── models.py                  # Database models (including ExchangeRate)
 │   ├── schemas.py                 # Pydantic schemas
-│   └── database.py                # Database configuration
+│   ├── database.py                # Database configuration
+│   └── balance_calculator.py      # Balance calculation utilities
 ├── frontend/
 │   ├── index.html                 # Dashboard page
 │   ├── transactions.html          # Transaction management page
+│   ├── loans.html                 # Loans & credit cards page
+│   ├── tools.html                 # Management tools page
 │   └── navbar.js                  # Navigation component
 ├── data/
 │   └── finance.db                 # SQLite database (gitignored)
@@ -71,6 +97,8 @@ financisto-manager/
 ├── import_financisto_csv.py       # CSV import utility
 ├── update_exchange_rates.py       # Exchange rate updater script
 ├── update_database.py             # Database schema updater
+├── migrate_add_balances.py        # Migration script for balance columns
+├── clean_duplicate_categories.py  # Category deduplication utility
 ├── .gitignore
 └── README.md
 ```
@@ -87,8 +115,8 @@ financisto-manager/
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/magonji/financisto-manager.git
-   cd financisto-manager
+   git clone https://github.com/yourusername/delfin.git
+   cd delfin
    ```
 
 2. **Install dependencies**
@@ -124,14 +152,17 @@ financisto-manager/
 
 ### First Time Setup with Existing Data
 
-If you're setting up Financisto Manager with existing data:
+If you're setting up Delfin with existing data:
 
 1. Complete steps 1-4 above to install and import your data
 2. **Important**: Run the exchange rate updater:
+
    ```bash
    python update_exchange_rates.py
    ```
+
 3. You should see output like:
+
    ```
    🔄 Updating exchange rates...
    📊 Currencies in use: GBP, EUR, USD
@@ -141,14 +172,26 @@ If you're setting up Financisto Manager with existing data:
    
    ✅ Successfully updated 3 exchange rates!
    ```
-4. Start the server and enjoy your multi-currency dashboard!
+
+4. If you have duplicate categories, run:
+   
+   ```bash
+   python clean_duplicate_categories.py
+   ```
+
+5. Initialise balance calculations:
+   ```bash
+   python migrate_add_balances.py
+   ```
+6. Start the server and enjoy your multi-currency dashboard!
 
 ### Updating Database Schema (For Existing Installations)
 
-If you're upgrading from an older version without exchange rate support:
+If you're upgrading from an older version:
 
 ```bash
 python update_database.py
+python migrate_add_balances.py
 python update_exchange_rates.py
 ```
 
@@ -172,8 +215,28 @@ Navigate to `transactions.html` to:
 - Add new transactions with the quick-entry form
 - Create transfers between accounts (with different currencies)
 - Filter existing transactions by multiple criteria
-- Edit or delete transactions
+- Edit or delete transactions individually
+- Bulk edit multiple transactions or transfers at once
 - View complete transaction history with running balances
+
+### Loans & Credit Cards
+
+Navigate to `loans.html` to:
+
+- View all your loans and credit cards automatically detected
+- See detailed breakdown of charges, payments, and interest/fees
+- Track repayment progress with visual indicators
+- Expand to see complete transaction history for each loan/card
+- Monitor active vs paid-off loans separately
+
+### Tools & Management
+
+Navigate to `tools.html` to:
+
+- Edit categories, accounts, payees, locations, and projects
+- Import bank statements from CSV files
+- Export transactions to CSV with custom filters
+- Download database backups with timestamps
 
 ### Updating Exchange Rates
 
@@ -193,7 +256,7 @@ Exchange rates can be updated in two ways:
 
 ```bash
 # Linux/Mac - Add to crontab (runs daily at 2 AM)
-0 2 * * * cd /path/to/financisto-manager && python update_exchange_rates.py
+0 2 * * * cd /path/to/delfin && python update_exchange_rates.py
 
 # Windows - Use Task Scheduler to run the script daily
 ```
@@ -242,11 +305,13 @@ The FastAPI backend provides a RESTful API:
 | `/exchange-rates/update` | POST | Manually trigger rate update |
 | `/exchange-rates` | GET | Get historical exchange rates |
 
-### Dashboard
+### Dashboard & Admin
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/dashboard/summary` | GET | Get dashboard statistics with currency conversion |
+| `/admin/initialise-balances` | POST | Initialise balance calculations for all transactions |
+| `/admin/backup-database` | POST | Create and download database backup |
 
 Full API documentation available at: `http://localhost:8000/docs`
 
@@ -265,15 +330,23 @@ Exchange rates are fetched from [exchangerate-api.com](https://www.exchangerate-
 ## 📊 Database Schema
 
 ### Main Tables
+
 - **accounts**: Bank accounts, cash, credit cards (with currency)
 - **categories**: Hierarchical expense/income categories
 - **payees**: Merchants and payment recipients
 - **locations**: Geographic locations
 - **projects**: Project groupings for transactions
-- **transactions**: Individual financial transactions (with currency)
+- **transactions**: Individual financial transactions (with currency, cached balances)
 - **exchange_rates**: Historical exchange rate data
 
+### Balance Tracking
+
+- Transactions include `account_balance_after` and `total_balance_after` columns
+- Balances are calculated and cached for performance
+- Automatically recalculated when transactions are added, edited, or deleted
+
 ### Relationships
+
 - Transactions link to accounts, categories, payees, locations, and projects via foreign keys
 - Exchange rates are indexed by currency and date for efficient lookups
 - The system automatically determines the base currency from transaction frequency
@@ -281,6 +354,7 @@ Exchange rates are fetched from [exchangerate-api.com](https://www.exchangerate-
 ## 🔧 Development
 
 ### Running in Development Mode
+
 ```bash
 uvicorn backend.main:app --reload
 ```
@@ -290,10 +364,11 @@ The `--reload` flag enables auto-reload on code changes.
 ### Adding New Features
 
 1. **Backend changes**: Edit files in `backend/`
-2. **Frontend changes**: Edit `frontend/index.html` or `transactions.html`
+2. **Frontend changes**: Edit HTML files in `frontend/`
 3. **Database changes**: 
    - Update `backend/models.py`
-   - Run `python update_database.py`
+   - Create migration script if needed
+   - Run migration
 
 ### Testing Exchange Rate Updates
 
@@ -315,15 +390,23 @@ If you see CORS errors in the browser console, ensure the CORS middleware is pro
 
 If you encounter database errors:
 ```bash
-# Delete the database
+# Back up your database first!
+python -c "import shutil; from datetime import datetime; shutil.copy('data/finance.db', f'data/finance_backup_{datetime.now().strftime(\"%Y%m%d_%H%M%S\")}.db')"
+
+# Then recreate if necessary
 rm data/finance.db   # Mac/Linux
 del data\finance.db  # Windows
 
-# Recreate tables
 python create_tables.py
-
-# Reimport data if needed
 python import_financisto_csv.py
+```
+
+### Balance Calculation Issues
+
+If balances seem incorrect:
+```bash
+# Reinitialise all balance calculations
+curl -X POST http://localhost:8000/admin/initialise-balances
 ```
 
 ### Exchange Rate Issues
@@ -346,6 +429,13 @@ sqlite3 data/finance.db "SELECT COUNT(*) FROM exchange_rates;"
 - The free API has rate limits; wait a few minutes and try again
 - If persistent, check [exchangerate-api.com status](https://www.exchangerate-api.com/)
 
+### Duplicate Categories
+
+If you see repeated categories in dropdowns:
+```bash
+python clean_duplicate_categories.py
+```
+
 ### Import Errors
 
 If CSV import fails:
@@ -361,6 +451,7 @@ If CSV import fails:
 - When deploying to production, add proper authentication
 - Use environment variables for sensitive configuration
 - Exchange rate API calls don't require authentication but are rate-limited
+- Database backups include all sensitive financial data - store them securely
 
 ## 🚀 Future Enhancements
 
@@ -373,18 +464,34 @@ Potential features for future development:
 - [ ] Cloud deployment (Railway/Render)
 - [ ] Desktop app (Electron)
 - [ ] User authentication
-- [ ] Automated backup
+- [ ] Automated Google Drive backup
 - [x] Multi-currency support with conversion ✅
 - [x] Live exchange rate updates ✅
+- [x] Cached balance calculations ✅
+- [x] Bulk transaction editing ✅
+- [x] Loan and credit card tracking ✅
+- [x] Database backup functionality ✅
 - [ ] Custom exchange rate entry (for historical accuracy)
-- [ ] Currency conversion history tracking
 - [ ] Investment portfolio tracking
 - [ ] Cryptocurrency support
+- [ ] Bill reminders and notifications
 
 
 ## 📝 Changelog
 
-### Version 2.0 (Current)
+### Version 3.0 (Current)
+- ✨ Added cached balance calculations for improved performance
+- ✨ Implemented bulk editing for transactions and transfers
+- ✨ New Loans & Credit Cards page with automatic detection
+- ✨ Smart categorisation of charges vs fees/interest
+- ✨ Database backup functionality with timestamps
+- ✨ Category deduplication utility
+- 🐬 Rebranded from "Financisto Manager" to "Delfin"
+- 🎨 Enhanced UI with better transaction displays
+- 📊 Running balance shown for each transaction
+- 🔧 Multiple bug fixes and performance improvements
+
+### Version 2.0
 - ✨ Added multi-currency support with automatic conversion
 - ✨ Integrated live exchange rate fetching from exchangerate-api.com
 - ✨ New ExchangeRate model for historical rate storage
@@ -420,4 +527,4 @@ For questions or suggestions, open an issue on GitHub.
 
 ---
 
-**Built with ❤️ for personal finance management**
+**Built with ❤️ by a dolphin for personal finance management** 🐬
