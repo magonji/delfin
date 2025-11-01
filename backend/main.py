@@ -701,10 +701,11 @@ def get_exchange_rates_history(
 def get_dashboard_summary(db: Session = Depends(get_db)):
     """
     Get summary statistics for the dashboard with currency conversion.
+    Optimised version with aggregation instead of loading all rows.
     """
-    # Get latest exchange rates
-    from sqlalchemy import func as sql_func
+    from sqlalchemy import func as sql_func, case
     
+    # Get latest exchange rates (esta parte está bien)
     subquery = db.query(
         ExchangeRate.currency,
         sql_func.max(ExchangeRate.date).label('max_date')
@@ -728,23 +729,29 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
     base_currency = currency_counts[0][0] if currency_counts else "GBP"
     base_rate = rates_dict.get(base_currency, 1.0)
     
-    # Calculate total balance with conversion
-    transactions = db.query(Transaction).all()
-    total_balance_converted = 0
+    # OPTIMISATION: Use aggregation with CASE for currency conversion
+    # Instead of loading all transactions into memory
+    conversion_cases = []
+    for currency, rate in rates_dict.items():
+        conversion_factor = base_rate / rate
+        conversion_cases.append(
+            (Transaction.currency == currency, Transaction.amount * conversion_factor)
+        )
     
-    for t in transactions:
-        if t.currency in rates_dict:
-            # Convert to base currency
-            # Formula: amount * (base_rate / transaction_rate)
-            conversion_factor = base_rate / rates_dict[t.currency]
-            total_balance_converted += t.amount * conversion_factor
-        else:
-            # If no rate available, use direct amount (fallback)
-            total_balance_converted += t.amount
+    # Add fallback for currencies without rates
+    conversion_expression = case(
+        *conversion_cases,
+        else_=Transaction.amount  # Fallback
+    )
     
-    total_transactions = db.query(Transaction).count()
-    total_accounts = db.query(Account).count()
-    total_categories = db.query(Category).count()
+    total_balance_converted = db.query(
+        sql_func.sum(conversion_expression)
+    ).scalar() or 0
+    
+    # Count queries remain the same (already optimised)
+    total_transactions = db.query(sql_func.count(Transaction.id)).scalar()
+    total_accounts = db.query(sql_func.count(Account.id)).scalar()
+    total_categories = db.query(sql_func.count(Category.id)).scalar()
     
     return {
         "total_transactions": total_transactions,
