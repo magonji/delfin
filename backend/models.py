@@ -91,17 +91,21 @@ class Transaction(Base):
     id = Column(Integer, primary_key=True, index=True)
     date = Column(DateTime, nullable=False, index=True)
     amount = Column(Float, nullable=False)
-    currency = Column(String, default="GBP", index=True)  # NEW INDEX: agrupación por moneda
+    currency = Column(String, default="GBP", index=True)
     note = Column(Text)
     
-    # Foreign keys - Todos con índices automáticos por las FK
+    # Foreign keys
     account_id = Column(Integer, ForeignKey("accounts.id"), index=True)
     category_id = Column(Integer, ForeignKey("categories.id"), index=True)
     payee_id = Column(Integer, ForeignKey("payees.id"), index=True)
     location_id = Column(Integer, ForeignKey("locations.id"), index=True)
     project_id = Column(Integer, ForeignKey("projects.id"), index=True)
     
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)  # NEW INDEX: ordenación
+    # NEW: Cached balance columns
+    account_balance_after = Column(Float, nullable=True, index=True)  # Balance of specific account after transaction
+    total_balance_after = Column(Float, nullable=True, index=True)    # Total balance (all accounts) after transaction
+    
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
@@ -111,21 +115,12 @@ class Transaction(Base):
     location = relationship("Location", back_populates="transactions")
     project = relationship("Project", back_populates="transactions")
     
-    # COMPOSITE INDICES - Críticos para rendimiento
+    # Composite indices
     __table_args__ = (
-        # Índice compuesto para consultas por cuenta ordenadas por fecha
         Index('idx_transaction_account_date', 'account_id', 'date'),
-        
-        # Índice compuesto para análisis de moneda por fecha
         Index('idx_transaction_currency_date', 'currency', 'date'),
-        
-        # Índice compuesto para consultas de fecha con suma de amounts
         Index('idx_transaction_date_amount', 'date', 'amount'),
-        
-        # Índice compuesto para filtros por categoría y fecha
         Index('idx_transaction_category_date', 'category_id', 'date'),
-        
-        # Índice compuesto para filtros por payee y fecha
         Index('idx_transaction_payee_date', 'payee_id', 'date'),
     )
 

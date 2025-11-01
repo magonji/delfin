@@ -73,11 +73,12 @@ class TransactionBase(BaseModel):
 class TransactionCreate(TransactionBase):
     pass
 
-
 class TransactionResponse(TransactionBase):
     id: int
     created_at: datetime
     updated_at: datetime
+    account_balance_after: Optional[float] = None  # NEW
+    total_balance_after: Optional[float] = None    # NEW
     
     class Config:
         from_attributes = True

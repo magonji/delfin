@@ -8,6 +8,7 @@ from backend.database import get_db, engine
 from backend import models, schemas
 from backend.models import Account, Category, Payee, Location, Project, Transaction, ExchangeRate
 from backend.schemas import ExchangeRateResponse
+from backend.balance_calculator import recalculate_balances_from_transaction, initialise_all_balances
 from sqlalchemy import func
 
 # Create tables if they don't exist
@@ -366,6 +367,8 @@ def get_transactions(
             "project_id": t.project_id,
             "created_at": t.created_at,
             "updated_at": t.updated_at,
+            "account_balance_after": t.account_balance_after,
+            "total_balance_after": t.total_balance_after,
             "account_name": t.account.name if t.account else None,
             "category_name": t.category.name if t.category else None,
             "payee_name": t.payee.name if t.payee else None,
@@ -383,11 +386,15 @@ def create_transaction(
     db: Session = Depends(get_db)
 ):
     """
-    Create a new transaction.
+    Create a new transaction and recalculate balances.
     """
     db_transaction = models.Transaction(**transaction.dict())
     db.add(db_transaction)
-    db.commit()
+    db.flush()  # Get the ID without committing
+    
+    # Recalculate balances from this transaction onwards
+    recalculate_balances_from_transaction(db, db_transaction.id)
+    
     db.refresh(db_transaction)
     return db_transaction
 
@@ -491,6 +498,8 @@ def get_transaction(
         "project_id": transaction.project_id,
         "created_at": transaction.created_at,
         "updated_at": transaction.updated_at,
+        "account_balance_after": transaction.account_balance_after,
+        "total_balance_after": transaction.total_balance_after,
         "account_name": transaction.account.name if transaction.account else None,
         "category_name": transaction.category.name if transaction.category else None,
         "payee_name": transaction.payee.name if transaction.payee else None,
@@ -505,21 +514,42 @@ def update_transaction(
     db: Session = Depends(get_db)
 ):
     """
-    Update an existing transaction.
+    Update an existing transaction and recalculate balances.
     """
-    db_transaction = db.query(models.Transaction).filter(models.Transaction.id == transaction_id).first()
+    db_transaction = db.query(models.Transaction).filter(
+        models.Transaction.id == transaction_id
+    ).first()
     
     if not db_transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    old_date = db_transaction.date
+    old_account_id = db_transaction.account_id
     
     # Update fields
     for key, value in transaction.dict().items():
         setattr(db_transaction, key, value)
     
     db_transaction.updated_at = datetime.utcnow()
-    db.commit()
-    db.refresh(db_transaction)
+    db.flush()
     
+    # Determine which accounts are affected
+    affected_accounts = list(set([old_account_id, db_transaction.account_id]))
+    
+    # Recalculate from the earlier of old_date or new date
+    earliest_date = min(old_date, db_transaction.date)
+    earliest_transaction = db.query(models.Transaction).filter(
+        models.Transaction.date == earliest_date
+    ).order_by(models.Transaction.id.asc()).first()
+    
+    if earliest_transaction:
+        recalculate_balances_from_transaction(
+            db, 
+            earliest_transaction.id,
+            affected_accounts
+        )
+    
+    db.refresh(db_transaction)
     return db_transaction
 
 
@@ -529,16 +559,35 @@ def delete_transaction(
     db: Session = Depends(get_db)
 ):
     """
-    Delete a transaction.
+    Delete a transaction and recalculate balances.
     """
-    db_transaction = db.query(models.Transaction).filter(models.Transaction.id == transaction_id).first()
+    db_transaction = db.query(models.Transaction).filter(
+        models.Transaction.id == transaction_id
+    ).first()
     
     if not db_transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
     
-    db.delete(db_transaction)
-    db.commit()
+    transaction_date = db_transaction.date
+    account_id = db_transaction.account_id
     
+    # Delete the transaction
+    db.delete(db_transaction)
+    db.flush()
+    
+    # Find the next transaction after the deleted one
+    next_transaction = db.query(models.Transaction).filter(
+        models.Transaction.date >= transaction_date,
+        models.Transaction.account_id == account_id
+    ).order_by(
+        models.Transaction.date.asc(), 
+        models.Transaction.id.asc()
+    ).first()
+    
+    if next_transaction:
+        recalculate_balances_from_transaction(db, next_transaction.id, [account_id])
+    
+    db.commit()
     return {"message": "Transaction deleted successfully"}
 
 
@@ -558,12 +607,16 @@ def create_transfer(
     db: Session = Depends(get_db)
 ):
     """
-    Create a transfer between two accounts.
+    Create a transfer between two accounts and recalculate balances.
     Creates two transactions: one negative (out) and one positive (in).
     """
     # Get Transfer locations
-    transfer_out_loc = db.query(models.Location).filter(models.Location.name == "Transfer Out").first()
-    transfer_in_loc = db.query(models.Location).filter(models.Location.name == "Transfer In").first()
+    transfer_out_loc = db.query(models.Location).filter(
+        models.Location.name == "Transfer Out"
+    ).first()
+    transfer_in_loc = db.query(models.Location).filter(
+        models.Location.name == "Transfer In"
+    ).first()
     
     if not transfer_out_loc:
         transfer_out_loc = models.Location(name="Transfer Out")
@@ -576,8 +629,12 @@ def create_transfer(
         db.flush()
     
     # Get accounts to determine currencies
-    from_account = db.query(models.Account).filter(models.Account.id == transfer.from_account_id).first()
-    to_account = db.query(models.Account).filter(models.Account.id == transfer.to_account_id).first()
+    from_account = db.query(models.Account).filter(
+        models.Account.id == transfer.from_account_id
+    ).first()
+    to_account = db.query(models.Account).filter(
+        models.Account.id == transfer.to_account_id
+    ).first()
     
     if not from_account or not to_account:
         raise HTTPException(status_code=404, detail="Account not found")
@@ -595,6 +652,7 @@ def create_transfer(
         note=transfer.note
     )
     db.add(transaction_out)
+    db.flush()
     
     # Create incoming transaction
     transaction_in = models.Transaction(
@@ -606,8 +664,17 @@ def create_transfer(
         note=transfer.note
     )
     db.add(transaction_in)
+    db.flush()
     
-    db.commit()
+    # Recalculate balances for both accounts
+    # Use the earlier transaction ID to start recalculation
+    earlier_transaction_id = min(transaction_out.id, transaction_in.id)
+    recalculate_balances_from_transaction(
+        db,
+        earlier_transaction_id,
+        [transfer.from_account_id, transfer.to_account_id]
+    )
+    
     db.refresh(transaction_out)
     db.refresh(transaction_in)
     
@@ -705,7 +772,7 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
     """
     from sqlalchemy import func as sql_func, case
     
-    # Get latest exchange rates (esta parte está bien)
+    # Get latest exchange rates
     subquery = db.query(
         ExchangeRate.currency,
         sql_func.max(ExchangeRate.date).label('max_date')
@@ -761,6 +828,24 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
         "base_currency": base_currency,
         "rates_available": len(rates_dict) > 0
     }
+
+
+# ============================================
+# ADMIN / MAINTENANCE ENDPOINTS
+# ============================================
+
+@app.post("/admin/initialise-balances")
+def initialise_balances(db: Session = Depends(get_db)):
+    """
+    Initialise balance columns for all existing transactions.
+    This should be run once after migration.
+    """
+    try:
+        initialise_all_balances(db)
+        return {"message": "Balances initialised successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to initialise balances: {str(e)}")
 
 
 @app.get("/")
