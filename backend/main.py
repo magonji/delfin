@@ -19,8 +19,8 @@ from sqlalchemy import func
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
-    title="Financisto Manager API",
-    description="Personal finance management system",
+    title="Delifn API",
+    description="Personal finance management system based in Financisto",
     version="1.0.0"
 )
 
@@ -858,7 +858,7 @@ def root():
     Root endpoint with API information.
     """
     return {
-        "message": "Welcome to Financisto Manager API",
+        "message": "Welcome to Delfin API",
         "docs": "/docs",
         "version": "1.0.0"
     }

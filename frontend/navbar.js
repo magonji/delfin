@@ -4,7 +4,7 @@ function createNavbar() {
     return `
         <nav style="background: white; padding: 15px 30px; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center;">
             <div style="display: flex; gap: 20px; align-items: center;">
-                <h2 style="margin: 0; color: #667eea; font-size: 20px;">💰 Financisto Manager</h2>
+                <h2 style="margin: 0; color: #667eea; font-size: 20px;">🐬 Delfin</h2>
                 <div style="display: flex; gap: 15px;">
                     <a href="index.html" style="text-decoration: none; color: ${currentPage === 'index.html' ? '#667eea' : '#666'}; font-weight: ${currentPage === 'index.html' ? '600' : '400'}; padding: 8px 16px; border-radius: 8px; background: ${currentPage === 'index.html' ? '#f0f4ff' : 'transparent'}; transition: all 0.3s;">
                         📊 Dashboard
