@@ -2,10 +2,6 @@
 
 A personal finance management system built with Python FastAPI and vanilla JavaScript. Import your Financisto data and manage your finances from your computer with a modern web interface.
 
-![Dashboard](https://img.shields.io/badge/Status-Active-success)
-![Python](https://img.shields.io/badge/Python-3.11+-blue)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green)
-
 ## 📋 Features
 
 ### Dashboard
