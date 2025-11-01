@@ -1,8 +1,12 @@
 from fastapi import FastAPI, Depends, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware 
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime, date
+
+import shutil
+import os
 
 from backend.database import get_db, engine
 from backend import models, schemas
@@ -858,3 +862,36 @@ def root():
         "docs": "/docs",
         "version": "1.0.0"
     }
+
+
+@app.post("/admin/backup-database")
+def backup_database():
+    """
+    Create a backup copy of the database and return it as a download.
+    """
+    try:
+        # Source database path
+        source_db = "./data/finance.db"
+        
+        # Check if database exists
+        if not os.path.exists(source_db):
+            raise HTTPException(status_code=404, detail="Database file not found")
+        
+        # Generate timestamp for backup filename
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        backup_filename = f"finance_backup_{timestamp}.db"
+        backup_path = f"./data/{backup_filename}"
+        
+        # Create backup copy
+        shutil.copy2(source_db, backup_path)
+        
+        # Return the file as a download
+        return FileResponse(
+            path=backup_path,
+            filename=backup_filename,
+            media_type='application/octet-stream',
+            background=None  # Keep file after sending
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create backup: {str(e)}")

@@ -290,6 +290,12 @@
                 <div class="tool-title">Export to CSV</div>
                 <div class="tool-description">Export your transactions to CSV format</div>
             </div>
+            
+            <div class="tool-card" onclick="openTool('backup')">
+                <div class="tool-icon">💾</div>
+                <div class="tool-title">Backup Database</div>
+                <div class="tool-description">Download a backup of your database with timestamp</div>
+            </div>
         </div>
     </div>
     
@@ -571,6 +577,10 @@
                 case 'export':
                     await loadExportData();
                     document.getElementById('exportModal').style.display = 'block';
+                    break;
+                case 'backup':
+                    document.getElementById('backupModal').style.display = 'block';
+                    document.getElementById('backupStatus').style.display = 'none';
                     break;
             }
         }
@@ -2520,6 +2530,100 @@
                     showError('Error exporting data: ' + error.message);
                 }
         }
+
+        // Download database backup
+        async function downloadDatabaseBackup() {
+            const statusDiv = document.getElementById('backupStatus');
+            
+            try {
+                statusDiv.style.display = 'block';
+                statusDiv.style.background = '#e3f2fd';
+                statusDiv.style.color = '#1976d2';
+                statusDiv.innerHTML = '⏳ Creating backup...';
+                
+                // Call the backup endpoint
+                const response = await fetch(`${API_URL}/admin/backup-database`, {
+                    method: 'POST'
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to create backup');
+                }
+                
+                // Get the blob from response
+                const blob = await response.blob();
+                
+                // Generate filename with timestamp
+                const now = new Date();
+                const timestamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}-${String(now.getSeconds()).padStart(2, '0')}`;
+                const filename = `finance_backup_${timestamp}.db`;
+                
+                // Create download link
+                const url = window.URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(url);
+                
+                // Show success message
+                statusDiv.style.background = '#d1f2eb';
+                statusDiv.style.color = '#0f5132';
+                statusDiv.innerHTML = `✅ Backup downloaded successfully!<br><small>${filename}</small>`;
+                
+                showSuccess(`Database backup downloaded: ${filename}`);
+                
+                // Close modal after 2 seconds
+                setTimeout(() => {
+                    closeModal('backupModal');
+                }, 2000);
+                
+            } catch (error) {
+                console.error('Error creating backup:', error);
+                statusDiv.style.background = '#f8d7da';
+                statusDiv.style.color = '#842029';
+                statusDiv.innerHTML = '❌ Failed to create backup. Please try again.';
+                showError('Failed to create backup: ' + error.message);
+            }
+        }
     </script>
+    
+    <!-- Backup Modal -->
+    <div id="backupModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>💾 Backup Database</h3>
+                <button class="close-btn" onclick="closeModal('backupModal')">&times;</button>
+            </div>
+            
+            <div style="margin-bottom: 20px;">
+                <p style="color: #666; margin-bottom: 15px;">
+                    Create a backup copy of your finance database. The file will be downloaded with a timestamp in the filename.
+                </p>
+                
+                <div style="background: #f0f4ff; padding: 15px; border-radius: 8px; border-left: 4px solid #667eea; margin-bottom: 20px;">
+                    <strong>📝 Backup Details:</strong>
+                    <ul style="margin: 10px 0 0 20px; color: #666;">
+                        <li>Format: SQLite database (.db)</li>
+                        <li>Includes: All transactions, accounts, categories, and settings</li>
+                        <li>Filename: finance_backup_YYYY-MM-DD_HH-MM-SS.db</li>
+                    </ul>
+                </div>
+
+                <div id="backupStatus" style="display: none; padding: 15px; border-radius: 8px; margin-bottom: 15px;"></div>
+            </div>
+            
+            <div style="display: flex; gap: 10px;">
+                <button onclick="downloadDatabaseBackup()" style="flex: 1;">
+                    💾 Download Backup
+                </button>
+                <button onclick="closeModal('backupModal')" class="secondary" style="flex: 1;">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
