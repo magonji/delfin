@@ -510,7 +510,7 @@
                 document.getElementById('activeLoansSection').style.display = 'none';
                 document.getElementById('completedLoansSection').style.display = 'none';
                 
-                const response = await fetch(`${API_URL}/accounts`);
+                const response = await fetch(`${API_URL}/accounts?include_closed=true`);
                 const accounts = await response.json();
                 
                 // Identify potential debt accounts (loans and credit cards)

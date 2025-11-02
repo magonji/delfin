@@ -607,11 +607,17 @@
         }
         
         async function loadAccounts() {
-            const response = await fetch(`${API_URL}/accounts`);
+            // Load ALL accounts including closed ones, WITH REAL BALANCES
+            const response = await fetch(`${API_URL}/accounts/with-balances?include_closed=true`);
             allAccounts = await response.json();
             
-            // Sort alphabetically by name
-            allAccounts.sort((a, b) => a.name.localeCompare(b.name));
+            // Sort: active accounts first, then by name
+            allAccounts.sort((a, b) => {
+                if (a.is_active !== b.is_active) {
+                    return b.is_active - a.is_active;  // Active (1) before closed (0)
+                }
+                return a.name.localeCompare(b.name);
+            });
         }
         
         async function loadPayees() {
@@ -736,17 +742,31 @@
             const accounts = filtered || allAccounts;
             const list = document.getElementById('accountsList');
             
-            list.innerHTML = accounts.map(acc => `
-                <div class="item-row">
-                    <div class="item-info">
-                        <div class="item-name">${acc.name}</div>
-                        <div class="item-meta">Currency: ${acc.currency} | Type: ${acc.type || 'Regular'}</div>
+            list.innerHTML = accounts.map(acc => {
+                const status_badge = acc.is_active === 1 
+                    ? '<span style="background: #4ade80; color: white; padding: 3px 8px; border-radius: 5px; font-size: 11px; margin-left: 10px;">Active</span>' 
+                    : '<span style="background: #f87171; color: white; padding: 3px 8px; border-radius: 5px; font-size: 11px; margin-left: 10px;">Closed</span>';
+                
+                const action_button = acc.is_active === 1
+                    ? `<button onclick="closeAccount(${acc.id}, '${acc.name.replace(/'/g, "\\'")}', ${acc.current_balance})" style="background: #f87171; color: white;">🔒 Close Account</button>`
+                    : `<button onclick="openAccount(${acc.id}, '${acc.name.replace(/'/g, "\\'")}')">🔓 Open Account</button>`;
+                
+                return `
+                    <div class="item-row" style="${acc.is_active === 0 ? 'opacity: 0.6;' : ''}">
+                        <div class="item-info">
+                            <div class="item-name">
+                                ${acc.name}
+                                ${status_badge}
+                            </div>
+                            <div class="item-meta">Currency: ${acc.currency} | Type: ${acc.type || 'Regular'} | Balance: ${acc.current_balance.toFixed(2)}</div>
+                        </div>
+                        <div class="item-actions">
+                            <button onclick="editItem('account', ${acc.id})">✏️ Edit</button>
+                            ${action_button}
+                        </div>
                     </div>
-                    <div class="item-actions">
-                        <button onclick="editItem('account', ${acc.id})">✏️ Edit</button>
-                    </div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
         }
         
         function displayPayees(filtered = null) {
@@ -1013,6 +1033,62 @@
                     }
                 } else {
                     showError('Failed to update item');
+                }
+            } catch (error) {
+                showError('Error: ' + error.message);
+            }
+        }
+
+        // Close an account
+        async function closeAccount(account_id, account_name, current_balance) {
+            // Check for non-zero balance (accounting for floating point errors)
+            if (Math.abs(current_balance) > 0.01) {
+                showError(`Cannot close account "${account_name}" with non-zero balance: ${current_balance.toFixed(2)}`);
+                return;
+            }
+            
+            if (!confirm(`Are you sure you want to close the account "${account_name}"?\n\nClosed accounts will not appear in dropdowns or the dashboard, but all historical data will be preserved.`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/accounts/${account_id}/close`, {
+                    method: 'PATCH'
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    showSuccess(result.message);
+                    await loadAccounts();
+                    displayAccounts();
+                } else {
+                    const error = await response.json();
+                    showError(error.detail || 'Failed to close account');
+                }
+            } catch (error) {
+                showError('Error: ' + error.message);
+            }
+        }
+
+        // Reopen an account
+        async function openAccount(account_id, account_name) {
+            if (!confirm(`Are you sure you want to reopen the account "${account_name}"?`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/accounts/${account_id}/open`, {
+                    method: 'PATCH'
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    showSuccess(result.message);
+                    await loadAccounts();
+                    displayAccounts();
+                } else {
+                    const error = await response.json();
+                    showError(error.detail || 'Failed to open account');
                 }
             } catch (error) {
                 showError('Error: ' + error.message);

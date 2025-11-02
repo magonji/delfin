@@ -930,7 +930,8 @@
         async function populateExcludeAccountsDropdown() {
             try {
                 const response = await fetch(`${API_URL}/accounts`);
-                allAccounts = await response.json();
+                const all_accounts_data = await response.json();
+                allAccounts = all_accounts_data.filter(acc => acc.is_active === 1);  // Only active accounts
                 
                 const checkboxList = document.getElementById('accountCheckboxList');
                 checkboxList.innerHTML = '';
@@ -2229,7 +2230,8 @@
         async function loadAccountBalanceTable() {
             try {
                 const response = await fetch(`${API_URL}/accounts`);
-                const accounts = await response.json();
+                const all_accounts_data = await response.json();
+                const accounts = all_accounts_data.filter(acc => acc.is_active === 1);  // Only active accounts for dashboard
                 
                 // Calculate balance for each account
                 const transResponse = await fetch(`${API_URL}/transactions?limit=100000`);

@@ -73,15 +73,17 @@ class TransactionBase(BaseModel):
 class TransactionCreate(TransactionBase):
     pass
 
+
 class TransactionResponse(TransactionBase):
     id: int
     created_at: datetime
     updated_at: datetime
-    account_balance_after: Optional[float] = None  # NEW
-    total_balance_after: Optional[float] = None    # NEW
+    account_balance_after: Optional[float] = None  # Balance after transaction
+    total_balance_after: Optional[float] = None    # Total balance after transaction
     
     class Config:
         from_attributes = True
+
 
 class LocationBase(BaseModel):
     name: str
@@ -124,6 +126,18 @@ class TransactionWithDetails(TransactionResponse):
     payee_name: Optional[str] = None
     location_name: Optional[str] = None
     project_name: Optional[str] = None
+
+
+class TransferCreate(BaseModel):
+    """
+    Schema for creating a transfer between two accounts.
+    """
+    date: datetime
+    from_account_id: int
+    to_account_id: int
+    from_amount: float
+    to_amount: Optional[float] = None  # If not specified, uses from_amount
+    note: Optional[str] = None
 
 
 class ExchangeRateBase(BaseModel):

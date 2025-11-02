@@ -876,7 +876,8 @@
         async function loadAccounts() {
             try {
                 const response = await fetch(`${API_URL}/accounts`);
-                const accounts = await response.json();
+                const all_accounts_data = await response.json();
+                const accounts = all_accounts_data.filter(acc => acc.is_active === 1);
                 const select = document.getElementById('account');
                 accounts.forEach(account => {
                     const option = document.createElement('option');
@@ -1234,7 +1235,8 @@
         async function loadTransferAccounts() {
             try {
                 const response = await fetch(`${API_URL}/accounts`);
-                const accounts = await response.json();
+                const all_accounts_data = await response.json();
+                const accounts = all_accounts_data.filter(acc => acc.is_active === 1);
                 
                 const fromSelect = document.getElementById('fromAccount');
                 const toSelect = document.getElementById('toAccount');
