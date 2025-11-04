@@ -334,6 +334,14 @@
                 <h3>Manage Payees</h3>
                 <button class="close-btn" onclick="closeModal('payeesModal')">&times;</button>
             </div>
+            <div style="margin-top: 20px; padding-top: 20px; border-top: 2px solid #e0e0e0; margin-bottom: 20px; padding-bottom: 20px; border-bottom: 2px solid #e0e0e0;">
+                    <button onclick="updateAllPayeeStatistics(event)" style="width: 100%;">
+                        📊 Update All Payee Statistics
+                    </button>
+                    <p style="font-size: 12px; color: #666; margin-top: 8px; text-align: center;">
+                        Recalculates the most common category, location, and project for each payee based on transaction history
+                    </p>
+            </div>
             <div class="search-box">
                 <input type="text" id="payeeSearch" placeholder="Search payees..." onkeyup="filterPayees()">
             </div>
@@ -408,19 +416,19 @@
             </div>
             
             <div id="uploadSection">
+                <div class="form-group">
+                    <label for="importAccount">Select Account for Import</label>
+                    <select id="importAccount" required>
+                        <option value="">Select account...</option>
+                    </select>
+                </div>
+
                 <div style="border: 2px dashed #667eea; border-radius: 10px; padding: 40px; text-align: center; margin-bottom: 20px; background: #f8f9ff;">
                     <div style="font-size: 48px; margin-bottom: 15px;">📄</div>
                     <h4 style="margin-bottom: 10px; color: #333;">Upload your bank statement</h4>
                     <p style="color: #666; margin-bottom: 20px;">Supported format: CSV</p>
                     <input type="file" id="fileInput" accept=".csv" style="display: none;" onchange="handleFileUpload(event)">
                     <button onclick="document.getElementById('fileInput').click()" style="padding: 12px 30px;">Choose File</button>
-                </div>
-                
-                <div class="form-group">
-                    <label for="importAccount">Select Account for Import</label>
-                    <select id="importAccount" required>
-                        <option value="">Select account...</option>
-                    </select>
                 </div>
             </div>
             
@@ -1655,14 +1663,14 @@
             
             if (!payeeName) return;
             
-            // Find or suggest payee
+            // Find payee
             let payee = allPayees.find(p => p.name.toLowerCase() === payeeName.toLowerCase());
             
             if (payee) {
                 parsedTransactions[index].payee_id = payee.id;
                 
-                // Auto-fill category, location, project based on most common for this payee
-                await autoFillFromPayee(index, payee.id);
+                // Use pre-calculated most common values
+                autoFillFromPayeeStats(index, payee);
                 
                 // Store suggestion for similar descriptions
                 payeeSuggestions[parsedTransactions[index].description] = payeeName;
@@ -1674,87 +1682,161 @@
             }
         }
 
-        // Auto-fill fields based on most common values for this payee
-        async function autoFillFromPayee(index, payeeId) {
+        // Auto-fill fields based on pre-calculated payee statistics
+        function autoFillFromPayeeStats(index, payee) {
             try {
-                // Get all transactions for this payee
-                const response = await fetch(`${API_URL}/transactions?limit=100000`);
-                const allTransactions = await response.json();
-                
-                const payeeTransactions = allTransactions.filter(t => t.payee_id === payeeId);
-                
-                if (payeeTransactions.length === 0) return;
-                
-                // Find most common category
-                const categoryCounts = {};
-                const locationCounts = {};
-                const projectCounts = {};
-                
-                payeeTransactions.forEach(t => {
-                    if (t.category_id) {
-                        categoryCounts[t.category_id] = (categoryCounts[t.category_id] || 0) + 1;
-                    }
-                    if (t.location_id) {
-                        locationCounts[t.location_id] = (locationCounts[t.location_id] || 0) + 1;
-                    }
-                    if (t.project_id) {
-                        projectCounts[t.project_id] = (projectCounts[t.project_id] || 0) + 1;
-                    }
-                });
-                
-                // Get most common values
-                const mostCommonCategory = Object.keys(categoryCounts).reduce((a, b) => 
-                    categoryCounts[a] > categoryCounts[b] ? a : b, null);
-                const mostCommonLocation = Object.keys(locationCounts).reduce((a, b) => 
-                    locationCounts[a] > locationCounts[b] ? a : b, null);
-                const mostCommonProject = Object.keys(projectCounts).reduce((a, b) => 
-                    projectCounts[a] > projectCounts[b] ? a : b, null);
-                
-                // Set the values
-                if (mostCommonCategory) {
-                    const category = allCategories.find(c => c.id === parseInt(mostCommonCategory));
+                // Use the pre-calculated most common category
+                if (payee.most_common_category_id) {
+                    const category = allCategories.find(c => c.id === payee.most_common_category_id);
                     if (category && category.parent) {
                         document.getElementById(`parentCategory_${index}`).value = category.parent;
                         handleParentCategoryChange(index);
                         setTimeout(() => {
-                            document.getElementById(`category_${index}`).value = mostCommonCategory;
-                            parsedTransactions[index].category_id = parseInt(mostCommonCategory);
-                        }, 100);
+                            document.getElementById(`category_${index}`).value = payee.most_common_category_id;
+                            parsedTransactions[index].category_id = payee.most_common_category_id;
+                        }, 50);
                     }
                 }
                 
-                if (mostCommonLocation) {
-                    document.getElementById(`location_${index}`).value = mostCommonLocation;
-                    parsedTransactions[index].location_id = parseInt(mostCommonLocation);
+                // Use the pre-calculated most common location
+                if (payee.most_common_location_id) {
+                    document.getElementById(`location_${index}`).value = payee.most_common_location_id;
+                    parsedTransactions[index].location_id = payee.most_common_location_id;
                 }
                 
-                if (mostCommonProject) {
-                    document.getElementById(`project_${index}`).value = mostCommonProject;
-                    parsedTransactions[index].project_id = parseInt(mostCommonProject);
+                // Use the pre-calculated most common project
+                if (payee.most_common_project_id) {
+                    document.getElementById(`project_${index}`).value = payee.most_common_project_id;
+                    parsedTransactions[index].project_id = payee.most_common_project_id;
                 }
                 
             } catch (error) {
-                console.error('Error auto-filling from payee:', error);
+                console.error('Error auto-filling from payee statistics:', error);
+            }
+        }
+
+        // Añade esta función después de las otras funciones de payees
+        async function updateAllPayeeStatistics(event) {
+            console.log('updateAllPayeeStatistics called');
+            
+            if (!confirm('This will recalculate the most common category, location, and project for all payees based on their transaction history. Continue?')) {
+                return;
+            }
+            
+            console.log('User confirmed, proceeding...');
+            
+            const statusDiv = document.createElement('div');
+            statusDiv.style.cssText = 'background: #e3f2fd; color: #1976d2; padding: 15px; border-radius: 8px; margin: 15px 0;';
+            statusDiv.innerHTML = '⏳ Updating payee statistics...';
+            
+            // Find the modal content using the event (works even if modal selector fails)
+            let modalContent = null;
+            if (event && event.target) {
+                modalContent = event.target.closest('.modal-content');
+                console.log('Found modal via event.target.closest');
+            }
+            
+            // Fallback to querySelector
+            if (!modalContent) {
+                modalContent = document.querySelector('#payeesModal .modal-content');
+                console.log('Found modal via querySelector');
+            }
+            
+            if (!modalContent) {
+                console.error('Modal content not found!');
+                alert('Error: Modal not found. Please report this bug.');
+                return;
+            }
+            
+            console.log('Modal found, inserting status div');
+            
+            // Insert after modal header
+            const modalHeader = modalContent.querySelector('.modal-header');
+            if (modalHeader && modalHeader.nextSibling) {
+                modalContent.insertBefore(statusDiv, modalHeader.nextSibling);
+            } else {
+                modalContent.insertBefore(statusDiv, modalContent.firstChild);
+            }
+            
+            try {
+                console.log('Calling API endpoint:', `${API_URL}/payees/recalculate-all-stats`);
+                
+                const response = await fetch(`${API_URL}/payees/recalculate-all-stats`, {
+                    method: 'POST'
+                });
+                
+                console.log('API response status:', response.status);
+                
+                if (!response.ok) {
+                    throw new Error('Failed to update statistics');
+                }
+                
+                const result = await response.json();
+                console.log('API result:', result);
+                
+                statusDiv.style.background = '#d1f2eb';
+                statusDiv.style.color = '#0f5132';
+                statusDiv.innerHTML = `✅ Statistics updated successfully!<br><small>Updated ${result.updated} of ${result.total_payees} payees</small>`;
+                
+                showSuccess(`Updated statistics for ${result.updated} payees`);
+                
+                // Refresh payees list by reloading from API
+                const payeesResponse = await fetch(`${API_URL}/payees`);
+                allPayees = await payeesResponse.json();
+                console.log('Reloaded payees:', allPayees.length);
+                
+                setTimeout(() => {
+                    statusDiv.remove();
+                }, 3000);
+                
+            } catch (error) {
+                console.error('Error updating payee statistics:', error);
+                statusDiv.style.background = '#f8d7da';
+                statusDiv.style.color = '#842029';
+                statusDiv.innerHTML = '❌ Failed to update statistics. Please try again.';
+                showError('Failed to update statistics: ' + error.message);
             }
         }
 
         // Apply payee suggestion to other transactions with same description
         function applySuggestionToSimilar(sourceIndex) {
             const sourceDescription = parsedTransactions[sourceIndex].description;
-            const suggestedPayee = payeeSuggestions[sourceDescription];
+            const sourcePayee = document.getElementById(`payee_${sourceIndex}`).value;
             
-            if (!suggestedPayee) return;
+            if (!sourcePayee || !sourceDescription) return;
+            
+            let updatedCount = 0;
             
             // Apply to all other transactions with same description
             parsedTransactions.forEach((trans, index) => {
                 if (index !== sourceIndex && trans.description === sourceDescription) {
                     const payeeInput = document.getElementById(`payee_${index}`);
-                    if (!payeeInput.value) { // Only if not already filled
-                        payeeInput.value = suggestedPayee;
-                        handlePayeeChange(index);
-                    }
+                    const row = payeeInput.closest('tr');
+                    
+                    // Update the payee value
+                    payeeInput.value = sourcePayee;
+                    payeeSuggestions[sourceDescription] = sourcePayee;
+                    
+                    // Add visual feedback
+                    row.style.transition = 'background-color 0.3s';
+                    row.style.backgroundColor = '#d1f2eb';
+                    
+                    // Trigger the change handler
+                    handlePayeeChange(index);
+                    
+                    // Remove highlight after a short delay
+                    setTimeout(() => {
+                        row.style.backgroundColor = '';
+                    }, 1000);
+                    
+                    updatedCount++;
                 }
             });
+            
+            // Show a message if multiple rows were updated
+            if (updatedCount > 0) {
+                showSuccess(`Updated payee for ${updatedCount + 1} transaction(s) with the same description`);
+            }
         }
 
         // Handle parent category change

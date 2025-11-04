@@ -650,6 +650,7 @@
       
         // Global variables
         let allCategories = [];
+        let allPayees = []; // Store payees with their pre-calculated statistics
         let regularTransactions = [];
         let transferTransactions = [];
 
@@ -1091,6 +1092,10 @@
             try {
                 const response = await fetch(`${API_URL}/payees`);
                 const payees = await response.json();
+                
+                // Store payees globally with their pre-calculated statistics
+                allPayees = payees;
+                
                 const datalist = document.getElementById('payeeList');
                 payees.forEach(payee => {
                     const option = document.createElement('option');
@@ -1392,52 +1397,27 @@
         
         // Function to finde the most common values of a payee
         function getMostCommonValuesForPayee(payeeName) {
-            if (!payeeName || !regularTransactions.length) return null;
+            if (!payeeName || !allPayees.length) return null;
             
-            // filter transactions of a payee
-            const payeeTransactions = regularTransactions.filter(t => 
-                t.payee_name && t.payee_name.toLowerCase() === payeeName.toLowerCase()
+            // Find the payee in our pre-loaded list with statistics
+            const payee = allPayees.find(p => 
+                p.name.toLowerCase() === payeeName.toLowerCase()
             );
             
-            if (payeeTransactions.length === 0) return null;
+            if (!payee) return null;
             
-            // Count the frecuency of each value
-            const categoryCounts = {};
-            const locationCounts = {};
-            const accountCounts = {};
-            const projectCounts = {};
+            // Count transactions for this payee (for display purposes)
+            const payeeTransactionCount = regularTransactions.filter(t => 
+                t.payee_name && t.payee_name.toLowerCase() === payeeName.toLowerCase()
+            ).length;
             
-            payeeTransactions.forEach(t => {
-                // count categories
-                if (t.category_id) {
-                    categoryCounts[t.category_id] = (categoryCounts[t.category_id] || 0) + 1;
-                }
-                // count locations
-                if (t.location_id) {
-                    locationCounts[t.location_id] = (locationCounts[t.location_id] || 0) + 1;
-                }
-                // count accounts
-                if (t.account_id) {
-                    accountCounts[t.account_id] = (accountCounts[t.account_id] || 0) + 1;
-                }
-                // Count projects
-                if (t.project_id) {
-                    projectCounts[t.project_id] = (projectCounts[t.project_id] || 0) + 1;
-                }
-            });
-            
-            // Find the most common values
-            const getMostCommon = (counts) => {
-                if (Object.keys(counts).length === 0) return null;
-                return parseInt(Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0]);
-            };
-            
+            // Return the pre-calculated statistics
             return {
-                categoryId: getMostCommon(categoryCounts),
-                locationId: getMostCommon(locationCounts),
-                accountId: getMostCommon(accountCounts),
-                projectId: getMostCommon(projectCounts),
-                transactionCount: payeeTransactions.length
+                categoryId: payee.most_common_category_id,
+                locationId: payee.most_common_location_id,
+                accountId: null, // We don't track most common account
+                projectId: payee.most_common_project_id,
+                transactionCount: payeeTransactionCount
             };
         }
         

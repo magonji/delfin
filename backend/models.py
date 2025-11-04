@@ -47,10 +47,20 @@ class Payee(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, nullable=False, index=True)
+    
+    # Most common associations (pre-calculated for performance)
+    most_common_category_id = Column(Integer, ForeignKey("categories.id"), nullable=True, index=True)
+    most_common_location_id = Column(Integer, ForeignKey("locations.id"), nullable=True, index=True)
+    most_common_project_id = Column(Integer, ForeignKey("projects.id"), nullable=True, index=True)
+    
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=True)
     
     # Relationships
-    transactions = relationship("Transaction", back_populates="payee")
+    transactions = relationship("Transaction", back_populates="payee", foreign_keys="Transaction.payee_id")
+    most_common_category = relationship("Category", foreign_keys=[most_common_category_id])
+    most_common_location = relationship("Location", foreign_keys=[most_common_location_id])
+    most_common_project = relationship("Project", foreign_keys=[most_common_project_id])
 
 
 class Location(Base):

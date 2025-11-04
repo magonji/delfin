@@ -52,10 +52,23 @@ class PayeeCreate(PayeeBase):
 
 class PayeeResponse(PayeeBase):
     id: int
+    most_common_category_id: Optional[int] = None
+    most_common_location_id: Optional[int] = None
+    most_common_project_id: Optional[int] = None
     created_at: datetime
+    updated_at: datetime
     
     class Config:
         from_attributes = True
+
+
+class PayeeWithDetails(PayeeResponse):
+    """
+    Payee response with related entity names.
+    """
+    most_common_category_name: Optional[str] = None
+    most_common_location_name: Optional[str] = None
+    most_common_project_name: Optional[str] = None
 
 
 class TransactionBase(BaseModel):

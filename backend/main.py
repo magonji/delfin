@@ -150,17 +150,30 @@ def create_category(
 # PAYEES ENDPOINTS
 # ============================================
 
-@app.get("/payees", response_model=List[schemas.PayeeResponse])
-def get_payees(
-    skip: int = 0,
-    limit: int = 1000,
-    db: Session = Depends(get_db)
-):
+@app.get("/payees", response_model=List[schemas.PayeeWithDetails])
+def get_payees(db: Session = Depends(get_db)):
     """
-    Retrieve all payees.
+    Retrieve all payees with their most common associations.
     """
-    payees = db.query(models.Payee).offset(skip).limit(limit).all()
-    return payees
+    payees = db.query(Payee).all()
+    
+    result = []
+    for payee in payees:
+        payee_dict = {
+            "id": payee.id,
+            "name": payee.name,
+            "most_common_category_id": payee.most_common_category_id,
+            "most_common_location_id": payee.most_common_location_id,
+            "most_common_project_id": payee.most_common_project_id,
+            "created_at": payee.created_at,
+            "updated_at": payee.updated_at,
+            "most_common_category_name": payee.most_common_category.name if payee.most_common_category else None,
+            "most_common_location_name": payee.most_common_location.name if payee.most_common_location else None,
+            "most_common_project_name": payee.most_common_project.name if payee.most_common_project else None,
+        }
+        result.append(payee_dict)
+    
+    return result
 
 @app.post("/payees", response_model=schemas.PayeeResponse)
 def create_payee(
@@ -181,6 +194,118 @@ def create_payee(
     db.refresh(db_payee)
     return db_payee
 
+@app.post("/payees/{payee_id}/recalculate-stats")
+# Add these endpoints after the create_payee endpoint (after line 182 in main.py)
+
+@app.post("/payees/{payee_id}/recalculate-stats")
+def recalculate_payee_stats(payee_id: int, db: Session = Depends(get_db)):
+    """
+    Recalculate most common category, location, and project for a specific payee.
+    """
+    payee = db.query(Payee).filter(Payee.id == payee_id).first()
+    if not payee:
+        raise HTTPException(status_code=404, detail="Payee not found")
+    
+    # Get all transactions for this payee
+    transactions = db.query(Transaction).filter(Transaction.payee_id == payee_id).all()
+    
+    if not transactions:
+        # Reset to None if no transactions
+        payee.most_common_category_id = None
+        payee.most_common_location_id = None
+        payee.most_common_project_id = None
+        payee.updated_at = datetime.utcnow()
+        db.commit()
+        return {"message": "Payee statistics reset (no transactions found)"}
+    
+    # Count occurrences
+    category_counts = {}
+    location_counts = {}
+    project_counts = {}
+    
+    for trans in transactions:
+        if trans.category_id:
+            category_counts[trans.category_id] = category_counts.get(trans.category_id, 0) + 1
+        if trans.location_id:
+            location_counts[trans.location_id] = location_counts.get(trans.location_id, 0) + 1
+        if trans.project_id:
+            project_counts[trans.project_id] = project_counts.get(trans.project_id, 0) + 1
+    
+    # Get most common values
+    payee.most_common_category_id = max(category_counts, key=category_counts.get) if category_counts else None
+    payee.most_common_location_id = max(location_counts, key=location_counts.get) if location_counts else None
+    payee.most_common_project_id = max(project_counts, key=project_counts.get) if project_counts else None
+    payee.updated_at = datetime.utcnow()
+    
+    db.commit()
+    
+    return {
+        "message": "Payee statistics recalculated successfully",
+        "payee_id": payee_id,
+        "most_common_category_id": payee.most_common_category_id,
+        "most_common_location_id": payee.most_common_location_id,
+        "most_common_project_id": payee.most_common_project_id,
+        "transaction_count": len(transactions)
+    }
+
+
+@app.post("/payees/recalculate-all-stats")
+def recalculate_all_payees_stats(db: Session = Depends(get_db)):
+    """
+    Recalculate statistics for all payees.
+    This can be triggered from the 'Manage Payees' interface.
+    """
+    payees = db.query(Payee).all()
+    
+    updated_count = 0
+    error_count = 0
+    
+    for payee in payees:
+        try:
+            # Get all transactions for this payee
+            transactions = db.query(Transaction).filter(Transaction.payee_id == payee.id).all()
+            
+            if not transactions:
+                payee.most_common_category_id = None
+                payee.most_common_location_id = None
+                payee.most_common_project_id = None
+                payee.updated_at = datetime.utcnow()
+                updated_count += 1
+                continue
+            
+            # Count occurrences
+            category_counts = {}
+            location_counts = {}
+            project_counts = {}
+            
+            for trans in transactions:
+                if trans.category_id:
+                    category_counts[trans.category_id] = category_counts.get(trans.category_id, 0) + 1
+                if trans.location_id:
+                    location_counts[trans.location_id] = location_counts.get(trans.location_id, 0) + 1
+                if trans.project_id:
+                    project_counts[trans.project_id] = project_counts.get(trans.project_id, 0) + 1
+            
+            # Get most common values
+            payee.most_common_category_id = max(category_counts, key=category_counts.get) if category_counts else None
+            payee.most_common_location_id = max(location_counts, key=location_counts.get) if location_counts else None
+            payee.most_common_project_id = max(project_counts, key=project_counts.get) if project_counts else None
+            payee.updated_at = datetime.utcnow()
+            
+            updated_count += 1
+            
+        except Exception as e:
+            print(f"Error updating payee {payee.id}: {str(e)}")
+            error_count += 1
+    
+    db.commit()
+    
+    return {
+        "message": "All payee statistics recalculated",
+        "total_payees": len(payees),
+        "updated": updated_count,
+        "errors": error_count
+    }
 
 # ============================================
 # LOCATIONS ENDPOINTS
