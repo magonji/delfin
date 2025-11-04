@@ -1923,6 +1923,26 @@
                 return;
             }
             
+            // Create progress indicator in the modal
+            const progressDiv = document.createElement('div');
+            progressDiv.id = 'importProgress';
+            progressDiv.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 15px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); z-index: 10000; text-align: center; min-width: 300px;';
+            progressDiv.innerHTML = `
+                <div style="font-size: 48px; margin-bottom: 15px;">⏳</div>
+                <div style="font-size: 18px; font-weight: bold; color: #333; margin-bottom: 10px;">Importing Transactions...</div>
+                <div id="importProgressText" style="font-size: 14px; color: #666;">Processing 0 of ${transactionsToImport.length}</div>
+                <div style="margin-top: 15px; font-size: 12px; color: #999;">Please wait, do not close this window</div>
+            `;
+            document.body.appendChild(progressDiv);
+            
+            // Disable the import button to prevent double-clicks
+            const importButton = event?.target || document.querySelector('button[onclick*="importTransactions"]');
+            if (importButton) {
+                importButton.disabled = true;
+                importButton.style.opacity = '0.5';
+                importButton.style.cursor = 'not-allowed';
+            }
+            
             try {
                 let successCount = 0;
                 let errorCount = 0;
@@ -1932,6 +1952,12 @@
                     const trans = parsedTransactions[i];
                     
                     if (trans.isDuplicate || trans.skip) continue;
+                    
+                    // Update progress
+                    const progressText = document.getElementById('importProgressText');
+                    if (progressText) {
+                        progressText.textContent = `Processing ${successCount + errorCount + 1} of ${transactionsToImport.length}`;
+                    }
                     
                     try {
                         // Get values from form
@@ -2068,6 +2094,20 @@
                     }
                 }
                 
+                // Remove progress indicator
+                const progressDiv = document.getElementById('importProgress');
+                if (progressDiv) {
+                    progressDiv.remove();
+                }
+                
+                // Re-enable import button
+                const importButton = document.querySelector('button[onclick*="importTransactions"]');
+                if (importButton) {
+                    importButton.disabled = false;
+                    importButton.style.opacity = '1';
+                    importButton.style.cursor = 'pointer';
+                }
+                
                 // Show results
                 let message = '';
                 if (successCount > 0) {
@@ -2087,8 +2127,10 @@
                 if (successCount > 0 && errorCount === 0) {
                     showSuccess(message);
                     // Close modal and reset
-                    closeModal('importModal');
-                    cancelImport();
+                    setTimeout(() => {
+                        closeModal('importModal');
+                        cancelImport();
+                    }, 1500); // Small delay so user sees the success message
                 } else if (successCount > 0 && errorCount > 0) {
                     showError(message);
                     // Don't close modal so user can review
@@ -2098,6 +2140,21 @@
                 
             } catch (error) {
                 console.error('Error importing transactions:', error);
+                
+                // Remove progress indicator on error
+                const progressDiv = document.getElementById('importProgress');
+                if (progressDiv) {
+                    progressDiv.remove();
+                }
+                
+                // Re-enable import button
+                const importButton = document.querySelector('button[onclick*="importTransactions"]');
+                if (importButton) {
+                    importButton.disabled = false;
+                    importButton.style.opacity = '1';
+                    importButton.style.cursor = 'pointer';
+                }
+                
                 showError('Error importing transactions: ' + error.message + '\n\nCheck browser console (F12) for details');
             }
         }

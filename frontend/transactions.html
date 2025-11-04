@@ -613,7 +613,10 @@
                             </select>
                         </div>
                     </div>
-                    <button onclick="applyBulkEdit()" style="margin-top: 15px; width: 100%;">✅ Apply Changes to Selected Transactions</button>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px;">
+                        <button onclick="applyBulkEdit()" style="width: 100%;">✅ Apply Changes</button>
+                        <button onclick="bulkDeleteTransactions()" class="danger" style="width: 100%;">🗑️ Delete Selected</button>
+                    </div>
                 </div>
                 
                 <!-- Transfer Edit Fields -->
@@ -639,7 +642,10 @@
                         </div>
                     </div>
                     <div id="transferCurrencyInfo" style="color: #10b981; font-size: 12px; margin-top: 10px; display: none;"></div>
-                    <button onclick="applyBulkTransferEdit()" style="margin-top: 15px; width: 100%;">✅ Apply Changes to Selected Transfers</button>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px;">
+                        <button onclick="applyBulkTransferEdit()" style="width: 100%;">✅ Apply Changes</button>
+                        <button onclick="bulkDeleteTransfers()" class="danger" style="width: 100%;">🗑️ Delete Selected</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -3260,6 +3266,160 @@
             
             enableAllItems();
             updateBulkEditBar();
+        }
+
+        // Bulk delete transactions
+        async function bulkDeleteTransactions() {
+            if (selectedTransactions.length === 0) {
+                showError('No transactions selected');
+                return;
+            }
+            
+            const count = selectedTransactions.length;
+            const confirmMessage = `Are you sure you want to delete ${count} transaction${count > 1 ? 's' : ''}?\n\nThis action cannot be undone!`;
+            
+            if (!confirm(confirmMessage)) {
+                return;
+            }
+            
+            // Double confirmation for safety
+            if (!confirm(`FINAL CONFIRMATION: Delete ${count} transaction${count > 1 ? 's' : ''} permanently?`)) {
+                return;
+            }
+            
+            try {
+                let successCount = 0;
+                let errorCount = 0;
+                
+                // Show progress
+                const progressDiv = document.createElement('div');
+                progressDiv.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 15px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); z-index: 10000; text-align: center; min-width: 300px;';
+                progressDiv.innerHTML = `
+                    <div style="font-size: 48px; margin-bottom: 15px;">🗑️</div>
+                    <div style="font-size: 18px; font-weight: bold; color: #333; margin-bottom: 10px;">Deleting Transactions...</div>
+                    <div id="deleteProgressText" style="font-size: 14px; color: #666;">Deleted 0 of ${count}</div>
+                `;
+                document.body.appendChild(progressDiv);
+                
+                for (const transactionId of selectedTransactions) {
+                    try {
+                        const response = await fetch(`${API_URL}/transactions/${transactionId}`, {
+                            method: 'DELETE'
+                        });
+                        
+                        if (response.ok) {
+                            successCount++;
+                            // Update progress
+                            const progressText = document.getElementById('deleteProgressText');
+                            if (progressText) {
+                                progressText.textContent = `Deleted ${successCount} of ${count}`;
+                            }
+                        } else {
+                            errorCount++;
+                        }
+                    } catch (error) {
+                        console.error(`Error deleting transaction ${transactionId}:`, error);
+                        errorCount++;
+                    }
+                }
+                
+                // Remove progress indicator
+                progressDiv.remove();
+                
+                // Show results
+                if (successCount > 0) {
+                    showSuccess(`Successfully deleted ${successCount} transaction${successCount > 1 ? 's' : ''}!`);
+                }
+                if (errorCount > 0) {
+                    showError(`Failed to delete ${errorCount} transaction${errorCount > 1 ? 's' : ''}`);
+                }
+                
+                // Cancel bulk edit and reload
+                cancelBulkEdit();
+                await reloadTransactionsWithFilters();
+                
+            } catch (error) {
+                console.error('Error during bulk delete:', error);
+                showError('Error deleting transactions: ' + error.message);
+            }
+        }
+        
+        // Bulk delete transfers
+        async function bulkDeleteTransfers() {
+            if (selectedTransfers.length === 0) {
+                showError('No transfers selected');
+                return;
+            }
+            
+            const count = selectedTransfers.length;
+            const confirmMessage = `Are you sure you want to delete ${count} transfer${count > 1 ? 's' : ''}?\n\nThis will delete both the outgoing and incoming transactions.\n\nThis action cannot be undone!`;
+            
+            if (!confirm(confirmMessage)) {
+                return;
+            }
+            
+            // Double confirmation for safety
+            if (!confirm(`FINAL CONFIRMATION: Delete ${count} transfer${count > 1 ? 's' : ''} permanently?`)) {
+                return;
+            }
+            
+            try {
+                let successCount = 0;
+                let errorCount = 0;
+                
+                // Show progress
+                const progressDiv = document.createElement('div');
+                progressDiv.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 15px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); z-index: 10000; text-align: center; min-width: 300px;';
+                progressDiv.innerHTML = `
+                    <div style="font-size: 48px; margin-bottom: 15px;">🗑️</div>
+                    <div style="font-size: 18px; font-weight: bold; color: #333; margin-bottom: 10px;">Deleting Transfers...</div>
+                    <div id="deleteProgressText" style="font-size: 14px; color: #666;">Deleted 0 of ${count}</div>
+                `;
+                document.body.appendChild(progressDiv);
+                
+                for (const transferId of selectedTransfers) {
+                    const [outId, inId] = transferId.split('_');
+                    
+                    try {
+                        // Delete both transactions that make up the transfer
+                        const response1 = await fetch(`${API_URL}/transactions/${outId}`, { method: 'DELETE' });
+                        const response2 = await fetch(`${API_URL}/transactions/${inId}`, { method: 'DELETE' });
+                        
+                        if (response1.ok && response2.ok) {
+                            successCount++;
+                            // Update progress
+                            const progressText = document.getElementById('deleteProgressText');
+                            if (progressText) {
+                                progressText.textContent = `Deleted ${successCount} of ${count}`;
+                            }
+                        } else {
+                            errorCount++;
+                        }
+                    } catch (error) {
+                        console.error(`Error deleting transfer ${transferId}:`, error);
+                        errorCount++;
+                    }
+                }
+                
+                // Remove progress indicator
+                progressDiv.remove();
+                
+                // Show results
+                if (successCount > 0) {
+                    showSuccess(`Successfully deleted ${successCount} transfer${successCount > 1 ? 's' : ''}!`);
+                }
+                if (errorCount > 0) {
+                    showError(`Failed to delete ${errorCount} transfer${errorCount > 1 ? 's' : ''}`);
+                }
+                
+                // Cancel bulk edit and reload
+                cancelBulkEdit();
+                await reloadTransactionsWithFilters();
+                
+            } catch (error) {
+                console.error('Error during bulk delete:', error);
+                showError('Error deleting transfers: ' + error.message);
+            }
         }
     </script>
     
