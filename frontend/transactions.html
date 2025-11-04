@@ -2189,7 +2189,7 @@
                     note: document.getElementById('transferNote').value || null
                 };
                 
-                const response = await fetch(`${API_URL}/transactions/transfer`, {
+                const response = await fetch(`${API_URL}/transactions/transfers`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(transfer)

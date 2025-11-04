@@ -110,34 +110,42 @@ delfin/
 ### Installation
 
 1. **Clone the repository**
+
    ```bash
-   git clone https://github.com/yourusername/delfin.git
+   git clone https://github.com/magonji/delfin.git
    cd delfin
    ```
 
 2. **Install dependencies**
+
    ```bash
    pip install fastapi uvicorn sqlalchemy python-multipart pandas questionary requests
    ```
 
 3. **Create the database tables**
+
    ```bash
    python create_tables.py
    ```
 
 4. **Import your Financisto data (optional)**
+
    ```bash
    python import_financisto_csv.py
    ```
+
    Follow the prompts to select your CSV file.
 
 5. **Update exchange rates**
+
    ```bash
    python update_exchange_rates.py
    ```
+
    This will fetch the latest exchange rates for all currencies in your transactions.
 
 6. **Start the API server**
+
    ```bash
    uvicorn backend.main:app --reload
    ```
@@ -239,11 +247,13 @@ Navigate to `tools.html` to:
 Exchange rates can be updated in two ways:
 
 1. **Manual script execution**:
+
    ```bash
    python update_exchange_rates.py
    ```
 
 2. **Via API** (from the dashboard or any HTTP client):
+
    ```bash
    curl -X POST http://localhost:8000/exchange-rates/update
    ```
