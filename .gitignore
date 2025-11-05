@@ -24,5 +24,9 @@ ENV/
 .DS_Store
 Thumbs.db
 
+# executable files
+*.bat
+*.command
+
 # Environment variables (para contraseñas en el futuro)
 .env
