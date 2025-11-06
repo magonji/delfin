@@ -1,6 +1,6 @@
 # 🐬 Delfin
 
-A personal finance management system built with Python FastAPI and vanilla JavaScript. Import your Financisto data and manage your finances from your computer with a modern web interface.
+A personal finance management app built with Python, FastAPI, and vanilla JavaScript. Easily import your Financisto data and track, analyse, and manage your finances through a sleek, modern web interface. Right from your computer!
 
 ## 📋 Features
 
@@ -16,7 +16,7 @@ A personal finance management system built with Python FastAPI and vanilla JavaS
 
 ### Transaction Management
 
-- ➕ **Quick Entry**: Fast transaction input with autocomplete
+- ➕ **Quick Entry**: Fast transaction input with autocomplete for payees
 - 🔄 **Transfer Transactions**: Create transfers between accounts with currency conversion support
 - 🏷️ **Hierarchical Categories**: Parent-child category selection
 - 📍 **Location & Project Tracking**: Organise transactions by location and project
@@ -38,7 +38,7 @@ A personal finance management system built with Python FastAPI and vanilla JavaS
 
 - 📁 **Category Management**: Edit parent categories and subcategories
 - 💳 **Account Management**: Edit account names and currencies
-- 👤 **Payee Management**: Edit and merge payee names
+- 👤 **Payee Management**: Edit and merge payee names with smart suggestions
 - 📍 **Location Management**: Organise transaction locations
 - 📋 **Project Management**: Track projects across transactions
 - 📥 **Bank Statement Import**: Import transactions from CSV bank statements (Bank of Scotland, PayPal)
@@ -76,9 +76,9 @@ A personal finance management system built with Python FastAPI and vanilla JavaS
 delfin/
 ├── backend/
 │   ├── __init__.py
-│   ├── main.py                    # FastAPI application
-│   ├── models.py                  # Database models (including ExchangeRate)
-│   ├── schemas.py                 # Pydantic schemas
+│   ├── main.py                    # FastAPI application with all endpoints
+│   ├── models.py                  # Database models (SQLAlchemy)
+│   ├── schemas.py                 # Pydantic schemas for API validation
 │   ├── database.py                # Database configuration
 │   └── balance_calculator.py      # Balance calculation utilities
 ├── frontend/
@@ -88,12 +88,12 @@ delfin/
 │   ├── tools.html                 # Management tools page
 │   └── navbar.js                  # Navigation component
 ├── data/
-│   └── finance.db                 # SQLite database (gitignored)
-├── create_tables.py               # Table creation script
-├── import_financisto_csv.py       # CSV import utility
-├── update_exchange_rates.py       # Exchange rate updater script
+│   └── finance.db                 # SQLite database (created automatically, gitignored)
+├── create_tables.py               # Database table creation script
+├── import_financisto_csv.py       # CSV import utility with interactive prompts
+├── initialise_database.py         # Initial setup script (balances, rates, stats)
 ├── update_database.py             # Database schema updater
-├── migrate_add_balances.py        # Migration script for balance columns
+├── update_exchange_rates.py       # Exchange rate updater script
 ├── clean_duplicate_categories.py  # Category deduplication utility
 ├── .gitignore
 └── README.md
@@ -107,97 +107,129 @@ delfin/
 - pip (Python package manager)
 - Internet connection (for fetching exchange rates)
 
-### Installation
+### Installation for New Users
 
-1. **Clone the repository**
+If you're starting fresh with a Financisto CSV export:
 
-   ```bash
-   git clone https://github.com/magonji/delfin.git
-   cd delfin
-   ```
+#### 1. **Clone the repository**
 
-2. **Install dependencies**
+```bash
+git clone https://github.com/magonji/delfin.git
+cd delfin
+```
 
-   ```bash
-   pip install fastapi uvicorn sqlalchemy python-multipart pandas questionary requests
-   ```
+#### 2. **Install dependencies**
 
-3. **Create the database tables**
+```bash
+pip install fastapi uvicorn sqlalchemy python-multipart pandas questionary requests
+```
 
-   ```bash
-   python create_tables.py
-   ```
+#### 3. **Create the database tables**
 
-4. **Import your Financisto data (optional)**
+```bash
+python create_tables.py
+```
 
-   ```bash
-   python import_financisto_csv.py
-   ```
+This creates an empty SQLite database with all necessary tables.
 
-   Follow the prompts to select your CSV file.
+#### 4. **Import your Financisto data**
 
-5. **Update exchange rates**
+```bash
+python import_financisto_csv.py
+```
 
-   ```bash
-   python update_exchange_rates.py
-   ```
+The script will:
+- Ask you to select the folder containing your CSV file
+- Show you a list of CSV files in that folder
+- Ask for confirmation before importing
+- Display progress as it imports your transactions
 
-   This will fetch the latest exchange rates for all currencies in your transactions.
+Example output:
+```
+Where is your CSV file located? /Users/yourname/Downloads
+Which CSV file would you like to import?
+❯ financisto_export_2024.csv
 
-6. **Start the API server**
+Import 'financisto_export_2024.csv'?
+This will add transactions to the database.
+Yes
 
-   ```bash
-   uvicorn backend.main:app --reload
-   ```
+Reading CSV file: /Users/yourname/Downloads/financisto_export_2024.csv
+Found 1523 transactions to import
+Imported 100 transactions...
+Imported 200 transactions...
+...
 
-7. **Open the frontend**
-   - Open `frontend/index.html` in your web browser
-   - Or navigate to `http://localhost:8000/docs` for the interactive API documentation
+✅ Import complete!
+   Imported: 1523
+   Skipped: 0
+```
 
-### First Time Setup with Existing Data
+#### 5. **Initialise calculated data**
 
-If you're setting up Delfin with existing data:
+```bash
+python initialise_database.py
+```
 
-1. Complete steps 1-4 above to install and import your data
-2. **Important**: Run the exchange rate updater:
+This comprehensive script will:
+- Fetch and store the latest exchange rates
+- Calculate running balances for all transactions
+- Compute most common category/location/project for each payee
 
-   ```bash
-   python update_exchange_rates.py
-   ```
+This step is **essential** for the dashboard and features to work properly.
 
-3. You should see output like:
+#### 6. **Start the server**
 
-   ```
-   🔄 Updating exchange rates...
-   📊 Currencies in use: GBP, EUR, USD
-      ✅ Added GBP: 1.0
-      ✅ Added EUR: 1.17
-      ✅ Added USD: 1.27
-   
-   ✅ Successfully updated 3 exchange rates!
-   ```
+```bash
+uvicorn backend.main:app --reload
+```
 
-4. If you have duplicate categories, run:
-   
-   ```bash
-   python clean_duplicate_categories.py
-   ```
+The API server will start at `http://localhost:8000`
 
-5. Initialise balance calculations:
-   ```bash
-   python migrate_add_balances.py
-   ```
-6. Start the server and enjoy your multi-currency dashboard!
+#### 7. **Open the frontend**
 
-### Updating Database Schema (For Existing Installations)
+Open `frontend/index.html` in your web browser to start using Delfin!
 
-If you're upgrading from an older version:
+Alternatively, visit `http://localhost:8000/docs` for the interactive API documentation.
+
+---
+
+### Installation for Existing Installations
+
+If you're updating from an older version of Delfin:
+
+#### 1. **Update dependencies**
+
+```bash
+pip install --upgrade fastapi uvicorn sqlalchemy python-multipart pandas questionary requests
+```
+
+#### 2. **Update database schema**
 
 ```bash
 python update_database.py
-python migrate_add_balances.py
+```
+
+This will:
+- Create any new tables or columns
+- Initialise balance calculations if needed
+- Recalculate payee statistics
+
+#### 3. **Update exchange rates**
+
+```bash
 python update_exchange_rates.py
 ```
+
+#### 4. **Clean duplicates (optional)**
+
+If you notice duplicate categories:
+
+```bash
+python clean_duplicate_categories.py
+```
+
+---
 
 ## 📊 Usage
 
@@ -237,65 +269,56 @@ Navigate to `loans.html` to:
 
 Navigate to `tools.html` to:
 
-- Edit categories, accounts, payees, locations, and projects
-- Import bank statements from CSV files
-- Export transactions to CSV with custom filters
-- Download database backups with timestamps
+- Manage categories, accounts, payees, locations, and projects
+- Import transactions from bank statement CSVs
+- Export your data to CSV format
+- Create database backups
+- Update exchange rates manually
 
-### Updating Exchange Rates
+---
 
-Exchange rates can be updated in two ways:
+## 🔌 API Endpoints
 
-1. **Manual script execution**:
+The FastAPI backend provides a RESTful API. Here are the main endpoints:
 
-   ```bash
-   python update_exchange_rates.py
-   ```
-
-2. **Via API** (from the dashboard or any HTTP client):
-
-   ```bash
-   curl -X POST http://localhost:8000/exchange-rates/update
-   ```
-
-**Recommendation**: Set up a daily cron job or scheduled task to keep rates current:
-
-```bash
-# Linux/Mac - Add to crontab (runs daily at 2 AM)
-0 2 * * * cd /path/to/delfin && python update_exchange_rates.py
-
-# Windows - Use Task Scheduler to run the script daily
-```
-
-## 🌐 API Endpoints
-
-The FastAPI backend provides a RESTful API:
-
-### Core Resources
+### Accounts
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/accounts` | GET | List all accounts |
+| `/accounts` | GET | List all accounts (with `include_closed` parameter) |
+| `/accounts/with-balances` | GET | Get accounts with current balances |
 | `/accounts` | POST | Create new account |
-| `/accounts/{id}` | PUT | Update account |
+
+### Categories
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
 | `/categories` | GET | List all categories |
 | `/categories` | POST | Create new category |
-| `/categories/{id}` | PUT | Update category |
-| `/payees` | GET | List all payees |
+
+### Payees
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/payees` | GET | List all payees with their most common associations |
 | `/payees` | POST | Create new payee |
-| `/payees/{id}` | PUT | Update payee |
+| `/payees/{id}/recalculate-stats` | POST | Recalculate statistics for specific payee |
+| `/payees/recalculate-all-stats` | POST | Recalculate statistics for all payees |
+
+### Locations & Projects
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
 | `/locations` | GET | List all locations |
 | `/locations` | POST | Create new location |
-| `/locations/{id}` | PUT | Update location |
 | `/projects` | GET | List all projects |
 | `/projects` | POST | Create new project |
-| `/projects/{id}` | PUT | Update project |
 
 ### Transactions
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/transactions` | GET | List transactions (with filters) |
+| `/transactions` | GET | List transactions with filters |
 | `/transactions` | POST | Create new transaction |
 | `/transactions/{id}` | GET | Get specific transaction |
 | `/transactions/{id}` | PUT | Update transaction |
@@ -317,9 +340,12 @@ The FastAPI backend provides a RESTful API:
 |----------|--------|-------------|
 | `/dashboard/summary` | GET | Get dashboard statistics with currency conversion |
 | `/admin/initialise-balances` | POST | Initialise balance calculations for all transactions |
+| `/admin/recalculate-account-balances` | POST | Recalculate account balances |
 | `/admin/backup-database` | POST | Create and download database backup |
 
 Full API documentation available at: `http://localhost:8000/docs`
+
+---
 
 ## 💱 Supported Currencies
 
@@ -333,29 +359,65 @@ The system supports 30+ currencies with automatic symbol detection:
 
 Exchange rates are fetched from [exchangerate-api.com](https://www.exchangerate-api.com/) which provides free access without requiring an API key.
 
+---
+
 ## 📊 Database Schema
 
 ### Main Tables
 
-- **accounts**: Bank accounts, cash, credit cards (with currency)
+- **accounts**: Bank accounts, cash, credit cards
+  - Includes: `currency`, `initial_balance`, `current_balance`, `is_active`
+  
 - **categories**: Hierarchical expense/income categories
+  - Includes: `name`, `parent`, `type`
+  
 - **payees**: Merchants and payment recipients
+  - Includes: `name`, cached most common `category_id`, `location_id`, `project_id`
+  
 - **locations**: Geographic locations
+  
 - **projects**: Project groupings for transactions
-- **transactions**: Individual financial transactions (with currency, cached balances)
+  
+- **transactions**: Individual financial transactions
+  - Includes: `date`, `amount`, `currency`, `note`
+  - Foreign keys to: `account`, `category`, `payee`, `location`, `project`
+  - Cached fields: `account_balance_after`, `total_balance_after`
+  
 - **exchange_rates**: Historical exchange rate data
+  - Includes: `currency`, `rate`, `date`
 
 ### Balance Tracking
 
-- Transactions include `account_balance_after` and `total_balance_after` columns
-- Balances are calculated and cached for performance
-- Automatically recalculated when transactions are added, edited, or deleted
+Delfin uses cached balance calculations for optimal performance:
 
-### Relationships
+- **`account_balance_after`**: Balance of the specific account after each transaction
+- **`total_balance_after`**: Total balance across all accounts (in base currency) after each transaction
 
-- Transactions link to accounts, categories, payees, locations, and projects via foreign keys
-- Exchange rates are indexed by currency and date for efficient lookups
-- The system automatically determines the base currency from transaction frequency
+These balances are:
+- Automatically calculated when transactions are created
+- Automatically recalculated when transactions are edited or deleted
+- Displayed in the transaction list for easy tracking
+
+### Payee Statistics
+
+To speed up transaction entry, payees store their most commonly used associations:
+
+- **`most_common_category_id`**: The category most frequently used with this payee
+- **`most_common_location_id`**: The location most frequently used with this payee
+- **`most_common_project_id`**: The project most frequently used with this payee
+
+These are automatically suggested when creating new transactions.
+
+### Performance Optimisations
+
+The database uses several composite indices for fast queries:
+- `(account_id, date)` for account-specific transaction lists
+- `(currency, date)` for currency-filtered queries
+- `(date, amount)` for expense analysis
+- `(category_id, date)` for category-based reports
+- `(payee_id, date)` for payee analysis
+
+---
 
 ## 🔧 Development
 
@@ -370,11 +432,20 @@ The `--reload` flag enables auto-reload on code changes.
 ### Adding New Features
 
 1. **Backend changes**: Edit files in `backend/`
+   - Add models in `models.py`
+   - Add schemas in `schemas.py`
+   - Add endpoints in `main.py`
+
 2. **Frontend changes**: Edit HTML files in `frontend/`
+   - Dashboard: `index.html`
+   - Transactions: `transactions.html`
+   - Loans: `loans.html`
+   - Tools: `tools.html`
+
 3. **Database changes**: 
    - Update `backend/models.py`
-   - Create migration script if needed
-   - Run migration
+   - Run `python update_database.py` to create new tables/columns
+   - Create a migration script if needed for existing data
 
 ### Testing Exchange Rate Updates
 
@@ -386,33 +457,53 @@ python update_exchange_rates.py
 sqlite3 data/finance.db "SELECT * FROM exchange_rates ORDER BY date DESC LIMIT 10;"
 ```
 
+---
+
 ## 🛠 Troubleshooting
 
 ### CORS Errors
 
-If you see CORS errors in the browser console, ensure the CORS middleware is properly configured in `backend/main.py`.
+If you see CORS errors in the browser console, ensure the CORS middleware is properly configured in `backend/main.py`. The default configuration allows all origins for development.
 
 ### Database Issues
 
 If you encounter database errors:
-```bash
-# Back up your database first!
-python -c "import shutil; from datetime import datetime; shutil.copy('data/finance.db', f'data/finance_backup_{datetime.now().strftime(\"%Y%m%d_%H%M%S\")}.db')"
 
-# Then recreate if necessary
-rm data/finance.db   # Mac/Linux
-del data\finance.db  # Windows
+1. **Back up your database first!**
+   ```bash
+   # Mac/Linux
+   cp data/finance.db data/finance_backup_$(date +%Y%m%d_%H%M%S).db
+   
+   # Windows
+   copy data\finance.db data\finance_backup_%date:~-4,4%%date:~-10,2%%date:~-7,2%.db
+   ```
 
-python create_tables.py
-python import_financisto_csv.py
-```
+2. **If database is corrupted:**
+   ```bash
+   # Mac/Linux
+   rm data/finance.db
+   
+   # Windows
+   del data\finance.db
+   
+   # Recreate and reimport
+   python create_tables.py
+   python import_financisto_csv.py
+   python initialise_database.py
+   ```
 
 ### Balance Calculation Issues
 
 If balances seem incorrect:
+
+**Option 1**: Use the API endpoint
 ```bash
-# Reinitialise all balance calculations
 curl -X POST http://localhost:8000/admin/initialise-balances
+```
+
+**Option 2**: Run the initialisation script
+```bash
+python initialise_database.py
 ```
 
 ### Exchange Rate Issues
@@ -438,9 +529,15 @@ sqlite3 data/finance.db "SELECT COUNT(*) FROM exchange_rates;"
 ### Duplicate Categories
 
 If you see repeated categories in dropdowns:
+
 ```bash
 python clean_duplicate_categories.py
 ```
+
+This script will:
+- Find all duplicate categories (same name + parent)
+- Merge them by reassigning transactions to one category
+- Delete the duplicates
 
 ### Import Errors
 
@@ -449,15 +546,29 @@ If CSV import fails:
 - Ensure the CSV format matches Financisto export format
 - Check for encoding issues (should be UTF-8)
 - Verify all required columns are present
+- Check the console output for specific error messages
+
+### Payee Autocomplete Not Working
+
+If payee suggestions aren't showing common associations:
+
+```bash
+# Recalculate statistics for all payees
+curl -X POST http://localhost:8000/payees/recalculate-all-stats
+```
+
+---
 
 ## 🔒 Security Notes
 
 - The database file (`finance.db`) is gitignored to protect your financial data
-- Never commit the `data/` folder to version control
+- **Never commit the `data/` folder to version control**
 - When deploying to production, add proper authentication
 - Use environment variables for sensitive configuration
 - Exchange rate API calls don't require authentication but are rate-limited
 - Database backups include all sensitive financial data - store them securely
+
+---
 
 ## 🚀 Future Enhancements
 
@@ -466,7 +577,6 @@ Potential features for future development:
 - [ ] Budget tracking and alerts
 - [ ] Recurring transaction templates
 - [ ] Export reports to PDF/Excel
-- [ ] Mobile app (React Native)
 - [ ] Cloud deployment (Railway/Render)
 - [ ] Desktop app (Electron)
 - [ ] User authentication
@@ -479,19 +589,26 @@ Potential features for future development:
 - [x] Database backup functionality ✅
 - [ ] Custom exchange rate entry (for historical accuracy)
 - [ ] Investment portfolio tracking
-- [ ] Cryptocurrency support
 - [ ] Bill reminders and notifications
 
+---
 
 ## 📝 Changelog
 
-### Version 3.0 (Current)
+### Version 3.1 (Current)
+- ✨ Added `initialise_database.py` for streamlined first-time setup
+- ✨ Improved `update_database.py` with automatic balance initialisation
+- ✨ Added `clean_duplicate_categories.py` utility
+- ✨ Payee statistics now include most common category/location/project
+- 📚 Simplified README with clearer installation instructions
+- 🔧 Better error handling in import scripts
+
+### Version 3.0
 - ✨ Added cached balance calculations for improved performance
 - ✨ Implemented bulk editing for transactions and transfers
 - ✨ New Loans & Credit Cards page with automatic detection
 - ✨ Smart categorisation of charges vs fees/interest
 - ✨ Database backup functionality with timestamps
-- ✨ Category deduplication utility
 - 🐬 Rebranded from "Financisto Manager" to "Delfin"
 - 🎨 Enhanced UI with better transaction displays
 - 📊 Running balance shown for each transaction
@@ -515,9 +632,13 @@ Potential features for future development:
 - ✅ CSV import from Financisto
 - ✅ SQLite database backend
 
+---
+
 ## 📄 Licence
 
 This project is for personal use. Feel free to fork and modify for your own needs.
+
+---
 
 ## 🙏 Acknowledgements
 
@@ -526,6 +647,8 @@ This project is for personal use. Feel free to fork and modify for your own need
 - **Chart.js**: For beautiful charts
 - **SQLAlchemy**: For powerful ORM capabilities
 - **exchangerate-api.com**: For providing free exchange rate data
+
+---
 
 ## 📧 Contact
 
