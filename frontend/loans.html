@@ -3,983 +3,474 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Delfin - Loans & Credit Cards</title>
+    <title>Delfin · The Loans and Credit Cards</title>
     <link rel="icon" href="favicon.ico">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
-        
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-        
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-            margin-bottom: 20px;
-        }
-        
-        .stat-card {
-            background: white;
-            padding: 25px;
-            border-radius: 15px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-        }
-        
-        .stat-label {
-            font-size: 14px;
-            color: #666;
-            margin-bottom: 10px;
-        }
-        
-        .stat-value {
-            font-size: 32px;
-            font-weight: bold;
-            color: #333;
-        }
-        
-        .card {
-            background: white;
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-            margin-bottom: 20px;
+        /* ============================================================================
+        CSS Variables and Global Styles
+        ============================================================================ */
+        :root {
+            --bg: #FFF1E6; --panel: #FEE5D7; --card: #D4B5A0; --border: #D4B5A0;
+            --muted: #5F5F5F; --text: #2D2D2D;
+            --green: #0e9530; --red: #d52811; --yellow: #f5b700;
         }
 
-        .section-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }
+        * { box-sizing: border-box; }
+        html { scrollbar-gutter: stable both-edges; }
+        body { margin: 0; background: var(--bg); color: var(--text); font-family: 'IBM Plex Mono', monospace; min-height: 100vh; }
 
-        .section-title {
-            font-size: 24px;
-            font-weight: bold;
-            color: #333;
+        /* Header styling */
+        header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 18px 20px; background: var(--panel); border-bottom: 1px solid var(--border);
+            position: sticky; top: 0; z-index: 100; backdrop-filter: blur(8px);
         }
+        h1 { font-size: 30px; margin: 0; font-family: 'Playfair Display', serif; }
 
-        .section-badge {
-            background: #667eea;
-            color: white;
-            padding: 5px 15px;
-            border-radius: 20px;
+        /* Toolbar controls and buttons */
+        .tools { display: flex; gap: 8px; align-items: center; }
+        .tools button, .dropdown .btn {
+            background: var(--bg); color: var(--text); border: 1px solid var(--border);
+            border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer;
+            transition: transform 0.1s;
+        }
+        .tools button:active { transform: translateY(1px); }
+        .tools .primary { background: var(--panel); border-color: var(--border); }
+        .tools .danger { background: var(--card); border-color: var(--border); }
+
+        /* Dropdown menu component */
+
+        .dropdown { position: relative; }
+        .dropdown .btn { display: flex; align-items: center; gap: 8px; }
+        .dropdown .menu {
+            position: absolute; top: 120%; right: 0; min-width: 200px;
+            background: #fff; border: 1px solid var(--border); border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1); display: none; padding: 8px; z-index: 20;
+        }
+        .dropdown.open .menu { display: block; }
+
+        .dropdown .menu .navItem { 
+            width: 100%; 
+            text-align: left; 
+            padding: 8px 12px; 
+            background: transparent; 
+            cursor: pointer; 
+            border: none !important;
+            border-radius: 6px;
+            transition: background 0.2s;
             font-size: 14px;
             font-weight: 600;
+            font-family: 'IBM Plex Sans', sans-serif; color: var(--text);
         }
         
-        .loan-card {
-            background: white;
-            padding: 25px;
-            border-radius: 15px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
+        .dropdown .menu .navItem:hover { 
+            background: var(--bg); 
         }
 
-        .loan-card.credit-card {
-            border-left: 5px solid #f59e0b;
+        /* Utility classes and badges */
+        .badge { padding: 2px 8px; border-radius: 99px; font-size: 11px; background: var(--card); border: 1px solid var(--border); }
+        .badge_spe {
+            display: inline-flex; justify-content: center; align-items: center;
+            width: 40px; height: 24px; border-radius: 12px; font-size: 13px;
+            background: var(--panel); border: 1px solid var(--border);
         }
+        .amount-positive { color: var(--green); }
+        .amount-negative { color: var(--red); }
+        .footer { opacity: 0.7; font-size: 12px; text-align: center; margin-top: 104px; padding-bottom: 10px; font-family: 'Playfair Display', serif; }
+        
+        /* Success and error message boxes */
+        .message-box { padding: 15px; border-radius: 8px; margin: 20px; display: none; color: white; text-align: center; }
+        .success-message { background: var(--green); }
+        .error-message { background: var(--red); }
 
-        .loan-card.loan {
-            border-left: 5px solid #8B0000;
-        }
+        /* Key Performance Indicator cards */
+        .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 20px; }
+        .kpi { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+        .kpi h3 { margin: 0 0 6px 0; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 1px; }
+        .kpi .value { font-size: 22px; font-weight: 700; }
 
-        .loan-card.completed {
-            border-left: 5px solid #10b981;
-        }
-        
-        .loan-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            cursor: pointer;
-            margin-bottom: 15px;
-        }
-        
-        .loan-title {
-            font-size: 24px;
-            font-weight: bold;
-            color: #333;
-        }
+        /* Main layout grid */
+        .card-container { margin: 0 20px 40px; display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
+        .col { flex: 1; display: flex; flex-direction: column; gap: 20px; min-width: 300px; }
 
-        .loan-type-badge {
-            background: #f3f4f6;
-            color: #666;
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: 600;
-            margin-left: 10px;
-        }
-        
-        .loan-toggle {
-            font-size: 20px;
-            transition: transform 0.3s;
-        }
-        
-        .loan-info {
-            display: flex;
-            gap: 30px;
-            margin-bottom: 15px;
-            font-size: 14px;
-            color: #666;
-        }
-        
-        .progress-bar-container {
-            width: 100%;
-            height: 20px;
-            background: #e0e0e0;
-            border-radius: 10px;
-            overflow: hidden;
-            margin-bottom: 15px;
-        }
-        
-        .progress-bar {
-            height: 100%;
-            background: #8B0000;
-            transition: width 0.5s ease, background 0.5s ease;
-        }
+        /* Card component sections */
+        .card { background: var(--bg); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+        .card .head { display: flex; justify-content: space-between; align-items: center; padding: 12px 18px; border-bottom: 1px solid var(--border); background: rgba(255,255,255,0.3); }
+        .card .title { margin: 0; font-size: 16px; font-kerning: auto; font-weight: 700; text-transform: uppercase; font-family: 'IBM Plex Sans', sans-serif; }
+        .card .content { padding: 15px; }
 
-        .progress-bar.credit-card {
-            background: #f59e0b;
-        }
+        /* Individual loan and credit card display */
+        .loan-card { background: var(--bg); padding: 20px; border-radius: 12px; border: 1px solid var(--border); margin-bottom: 15px; transition: box-shadow 0.2s; }
+        .loan-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
         
-        .progress-bar.completed {
-            background: #10b981;
-        }
+        .loan-header { display: flex; justify-content: space-between; align-items: center; cursor: pointer; margin-bottom: 15px; }
+        .loan-title { font-size: 20px; font-weight: bold; font-family: 'Playfair Display', serif; }
+        .loan-toggle { font-size: 14px; transition: transform 0.3s; color: var(--muted); }
         
-        .loan-stats {
-            display: flex;
-            justify-content: space-between;
-            gap: 20px;
-        }
+        .loan-info { display: flex; gap: 15px; margin-bottom: 15px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
         
-        .loan-stat {
-            flex: 1;
-        }
+        .progress-bar-container { width: 100%; height: 12px; background: #eee; border-radius: 6px; overflow: hidden; margin-bottom: 15px; }
+        .progress-bar { height: 100%; transition: width 0.5s ease; }
+        .progress-bar.loan { background: var(--red); }
+        .progress-bar.credit-card { background: var(--yellow); }
+        .progress-bar.completed { background: var(--green); }
         
-        .loan-stat-label {
-            font-size: 12px;
-            color: #666;
-            margin-bottom: 5px;
-        }
+        .loan-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+        .loan-stat-label { font-size: 10px; color: var(--muted); text-transform: uppercase; margin-bottom: 4px; }
+        .loan-stat-value { font-size: 15px; font-weight: bold; }
         
-        .loan-stat-value {
-            font-size: 18px;
-            font-weight: bold;
-            color: #333;
-        }
-        
-        .loan-transactions {
-            display: none;
-            margin-top: 20px;
-            padding-top: 20px;
-            border-top: 2px solid #e0e0e0;
-        }
-        
-        .loan-transactions.expanded {
-            display: block;
-        }
+        .loan-transactions { display: none; margin-top: 20px; padding-top: 15px; border-top: 1px dashed var(--border); }
+        .loan-transactions.expanded { display: block; animation: fadeIn 0.3s; }
         
         .transaction-item {
-            background: #f8f9fa;
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 8px;
-            display: grid;
-            grid-template-columns: auto 1fr auto;
-            gap: 15px;
-            align-items: center;
+            padding: 8px 0; border-bottom: 1px solid #eee;
+            display: grid; grid-template-columns: 80px 1fr auto; gap: 10px; align-items: center;
         }
-        
-        .transaction-date {
-            font-size: 12px;
-            color: #666;
-        }
-        
-        .transaction-details {
-            flex: 1;
-        }
-        
-        .transaction-type {
-            font-weight: 600;
-            color: #333;
-        }
-        
-        .transaction-note {
-            font-size: 12px;
-            color: #666;
-        }
-        
-        .transaction-amount {
-            font-size: 16px;
-            font-weight: bold;
-        }
-        
-        .amount-positive {
-            color: #10b981;
-        }
-        
-        .amount-negative {
-            color: #ef4444;
-        }
+        .transaction-item:last-child { border-bottom: none; }
+        .transaction-date { font-size: 11px; color: var(--muted); line-height: 1.2; }
+        .transaction-type { font-weight: 600; font-size: 13px; margin-bottom: 2px; }
+        .transaction-note { font-size: 11px; color: var(--muted); }
+        .transaction-amount { font-weight: bold; font-size: 14px; }
 
-        .empty-state {
-            text-align: center;
-            padding: 40px;
-            color: #999;
-            font-style: italic;
-        }
-
-        .loading-spinner {
-            text-align: center;
-            padding: 40px;
-            font-size: 20px;
-        }
-        
-        button {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 15px 30px;
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
-            width: 100%;
-        }
-        
-        button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
-        }
-        
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0,0,0,0.5);
-        }
-        
-        .modal-content {
-            background-color: white;
-            margin: 5% auto;
-            padding: 30px;
-            border-radius: 15px;
-            width: 90%;
-            max-width: 600px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-        }
-        
-        .modal-header {
-            margin-bottom: 20px;
-        }
-        
-        .modal-header h3 {
-            margin: 0;
-            color: #333;
-        }
-        
-        .form-group {
-            margin-bottom: 20px;
-        }
-        
-        label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
-            color: #333;
-        }
-        
-        input, select, textarea {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-size: 14px;
-            transition: border-color 0.3s;
-        }
-        
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-        
-        .radio-group {
-            display: flex;
-            gap: 20px;
-            margin-bottom: 15px;
-        }
-        
-        .radio-option {
-            flex: 1;
-            border: 2px solid #e0e0e0;
-            padding: 15px;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-        
-        .radio-option:hover {
-            border-color: #667eea;
-        }
-        
-        .radio-option input[type="radio"] {
-            width: auto;
-            margin-right: 8px;
-        }
-        
-        .radio-option.selected {
-            border-color: #667eea;
-            background: #f0f4ff;
-        }
-        
-        .hidden {
-            display: none !important;
-        }
-        
-        .success-message {
-            background: #10b981;
-            color: white;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            display: none;
-        }
-        
-        .error-message {
-            background: #ef4444;
-            color: white;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            display: none;
-        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     </style>
-    <script src="navbar.js"></script>
 </head>
 <body>
-    <div class="container">
-        <div id="successMessage" class="success-message"></div>
-        <div id="errorMessage" class="error-message"></div>
-        
-        <!-- Statistics -->
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-label">💳 Active Credit Cards</div>
-                <div class="stat-value" id="activeCreditCards">0</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">📋 Active Loans</div>
-                <div class="stat-value" id="activeLoans">0</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">💰 Total Owed</div>
-                <div class="stat-value" id="totalOwed">£0.00</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">📊 Total Interest Paid</div>
-                <div class="stat-value" id="totalInterest">£0.00</div>
+
+    <header>
+        <h1>🐬 Delfin · The Loans</h1>
+        <div class="tools">
+            <span class="badge" id="baseCurrencySum">—</span>
+            <button onclick="refreshCache()" class="primary">🔄 Refresh</button>
+            <button id="btnUpdateRates" class="danger">💱 Update rates</button>
+            
+            <div class="dropdown" id="navDropdown">
+                <button class="btn" id="navBtn" onclick="toggleNav()">📂 Menu ▾</button>
+                <div class="menu" id="navMenu">
+                    <button class="navItem" onclick="location.href='index.html'">📊 Dashboard</button>
+                    <button class="navItem" onclick="location.href='transactions.html'">📑 Transactions</button>
+                    <button class="navItem" onclick="location.href='tools.html'">🛠️ Tools</button>
+                </div>
             </div>
         </div>
-        
-        <!-- Loading Spinner -->
-        <div id="loadingSpinner" class="card loading-spinner">
-            <div>⏳ Loading loans and credit cards...</div>
+    </header>
+
+    <section class="kpis">
+        <div class="kpi">
+            <h3>Total Owed</h3>
+            <div class="value" id="totalOwed">—</div>
         </div>
-        
-        <!-- Credit Cards Section -->
-        <div id="creditCardsSection" class="card" style="display: none;">
-            <div class="section-header">
-                <h2 class="section-title">💳 Credit Cards</h2>
-                <div class="section-badge" id="creditCardsCount">0</div>
-            </div>
-            <div id="creditCardsList"></div>
+        <div class="kpi">
+            <h3>Total Interest Paid</h3>
+            <div class="value" id="totalInterest">—</div>
         </div>
-        
-        <!-- Active Loans Section -->
-        <div id="activeLoansSection" class="card" style="display: none;">
-            <div class="section-header">
-                <h2 class="section-title">📋 Active Loans</h2>
-                <div class="section-badge" id="activeLoansCount">0</div>
+        <div class="kpi">
+            <h3>Active Loans</h3>
+            <div class="value" id="activeLoans">—</div>
+        </div>
+        <div class="kpi">
+            <h3>Active Credit Cards</h3>
+            <div class="value" id="activeCreditCards">—</div>
+        </div>
+    </section>
+
+    <div id="successMessage" class="message-box success-message"></div>
+    <div id="errorMessage" class="message-box error-message"></div>
+
+    <div class="card-container">
+        <div class="col">
+            <div id="activeLoansSection" class="card" style="display:none">
+                <div class="head">
+                    <h2 class="title">Active Loans</h2>
+                    <div class="badge_spe" id="activeLoansCount">0</div>
+                </div>
+                <div class="content" id="activeLoansList"></div>
             </div>
-            <div id="activeLoansList"></div>
+
+            <div id="completedLoansSection" class="card" style="display:none">
+                <div class="head">
+                    <h2 class="title">Paid Off Loans</h2>
+                    <div class="badge_spe" id="completedLoansCount">0</div>
+                </div>
+                <div class="content" id="completedLoansList"></div>
+            </div>
         </div>
 
-        <!-- Completed Loans Section -->
-        <div id="completedLoansSection" class="card" style="display: none;">
-            <div class="section-header">
-                <h2 class="section-title">✅ Paid Off Loans</h2>
-                <div class="section-badge" id="completedLoansCount">0</div>
+        <div class="col">
+            <div id="creditCardsSection" class="card" style="display:none">
+                <div class="head">
+                    <h2 class="title">Credit Cards</h2>
+                    <div class="badge_spe" id="creditCardsCount">0</div>
+                </div>
+                <div class="content" id="creditCardsList"></div>
             </div>
-            <div id="completedLoansList"></div>
         </div>
     </div>
 
-    <script>
-        const API_URL = 'http://localhost:8000';
+    <div class="footer">© Royal Bank of González. 2025</div>
         
-        // Global variables
-        let allTransfers = [];
-        let loanAccounts = [];
-        let creditCardAccounts = [];
-        
-        // Minimum unique payees threshold to classify as credit card
-        const CREDIT_CARD_PAYEE_THRESHOLD = 3;
-        
-        // Load initial data
-        document.addEventListener('DOMContentLoaded', async () => {
-            await loadTransactions();
-            await loadLoans();
-        });
-        
-        // Get currency symbol
-        function getCurrencySymbol(currency) {
-            const symbols = {
-                'GBP': '£',
-                'EUR': '€',
-                'USD': '$',
-                'JPY': '¥',
-                'CNY': '¥',
-                'CHF': 'Fr',
-                'CAD': 'CA$',
-                'AUD': 'A$',
-                'NZD': 'NZ$',
-                'INR': '₹',
-                'BRL': 'R$',
-                'RUB': '₽',
-                'KRW': '₩',
-                'SEK': 'kr',
-                'NOK': 'kr',
-                'DKK': 'kr',
-                'PLN': 'zł',
-                'MXN': 'MX$',
-                'ARS': 'AR$',
-                'CLP': 'CL$',
-                'COP': 'CO$',
-                'PEN': 'S/',
-                'TRY': '₺',
-                'ZAR': 'R',
-                'THB': '฿',
-                'SGD': 'S$',
-                'HKD': 'HK$',
-                'MYR': 'RM'
-            };
-            
-            return symbols[currency] || currency;
-        }
-        
-        // Format number
-        function formatNumber(num) {
-            return num.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-        }
-        
-        // Load all transfers
-        async function loadTransactions() {
-            try {
-                const response = await fetch(`${API_URL}/transactions/transfers`);
-                allTransfers = await response.json();
-            } catch (error) {
-                console.error('Error loading transfers:', error);
-            }
-        }
-        
-        
-        // Load and categorise loans/credit cards
-        async function loadLoans() {
-            try {
-                document.getElementById('loadingSpinner').style.display = 'block';
-                document.getElementById('creditCardsSection').style.display = 'none';
-                document.getElementById('activeLoansSection').style.display = 'none';
-                document.getElementById('completedLoansSection').style.display = 'none';
-                
-                const response = await fetch(`${API_URL}/accounts?include_closed=true`);
-                const accounts = await response.json();
-                
-                // Identify potential debt accounts (loans and credit cards)
-                loanAccounts = [];
-                creditCardAccounts = [];
-                
-                // Process accounts in parallel
-                const accountPromises = accounts.map(async (account) => {
-                    try {
-                        const accountTransResponse = await fetch(`${API_URL}/transactions?account_id=${account.id}&limit=10000`);
-                        const accountTransactions = await accountTransResponse.json();
-                        
-                        if (accountTransactions.length === 0) return null;
-                        
-                        // Sort transactions chronologically
-                        accountTransactions.sort((a, b) => new Date(a.date) - new Date(b.date));
-                        
-                        // Check the first transaction - debt accounts start negative
-                        const firstTransaction = accountTransactions[0];
-                        const startsNegative = firstTransaction.amount < 0;
-                        
-                        // Only process if account started with negative balance (loan/credit card)
-                        if (startsNegative) {
-                            // Count unique payees (excluding transfers)
-                            const transferIds = new Set();
-                            allTransfers.forEach(t => {
-                                if (t.transfer_out_id) transferIds.add(t.transfer_out_id);
-                                if (t.transfer_in_id) transferIds.add(t.transfer_in_id);
-                            });
-                            
-                            const uniquePayees = new Set();
-                            accountTransactions.forEach(trans => {
-                                if (trans.payee_id && !transferIds.has(trans.id)) {
-                                    uniquePayees.add(trans.payee_id);
-                                }
-                            });
-                            
-                            // Determine if it's a credit card or loan based on unique payees
-                            const isCreditCard = uniquePayees.size >= CREDIT_CARD_PAYEE_THRESHOLD;
-                            
-                            // Use appropriate calculation function
-                            const debtData = isCreditCard 
-                                ? await calculateCreditCardData(account, accountTransactions)
-                                : await calculateLoanData(account, accountTransactions);
-                            
-                            // Add type and payee count info
-                            if (isCreditCard) {
-                                debtData.type = 'credit-card';
-                                debtData.uniquePayees = uniquePayees.size;
-                                return { type: 'credit-card', data: debtData };
-                            } else {
-                                debtData.type = 'loan';
-                                debtData.uniquePayees = uniquePayees.size;
-                                return { type: 'loan', data: debtData };
-                            }
-                        }
-                        
-                        return null;
-                    } catch (error) {
-                        console.error(`Error processing account ${account.name}:`, error);
-                        return null;
-                    }
-                });
-                
-                // Wait for all accounts to be processed
-                const results = await Promise.all(accountPromises);
-                const validResults = results.filter(r => r !== null);
-                
-                // Separate into credit cards and loans
-                creditCardAccounts = validResults.filter(r => r.type === 'credit-card').map(r => r.data);
-                loanAccounts = validResults.filter(r => r.type === 'loan').map(r => r.data);
-                
-                document.getElementById('loadingSpinner').style.display = 'none';
-                
-                // Display results
-                if (creditCardAccounts.length > 0) {
-                    document.getElementById('creditCardsSection').style.display = 'block';
-                    displayCreditCards();
-                }
-                
-                if (loanAccounts.length > 0) {
-                    displayLoans();
-                }
-                
-                updateStatistics();
-                
-            } catch (error) {
-                console.error('Error loading loans:', error);
-                document.getElementById('loadingSpinner').style.display = 'none';
-                showError('Error loading loans and credit cards');
-            }
-        }
-        
-        // Calculate loan statistics (for actual loans, not credit cards)
-        async function calculateLoanData(account, transactions) {
-            const sortedTransactions = [...transactions].sort((a, b) => new Date(a.date) - new Date(b.date));
-            
-            const firstTrans = sortedTransactions[0];
-            const openDate = new Date(firstTrans.date);
-            const borrowed = Math.abs(firstTrans.amount);
-            
-            let balance = 0;
-            let closeDate = null;
-            let repaid = 0;
-            let interest = 0;
-            let lenderName = 'Unknown';
-            
-            const transferIds = new Set();
-            allTransfers.forEach(t => {
-                if (t.transfer_out_id) transferIds.add(t.transfer_out_id);
-                if (t.transfer_in_id) transferIds.add(t.transfer_in_id);
+<script>
+    const API_BASE = (localStorage.getItem('delfin_api') || 'http://localhost:8000').replace(/\/$/, '');
+    const q = (sel) => document.querySelector(sel);
+    const CACHE_DURATION = 14 * 24 * 60 * 60 * 1000; // Cache expiry: 14 days in milliseconds
+
+    // Application state
+    let globalCurrency = 'GBP';
+
+    // --- API calls and caching layer ---
+
+    async function api(path, opts = {}) {
+        try {
+            const res = await fetch(`${API_BASE}${path}`, {
+                headers: { 'Content-Type': 'application/json' },
+                ...opts
             });
-            
-            for (let i = 0; i < sortedTransactions.length; i++) {
-                const trans = sortedTransactions[i];
-                balance += trans.amount;
-                
-                if (balance >= -0.5 && closeDate === null) {
-                    closeDate = new Date(trans.date);
-                }
-                
-                if (trans.amount > 0) {
-                    repaid += trans.amount;
-                }
-                
-                // For loans: all negative transactions (except first) are interest/fees
-                if (trans.amount < 0 && !transferIds.has(trans.id) && trans.id !== firstTrans.id) {
-                    interest += Math.abs(trans.amount);
-                    
-                    if (lenderName === 'Unknown' && trans.payee_name) {
-                        lenderName = trans.payee_name;
-                    }
-                }
+            if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+            return res.json();
+        } catch (e) {
+            throw e;
+        }
+    }
+
+    function getCache(key) {
+        try {
+            const cached = JSON.parse(localStorage.getItem(key));
+            if (!cached) return null;
+            if (Date.now() - cached.timestamp < CACHE_DURATION) return cached.value;
+            localStorage.removeItem(key); // Remove expired cache entry
+        } catch (e) { console.error(e); }
+        return null;
+    }
+
+    function setCache(key, value) {
+        localStorage.setItem(key, JSON.stringify({ value, timestamp: Date.now() }));
+    }
+
+    // --- Data loading and initialisation ---
+
+    async function loadData() {
+        try {
+            // Load summary data (total owed, interest, etc.)
+            let summary = getCache('loans_summary');
+            if (!summary) {
+                summary = await api('/loans/summary');
+                setCache('loans_summary', summary);
             }
-            
-            balance = Math.round(balance * 100) / 100;
-            
-            const currentOwed = Math.abs(Math.min(balance, 0));
-            const isCompleted = balance >= -0.5;
-            
-            return {
-                account,
-                openDate,
-                closeDate,
-                borrowed,
-                repaid,
-                interest,
-                currentOwed,
-                isCompleted,
-                lenderName,
-                transactions: sortedTransactions
-            };
+            updateSummaryUI(summary);
+
+            // Load detailed loan and credit card information
+            let details = getCache('loans_details');
+            if (!details) {
+                details = await api('/loans/details?include_completed=true');
+                setCache('loans_details', details);
+            }
+            renderDashboard(details);
+
+        } catch (e) {
+            showError('Error loading data: ' + e.message);
+            console.error(e);
+        }
+    }
+
+    function updateSummaryUI(data) {
+        globalCurrency = data.base_currency || 'GBP';
+        q('#baseCurrencySum').textContent = globalCurrency;
+        
+        q('#activeCreditCards').textContent = data.active_credit_cards;
+        q('#activeLoans').textContent = data.active_loans;
+        
+        const sym = getSymbol(globalCurrency);
+        q('#totalOwed').textContent = `${sym}${formatNum(data.total_owed)}`;
+        q('#totalInterest').textContent = `${sym}${formatNum(data.total_interest)}`;
+    }
+
+    function renderDashboard(data) {
+        const currency = data.base_currency || globalCurrency;
+        
+        renderSection('activeLoans', data.loans, currency, 'loan');
+        renderSection('completedLoans', data.completed, currency, 'mixed');
+        renderSection('creditCards', data.credit_cards, currency, 'card');
+    }
+
+    function renderSection(idPrefix, items, currency, type) {
+        const section = q(`#${idPrefix}Section`);
+        const list = q(`#${idPrefix}List`);
+        const count = q(`#${idPrefix}Count`);
+        
+        if (!items || items.length === 0) {
+            section.style.display = 'none';
+            return;
+        }
+
+        section.style.display = 'block';
+        count.textContent = items.length;
+        list.innerHTML = items.map(item => {
+            // Determine type for mixed lists
+            let itemType = type;
+            if (type === 'mixed') {
+                itemType = item.account.type === 'CREDIT_CARD' ? 'card' : 'loan';
+            }
+            return displayDebtAccount(item, itemType, currency);
+        }).join('');
+    }
+
+    // --- Display and rendering functions ---
+
+    function displayDebtAccount(debt, type, currency) {
+        const sym = getSymbol(currency);
+        const isCard = type === 'card' || type === 'credit-card';
+        const isCompleted = debt.is_completed;
+        
+        // Calculate repayment progress percentage
+        let progress = 0;
+        if (isCard) {
+            const total = debt.borrowed + debt.interest;
+            progress = total > 0 ? (debt.repaid / total) * 100 : 0;
+        } else {
+            progress = debt.borrowed > 0 ? (debt.repaid / debt.borrowed) * 100 : 0;
         }
         
-        // Calculate credit card statistics (different logic than loans)
-        async function calculateCreditCardData(account, transactions) {
-            const sortedTransactions = [...transactions].sort((a, b) => new Date(a.date) - new Date(b.date));
-            
-            const firstTrans = sortedTransactions[0];
-            const openDate = new Date(firstTrans.date);
-            
-            let balance = 0;
-            let borrowed = 0;  // Total charges on the card
-            let repaid = 0;    // Total payments made
-            let interest = 0;  // Only charges with "Intereses y comisiones" category
-            let cardName = account.name;
-            
-            const transferIds = new Set();
-            allTransfers.forEach(t => {
-                if (t.transfer_out_id) transferIds.add(t.transfer_out_id);
-                if (t.transfer_in_id) transferIds.add(t.transfer_in_id);
-            });
-            
-            for (let i = 0; i < sortedTransactions.length; i++) {
-                const trans = sortedTransactions[i];
-                balance += trans.amount;
+        const barClass = isCompleted ? 'completed' : (isCard ? 'credit-card' : 'loan');
+        
+        // Format balance/remaining amount with appropriate colour coding
+        let balanceDisplay;
+        if (isCard) {
+            const bal = debt.current_balance;
+            const color = bal > 0 ? 'var(--green)' : (bal < 0 ? 'var(--red)' : '#666');
+            balanceDisplay = `<span style="color:${color}">${bal > 0 ? '+' : ''}${sym}${formatNum(bal)}</span>`;
+        } else {
+            balanceDisplay = `<span style="color:${isCompleted ? 'var(--green)' : 'var(--red)'}">${sym}${formatNum(debt.current_owed)}</span>`;
+        }
+
+        return `
+            <div class="loan-card">
+                <div class="loan-header" onclick="toggleTransactions(${debt.account.id})">
+                    <div>
+                        <span class="loan-title">${debt.account.name}</span>
+                        ${isCard ? `<span class="badge" style="margin-left:10px">${debt.unique_payees} payees</span>` : ''}
+                    </div>
+                    <span class="loan-toggle" id="toggle-${debt.account.id}">▼</span>
+                </div>
                 
-                if (trans.amount > 0) {
-                    // Positive = payment
-                    repaid += trans.amount;
-                } else if (trans.amount < 0 && !transferIds.has(trans.id)) {
-                    // Negative = charge
-                    const absAmount = Math.abs(trans.amount);
-                    
-                    // Check if it's interest/fees by category name
-                    if (trans.category_name && 
-                        trans.category_name.toLowerCase().includes('intereses') || 
-                        trans.category_name && trans.category_name.toLowerCase().includes('comisiones')) {
-                        interest += absAmount;
-                    } else {
-                        // Regular purchase
-                        borrowed += absAmount;
-                    }
-                }
-            }
-            
-            balance = Math.round(balance * 100) / 100;
-            
-            // For credit cards, currentOwed can be negative (means you have positive balance)
-            // But we typically show debt as positive number
-            const currentOwed = Math.abs(Math.min(balance, 0));
-            
-            // Credit cards are never "completed" - they remain active
-            const isCompleted = false;
-            const closeDate = null;
-            
-            return {
-                account,
-                openDate,
-                closeDate,
-                borrowed,
-                repaid,
-                interest,
-                currentOwed,
-                isCompleted,
-                lenderName: cardName,
-                transactions: sortedTransactions,
-                currentBalance: balance  // Can be positive or negative
-            };
-        }
+                <div class="loan-info">
+                    <span>${isCard ? '💳 Credit Card' : '📋 Loan'}</span>
+                    <span>📅 ${formatDate(debt.open_date)}</span>
+                    ${debt.close_date ? `<span>✅ Closed: ${formatDate(debt.close_date)}</span>` : ''}
+                    <span>🏦 ${debt.lender_name}</span>
+                </div>
+                
+                <div class="progress-bar-container">
+                    <div class="progress-bar ${barClass}" style="width: ${Math.min(progress, 100)}%"></div>
+                </div>
+                
+                <div class="loan-stats">
+                    <div>
+                        <div class="loan-stat-label">${isCard ? 'Charges' : 'Borrowed'}</div>
+                        <div class="loan-stat-value">${sym}${formatNum(debt.borrowed)}</div>
+                    </div>
+                    <div>
+                        <div class="loan-stat-label">Repaid</div>
+                        <div class="loan-stat-value" style="color: var(--green)">${sym}${formatNum(debt.repaid)}</div>
+                    </div>
+                    <div>
+                        <div class="loan-stat-label">Interest</div>
+                        <div class="loan-stat-value" style="color: var(--red)">${sym}${formatNum(debt.interest)}</div>
+                    </div>
+                    <div>
+                        <div class="loan-stat-label">${isCard ? 'Balance' : 'Remaining'}</div>
+                        <div class="loan-stat-value">${balanceDisplay}</div>
+                    </div>
+                </div>
+                
+                <div class="loan-transactions" id="transactions-${debt.account.id}">
+                    ${renderTransactions(debt.transactions, sym)}
+                </div>
+            </div>
+        `;
+    }
+
+    function renderTransactions(transactions, sym) {
+        if (!transactions || transactions.length === 0) return '<div style="text-align:center;color:#999;font-size:12px;padding:10px">No transactions</div>';
         
-        // Display credit cards
-        function displayCreditCards() {
-            const list = document.getElementById('creditCardsList');
-            const count = document.getElementById('creditCardsCount');
-            
-            if (creditCardAccounts.length === 0) {
-                list.innerHTML = '<div class="empty-state">No credit cards found</div>';
-                count.textContent = '0';
-                return;
-            }
-            
-            count.textContent = creditCardAccounts.length;
-            list.innerHTML = creditCardAccounts.map(card => displayDebtAccount(card, 'credit-card')).join('');
-        }
-        
-        // Display loans
-        function displayLoans() {
-            const activeList = document.getElementById('activeLoansList');
-            const completedList = document.getElementById('completedLoansList');
-            const activeCount = document.getElementById('activeLoansCount');
-            const completedCount = document.getElementById('completedLoansCount');
-            
-            // Separate active and completed loans
-            const activeLoans = loanAccounts.filter(loan => !loan.isCompleted);
-            const completedLoans = loanAccounts.filter(loan => loan.isCompleted);
-            
-            // Display active loans
-            if (activeLoans.length > 0) {
-                document.getElementById('activeLoansSection').style.display = 'block';
-                activeCount.textContent = activeLoans.length;
-                activeList.innerHTML = activeLoans.map(loan => displayDebtAccount(loan, 'loan')).join('');
-            } else {
-                document.getElementById('activeLoansSection').style.display = 'none';
-            }
-            
-            // Display completed loans
-            if (completedLoans.length > 0) {
-                document.getElementById('completedLoansSection').style.display = 'block';
-                completedCount.textContent = completedLoans.length;
-                completedList.innerHTML = completedLoans.map(loan => displayDebtAccount(loan, 'loan')).join('');
-            } else {
-                document.getElementById('completedLoansSection').style.display = 'none';
-            }
-        }
-        
-        // Display a debt account (loan or credit card)
-        function displayDebtAccount(debtAccount, type) {
-            const symbol = getCurrencySymbol(debtAccount.account.currency);
-            
-            // Different progress calculation for credit cards vs loans
-            let progressPercent;
-            if (type === 'credit-card') {
-                // For credit cards: show how much of charges have been paid
-                const totalCharges = debtAccount.borrowed + debtAccount.interest;
-                progressPercent = totalCharges > 0 
-                    ? Math.min((debtAccount.repaid / totalCharges) * 100, 100) 
-                    : 0;
-            } else {
-                // For loans: show how much of borrowed has been repaid
-                progressPercent = debtAccount.borrowed > 0 
-                    ? Math.min((debtAccount.repaid / debtAccount.borrowed) * 100, 100) 
-                    : 0;
-            }
-            
-            const progressBarClass = debtAccount.isCompleted ? 'completed' : type;
-            // Add 'completed' class for completed loans to show green border
-            const cardClass = debtAccount.isCompleted && type === 'loan' ? 'completed' : type;
-            
-            const typeLabel = type === 'credit-card' ? '💳 Credit Card' : '📋 Loan';
-            const typeBadge = `<span class="loan-type-badge">${debtAccount.uniquePayees} unique payees</span>`;
-            
-            // Different labels for credit cards vs loans
-            const borrowedLabel = type === 'credit-card' ? 'Total Charges' : 'Borrowed';
-            const remainingLabel = type === 'credit-card' ? 'Current Balance' : 'Remaining';
-            
-            // For credit cards, show if balance is positive (credit) or negative (debt)
-            let remainingDisplay;
-            if (type === 'credit-card' && debtAccount.currentBalance !== undefined) {
-                const absBalance = Math.abs(debtAccount.currentBalance);
-                if (debtAccount.currentBalance > 0) {
-                    // Positive balance (credit in your favour)
-                    remainingDisplay = `<div class="loan-stat-value" style="color: #10b981">+${symbol}${formatNumber(absBalance)}</div>`;
-                } else if (debtAccount.currentBalance < 0) {
-                    // Negative balance (you owe)
-                    remainingDisplay = `<div class="loan-stat-value" style="color: #ef4444">-${symbol}${formatNumber(absBalance)}</div>`;
-                } else {
-                    // Zero balance
-                    remainingDisplay = `<div class="loan-stat-value" style="color: #666">${symbol}0.00</div>`;
-                }
-            } else {
-                // For loans: show remaining debt
-                remainingDisplay = `<div class="loan-stat-value" style="color: ${debtAccount.isCompleted ? '#10b981' : '#ef4444'}">${symbol}${formatNumber(debtAccount.currentOwed)}</div>`;
-            }
-            
+        return transactions.map(t => {
+            // Determine transaction type from amount, location, and category
+            let type = 'Charge';
+            if (t.amount > 0) type = 'Payment';
+            if (t.location_name?.includes('Transfer')) type = 'Transfer';
+            const cat = t.category_name?.toLowerCase() || '';
+            if (cat.match(/interest|fee|interés|comisión/)) type = 'Interest';
+
             return `
-                <div class="loan-card ${cardClass}">
-                    <div class="loan-header" onclick="toggleLoan(${debtAccount.account.id})">
-                        <div>
-                            <span class="loan-title">${debtAccount.account.name}</span>
-                            ${type === 'credit-card' ? typeBadge : ''}
-                        </div>
-                        <span class="loan-toggle" id="toggle-${debtAccount.account.id}">▼</span>
+                <div class="transaction-item">
+                    <div class="transaction-date">${formatDate(t.date)}<br>${new Date(t.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div>
+                    <div class="transaction-details">
+                        <div class="transaction-type">${type}</div>
+                        <div class="transaction-note">${t.payee_name || t.category_name || t.note || ''}</div>
                     </div>
-                    
-                    <div class="loan-info">
-                        <div>${typeLabel}</div>
-                        <div>📅 Opened: ${debtAccount.openDate.toLocaleDateString('en-GB')}</div>
-                        ${debtAccount.closeDate ? `<div>✅ Closed: ${debtAccount.closeDate.toLocaleDateString('en-GB')}</div>` : '<div>⏳ Active</div>'}
-                        <div>🏦 ${debtAccount.lenderName}</div>
-                    </div>
-                    
-                    <div class="progress-bar-container">
-                        <div class="progress-bar ${progressBarClass}" style="width: ${progressPercent}%"></div>
-                    </div>
-                    
-                    <div class="loan-stats">
-                        <div class="loan-stat">
-                            <div class="loan-stat-label">${borrowedLabel}</div>
-                            <div class="loan-stat-value">${symbol}${formatNumber(debtAccount.borrowed)}</div>
-                        </div>
-                        <div class="loan-stat">
-                            <div class="loan-stat-label">Repaid</div>
-                            <div class="loan-stat-value" style="color: #10b981">${symbol}${formatNumber(debtAccount.repaid)}</div>
-                        </div>
-                        <div class="loan-stat">
-                            <div class="loan-stat-label">Interest/Fees</div>
-                            <div class="loan-stat-value" style="color: #ef4444">${symbol}${formatNumber(debtAccount.interest)}</div>
-                        </div>
-                        <div class="loan-stat">
-                            <div class="loan-stat-label">${remainingLabel}</div>
-                            ${remainingDisplay}
-                        </div>
-                    </div>
-                    
-                    <div class="loan-transactions" id="transactions-${debtAccount.account.id}">
-                        ${displayLoanTransactions(debtAccount.transactions, debtAccount.account.currency)}
+                    <div class="transaction-amount ${t.amount < 0 ? 'amount-negative' : 'amount-positive'}">
+                        ${sym}${formatNum(Math.abs(t.amount))}
                     </div>
                 </div>
             `;
-        }
-        
-        // Display loan/credit card transactions
-        // Display loan/credit card transactions
-        function displayLoanTransactions(transactions, currency) {
-            const symbol = getCurrencySymbol(currency);
-            
-            return transactions.map(t => {
-                const date = new Date(t.date).toLocaleDateString('en-GB');
-                const time = new Date(t.date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-                const amountClass = t.amount < 0 ? 'amount-negative' : 'amount-positive';
-                
-                let type;
-                let typeIcon = '';
-                
-                if (t.location_name && (t.location_name === 'Transfer In' || t.location_name === 'Transfer Out')) {
-                    type = 'Transfer';
-                    typeIcon = '🔄 ';
-                } else if (t.amount > 0) {
-                    type = 'Payment';
-                    typeIcon = '💰 ';
-                } else {
-                    // Negative transaction - check if it's interest/fee or regular charge
-                    if (t.category_name && 
-                        (t.category_name.toLowerCase().includes('intereses') || 
-                         t.category_name.toLowerCase().includes('comisiones'))) {
-                        // It's an interest or fee
-                        if (t.category_name.toLowerCase().includes('intereses')) {
-                            type = 'Interest';
-                            typeIcon = '📈 ';
-                        } else {
-                            type = 'Fee';
-                            typeIcon = '💸 ';
-                        }
-                    } else {
-                        // Regular charge/purchase
-                        type = 'Charge';
-                        typeIcon = '🛒 ';
-                    }
-                }
-                
-                return `
-                    <div class="transaction-item">
-                        <div class="transaction-date">${date}<br>${time}</div>
-                        <div class="transaction-details">
-                            <div class="transaction-type">${typeIcon}${type}</div>
-                            ${t.category_name ? `<div class="transaction-note">📂 ${t.category_name}</div>` : ''}
-                            ${t.payee_name ? `<div class="transaction-note">🏪 ${t.payee_name}</div>` : ''}
-                            ${t.note ? `<div class="transaction-note">📝 ${t.note}</div>` : ''}
-                        </div>
-                        <div class="transaction-amount ${amountClass}">
-                            ${symbol}${formatNumber(Math.abs(t.amount))}
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
-        
-        // Toggle loan/credit card transactions
-        function toggleLoan(accountId) {
-            const transDiv = document.getElementById(`transactions-${accountId}`);
-            const toggle = document.getElementById(`toggle-${accountId}`);
-            
-            if (transDiv.classList.contains('expanded')) {
-                transDiv.classList.remove('expanded');
-                toggle.style.transform = 'rotate(0deg)';
-            } else {
-                transDiv.classList.add('expanded');
-                toggle.style.transform = 'rotate(180deg)';
-            }
-        }
-        
-        // Update statistics
-        function updateStatistics() {
-            const activeCreditCards = creditCardAccounts.filter(c => !c.isCompleted).length;
-            const activeLoans = loanAccounts.filter(l => !l.isCompleted).length;
-            
-            const totalOwed = [...creditCardAccounts, ...loanAccounts]
-                .filter(d => !d.isCompleted)
-                .reduce((sum, d) => sum + d.currentOwed, 0);
-            
-            const totalInterest = [...creditCardAccounts, ...loanAccounts]
-                .reduce((sum, d) => sum + d.interest, 0);
-            
-            document.getElementById('activeCreditCards').textContent = activeCreditCards;
-            document.getElementById('activeLoans').textContent = activeLoans;
-            document.getElementById('totalOwed').textContent = '£' + formatNumber(totalOwed);
-            document.getElementById('totalInterest').textContent = '£' + formatNumber(totalInterest);
-        }
-        
-        // Create new loan (keeping original functionality)
-        
-        function showSuccess(message) {
-            const element = document.getElementById('successMessage');
-            element.textContent = message;
-            element.style.display = 'block';
-            setTimeout(() => {
-                element.style.display = 'none';
-            }, 3000);
-        }
-        
-        function showError(message) {
-            const element = document.getElementById('errorMessage');
-            element.textContent = message;
-            element.style.display = 'block';
-            setTimeout(() => {
-                element.style.display = 'none';
-            }, 5000);
-        }
-    </script>
+        }).join('');
+    }
+
+    // --- Utility functions ---
+
+    function formatNum(n) { return Math.abs(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+    function formatDate(d) { return new Date(d).toLocaleDateString('en-GB'); }
+    function getSymbol(c) { 
+        const s = {'GBP':'£','EUR':'€','USD':'$','JPY':'¥'};
+        return s[c] || c + ' ';
+    }
+    
+    function toggleTransactions(id) {
+        const el = q(`#transactions-${id}`);
+        const btn = q(`#toggle-${id}`);
+        el.classList.toggle('expanded');
+        btn.style.transform = el.classList.contains('expanded') ? 'rotate(180deg)' : 'rotate(0deg)';
+    }
+
+    function showSuccess(msg) { msgBox('successMessage', msg); }
+    function showError(msg) { msgBox('errorMessage', msg); }
+    
+    function msgBox(id, msg) {
+        const el = q(`#${id}`);
+        el.textContent = msg;
+        el.style.display = 'block';
+        setTimeout(() => el.style.display = 'none', 3000);
+    }
+
+    function toggleNav() {
+        q('#navDropdown').classList.toggle('open');
+    }
+
+    // --- User actions and event handlers ---
+
+    async function refreshCache() {
+        localStorage.removeItem('loans_summary');
+        localStorage.removeItem('loans_details');
+        showSuccess('Cache cleared. Reloading...');
+        await loadData();
+    }
+
+    q('#btnUpdateRates').addEventListener('click', async () => {
+        try {
+            await api('/exchange-rates/update', { method: 'POST' });
+            showSuccess('Exchange rates updated');
+            refreshCache();
+        } catch (e) { showError('Failed to update rates'); }
+    });
+
+    // Application initialisation
+    window.onclick = (e) => {
+        if (!e.target.matches('#navBtn')) q('#navDropdown').classList.remove('open');
+    }
+    
+    document.addEventListener('DOMContentLoaded', loadData);
+</script>
 </body>
 </html>
