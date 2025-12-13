@@ -778,10 +778,42 @@
         
         // Event listeners for refresh buttons
         document.querySelector('#btnRefresh').onclick = async () => {
-            cacheClearAll(); 
-            // Reload transactions
-            await loadRecentTransactions(true); 
-            alert('Data refreshed');
+            try {
+                // Show loading state
+                const btnRefresh = document.querySelector('#btnRefresh');
+                const originalText = btnRefresh.textContent;
+                btnRefresh.textContent = '⏳ Recalculating...';
+                btnRefresh.disabled = true;
+                
+                // Clear cache
+                cacheClearAll();
+                
+                // Recalculate balances in the backend
+                const balanceResponse = await fetch(`${API_URL}/admin/initialise-balances`, {
+                    method: 'POST'
+                });
+                
+                if (!balanceResponse.ok) {
+                    throw new Error('Failed to recalculate balances');
+                }
+                
+                // Reload transactions with fresh data
+                await loadRecentTransactions(true); 
+                
+                // Restore button state
+                btnRefresh.textContent = originalText;
+                btnRefresh.disabled = false;
+                
+                alert('Data refreshed and balances recalculated!');
+            } catch (error) {
+                console.error('Error during refresh:', error);
+                alert('Error refreshing data: ' + error.message);
+                
+                // Restore button state
+                const btnRefresh = document.querySelector('#btnRefresh');
+                btnRefresh.textContent = '🔄 Refresh';
+                btnRefresh.disabled = false;
+            }
         };
 
         document.querySelector('#btnUpdateRates').onclick = async () => {

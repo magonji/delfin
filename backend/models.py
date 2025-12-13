@@ -54,7 +54,7 @@ class Payee(Base):
     most_common_project_id = Column(Integer, ForeignKey("projects.id"), nullable=True, index=True)
     
     created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
     transactions = relationship("Transaction", back_populates="payee", foreign_keys="Transaction.payee_id")
@@ -111,7 +111,7 @@ class Transaction(Base):
     location_id = Column(Integer, ForeignKey("locations.id"), index=True)
     project_id = Column(Integer, ForeignKey("projects.id"), index=True)
     
-    # NEW: Cached balance columns
+    # Cached balance columns
     account_balance_after = Column(Float, nullable=True, index=True)  # Balance of specific account after transaction
     total_balance_after = Column(Float, nullable=True, index=True)    # Total balance (all accounts) after transaction
     

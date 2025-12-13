@@ -837,6 +837,7 @@ def update_transaction(
     # Store old values
     old_amount = db_transaction.amount
     old_account_id = db_transaction.account_id
+    old_date = db_transaction.date
 
     # Update the old account's balance (subtract old amount)
     if old_account_id:
@@ -859,9 +860,25 @@ def update_transaction(
         if new_account:
             new_account.current_balance += transaction.amount
 
-    # Recalculate balances from this transaction onwards for both accounts
+
+    # Commit changes to get the new date
+    db.commit()
+
+    # Recalculate balances from the EARLIEST date (old or new) for both accounts
     affected_account_ids = list(set([old_account_id, transaction.account_id]))
-    recalculate_balances_from_transaction(db, transaction_id, affected_account_ids)
+    earliest_date = min(old_date, db_transaction.date)
+    
+    # Find a transaction at or before the earliest date to use as trigger
+    trigger_transaction = db.query(models.Transaction).filter(
+        models.Transaction.date <= earliest_date
+    ).order_by(models.Transaction.date.desc(), models.Transaction.id.desc()).first()
+    
+    if trigger_transaction:
+        recalculate_balances_from_transaction(db, trigger_transaction.id, affected_account_ids)
+    else:
+        # If no earlier transaction exists, recalculate from the beginning
+        from backend.balance_calculator import initialise_all_balances
+        initialise_all_balances(db)
 
     db.refresh(db_transaction)
     return db_transaction

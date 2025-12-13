@@ -169,3 +169,8 @@ class ExchangeRateResponse(ExchangeRateBase):
     
     class Config:
         from_attributes = True
+
+class DuplicateCheck(BaseModel):
+       date: str
+       amount: float
+       account_id: int
