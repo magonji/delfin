@@ -907,7 +907,46 @@ def delete_transaction(
 
     return {"message": "Transaction deleted successfully"}
 
-
+@app.post("/transactions/check-duplicate")
+def check_duplicate_transaction(
+    duplicate_check: schemas.DuplicateCheck,
+    db: Session = Depends(get_db)
+):
+    """
+    Check if a transaction with the same date (day), amount, and account already exists.
+    This is used during CSV import to detect duplicates.
+    
+    Args:
+        duplicate_check: DuplicateCheck model with date, amount, and account_id
+    
+    Returns:
+        {"exists": bool}
+    """
+    try:
+        # Parse the date string to get just the date part
+        if 'T' in duplicate_check.date:
+            date_part = duplicate_check.date.split('T')[0]
+        else:
+            date_part = duplicate_check.date
+        
+        # Parse to datetime to ensure it's valid
+        parsed_date = datetime.fromisoformat(date_part)
+        
+        # Query for any transaction on the same day, same account, same amount
+        # We use func.date() to compare only the date part, ignoring time
+        exists = db.query(Transaction).filter(
+            func.date(Transaction.date) == parsed_date.date(),
+            Transaction.amount == duplicate_check.amount,
+            Transaction.account_id == duplicate_check.account_id
+        ).first() is not None
+        
+        return {"exists": exists}
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid date format: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error checking duplicate: {str(e)}")
+    
 # ============================================
 # TRANSFER ENDPOINTS
 # ============================================
