@@ -587,8 +587,8 @@ const toggleDropdown = (id, open) => {
     el.classList.toggle('open', open);
     const btnId = id.replace('Dropdown', 'Btn');
     const menuId = id.replace('Dropdown', 'Menu');
-    q('#' + btnId).setAttribute('aria-expanded', el.classList.contains('open'));
-    q('#' + menuId).setAttribute('aria-hidden', !el.classList.contains('open'));
+    q(btnId).setAttribute('aria-expanded', el.classList.contains('open'));
+    q(menuId).setAttribute('aria-hidden', !el.classList.contains('open'));
 };
 
 const setupDropdown = (btnId, dropId, searchId) => {

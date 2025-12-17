@@ -54,7 +54,7 @@ class Payee(Base):
     most_common_project_id = Column(Integer, ForeignKey("projects.id"), nullable=True, index=True)
     
     created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
     transactions = relationship("Transaction", back_populates="payee", foreign_keys="Transaction.payee_id")
@@ -111,7 +111,7 @@ class Transaction(Base):
     location_id = Column(Integer, ForeignKey("locations.id"), index=True)
     project_id = Column(Integer, ForeignKey("projects.id"), index=True)
     
-    # NEW: Cached balance columns
+    # Cached balance columns
     account_balance_after = Column(Float, nullable=True, index=True)  # Balance of specific account after transaction
     total_balance_after = Column(Float, nullable=True, index=True)    # Total balance (all accounts) after transaction
     
@@ -153,3 +153,42 @@ class ExchangeRate(Base):
         # Índice compuesto para obtener la tasa más reciente por moneda
         Index('idx_exchange_rate_currency_date', 'currency', 'date'),
     )
+
+# Event listeners para redondear cantidades monetarias antes de guardar
+from sqlalchemy import event
+
+@event.listens_for(Transaction, 'before_insert')
+@event.listens_for(Transaction, 'before_update')
+def round_transaction_money_amounts(mapper, connection, target):
+    """
+    Redondea cantidades monetarias a 2 decimales antes de guardar en la base de datos.
+    Esto previene la acumulación de errores de punto flotante.
+    """
+    if target.amount is not None:
+        target.amount = round(target.amount, 2)
+    if target.account_balance_after is not None:
+        target.account_balance_after = round(target.account_balance_after, 2)
+    if target.total_balance_after is not None:
+        target.total_balance_after = round(target.total_balance_after, 2)
+
+
+@event.listens_for(Account, 'before_insert')
+@event.listens_for(Account, 'before_update')
+def round_account_money_amounts(mapper, connection, target):
+    """
+    Redondea balances de cuentas a 2 decimales antes de guardar.
+    """
+    if target.initial_balance is not None:
+        target.initial_balance = round(target.initial_balance, 2)
+    if target.current_balance is not None:
+        target.current_balance = round(target.current_balance, 2)
+
+
+@event.listens_for(ExchangeRate, 'before_insert')
+@event.listens_for(ExchangeRate, 'before_update')
+def round_exchange_rate(mapper, connection, target):
+    """
+    Redondea tasas de cambio a 6 decimales (más precisión para divisas).
+    """
+    if target.rate is not None:
+        target.rate = round(target.rate, 6)

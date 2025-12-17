@@ -13,6 +13,7 @@ from backend.models import Account, Category, Payee, Location, Project, Transact
 from backend.schemas import ExchangeRateResponse
 from backend.balance_calculator import recalculate_balances_from_transaction, initialise_all_balances
 from sqlalchemy import func
+from backend.exchange_rate_helpers import get_rates_bulk, get_latest_rates
 
 # Create tables if they don't exist
 models.Base.metadata.create_all(bind=engine)
@@ -667,6 +668,11 @@ def get_transactions(
     # Enrich with entity names (no extra queries because of joinedload)
     enriched_transactions = []
     for trans in transactions:
+        # Safety check: skip None transactions (corrupted data)
+        if trans is None:
+            print("WARNING: Found None transaction in get_transactions query")
+            continue
+            
         trans_dict = {
             "id": trans.id,
             "date": trans.date.isoformat() if hasattr(trans.date, "isoformat") else str(trans.date),
@@ -792,120 +798,6 @@ def get_transaction(
     return transaction
 
 
-@app.post("/transactions", response_model=schemas.TransactionResponse)
-def create_transaction(
-    transaction: schemas.TransactionCreate,
-    db: Session = Depends(get_db)
-):
-    """
-    Create a new transaction and update account balance.
-    """
-    # Create transaction
-    db_transaction = models.Transaction(**transaction.dict())
-    db.add(db_transaction)
-    db.flush()  # Get the ID without committing
-
-    # Update account balance
-    account = db.query(models.Account).filter(
-        models.Account.id == transaction.account_id
-    ).first()
-    if account:
-        account.current_balance += transaction.amount
-
-    # Recalculate balances from this transaction onwards
-    recalculate_balances_from_transaction(db, db_transaction.id)
-
-    db.refresh(db_transaction)
-    return db_transaction
-
-
-@app.put("/transactions/{transaction_id}", response_model=schemas.TransactionResponse)
-def update_transaction(
-    transaction_id: int,
-    transaction: schemas.TransactionCreate,
-    db: Session = Depends(get_db)
-):
-    """
-    Update an existing transaction.
-    """
-    db_transaction = db.query(models.Transaction).filter(
-        models.Transaction.id == transaction_id
-    ).first()
-    if not db_transaction:
-        raise HTTPException(status_code=404, detail="Transaction not found")
-
-    # Store old values
-    old_amount = db_transaction.amount
-    old_account_id = db_transaction.account_id
-
-    # Update the old account's balance (subtract old amount)
-    if old_account_id:
-        old_account = db.query(models.Account).filter(
-            models.Account.id == old_account_id
-        ).first()
-        if old_account:
-            old_account.current_balance -= old_amount
-
-    # Update transaction fields
-    for key, value in transaction.dict().items():
-        setattr(db_transaction, key, value)
-    db_transaction.updated_at = datetime.utcnow()
-
-    # Update the new account's balance (add new amount)
-    if transaction.account_id:
-        new_account = db.query(models.Account).filter(
-            models.Account.id == transaction.account_id
-        ).first()
-        if new_account:
-            new_account.current_balance += transaction.amount
-
-    # Recalculate balances from this transaction onwards for both accounts
-    affected_account_ids = list(set([old_account_id, transaction.account_id]))
-    recalculate_balances_from_transaction(db, transaction_id, affected_account_ids)
-
-    db.refresh(db_transaction)
-    return db_transaction
-
-
-@app.delete("/transactions/{transaction_id}")
-def delete_transaction(
-    transaction_id: int,
-    db: Session = Depends(get_db)
-):
-    """
-    Delete a transaction.
-    """
-    db_transaction = db.query(models.Transaction).filter(
-        models.Transaction.id == transaction_id
-    ).first()
-    if not db_transaction:
-        raise HTTPException(status_code=404, detail="Transaction not found")
-
-    # Update account balance
-    account = db.query(models.Account).filter(
-        models.Account.id == db_transaction.account_id
-    ).first()
-    if account:
-        account.current_balance -= db_transaction.amount
-
-    # Store the account ID and date before deleting
-    affected_account_id = db_transaction.account_id
-    transaction_date = db_transaction.date
-
-    # Delete the transaction
-    db.delete(db_transaction)
-    db.commit()
-
-    # Find the next transaction after the deleted one to trigger recalculation
-    next_transaction = db.query(models.Transaction).filter(
-        models.Transaction.account_id == affected_account_id,
-        models.Transaction.date >= transaction_date
-    ).order_by(models.Transaction.date.asc(), models.Transaction.id.asc()).first()
-
-    if next_transaction:
-        recalculate_balances_from_transaction(db, next_transaction.id, [affected_account_id])
-
-    return {"message": "Transaction deleted successfully"}
 
 @app.post("/transactions/check-duplicate")
 def check_duplicate_transaction(
@@ -946,7 +838,145 @@ def check_duplicate_transaction(
         raise HTTPException(status_code=400, detail=f"Invalid date format: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error checking duplicate: {str(e)}")
+
+@app.post("/transactions", response_model=schemas.TransactionResponse)
+def create_transaction(
+    transaction: schemas.TransactionCreate,
+    skip_recalculation: bool = Query(False),
+    db: Session = Depends(get_db)
+):
+    """
+    Create a new transaction and update account balance.
+    STRICT VALIDATION ADDED to prevent database corruption.
+    """
+    # 1. VALIDATION: Ensure critical fields are not None
+    if transaction.amount is None:
+        raise HTTPException(status_code=400, detail="Transaction amount cannot be None/Null")
     
+    if transaction.date is None:
+        raise HTTPException(status_code=400, detail="Transaction date cannot be None")
+
+    if transaction.account_id is None:
+        raise HTTPException(status_code=400, detail="Transaction must be linked to an Account")
+
+    # 2. CREATE: Only proceed if validation passes
+    try:
+        db_transaction = models.Transaction(**transaction.dict())
+        db.add(db_transaction)
+        db.flush()  # Get the ID without committing
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error during insert: {str(e)}")
+
+    # 3. RECALCULATE
+    if not skip_recalculation:
+        try:
+            recalculate_balances_from_transaction(db, db_transaction.id)
+            db.commit()  # Commit después de recalcular
+        except Exception as e:
+            # If calculation fails, we MUST rollback the transaction so we don't save bad data
+            db.rollback()
+            print(f"CRITICAL: Calculation failed, rolled back transaction. Error: {e}")
+            raise HTTPException(status_code=500, detail=f"Calculation error: {str(e)}")
+    else:
+        db.commit()
+
+    db.refresh(db_transaction)
+    return db_transaction
+
+
+@app.put("/transactions/{transaction_id}", response_model=schemas.TransactionResponse)
+def update_transaction(
+    transaction_id: int,
+    transaction: schemas.TransactionCreate,
+    db: Session = Depends(get_db)
+):
+    """
+    Update an existing transaction.
+    """
+    db_transaction = db.query(models.Transaction).filter(
+        models.Transaction.id == transaction_id
+    ).first()
+    if not db_transaction:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+
+    # Store old values
+    old_account_id = db_transaction.account_id
+    old_date = db_transaction.date
+
+    # Update transaction fields
+    for key, value in transaction.dict().items():
+        setattr(db_transaction, key, value)
+    db_transaction.updated_at = datetime.utcnow()
+
+    # NO hacer commit aquí - se hará después del recálculo
+    db.flush()  # Flush para que los cambios estén disponibles para las queries siguientes
+
+    # Recalculate balances from the EARLIEST date for both accounts
+    affected_account_ids = list(set([old_account_id, transaction.account_id]))
+    earliest_date = min(old_date, db_transaction.date)
+    
+    # Find a transaction at or before the earliest date to use as trigger
+    trigger_transaction = db.query(models.Transaction).filter(
+        models.Transaction.date <= earliest_date
+    ).order_by(models.Transaction.date.desc(), models.Transaction.id.desc()).first()
+    
+    if trigger_transaction:
+        recalculate_balances_from_transaction(db, trigger_transaction.id, affected_account_ids)
+        db.commit()  # Commit después de recalcular
+    else:
+        # If no earlier transaction exists, recalculate from the beginning
+        from backend.balance_calculator import initialise_all_balances
+        initialise_all_balances(db)
+        db.commit()  # Commit después de inicializar
+
+    db.refresh(db_transaction)
+    return db_transaction
+
+
+@app.delete("/transactions/{transaction_id}")
+def delete_transaction(
+    transaction_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Delete a transaction.
+    """
+    db_transaction = db.query(models.Transaction).filter(
+        models.Transaction.id == transaction_id
+    ).first()
+    if not db_transaction:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+
+    # Store the account ID and date before deleting
+    affected_account_id = db_transaction.account_id
+    transaction_date = db_transaction.date
+
+    # Delete the transaction
+    db.delete(db_transaction)
+    db.flush()  # Flush en lugar de commit para mantener la transacción abierta
+
+    # Find the next transaction after the deleted one to trigger recalculation
+    next_transaction = db.query(models.Transaction).filter(
+        models.Transaction.account_id == affected_account_id,
+        models.Transaction.date >= transaction_date
+    ).order_by(models.Transaction.date.asc(), models.Transaction.id.asc()).first()
+
+    if next_transaction:
+        recalculate_balances_from_transaction(db, next_transaction.id, [affected_account_id])
+        db.commit()  # Commit después de recalcular
+    else:
+        # If no transactions remain for this account, reset current_balance
+        account = db.query(models.Account).filter(
+            models.Account.id == affected_account_id
+        ).first()
+        if account:
+            account.current_balance = account.initial_balance
+            db.commit()
+
+    return {"message": "Transaction deleted successfully"}
+
+
 # ============================================
 # TRANSFER ENDPOINTS
 # ============================================
@@ -1022,6 +1052,7 @@ def create_transfer(
         earlier_transaction_id,
         [transfer.from_account_id, transfer.to_account_id]
     )
+    db.commit()  # Commit después de recalcular
 
     db.refresh(transaction_out)
     db.refresh(transaction_in)
@@ -1031,7 +1062,7 @@ def create_transfer(
         "message": "Transfer created successfully"
     }
 
-
+                            
 # ============================================
 # EXCHANGE RATES ENDPOINTS
 # ============================================
@@ -1081,7 +1112,7 @@ def trigger_exchange_rate_update(db: Session = Depends(get_db)):
     Manually trigger an exchange rate update.
     """
     try:
-        from update_exchange_rates import update_exchange_rates
+        from backend.update_exchange_rates import update_exchange_rates  # ← Así
         update_exchange_rates()
         return {"message": "Exchange rates updated successfully"}
     except Exception as e:
@@ -1106,6 +1137,42 @@ def get_exchange_rates_history(
     return rates
 
 
+
+# ============================================
+# HELPER FUNCTIONS FOR HISTORICAL RATES
+# ============================================
+
+def _to_date(value):
+    """Convert any date-like value to datetime.date"""
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    try:
+        return datetime.fromisoformat(str(value)).date()
+    except Exception:
+        return None
+
+
+def _as_datetime_floor(d):
+    """Return datetime at 00:00:00 for a given date"""
+    if isinstance(d, datetime):
+        return d
+    if isinstance(d, date):
+        return datetime.combine(d, time.min)
+    return None
+
+
+def _as_datetime_ceil(d):
+    """Return datetime at 23:59:59.999999 for a given date"""
+    if isinstance(d, datetime):
+        return d
+    if isinstance(d, date):
+        return datetime.combine(d, time.max)
+    return None
+
+
+
 # ============================================
 # DASHBOARD / STATISTICS
 # ============================================
@@ -1114,24 +1181,10 @@ def get_exchange_rates_history(
 def get_dashboard_summary(db: Session = Depends(get_db)):
     """
     Get summary statistics for the dashboard with currency conversion.
-    Optimised version with aggregation instead of loading all rows.
+    Uses LATEST exchange rates (this is correct for current total balance).
     """
-    from sqlalchemy import func as sql_func, case
-
     # Get latest exchange rates
-    subquery = db.query(
-        ExchangeRate.currency,
-        sql_func.max(ExchangeRate.date).label('max_date')
-    ).group_by(ExchangeRate.currency).subquery()
-
-    rates_query = db.query(ExchangeRate).join(
-        subquery,
-        (ExchangeRate.currency == subquery.c.currency) &
-        (ExchangeRate.date == subquery.c.max_date)
-    ).all()
-
-    rates_dict = {rate.currency: rate.rate for rate in rates_query}
-    rates_dict['GBP'] = 1.0
+    rates_dict = get_latest_rates(db)
 
     # Find most common currency
     currency_counts = db.query(
@@ -1151,14 +1204,14 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
         )
     conversion_expression = case(
         *conversion_cases,
-        else_=Transaction.amount  # Fallback
+        else_=Transaction.amount
     )
 
     total_balance_converted = db.query(
         sql_func.sum(conversion_expression)
     ).scalar() or 0
 
-    # Count queries - NOTE: Only count ACTIVE accounts
+    # Count queries
     total_transactions = db.query(sql_func.count(Transaction.id)).scalar()
     total_accounts = db.query(sql_func.count(Account.id)).filter(
         Account.is_active == 1
@@ -1174,136 +1227,102 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
         "rates_available": len(rates_dict) > 0
     }
 
-
 # ============================================
 # OPTIMISED DASHBOARD ENDPOINTS
 # ============================================
 
 @app.get("/dashboard/networth/{period}")
 def get_networth_evolution(
-    period: str,  # "daily", "weekly", "monthly"
+    period: str,
     date_from: Optional[date] = Query(None),
     date_to: Optional[date] = Query(None),
-    excluded_accounts: Optional[str] = Query(None),  # comma-separated account IDs
+    excluded_accounts: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
     """
-    Get net worth evolution data optimised for charting.
-    Period determines the data aggregation level.
-    Returns pre-calculated data points ready for Chart.js
+    Get net worth evolution with HISTORICAL exchange rates.
+    Each transaction uses the exchange rate from its transaction date.
     """
-
-    # --- Helpers para normalizar fechas / comparaciones ---
-    def _to_date(value):
-        """Normalise any date-like to datetime.date (no time)."""
-        if isinstance(value, datetime):
-            return value.date()
-        if isinstance(value, date):
-            return value
-        try:
-            return datetime.fromisoformat(str(value)).date()
-        except Exception:
-            return None
-
-    def _as_datetime_floor(d):
-        """Return a datetime at 00:00:00 for a given date."""
-        if isinstance(d, datetime):
-            return d
-        if isinstance(d, date):
-            return datetime.combine(d, time.min)
-        return None
-
-    def _as_datetime_ceil(d):
-        """Return a datetime at 23:59:59.999999 for a given date."""
-        if isinstance(d, datetime):
-            return d
-        if isinstance(d, date):
-            return datetime.combine(d, time.max)
-        return None
-
     # Parse excluded accounts
     excluded_ids = []
     if excluded_accounts:
         excluded_ids = [int(id) for id in excluded_accounts.split(',') if id.strip().isdigit()]
-
-    # Get latest exchange rates for conversion
-    subquery = db.query(
-        ExchangeRate.currency,
-        sql_func.max(ExchangeRate.date).label('max_date')
-    ).group_by(ExchangeRate.currency).subquery()
-
-    rates_query = db.query(ExchangeRate).join(
-        subquery,
-        (ExchangeRate.currency == subquery.c.currency) &
-        (ExchangeRate.date == subquery.c.max_date)
-    ).all()
-
-    rates_dict = {rate.currency: rate.rate for rate in rates_query}
-    rates_dict['GBP'] = 1.0
-
-    # Determine base currency (most common in transactions)
-    currency_counts = db.query(
-        Transaction.currency,
-        sql_func.count(Transaction.id).label('count')
-    ).group_by(Transaction.currency).order_by(sql_func.count(Transaction.id).desc()).all()
-
-    base_currency = currency_counts[0][0] if currency_counts else "GBP"
-    base_rate = rates_dict.get(base_currency, 1.0)
 
     # Build query filters
     filters = []
     if excluded_ids:
         filters.append(~Transaction.account_id.in_(excluded_ids))
     if date_from:
-        filters.append(Transaction.date >= _as_datetime_floor(date_from))  # normalizado
+        filters.append(Transaction.date >= _as_datetime_floor(date_from))
     if date_to:
-        filters.append(Transaction.date <= _as_datetime_ceil(date_to))     # normalizado
+        filters.append(Transaction.date <= _as_datetime_ceil(date_to))
 
-    # Build currency conversion expression
-    conversion_cases = []
-    for currency, rate in rates_dict.items():
-        conversion_factor = base_rate / rate
-        conversion_cases.append(
-            (Transaction.currency == currency, Transaction.amount * conversion_factor)
-        )
-    conversion_expression = case(
-        *conversion_cases,
-        else_=Transaction.amount
-    )
-
-    # Get all transactions with converted amounts (order by ascending date)
-    query = db.query(
-        Transaction.date,
-        Transaction.account_id,
-        conversion_expression.label('converted_amount')
-    )
+    # Get all transactions in range
+    query = db.query(Transaction)
     if filters:
         query = query.filter(and_(*filters))
-    query = query.order_by(Transaction.date)
+    transactions = query.order_by(Transaction.date).all()
 
-    # ---------------- Baseline when date_from is set ----------------
+    if not transactions:
+        return {
+            "data_points": [],
+            "summary": {
+                "initial_balance": 0, "current_balance": 0, "total_change": 0,
+                "percentage_change": 0, "peak_balance": 0, "peak_date": None,
+                "lowest_balance": 0, "lowest_date": None
+            },
+            "base_currency": "GBP"
+        }
+
+    # Determine date range for exchange rates
+    min_trans_date = _to_date(transactions[0].date)
+    max_trans_date = _to_date(transactions[-1].date)
+    
+    if date_from and _to_date(date_from) < min_trans_date:
+        min_trans_date = _to_date(date_from)
+
+    # Get all currencies used
+    currencies_query = db.query(Transaction.currency).distinct()
+    if filters:
+        currencies_query = currencies_query.filter(and_(*filters))
+    currencies = [c[0] for c in currencies_query.all() if c[0]]
+
+    # Add account currencies for baseline calculation
+    if date_from:
+        account_currencies = db.query(Account.currency).distinct().all()
+        for c in account_currencies:
+            if c[0] and c[0] not in currencies:
+                currencies.append(c[0])
+
+    # Load historical exchange rates (BULK)
+    historical_rates = get_rates_bulk(db, currencies, min_trans_date, max_trans_date)
+
+    # Determine base currency
+    currency_counts = db.query(
+        Transaction.currency,
+        sql_func.count(Transaction.id).label('count')
+    ).group_by(Transaction.currency).order_by(sql_func.count(Transaction.id).desc()).all()
+    
+    base_currency = currency_counts[0][0] if currency_counts else "GBP"
+
+    # Calculate baseline balances
     account_balances = {}
     all_balance_points = []
 
     if date_from:
-        def convert_to_base(amount, currency):
-            rate = rates_dict.get(currency, 1.0)
-            return float(amount or 0) * (base_rate / rate)
-
-        # Only active accounts (excluding those marked)
         accounts_q = db.query(Account).filter(Account.is_active == 1)
         if excluded_ids:
             accounts_q = accounts_q.filter(~Account.id.in_(excluded_ids))
-        accounts_list = accounts_q.all()
+        accounts = accounts_q.all()
 
+        baseline_date = _to_date(date_from)
+        baseline_rates = historical_rates.get(baseline_date, {'GBP': 1.0})
         total_baseline = 0.0
-        boundary = _as_datetime_floor(date_from)  # compare with DateTime column
 
-        for acc in accounts_list:
-            # Last transaction BEFORE date_from for this account
+        for acc in accounts:
             last_tx = db.query(Transaction).filter(
                 Transaction.account_id == acc.id,
-                Transaction.date < boundary
+                Transaction.date < _as_datetime_floor(date_from)
             ).order_by(Transaction.date.desc(), Transaction.id.desc()).first()
 
             if last_tx and last_tx.account_balance_after is not None:
@@ -1311,65 +1330,49 @@ def get_networth_evolution(
             else:
                 baseline_native = acc.initial_balance or 0
 
-            baseline_conv = convert_to_base(baseline_native, acc.currency)
-            account_balances[acc.id] = baseline_conv
-            total_baseline += baseline_conv
+            acc_rate = baseline_rates.get(acc.currency, 1.0)
+            base_rate = baseline_rates.get(base_currency, 1.0)
+            baseline_converted = baseline_native * (base_rate / acc_rate)
 
-        # Synthetic point at date_from with the accumulated net worth up to that day
-        start_date = _to_date(date_from)
+            account_balances[acc.id] = baseline_converted
+            total_baseline += baseline_converted
+
         all_balance_points.append({
-            'date': start_date,
+            'date': baseline_date,
             'balance': round(total_baseline, 2)
         })
 
-    # ---------------- Process transactions in range ----------------
-    transactions_data = query.all()
+    # Process transactions with HISTORICAL rates
+    for trans in transactions:
+        trans_date = _to_date(trans.date)
+        rates_for_day = historical_rates.get(trans_date, {'GBP': 1.0})
+        
+        trans_rate = rates_for_day.get(trans.currency, 1.0)
+        base_rate = rates_for_day.get(base_currency, 1.0)
+        converted_amount = trans.amount * (base_rate / trans_rate)
 
-    if not transactions_data and not all_balance_points:
-        return {
-            "data_points": [],
-            "summary": {
-                "initial_balance": 0,
-                "current_balance": 0,
-                "total_change": 0,
-                "percentage_change": 0,
-                "peak_balance": 0,
-                "peak_date": None,
-                "lowest_balance": 0,
-                "lowest_date": None
-            },
-            "base_currency": base_currency
-        }
-
-    for trans in transactions_data:
         if trans.account_id not in account_balances:
             account_balances[trans.account_id] = 0.0
-        account_balances[trans.account_id] += float(trans.converted_amount or 0)
-
-        # Normalise transaction date to date (no time)
-        d = _to_date(trans.date)
+        account_balances[trans.account_id] += converted_amount
 
         total_balance = sum(account_balances.values())
         all_balance_points.append({
-            'date': d,
+            'date': trans_date,
             'balance': round(total_balance, 2)
         })
 
-    # ---------------- Aggregate based on period ----------------
+    # Aggregate by period
     aggregated_data = []
     if period == "monthly":
-        # Group by month, keep last balance of each month
         monthly_data = {}
         for point in all_balance_points:
             if point['date'] is None:
                 continue
             month_key = point['date'].strftime('%Y-%m')
-            # Keep last balance of each month
             if month_key not in monthly_data or point['date'] > monthly_data[month_key]['date']:
                 monthly_data[month_key] = point
         aggregated_data = sorted(monthly_data.values(), key=lambda x: x['date'])
     elif period == "weekly":
-        # Group by week (start Monday), keep last balance of each week
         weekly_data = {}
         for point in all_balance_points:
             if point['date'] is None:
@@ -1380,17 +1383,16 @@ def get_networth_evolution(
                 weekly_data[week_key] = point
         aggregated_data = sorted(weekly_data.values(), key=lambda x: x['date'])
     else:  # daily
-        # Group by day (keep last)
         daily_data = {}
         for point in all_balance_points:
             if point['date'] is None:
                 continue
             day_key = point['date'].strftime('%Y-%m-%d')
-            if day_key not in daily_data or point['date'] > daily_data[day_key]['date']:
+            if day_key not in daily_data:
                 daily_data[day_key] = point
         aggregated_data = sorted(daily_data.values(), key=lambda x: x['date'])
 
-    # ---------------- Summary statistics ----------------
+    # Summary statistics
     if aggregated_data:
         initial_balance = aggregated_data[0]['balance']
         current_balance = aggregated_data[-1]['balance']
@@ -1400,9 +1402,8 @@ def get_networth_evolution(
         balances = [p['balance'] for p in aggregated_data]
         peak_balance = max(balances)
         lowest_balance = min(balances)
-
-        peak_point = next((p for p in aggregated_data if p['balance'] == peak_balance), None)
-        lowest_point = next((p for p in aggregated_data if p['balance'] == lowest_balance), None)
+        peak_idx = balances.index(peak_balance)
+        lowest_idx = balances.index(lowest_balance)
 
         summary = {
             "initial_balance": round(initial_balance, 2),
@@ -1410,37 +1411,25 @@ def get_networth_evolution(
             "total_change": round(total_change, 2),
             "percentage_change": round(percentage_change, 2),
             "peak_balance": round(peak_balance, 2),
-            "peak_date": peak_point['date'].isoformat() if peak_point else None,
+            "peak_date": aggregated_data[peak_idx]['date'].isoformat(),
             "lowest_balance": round(lowest_balance, 2),
-            "lowest_date": lowest_point['date'].isoformat() if lowest_point else None
+            "lowest_date": aggregated_data[lowest_idx]['date'].isoformat()
         }
     else:
         summary = {
-            "initial_balance": 0,
-            "current_balance": 0,
-            "total_change": 0,
-            "percentage_change": 0,
-            "peak_balance": 0,
-            "peak_date": None,
-            "lowest_balance": 0,
-            "lowest_date": None
+            "initial_balance": 0, "current_balance": 0, "total_change": 0,
+            "percentage_change": 0, "peak_balance": 0, "peak_date": None,
+            "lowest_balance": 0, "lowest_date": None
         }
-
-    # Format response
-    data_points = [
-        {
-            "date": point['date'].isoformat(),
-            "balance": point['balance']
-        }
-        for point in aggregated_data
-    ]
 
     return {
-        "data_points": data_points,
+        "data_points": [
+            {'date': point['date'].isoformat(), 'balance': point['balance']}
+            for point in aggregated_data
+        ],
         "summary": summary,
         "base_currency": base_currency
     }
-
 
 # ============================================
 # (El resto de endpoints optimizados de categorías / yearly / top-payees / months)
@@ -1448,410 +1437,219 @@ def get_networth_evolution(
 # ============================================
 
 @app.get("/dashboard/categories/{period}")
-def get_categories_analysis(
-    period: str,  # "monthly", "weekly", "daily"
+def get_categories_evolution(
+    period: str,
+    category_ids: str = Query(...),
     date_from: Optional[date] = Query(None),
     date_to: Optional[date] = Query(None),
-    category_ids: Optional[str] = Query(None),  # comma-separated category IDs
-    limit: int = Query(20, description="Top N categories to return"),
     db: Session = Depends(get_db)
 ):
     """
-    Get spending by category over time, optimised for charting.
-    Returns time series data for selected categories.
+    Get category spending evolution with HISTORICAL exchange rates.
     """
-    from sqlalchemy import func as sql_func, case, and_, extract
-    from datetime import datetime, timedelta
-    # Parse category IDs if provided
-    selected_categories = None
-    if category_ids:
-        selected_categories = [int(id) for id in category_ids.split(',')]
-
-    # Get latest exchange rates
-    subquery = db.query(
-        ExchangeRate.currency,
-        sql_func.max(ExchangeRate.date).label('max_date')
-    ).group_by(ExchangeRate.currency).subquery()
-
-    rates_query = db.query(ExchangeRate).join(
-        subquery,
-        (ExchangeRate.currency == subquery.c.currency) &
-        (ExchangeRate.date == subquery.c.max_date)
-    ).all()
-    rates_dict = {rate.currency: rate.rate for rate in rates_query}
-    rates_dict['GBP'] = 1.0
-
-    # Get base currency
-    currency_counts = db.query(
-        Transaction.currency,
-        sql_func.count(Transaction.id).label('count')
-    ).group_by(Transaction.currency).order_by(sql_func.count(Transaction.id).desc()).all()
-    base_currency = currency_counts[0][0] if currency_counts else "GBP"
-    base_rate = rates_dict.get(base_currency, 1.0)
-
-    # Build currency conversion
-    conversion_cases = []
-    for currency, rate in rates_dict.items():
-        conversion_factor = base_rate / rate
-        conversion_cases.append(
-            (Transaction.currency == currency, sql_func.abs(Transaction.amount) * conversion_factor)
-        )
-    conversion_expression = case(
-        *conversion_cases,
-        else_=sql_func.abs(Transaction.amount)
-    )
+    cat_ids = [int(x) for x in category_ids.split(',') if x.strip().isdigit()]
+    if not cat_ids:
+        return {"periods": [], "categories": {}}
 
     # Build filters
-    filters = [Transaction.amount < 0]  # Only expenses
+    filters = [Transaction.category_id.in_(cat_ids)]
     if date_from:
-        filters.append(Transaction.date >= datetime.combine(date_from, time.min))
+        filters.append(Transaction.date >= _as_datetime_floor(date_from))
     if date_to:
-        filters.append(Transaction.date <= datetime.combine(date_to, time.max))
-    if selected_categories:
-        filters.append(Transaction.category_id.in_(selected_categories))
+        filters.append(Transaction.date <= _as_datetime_ceil(date_to))
 
-    # Determine grouping based on period - SQLite compatible
-    if period == "monthly":
-        # Group by YYYY-MM
-        date_group = sql_func.strftime('%Y-%m', Transaction.date)
-    elif period == "weekly":
-        # Group by YYYY-WWW (week number, Monday-first)
-        date_group = sql_func.strftime('%Y-W%W', Transaction.date)
-    else:  # daily
-        # Group by YYYY-MM-DD
-        date_group = sql_func.strftime('%Y-%m-%d', Transaction.date)
+    # Get transactions
+    transactions = db.query(Transaction).filter(and_(*filters)).order_by(Transaction.date).all()
+    
+    if not transactions:
+        return {"periods": [], "categories": {}}
 
-    # Query for category totals over time
-    query = db.query(
-        date_group.label('period_date'),
-        Transaction.category_id,
-        Category.name.label('category_name'),
-        sql_func.sum(conversion_expression).label('total_amount')
-    ).join(
-        Category, Transaction.category_id == Category.id, isouter=True
-    ).filter(
-        and_(*filters)
-    ).group_by(
-        date_group,
-        Transaction.category_id,
-        Category.name
-    ).order_by(
-        date_group,
-        sql_func.sum(conversion_expression).desc()
-    )
+    # Date range
+    min_date = _to_date(transactions[0].date)
+    max_date = _to_date(transactions[-1].date)
 
-    results = query.all()
+    # Get currencies
+    currencies = list(set([t.currency for t in transactions if t.currency]))
 
-    # -----------------------------
-    # Procesar resultados en series
-    # -----------------------------
-    time_series_data = {}   # {category_name: {period_str: amount}}
-    category_totals = {}    # totales por categoría (para top-N)
-    observed_periods = set()
+    # Load historical rates
+    historical_rates = get_rates_bulk(db, currencies, min_date, max_date)
 
-    for row in results:
-        period_str = str(row.period_date)
-        category_name = row.category_name or 'Uncategorised'
-        amount = float(row.total_amount or 0)
-        observed_periods.add(period_str)
-        if category_name not in time_series_data:
-            time_series_data[category_name] = {}
-        if category_name not in category_totals:
-            category_totals[category_name] = 0.0
-        time_series_data[category_name][period_str] = round(amount, 2)
-        category_totals[category_name] += amount
+    # Base currency
+    base_currency = "GBP"
 
-    # -----------------------------------------------
-    # Construir línea temporal completa (con huecos 0)
-    # -----------------------------------------------
-    from datetime import date as dt_date
+    # Group by period and category
+    data_by_period = {}
+    
+    for trans in transactions:
+        trans_date = _to_date(trans.date)
+        rates_for_day = historical_rates.get(trans_date, {'GBP': 1.0})
+        
+        trans_rate = rates_for_day.get(trans.currency, 1.0)
+        base_rate = rates_for_day.get(base_currency, 1.0)
+        converted = abs(trans.amount) * (base_rate / trans_rate)
 
-    def _parse_date(d):
-        if isinstance(d, dt_date):
-            return datetime.combine(d, time.min)
-        if isinstance(d, datetime):
-            return d
-        if d:
-            # 'YYYY-MM-DD' o 'YYYY-MM' desde el cliente
-            try:
-                # intentamos 'YYYY-MM-DD'
-                return datetime.strptime(str(d), '%Y-%m-%d')
-            except ValueError:
-                try:
-                    # intentamos 'YYYY-MM' -> 1er día del mes
-                    return datetime.strptime(str(d), '%Y-%m')
-                except ValueError:
-                    return None
-        return None
-
-    # Determinar rango temporal
-    start_dt = _parse_date(date_from) if date_from else None
-    end_dt   = _parse_date(date_to)   if date_to   else None
-
-    # Si no hay filtros, inferir del propio resultado:
-    if not start_dt or not end_dt:
-        # Convertir observed_periods a fechas reales según 'period'
-        def _period_to_dt(p):
-            if period == "monthly":
-                # p = 'YYYY-MM'
-                return datetime.strptime(p, '%Y-%m')
-            elif period == "weekly":
-                # p = 'YYYY-Www', ejemplo '2025-W06' (strftime con %W)
-                y, w = p.split('-W')
-                y = int(y); w = int(w)
-                # Lunes de esa semana (semana estilo %W, Monday-first, 0-based)
-                first = datetime.strptime(f"{y}-01-01", "%Y-%m-%d")
-                monday = first + timedelta(days=-first.weekday()) + timedelta(weeks=w)
-                return monday
-            else:  # daily
-                # p = 'YYYY-MM-DD'
-                return datetime.strptime(p, '%Y-%m-%d')
-
-        if observed_periods:
-            inferred_dates = sorted(_period_to_dt(p) for p in observed_periods)
-            start_dt = start_dt or inferred_dates[0]
-            end_dt   = end_dt   or inferred_dates[-1]
-        else:
-            # Sin datos, definimos una ventana mínima de 1 período
-            today = datetime.now()
-            if period == "monthly":
-                start_dt = datetime(today.year, today.month, 1)
-                end_dt   = start_dt
-            elif period == "weekly":
-                start_dt = today - timedelta(days=today.weekday())
-                end_dt   = start_dt
-            else:
-                start_dt = datetime(today.year, today.month, today.day)
-                end_dt   = start_dt
-
-    # Generar lista completa de períodos como strings
-    def _iter_periods(start_dt, end_dt, granularity):
-        periods = []
-        if granularity == "monthly":
-            y, m = start_dt.year, start_dt.month
-            y2, m2 = end_dt.year, end_dt.month
-            while (y < y2) or (y == y2 and m <= m2):
-                periods.append(f"{y}-{str(m).zfill(2)}")
-                # avanzar un mes
-                m += 1
-                if m == 13:
-                    m = 1; y += 1
-        elif granularity == "weekly":
-            # normalizar a lunes
-            cur = start_dt - timedelta(days=start_dt.weekday())
-            end = end_dt   - timedelta(days=end_dt.weekday())
-            while cur <= end:
-                periods.append(cur.strftime('%Y-W%W'))
-                cur += timedelta(weeks=1)
+        # Determine period key
+        if period == "monthly":
+            period_key = trans_date.strftime('%Y-%m')
+        elif period == "weekly":
+            week_start = trans_date - timedelta(days=trans_date.weekday())
+            period_key = week_start.strftime('%Y-%m-%d')
         else:  # daily
-            cur = start_dt
-            end = end_dt
-            while cur.date() <= end.date():
-                periods.append(cur.strftime('%Y-%m-%d'))
-                cur += timedelta(days=1)
-        return periods
+            period_key = trans_date.strftime('%Y-%m-%d')
 
-    sorted_periods = _iter_periods(start_dt, end_dt, period)
+        if period_key not in data_by_period:
+            data_by_period[period_key] = {}
+        
+        cat_name = trans.category.name if trans.category else "Uncategorized"
+        if cat_name not in data_by_period[period_key]:
+            data_by_period[period_key][cat_name] = 0
+        
+        data_by_period[period_key][cat_name] += converted
 
-    # Get top categories by total spending (puede ser 0 si no hay datos)
-    top_categories = sorted(
-        category_totals.items(),
-        key=lambda x: x[1],
-        reverse=True
-    )[:limit]
+    # Format response
+    periods = sorted(data_by_period.keys())
+    categories = {}
+    
+    for trans in transactions:
+        if trans.category:
+            cat_name = trans.category.name
+            if cat_name not in categories:
+                categories[cat_name] = []
 
-    categories_data = {}
-    # Asegurar que las top categorías tienen serie completa con 0s
-    for category_name, total in top_categories:
-        series = []
-        per_map = time_series_data.get(category_name, {})
-        for p in sorted_periods:
-            series.append(per_map.get(p, 0))
-        categories_data[category_name] = series
-
-    # Calculate summary statistics
-    total_spent = sum(category_totals.values())
-    num_periods = len(sorted_periods)
-    average_per_period = total_spent / num_periods if num_periods > 0 else 0
-
-    # Format top categories for response
-    top_categories_formatted = [
-        {
-            "name": name,
-            "total": round(total, 2),
-            "percentage": round((total / total_spent * 100), 1) if total_spent > 0 else 0
-        }
-        for name, total in top_categories
-    ]
+    for period_key in periods:
+        for cat_name in categories:
+            value = data_by_period[period_key].get(cat_name, 0)
+            categories[cat_name].append(round(value, 2))
 
     return {
-        "periods": sorted_periods,
-        "categories": categories_data,
-        "top_categories": top_categories_formatted,
-        "summary": {
-            "total_spent": round(total_spent, 2),
-            "average_per_period": round(average_per_period, 2),
-            "num_categories": len(category_totals)
-        },
+        "periods": periods,
+        "categories": categories,
         "base_currency": base_currency
     }
 
-
 @app.get("/dashboard/categories/breakdown/{year_month}")
 def get_monthly_category_breakdown(
-    year_month: str,  # Format: "2024-11"
+    year_month: str,
     db: Session = Depends(get_db)
 ):
     """
-    Get category breakdown for a specific month.
-    Perfect for pie/doughnut charts.
+    Get category breakdown for a month with HISTORICAL rates and top expenses.
     """
-    from sqlalchemy import func as sql_func, case, and_, extract
-
-    # Parse year and month
     try:
-        year, month = year_month.split('-')
-        year = int(year)
-        month = int(month)
-    except:
+        year, month = map(int, year_month.split('-'))
+        start_date = date(year, month, 1)
+        if month == 12:
+            end_date = date(year + 1, 1, 1) - timedelta(days=1)
+        else:
+            end_date = date(year, month + 1, 1) - timedelta(days=1)
+    except ValueError:
         raise HTTPException(status_code=400, detail="Invalid year_month format. Use YYYY-MM")
 
-    # Get exchange rates
-    subquery = db.query(
-        ExchangeRate.currency,
-        sql_func.max(ExchangeRate.date).label('max_date')
-    ).group_by(ExchangeRate.currency).subquery()
-
-    rates_query = db.query(ExchangeRate).join(
-        subquery,
-        (ExchangeRate.currency == subquery.c.currency) &
-        (ExchangeRate.date == subquery.c.max_date)
-    ).all()
-
-    rates_dict = {rate.currency: rate.rate for rate in rates_query}
-    rates_dict['GBP'] = 1.0
-
-    # Get base currency
-    currency_counts = db.query(
-        Transaction.currency,
-        sql_func.count(Transaction.id).label('count')
-    ).group_by(Transaction.currency).order_by(sql_func.count(Transaction.id).desc()).all()
-
-    base_currency = currency_counts[0][0] if currency_counts else "GBP"
-    base_rate = rates_dict.get(base_currency, 1.0)
-
-    # Build currency conversion
-    conversion_cases = []
-    for currency, rate in rates_dict.items():
-        conversion_factor = base_rate / rate
-        conversion_cases.append(
-            (Transaction.currency == currency, sql_func.abs(Transaction.amount) * conversion_factor)
-        )
-    conversion_expression = case(
-        *conversion_cases,
-        else_=sql_func.abs(Transaction.amount)
-    )
-
-    # Query for category totals in the month
-
+    # Get transfer location IDs to exclude
     transfer_ids = [
         r.id for r in db.query(Location.id)
         .filter(Location.name.in_(["Transfer In", "Transfer Out"]))
         .all()
     ]
-    extra_filters = []
+
+    # Build filters
+    filters = [
+        Transaction.date >= _as_datetime_floor(start_date),
+        Transaction.date <= _as_datetime_ceil(end_date)
+    ]
     if transfer_ids:
-        extra_filters.append(~Transaction.location_id.in_(transfer_ids))
+        filters.append(~Transaction.location_id.in_(transfer_ids))
 
-    # ====== DONA (totales por categoría del mes) ======
-    query = db.query(
-        Category.name.label('category_name'),
-        Category.id.label('category_id'),
-        sql_func.sum(conversion_expression).label('total_amount'),
-        sql_func.count(Transaction.id).label('transaction_count')
-    ).join(
-        Category, Transaction.category_id == Category.id, isouter=True
-    ).filter(
-        and_(
-            Transaction.amount < 0,                            # solo gastos
-            sql_func.strftime('%Y', Transaction.date) == str(year),
-            sql_func.strftime('%m', Transaction.date) == str(month).zfill(2),
-            *extra_filters                                     # ⬅️ EXCLUIR traspasos
-        )
-    ).group_by(
-        Category.id, Category.name
-    ).order_by(
-        sql_func.sum(conversion_expression).desc()
-    )
+    # Get transactions
+    transactions = db.query(Transaction).filter(and_(*filters)).all()
 
-    results = query.all()
+    if not transactions:
+        return {
+            "month": year_month,
+            "categories": [],
+            "top_expenses": [],
+            "summary": {
+                "total_spent": 0,
+                "num_categories": 0,
+                "num_transactions": 0
+            },
+            "base_currency": "GBP"
+        }
 
-    # ====== TOP 10 GASTOS DEL MES ======
-    expenses_query = db.query(
-        Transaction.date,
-        Transaction.note,
-        conversion_expression.label('amount'),
-        Category.name.label('category_name'),
-        Payee.name.label('payee_name')
-    ).join(
-        Category, Transaction.category_id == Category.id, isouter=True
-    ).join(
-        Payee, Transaction.payee_id == Payee.id, isouter=True
-    ).filter(
-        and_(
-            Transaction.amount < 0,
-            sql_func.strftime('%Y', Transaction.date) == str(year),
-            sql_func.strftime('%m', Transaction.date) == str(month).zfill(2),
-            *extra_filters                                     # ⬅️ EXCLUIR traspasos
-        )
-    ).order_by(
-        conversion_expression.desc()
-    ).limit(10)
+    # Get currencies
+    currencies = list(set([t.currency for t in transactions if t.currency]))
 
-    top_expenses = expenses_query.all()
+    # Load historical rates for the month
+    historical_rates = get_rates_bulk(db, currencies, start_date, end_date)
+    base_currency = "GBP"
 
-    # Format response
-    categories = []
-    total_amount = 0
-    for row in results:
-        category_name = row.category_name or 'Uncategorised'
-        amount = float(row.total_amount)
-        total_amount += amount
-        categories.append({
-            "id": row.category_id,
-            "name": category_name,
-            "amount": round(amount, 2),
-            "transaction_count": row.transaction_count
-        })
+    # Process transactions with historical rates
+    category_data = {}
+    total_income = 0
+    total_expenses = 0
+    all_expenses = []  # For top expenses
+
+    for trans in transactions:
+        trans_date = _to_date(trans.date)
+        rates_for_day = historical_rates.get(trans_date, {'GBP': 1.0})
+        
+        trans_rate = rates_for_day.get(trans.currency, 1.0)
+        base_rate = rates_for_day.get(base_currency, 1.0)
+        converted = trans.amount * (base_rate / trans_rate)
+
+        if converted > 0:
+            total_income += converted
+        else:
+            total_expenses += abs(converted)
+            
+            # Track for top expenses
+            all_expenses.append({
+                "date": trans_date.isoformat(),
+                "amount": abs(converted),
+                "category": trans.category.name if trans.category else "Uncategorised",
+                "payee": trans.payee.name if trans.payee else "Unknown",
+                "note": trans.note
+            })
+
+            # Category aggregation
+            cat_id = trans.category_id or 0
+            cat_name = trans.category.name if trans.category else "Uncategorised"
+
+            if cat_id not in category_data:
+                category_data[cat_id] = {
+                    "id": cat_id,
+                    "name": cat_name,
+                    "amount": 0,
+                    "transaction_count": 0
+                }
+            
+            category_data[cat_id]["amount"] += abs(converted)
+            category_data[cat_id]["transaction_count"] += 1
+
+    # Sort categories by amount
+    categories = sorted(category_data.values(), key=lambda x: x["amount"], reverse=True)[:20]
 
     # Add percentages
     for category in categories:
-        category["percentage"] = round((category["amount"] / total_amount * 100), 1) if total_amount > 0 else 0
+        category["percentage"] = round((category["amount"] / total_expenses * 100), 1) if total_expenses > 0 else 0
+        category["amount"] = round(category["amount"], 2)
 
-    # Format top expenses
-    top_expenses_formatted = [
-        {
-            "date": expense.date.isoformat() if hasattr(expense.date, 'isoformat') else str(expense.date),
-            "amount": round(float(expense.amount), 2),
-            "category": expense.category_name or 'Uncategorised',
-            "payee": expense.payee_name or 'Unknown',
-            "note": expense.note
-        }
-        for expense in top_expenses
-    ]
+    # Sort and get top 10 expenses
+    top_expenses = sorted(all_expenses, key=lambda x: x["amount"], reverse=True)[:10]
+    for expense in top_expenses:
+        expense["amount"] = round(expense["amount"], 2)
 
     return {
         "month": year_month,
-        "categories": categories[:20],  # Top 20 categories
-        "top_expenses": top_expenses_formatted,
+        "categories": categories,
+        "top_expenses": top_expenses,
         "summary": {
-            "total_spent": round(total_amount, 2),
+            "total_spent": round(total_expenses, 2),
             "num_categories": len(categories),
             "num_transactions": sum(c["transaction_count"] for c in categories)
         },
         "base_currency": base_currency
     }
-
 
 @app.get("/dashboard/yearly-summary")
 def get_yearly_summary(
@@ -1859,130 +1657,113 @@ def get_yearly_summary(
     db: Session = Depends(get_db)
 ):
     """
-    Get yearly summary with month-by-month breakdown of income and expenses.
+    Get yearly summary with month-by-month breakdown using HISTORICAL exchange rates.
     Perfect for yearly overview charts.
     """
-    from sqlalchemy import func as sql_func, case, and_
-
     # Use current year if not specified
     if not year:
         year = datetime.now().year
 
-    # Get exchange rates
-    subquery = db.query(
-        ExchangeRate.currency,
-        sql_func.max(ExchangeRate.date).label('max_date')
-    ).group_by(ExchangeRate.currency).subquery()
+    # Date range for the year
+    start_date = date(year, 1, 1)
+    end_date = date(year, 12, 31)
 
-    rates_query = db.query(ExchangeRate).join(
-        subquery,
-        (ExchangeRate.currency == subquery.c.currency) &
-        (ExchangeRate.date == subquery.c.max_date)
+    # Get all transactions for the year (excluding transfers)
+    transactions = db.query(Transaction).filter(
+        and_(
+            Transaction.date >= _as_datetime_floor(start_date),
+            Transaction.date <= _as_datetime_ceil(end_date),
+            or_(
+                Transaction.location_id.is_(None),
+                Transaction.location.has(Location.name.notin_(["Transfer In", "Transfer Out"]))
+            )
+        )
     ).all()
 
-    rates_dict = {rate.currency: rate.rate for rate in rates_query}
-    rates_dict['GBP'] = 1.0
+    if not transactions:
+        # Return empty structure
+        months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        monthly_data = [
+            {
+                "month": months[i],
+                "month_num": i+1,
+                "income": 0,
+                "expenses": 0,
+                "net": 0
+            }
+            for i in range(12)
+        ]
+        return {
+            "year": year,
+            "monthly_data": monthly_data,
+            "category_breakdown": [],
+            "summary": {
+                "total_income": 0,
+                "total_expenses": 0,
+                "net_savings": 0,
+                "savings_rate": 0,
+                "avg_monthly_income": 0,
+                "avg_monthly_expenses": 0,
+                "highest_expense_month": None,
+                "highest_income_month": None
+            },
+            "base_currency": "GBP"
+        }
 
-    # Get base currency
-    currency_counts = db.query(
-        Transaction.currency,
-        sql_func.count(Transaction.id).label('count')
-    ).group_by(Transaction.currency).order_by(sql_func.count(Transaction.id).desc()).all()
+    # Get currencies
+    currencies = list(set([t.currency for t in transactions if t.currency]))
 
-    base_currency = currency_counts[0][0] if currency_counts else "GBP"
-    base_rate = rates_dict.get(base_currency, 1.0)
+    # Load historical rates for the year
+    historical_rates = get_rates_bulk(db, currencies, start_date, end_date)
+    base_currency = "GBP"
 
-    # Build currency conversion
-    conversion_cases = []
-    for currency, rate in rates_dict.items():
-        conversion_factor = base_rate / rate
-        conversion_cases.append(
-            (Transaction.currency == currency, Transaction.amount * conversion_factor)
-        )
-    conversion_expression = case(
-        *conversion_cases,
-        else_=Transaction.amount
-    )
-
-    # Query for monthly income and expenses
-    monthly_query = db.query(
-        sql_func.strftime('%m', Transaction.date).label('month'),
-        sql_func.sum(
-            case(
-                (Transaction.amount > 0, conversion_expression),
-                else_=0
-            )
-        ).label('income'),
-        sql_func.sum(
-            case(
-                (Transaction.amount < 0, sql_func.abs(conversion_expression)),
-                else_=0
-            )
-        ).label('expenses')
-    ).filter(
-        func.strftime('%Y', Transaction.date) == str(year),
-        or_(
-            Transaction.location_id.is_(None),
-            Transaction.location.has(Location.name.notin_(["Transfer In", "Transfer Out"]))
-        )
-    ).group_by(
-        sql_func.strftime('%m', Transaction.date)
-    ).order_by(
-        sql_func.strftime('%m', Transaction.date)
-    )
-
-    monthly_results = monthly_query.all()
-
-    # Query for category breakdown for the year
-    category_query = db.query(
-        Category.name.label('category_name'),
-        sql_func.sum(sql_func.abs(conversion_expression)).label('total')
-    ).join(
-        Category, Transaction.category_id == Category.id, isouter=True
-    ).filter(
-        and_(
-            Transaction.amount < 0,
-            sql_func.strftime('%Y', Transaction.date) == str(year)
-        )
-    ).filter(
-        Transaction.location.has(models.Location.name.notin_(["Transfer In", "Transfer Out"]))
-    ).group_by(
-        Category.name
-    ).order_by(
-        sql_func.sum(sql_func.abs(conversion_expression)).desc()
-    ).limit(10)
-
-    category_results = category_query.all()
-
-    # Build monthly data
-    months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-            'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-    monthly_data = []
+    # Process transactions with historical rates
+    monthly_data_dict = {}
+    category_totals = {}
     total_income = 0
     total_expenses = 0
 
-    # ✅ Acumular por mes en vez de sobrescribir
-    monthly_sums = {}
-    for row in monthly_results:
-        m = row.month  # '01'..'12'
-        if m not in monthly_sums:
-            monthly_sums[m] = {'income': 0.0, 'expenses': 0.0}
-        monthly_sums[m]['income']  += float(row.income or 0)
-        monthly_sums[m]['expenses'] += float(row.expenses or 0)
+    for trans in transactions:
+        trans_date = _to_date(trans.date)
+        rates_for_day = historical_rates.get(trans_date, {'GBP': 1.0})
+        
+        trans_rate = rates_for_day.get(trans.currency, 1.0)
+        base_rate = rates_for_day.get(base_currency, 1.0)
+        converted = trans.amount * (base_rate / trans_rate)
 
+        # Get month number (1-12)
+        month_num = trans_date.month
+        
+        if month_num not in monthly_data_dict:
+            monthly_data_dict[month_num] = {"income": 0, "expenses": 0}
+
+        if converted > 0:
+            monthly_data_dict[month_num]["income"] += converted
+            total_income += converted
+        else:
+            monthly_data_dict[month_num]["expenses"] += abs(converted)
+            total_expenses += abs(converted)
+
+            # Category breakdown (only for expenses)
+            cat_name = trans.category.name if trans.category else "Uncategorised"
+            if cat_name not in category_totals:
+                category_totals[cat_name] = 0
+            category_totals[cat_name] += abs(converted)
+
+    # Build monthly data with all 12 months
+    months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+            'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    monthly_data = []
+    
     for i in range(1, 13):
-        month_str = str(i).zfill(2)
-        sums = monthly_sums.get(month_str, {'income': 0.0, 'expenses': 0.0})
-        income   = sums['income']
-        expenses = sums['expenses']
-        total_income   += income
-        total_expenses += expenses
+        data = monthly_data_dict.get(i, {"income": 0, "expenses": 0})
         monthly_data.append({
             "month": months[i-1],
             "month_num": i,
-            "income": round(income, 2),
-            "expenses": round(expenses, 2),
-            "net": round(income - expenses, 2)
+            "income": round(data["income"], 2),
+            "expenses": round(data["expenses"], 2),
+            "net": round(data["income"] - data["expenses"], 2)
         })
 
     # Calculate averages
@@ -1990,15 +1771,19 @@ def get_yearly_summary(
     avg_monthly_income = total_income / months_with_data if months_with_data > 0 else 0
     avg_monthly_expenses = total_expenses / months_with_data if months_with_data > 0 else 0
 
-    # Format category breakdown
+    # Format category breakdown (top 10)
     category_breakdown = [
         {
-            "name": row.category_name or 'Uncategorised',
-            "amount": round(float(row.total), 2),
-            "percentage": round((float(row.total) / total_expenses * 100), 1) if total_expenses > 0 else 0
+            "name": name,
+            "amount": round(amount, 2),
+            "percentage": round((amount / total_expenses * 100), 1) if total_expenses > 0 else 0
         }
-        for row in category_results
+        for name, amount in sorted(category_totals.items(), key=lambda x: x[1], reverse=True)[:10]
     ]
+
+    # Find highest months
+    highest_expense_month = max(monthly_data, key=lambda x: x['expenses'])['month'] if monthly_data else None
+    highest_income_month = max(monthly_data, key=lambda x: x['income'])['month'] if monthly_data else None
 
     return {
         "year": year,
@@ -2011,129 +1796,93 @@ def get_yearly_summary(
             "savings_rate": round(((total_income - total_expenses) / total_income * 100), 1) if total_income > 0 else 0,
             "avg_monthly_income": round(avg_monthly_income, 2),
             "avg_monthly_expenses": round(avg_monthly_expenses, 2),
-            "highest_expense_month": max(monthly_data, key=lambda x: x['expenses'])['month'] if monthly_data else None,
-            "highest_income_month": max(monthly_data, key=lambda x: x['income'])['month'] if monthly_data else None
+            "highest_expense_month": highest_expense_month,
+            "highest_income_month": highest_income_month
         },
         "base_currency": base_currency
     }
-
 
 @app.get("/dashboard/top-payees")
 def get_top_payees(
+    limit: int = Query(20),
     date_from: Optional[date] = Query(None),
     date_to: Optional[date] = Query(None),
-    limit: int = Query(20, description="Number of top payees to return"),
     db: Session = Depends(get_db)
 ):
     """
-    Get top payees by transaction amount and frequency.
-    Useful for identifying spending patterns.
+    Get top payees by spending with HISTORICAL exchange rates.
     """
-    from sqlalchemy import func as sql_func, case, and_
-
-    # Get exchange rates
-    subquery = db.query(
-        ExchangeRate.currency,
-        sql_func.max(ExchangeRate.date).label('max_date')
-    ).group_by(ExchangeRate.currency).subquery()
-
-    rates_query = db.query(ExchangeRate).join(
-        subquery,
-        (ExchangeRate.currency == subquery.c.currency) &
-        (ExchangeRate.date == subquery.c.max_date)
-    ).all()
-
-    rates_dict = {rate.currency: rate.rate for rate in rates_query}
-    rates_dict['GBP'] = 1.0
-
-    # Get base currency
-    currency_counts = db.query(
-        Transaction.currency,
-        sql_func.count(Transaction.id).label('count')
-    ).group_by(Transaction.currency).order_by(sql_func.count(Transaction.id).desc()).all()
-
-    base_currency = currency_counts[0][0] if currency_counts else "GBP"
-    base_rate = rates_dict.get(base_currency, 1.0)
-
-    # Build currency conversion
-    conversion_cases = []
-    for currency, rate in rates_dict.items():
-        conversion_factor = base_rate / rate
-        conversion_cases.append(
-            (Transaction.currency == currency, sql_func.abs(Transaction.amount) * conversion_factor)
-        )
-    conversion_expression = case(
-        *conversion_cases,
-        else_=sql_func.abs(Transaction.amount)
-    )
-
     # Build filters
-    filters = [Transaction.amount < 0]  # Only expenses
+    filters = [Transaction.payee_id.isnot(None)]
     if date_from:
-        filters.append(Transaction.date >= datetime.combine(date_from, time.min))
+        filters.append(Transaction.date >= _as_datetime_floor(date_from))
     if date_to:
-        filters.append(Transaction.date <= datetime.combine(date_to, time.max))
+        filters.append(Transaction.date <= _as_datetime_ceil(date_to))
 
-    # Query for top payees
-    query = db.query(
-        Payee.id,
-        Payee.name,
-        sql_func.sum(conversion_expression).label('total_spent'),
-        sql_func.count(Transaction.id).label('transaction_count'),
-        sql_func.avg(conversion_expression).label('avg_transaction'),
-        sql_func.max(Transaction.date).label('last_transaction'),
-        Category.name.label('most_common_category')
-    ).join(
-        Payee, Transaction.payee_id == Payee.id
-    ).join(
-        Category, Payee.most_common_category_id == Category.id, isouter=True
-    ).filter(
-        and_(*filters)
-    ).group_by(
-        Payee.id,
-        Payee.name,
-        Category.name
-    ).order_by(
-        sql_func.sum(conversion_expression).desc()
-    ).limit(limit)
+    # Get transactions
+    transactions = db.query(Transaction).filter(and_(*filters)).all()
 
-    results = query.all()
+    if not transactions:
+        return {"payees": [], "base_currency": "GBP"}
 
-    # Calculate total for percentage
-    total_query = db.query(
-        sql_func.sum(conversion_expression).label('total')
-    ).filter(
-        and_(*filters)
-    )
-    total_result = total_query.scalar() or 0
+    # Date range
+    min_date = _to_date(min(t.date for t in transactions))
+    max_date = _to_date(max(t.date for t in transactions))
 
-    # Format response
-    payees = []
-    for row in results:
-        payees.append({
-            "id": row.id,
-            "name": row.name,
-            "total_spent": round(float(row.total_spent), 2),
-            "transaction_count": row.transaction_count,
-            "avg_transaction": round(float(row.avg_transaction), 2),
-            "last_transaction": row.last_transaction.isoformat() if hasattr(row.last_transaction, 'isoformat') else str(row.last_transaction),
-            "most_common_category": row.most_common_category or 'Uncategorised',
-            "percentage_of_total": round((float(row.total_spent) / float(total_result) * 100), 1) if total_result > 0 else 0
-        })
+    # Get currencies
+    currencies = list(set([t.currency for t in transactions if t.currency]))
+
+    # Load historical rates
+    historical_rates = get_rates_bulk(db, currencies, min_date, max_date)
+    base_currency = "GBP"
+
+    # Aggregate by payee
+    payee_data = {}
+
+    for trans in transactions:
+        if trans.amount >= 0:  # Skip income
+            continue
+
+        trans_date = _to_date(trans.date)
+        rates_for_day = historical_rates.get(trans_date, {'GBP': 1.0})
+        
+        trans_rate = rates_for_day.get(trans.currency, 1.0)
+        base_rate = rates_for_day.get(base_currency, 1.0)
+        converted = abs(trans.amount) * (base_rate / trans_rate)
+
+        payee_id = trans.payee_id
+        if payee_id not in payee_data:
+            payee_data[payee_id] = {
+                "name": trans.payee.name if trans.payee else "Unknown",
+                "total_spent": 0,
+                "transaction_count": 0,
+                "most_common_category": None
+            }
+
+        payee_data[payee_id]["total_spent"] += converted
+        payee_data[payee_id]["transaction_count"] += 1
+
+    # Add most common category
+    for payee_id, data in payee_data.items():
+        payee = db.query(Payee).filter(Payee.id == payee_id).first()
+        if payee and payee.most_common_category:
+            data["most_common_category"] = payee.most_common_category.name
+
+    # Sort and limit
+    top_payees = sorted(payee_data.values(), key=lambda x: x["total_spent"], reverse=True)[:limit]
 
     return {
-        "payees": payees,
-        "summary": {
-            "total_spent": round(float(total_result), 2),
-            "num_payees": len(results),
-            "date_range": {
-                "from": date_from.isoformat() if date_from else None,
-                "to": date_to.isoformat() if date_to else None
+        "payees": [
+            {
+                "name": p["name"],
+                "total_spent": round(p["total_spent"], 2),
+                "transaction_count": p["transaction_count"],
+                "most_common_category": p["most_common_category"]
             }
-        },
+            for p in top_payees
+        ],
         "base_currency": base_currency
     }
-
 
 @app.get("/dashboard/available-months")
 def get_available_months(db: Session = Depends(get_db)):
@@ -2189,110 +1938,73 @@ from fastapi import Query
 
 @app.get("/dashboard/top-individual-expenses")
 def get_top_individual_expenses(
+    limit: int = Query(20),
     date_from: Optional[date] = Query(None),
-    date_to: Optional[date]   = Query(None),
-    limit: int = Query(20, ge=1, le=200, description="Número de gastos a devolver"),
-    exclude_transfers: bool = Query(True, description="Excluir Transfer In/Out"),
+    date_to: Optional[date] = Query(None),
+    exclude_transfers: bool = Query(True),
     db: Session = Depends(get_db)
 ):
     """
-    Devuelve las N transacciones individuales de gasto más altas
-    en moneda base, opcionalmente filtradas por rango de fechas
-    y excluyendo traspasos entre cuentas.
+    Get top individual expenses with HISTORICAL exchange rates.
     """
-    from sqlalchemy import func as sql_func, case, and_
-
-    # --- Tipos de cambio recientes (igual que en otros endpoints) ---
-    subq = db.query(
-        ExchangeRate.currency,
-        sql_func.max(ExchangeRate.date).label('max_date')
-    ).group_by(ExchangeRate.currency).subquery()
-
-    rates_q = db.query(ExchangeRate).join(
-        subq,
-        (ExchangeRate.currency == subq.c.currency) &
-        (ExchangeRate.date == subq.c.max_date)
-    ).all()
-    rates_dict = {r.currency: r.rate for r in rates_q}
-    rates_dict['GBP'] = 1.0
-
-    # Moneda base = la más común en transacciones (como haces en otros)
-    currency_counts = db.query(
-        Transaction.currency,
-        sql_func.count(Transaction.id).label('count')
-    ).group_by(Transaction.currency).order_by(sql_func.count(Transaction.id).desc()).all()
-    base_currency = currency_counts[0][0] if currency_counts else "GBP"
-    base_rate = rates_dict.get(base_currency, 1.0)
-
-    # Conversión a base: |amount| * (base_rate / rate_moneda)
-    conversion_cases = []
-    for curr, rate in rates_dict.items():
-        conv_factor = base_rate / rate
-        conversion_cases.append((Transaction.currency == curr, sql_func.abs(Transaction.amount) * conv_factor))
-    conversion_expr = case(*conversion_cases, else_=sql_func.abs(Transaction.amount))
-
-    # --- Filtros: solo gastos, rango fechas, excluir traspasos ---
+    # Build filters
     filters = [Transaction.amount < 0]
     if date_from:
-        filters.append(Transaction.date >= datetime.combine(date_from, time.min))
+        filters.append(Transaction.date >= _as_datetime_floor(date_from))
     if date_to:
-        filters.append(Transaction.date <= datetime.combine(date_to, time.max))
-
+        filters.append(Transaction.date <= _as_datetime_ceil(date_to))
     if exclude_transfers:
-        transfer_ids = [
-            r.id for r in db.query(Location.id)
-            .filter(Location.name.in_(["Transfer In", "Transfer Out"]))
-            .all()
-        ]
-        if transfer_ids:
-            filters.append(~Transaction.location_id.in_(transfer_ids))
+        filters.append(or_(
+            Transaction.category_id.isnot(None),
+            Transaction.payee_id.isnot(None)
+        ))
 
-    # --- Consulta principal: top N por importe convertido ---
-    q = db.query(
-        Transaction.id,
-        Transaction.date,
-        conversion_expr.label('amount_converted'),
-        Transaction.note,
-        Payee.name.label('payee_name'),
-        Category.name.label('category_name'),
-        Account.name.label('account_name'),
-        Location.name.label('location_name')
-    ).join(Payee,   Transaction.payee_id   == Payee.id,   isouter=True
-    ).join(Category, Transaction.category_id == Category.id, isouter=True
-    ).join(Account,  Transaction.account_id  == Account.id,  isouter=True
-    ).join(Location, Transaction.location_id == Location.id, isouter=True
-    ).filter(and_(*filters)
-    ).order_by(sql_func.abs(conversion_expr).desc()
-    ).limit(limit)
+    # Get transactions
+    transactions = db.query(Transaction).filter(and_(*filters)).order_by(Transaction.amount).all()
 
-    rows = q.all()
+    if not transactions:
+        return {"items": [], "base_currency": "GBP"}
 
+    # Take top expenses by absolute amount
+    transactions = transactions[:limit * 2]  # Get extra to ensure we have enough after conversion
+
+    # Date range
+    min_date = _to_date(min(t.date for t in transactions))
+    max_date = _to_date(max(t.date for t in transactions))
+
+    # Get currencies
+    currencies = list(set([t.currency for t in transactions if t.currency]))
+
+    # Load historical rates
+    historical_rates = get_rates_bulk(db, currencies, min_date, max_date)
+    base_currency = "GBP"
+
+    # Convert and collect
     items = []
-    for r in rows:
+    for trans in transactions:
+        trans_date = _to_date(trans.date)
+        rates_for_day = historical_rates.get(trans_date, {'GBP': 1.0})
+        
+        trans_rate = rates_for_day.get(trans.currency, 1.0)
+        base_rate = rates_for_day.get(base_currency, 1.0)
+        converted = abs(trans.amount) * (base_rate / trans_rate)
+
         items.append({
-            "id": r.id,
-            "date": r.date.isoformat() if hasattr(r.date, "isoformat") else str(r.date),
-            "amount": round(float(r.amount_converted or 0), 2),
-            "currency": base_currency,
-            "payee": r.payee_name or "Unknown",
-            "category": r.category_name or "Uncategorised",
-            "account": r.account_name or None,
-            "note": r.note,
-            "location": r.location_name or None,
+            "id": trans.id,
+            "date": trans_date.isoformat(),
+            "amount": round(converted, 2),
+            "payee": trans.payee.name if trans.payee else "No payee",
+            "category": trans.category.name if trans.category else "No category",
+            "note": trans.note
         })
+
+    # Sort by converted amount and take top limit
+    items = sorted(items, key=lambda x: x["amount"], reverse=True)[:limit]
 
     return {
         "items": items,
-        "summary": {
-            "count": len(items),
-            "date_range": {
-                "from": date_from.isoformat() if date_from else None,
-                "to": date_to.isoformat() if date_to else None
-            }
-        },
         "base_currency": base_currency
     }
-
 
 # ============================================
 # LOANS & CREDIT CARDS ENDPOINTS 
@@ -2643,15 +2355,67 @@ def get_loans_details(
 @app.post("/admin/initialise-balances")
 def initialise_balances(db: Session = Depends(get_db)):
     """
-    Initialise balance columns for all existing transactions.
-    This should be run once after migration.
+    Recalcula los saldos de todas las cuentas desde cero.
+    Reemplaza completamente la lógica anterior para evitar errores de 'NoneType'.
     """
+    print("--- INICIANDO RECALCULO DE BALANCES (MODO SEGURO) ---")
     try:
-        initialise_all_balances(db)
-        return {"message": "Balances initialised successfully"}
+        # 1. Obtener todas las cuentas activas y cerradas
+        accounts = db.query(models.Account).all()
+        total_tx_count = 0
+        
+        for account in accounts:
+            print(f"Procesando cuenta: {account.name} (ID: {account.id})")
+            
+            # 2. Obtener transacciones ordenadas: Fecha ASC, luego ID ASC
+            transactions = db.query(models.Transaction).filter(
+                models.Transaction.account_id == account.id
+            ).order_by(models.Transaction.date.asc(), models.Transaction.id.asc()).all()
+            
+            # 3. Calcular saldo acumulado
+            # Usamos 0.0 si el saldo inicial es None
+            running_balance = float(account.initial_balance) if account.initial_balance is not None else 0.0
+            
+            for t in transactions:
+                # GUARDIA DE SEGURIDAD 1: Si la transacción es None (raro, pero posible en listas corruptas)
+                if t is None:
+                    print("AVISO: Se encontró una transacción None en la lista. Saltando.")
+                    continue
+                
+                # GUARDIA DE SEGURIDAD 2: Verificar atributo amount
+                if not hasattr(t, 'amount') or t.amount is None:
+                    print(f"AVISO: Transacción ID {t.id} tiene amount None o inválido. Asumiendo 0.")
+                    amount = 0.0
+                else:
+                    amount = float(t.amount)
+
+                # Actualizar saldo
+                running_balance += amount
+                
+                # Guardar en el campo de la transacción
+                t.account_balance_after = running_balance
+                total_tx_count += 1
+            
+            # 4. Actualizar el saldo actual de la cuenta al final
+            account.current_balance = running_balance
+            
+        # 5. Confirmar todos los cambios en la BD
+        db.commit()
+        print(f"--- FIN RECALCULO: {len(accounts)} cuentas, {total_tx_count} transacciones ---")
+        
+        return {
+            "message": "Balances recalculated successfully",
+            "accounts_processed": len(accounts),
+            "transactions_processed": total_tx_count
+        }
+        
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to initialise balances: {str(e)}")
+        import traceback
+        error_msg = f"ERROR CRÍTICO RECALCULANDO BALANCES: {str(e)}"
+        print(error_msg)
+        print(traceback.format_exc()) # Esto imprimirá la línea exacta del error en la consola
+        raise HTTPException(status_code=500, detail=error_msg)
 
 
 @app.post("/admin/recalculate-account-balances")
@@ -2735,3 +2499,36 @@ def backup_database():
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create backup: {str(e)}")
+
+
+@app.delete("/admin/clean-corrupt-transactions")
+def clean_corrupt_transactions(db: Session = Depends(get_db)):
+    """
+    Identifies and permanently deletes transactions that are corrupted 
+    (where amount or date is NULL), which causes 'NoneType' errors.
+    """
+    try:
+        # 1. DELETE rows where the 'amount' field is NULL
+        deleted_by_amount = db.query(models.Transaction).filter(
+            models.Transaction.amount == None
+        ).delete(synchronize_session=False)
+        
+        # 2. DELETE rows where the 'date' field is NULL
+        deleted_by_date = db.query(models.Transaction).filter(
+            models.Transaction.date == None
+        ).delete(synchronize_session=False)
+
+        total_deleted = deleted_by_amount + deleted_by_date
+        db.commit()
+        
+        # Opcional: Volver a calcular todo para asegurar que los saldos son perfectos tras la limpieza
+        initialise_all_balances(db)
+        db.commit()  # Commit después de inicializar
+        
+        return {
+            "message": "Database cleanup complete.",
+            "details": f"Successfully deleted {total_deleted} corrupt transactions (deleted by amount: {deleted_by_amount}, deleted by date: {deleted_by_date})."
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database cleanup failed: {str(e)}")

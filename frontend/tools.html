@@ -269,6 +269,8 @@
         }
 
         /* Row States */
+        tr.duplicate td { background-color: #fffaf0 !important; opacity: 0.8; }
+        tr.duplicate:hover td { background-color: #fffaf0; opacity: 1; }
         tr.skipped td { opacity: 0.4; filter: grayscale(100%); background: #f9f9f9; }
         tr.skipped:hover td { opacity: 0.6; }
 
@@ -1451,35 +1453,54 @@
 
         // Check for duplicate transactions
         async function checkDuplicates() {
+            console.log('=== Starting duplicate check ===');
+            console.log(`Total transactions to check: ${parsedTransactions.length}`);
+            
             // Check each transaction against the backend API
-            for (const trans of parsedTransactions) {
+            for (let i = 0; i < parsedTransactions.length; i++) {
+                const trans = parsedTransactions[i];
                 try {
+                    const checkData = {
+                        date: trans.date,
+                        amount: trans.amount,
+                        account_id: trans.account_id
+                    };
+                    
+                    console.log(`\n--- Checking transaction ${i+1}/${parsedTransactions.length} ---`);
+                    console.log('Data being sent:', checkData);
+                    
                     // Send the complete date string (including time)
                     const response = await fetch(`${API_URL}/transactions/check-duplicate`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({
-                            date: trans.date,
-                            amount: trans.amount,
-                            account_id: trans.account_id
-                        })
+                        body: JSON.stringify(checkData)
                     });
                     
                     if (response.ok) {
                         const result = await response.json();
                         trans.isDuplicate = result.exists || false;
+                        console.log('Result:', result);
+                        if (result.exists) {
+                            console.log('✅ DUPLICATE FOUND:', trans.description, trans.amount, trans.date);
+                        } else {
+                            console.log('⚪ Not a duplicate');
+                        }
                     } else {
                         const errorText = await response.text();
-                        console.error('Failed to check duplicate. Status:', response.status, 'Error:', errorText);
+                        console.error('❌ Failed to check duplicate. Status:', response.status, 'Error:', errorText);
                         trans.isDuplicate = false;
                     }
                 } catch (error) {
-                    console.error('Error checking duplicate:', error);
+                    console.error('❌ Error checking duplicate:', error);
                     trans.isDuplicate = false;
                 }
             }
+            
+            const duplicateCount = parsedTransactions.filter(t => t.isDuplicate).length;
+            console.log(`\n=== Duplicate check complete ===`);
+            console.log(`Found ${duplicateCount} duplicates out of ${parsedTransactions.length} transactions`);
         }
 
         // Cancel import
@@ -1507,11 +1528,8 @@
                 }
                 
                 const row = document.createElement('tr');
-                // Auto-skip duplicates
-                if (trans.isDuplicate && !trans.hasOwnProperty('skip')) {
-                    trans.skip = true;
-                }
-                if (trans.skip) row.classList.add('skipped');
+                if (trans.isDuplicate) row.classList.add('duplicate');
+                if (trans.skip) row.classList.add('skipped'); // Aseguramos que se vea skipped si se recarga
                 
                 // Date formatting
                 const dateObj = new Date(trans.date);
@@ -2080,16 +2098,17 @@
                         const payload = {
                             date: trans.date,
                             amount: trans.amount,
-                            currency: 'GBP', // O la moneda de la cuenta si la tienes disponible
+                            currency: 'GBP',
                             account_id: trans.account_id,
                             category_id: categoryId ? parseInt(categoryId) : null,
-                            payee_id: finalPayeeId, // Usamos el ID encontrado o el recién creado
+                            payee_id: finalPayeeId,
                             location_id: locationId ? parseInt(locationId) : null,
                             project_id: projectId ? parseInt(projectId) : null,
                             note: trans.note
                         };
 
-                        const res = await fetch(`${API_URL}/transactions`, {
+                        // CAMBIO AQUÍ: Añadimos ?skip_recalculation=true para evitar el error 500 y acelerar
+                        const res = await fetch(`${API_URL}/transactions?skip_recalculation=true`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify(payload)
@@ -2106,11 +2125,26 @@
                 }
 
                 if (errorCount === 0) {
-                    showToast(`✅ Successfully imported ${successCount} transactions!`, 'success');
-                    setTimeout(() => {
-                        closeModal('importModal');
-                        cancelImport();
-                    }, 1500);
+                    // Recalcular balances una sola vez al final
+                    showToast('🔄 Recalculating all balances...', 'success');
+                    
+                    try {
+                        const recalcRes = await fetch(`${API_URL}/admin/initialise-balances`, {
+                            method: 'POST'
+                        });
+                        
+            if (recalcRes.ok) {
+                            showToast(`✅ Successfully imported ${successCount} transactions and updated balances!`, 'success');
+                            setTimeout(() => {
+                                closeModal('importModal');
+                                cancelImport();
+                            }, 1500);
+                        } else {
+                            showToast('⚠️ Imported transactions but failed to recalculate balances.', 'error');
+                        }
+                    } catch (err) {
+                        showToast('⚠️ Error triggering balance recalculation.', 'error');
+                    }
                 } else {
                     showToast(`⚠️ Imported ${successCount} items, but ${errorCount} failed. Check console.`, 'error');
                 }

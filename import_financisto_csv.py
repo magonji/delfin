@@ -1,8 +1,10 @@
 import pandas as pd
 from datetime import datetime
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from backend.database import SessionLocal, engine
 from backend.models import Account, Category, Payee, Location, Project, Transaction, Base
+from backend.balance_calculator import initialise_all_balances
 import questionary
 import os
 
@@ -142,6 +144,68 @@ def import_financisto_csv(csv_path: str):
         print(f"\n✅ Import complete!")
         print(f"   Imported: {imported}")
         print(f"   Skipped: {skipped}")
+        
+        # Post-import processing
+        if imported > 0:
+            print("\n🔄 Post-import processing...")
+            
+            # Step 1: Reorder transactions chronologically
+            print("   ⏳ Reordering transactions chronologically...")
+            try:
+                connection = db.connection()
+                
+                # Create temporary table with ordered data
+                connection.execute(text("""
+                    CREATE TABLE transactions_ordered AS
+                    SELECT * FROM transactions
+                    ORDER BY date ASC, id ASC
+                """))
+                
+                # Drop original table
+                connection.execute(text("DROP TABLE transactions"))
+                
+                # Rename temporary table
+                connection.execute(text("ALTER TABLE transactions_ordered RENAME TO transactions"))
+                
+                # Recreate all indexes
+                indices = [
+                    "CREATE INDEX IF NOT EXISTS ix_transactions_date ON transactions(date)",
+                    "CREATE INDEX IF NOT EXISTS ix_transactions_currency ON transactions(currency)",
+                    "CREATE INDEX IF NOT EXISTS ix_transactions_account_id ON transactions(account_id)",
+                    "CREATE INDEX IF NOT EXISTS ix_transactions_category_id ON transactions(category_id)",
+                    "CREATE INDEX IF NOT EXISTS ix_transactions_payee_id ON transactions(payee_id)",
+                    "CREATE INDEX IF NOT EXISTS ix_transactions_location_id ON transactions(location_id)",
+                    "CREATE INDEX IF NOT EXISTS ix_transactions_project_id ON transactions(project_id)",
+                    "CREATE INDEX IF NOT EXISTS ix_transactions_account_balance_after ON transactions(account_balance_after)",
+                    "CREATE INDEX IF NOT EXISTS ix_transactions_total_balance_after ON transactions(total_balance_after)",
+                    "CREATE INDEX IF NOT EXISTS ix_transactions_created_at ON transactions(created_at)",
+                    "CREATE INDEX IF NOT EXISTS idx_transaction_account_date ON transactions(account_id, date)",
+                    "CREATE INDEX IF NOT EXISTS idx_transaction_currency_date ON transactions(currency, date)",
+                    "CREATE INDEX IF NOT EXISTS idx_transaction_date_amount ON transactions(date, amount)",
+                    "CREATE INDEX IF NOT EXISTS idx_transaction_category_date ON transactions(category_id, date)",
+                    "CREATE INDEX IF NOT EXISTS idx_transaction_payee_date ON transactions(payee_id, date)",
+                ]
+                
+                for idx in indices:
+                    connection.execute(text(idx))
+                
+                db.commit()
+                print("   ✅ Transactions reordered successfully")
+                
+            except Exception as e:
+                print(f"   ⚠️  Error reordering transactions: {e}")
+                db.rollback()
+            
+            # Step 2: Recalculate all balances
+            print("   ⏳ Recalculating account balances...")
+            try:
+                initialise_all_balances(db)
+                print("   ✅ Balances recalculated successfully")
+            except Exception as e:
+                print(f"   ⚠️  Error recalculating balances: {e}")
+                db.rollback()
+            
+            print("\n🎉 Import and post-processing completed!")
         
     finally:
         db.close()

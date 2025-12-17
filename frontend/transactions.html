@@ -738,6 +738,10 @@
         let activeFilters = { startDate: null, endDate: null, accountId: null, categoryId: null, searchText: null };
         let filtersActive = false;
 
+        function parseMoneyAmount(value) {
+            return Math.round(parseFloat(value) * 100) / 100;
+        }
+
         // Navigation dropdown toggle
         function toggleNav() {
             toggleDropdown('#navDropdown');
@@ -753,8 +757,8 @@
             }
             const btnId = id.replace('Dropdown', 'Btn');
             const menuId = id.replace('Dropdown', 'Menu');
-            document.querySelector('#' + btnId).setAttribute('aria-expanded', el.classList.contains('open'));
-            document.querySelector('#' + menuId).setAttribute('aria-hidden', !el.classList.contains('open'));
+            document.querySelector(btnId).setAttribute('aria-expanded', el.classList.contains('open'));
+            document.querySelector(menuId).setAttribute('aria-hidden', !el.classList.contains('open'));
         };
 
         // Navigation dropdown setup
@@ -778,10 +782,43 @@
         
         // Event listeners for refresh buttons
         document.querySelector('#btnRefresh').onclick = async () => {
-            cacheClearAll(); 
-            // Reload transactions
-            await loadRecentTransactions(true); 
-            alert('Data refreshed');
+            try {
+                // Show loading state
+                const btnRefresh = document.querySelector('#btnRefresh');
+                const originalText = btnRefresh.textContent;
+                btnRefresh.disabled = true;
+                
+                // Clear cache
+                cacheClearAll();
+                
+                // Step 2: Recalculate balances in the backend
+                btnRefresh.textContent = '⏳ Recalculating balances...';
+                const balanceResponse = await fetch(`${API_URL}/admin/initialise-balances`, {
+                    method: 'POST'
+                });
+                
+                if (!balanceResponse.ok) {
+                    throw new Error('Failed to recalculate balances');
+                }
+                
+                // Step 3: Reload transactions with fresh data
+                btnRefresh.textContent = '⏳ Refreshing display...';
+                await loadRecentTransactions(true); 
+                
+                // Restore button state
+                btnRefresh.textContent = originalText;
+                btnRefresh.disabled = false;
+                
+                alert(`Success! Recalculated all balances.`);
+            } catch (error) {
+                console.error('Error during refresh:', error);
+                alert('Error refreshing data: ' + error.message);
+                
+                // Restore button state
+                const btnRefresh = document.querySelector('#btnRefresh');
+                btnRefresh.textContent = '🔄 Refresh';
+                btnRefresh.disabled = false;
+            }
         };
 
         document.querySelector('#btnUpdateRates').onclick = async () => {
@@ -1181,7 +1218,7 @@
             }
             const data = {
                 date: `${document.getElementById('date').value}T${document.getElementById('time').value}:00`,
-                amount: parseFloat(document.getElementById('amount').value),
+                amount: parseMoneyAmount(document.getElementById('amount').value),
                 currency: document.getElementById('account').selectedOptions[0].dataset.currency,
                 account_id: parseInt(document.getElementById('account').value),
                 category_id: document.getElementById('category').value ? parseInt(document.getElementById('category').value) : null,
@@ -1204,8 +1241,8 @@
                 date: `${document.getElementById('transferDate').value}T${document.getElementById('transferTime').value}:00`,
                 from_account_id: parseInt(document.getElementById('fromAccount').value),
                 to_account_id: parseInt(document.getElementById('toAccount').value),
-                from_amount: parseFloat(document.getElementById('fromAmount').value),
-                to_amount: document.getElementById('toAmount').value ? parseFloat(document.getElementById('toAmount').value) : null,
+                from_amount: parseMoneyAmount(document.getElementById('fromAmount').value),
+                to_amount: document.getElementById('toAmount').value ? parseMoneyAmount(document.getElementById('toAmount').value) : null,
                 note: document.getElementById('transferNote').value
             };
             const res = await fetch(`${API_URL}/transactions/transfers`, { method:'POST', body:JSON.stringify(data), headers:{'Content-Type':'application/json'} });

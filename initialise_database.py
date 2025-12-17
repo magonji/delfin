@@ -12,7 +12,7 @@ import sys
 from backend.database import SessionLocal
 from backend.models import Transaction, Payee
 from backend.balance_calculator import initialise_all_balances
-from sqlalchemy import func
+from sqlalchemy import func, text
 from datetime import datetime
 
 
@@ -32,12 +32,83 @@ def update_exchange_rates():
         print("   You can update them manually later with: python update_exchange_rates.py")
 
 
+
+def reorder_transactions():
+    """
+    Reorder all transactions chronologically in the database.
+    """
+    print("\n" + "="*60)
+    print("STEP 2: Reordering Transactions Chronologically")
+    print("="*60)
+    
+    db = SessionLocal()
+    try:
+        # Get total count
+        total_transactions = db.query(func.count(Transaction.id)).scalar()
+        
+        if total_transactions == 0:
+            print("ℹ️  No transactions to reorder")
+            return
+        
+        print(f"📊 Found {total_transactions} transactions")
+        print(f"⏳ Reordering by date and ID...")
+        
+        # Get raw connection
+        connection = db.connection()
+        
+        # Create temporary table with ordered data
+        connection.execute(text("""
+            CREATE TABLE transactions_ordered AS
+            SELECT * FROM transactions
+            ORDER BY date ASC, id ASC
+        """))
+        
+        # Drop original table
+        connection.execute(text("DROP TABLE transactions"))
+        
+        # Rename temporary table
+        connection.execute(text("ALTER TABLE transactions_ordered RENAME TO transactions"))
+        
+        # Recreate all indexes
+        print("   ⏳ Recreating indexes...")
+        indices = [
+            "CREATE INDEX IF NOT EXISTS ix_transactions_date ON transactions(date)",
+            "CREATE INDEX IF NOT EXISTS ix_transactions_currency ON transactions(currency)",
+            "CREATE INDEX IF NOT EXISTS ix_transactions_account_id ON transactions(account_id)",
+            "CREATE INDEX IF NOT EXISTS ix_transactions_category_id ON transactions(category_id)",
+            "CREATE INDEX IF NOT EXISTS ix_transactions_payee_id ON transactions(payee_id)",
+            "CREATE INDEX IF NOT EXISTS ix_transactions_location_id ON transactions(location_id)",
+            "CREATE INDEX IF NOT EXISTS ix_transactions_project_id ON transactions(project_id)",
+            "CREATE INDEX IF NOT EXISTS ix_transactions_account_balance_after ON transactions(account_balance_after)",
+            "CREATE INDEX IF NOT EXISTS ix_transactions_total_balance_after ON transactions(total_balance_after)",
+            "CREATE INDEX IF NOT EXISTS ix_transactions_created_at ON transactions(created_at)",
+            "CREATE INDEX IF NOT EXISTS idx_transaction_account_date ON transactions(account_id, date)",
+            "CREATE INDEX IF NOT EXISTS idx_transaction_currency_date ON transactions(currency, date)",
+            "CREATE INDEX IF NOT EXISTS idx_transaction_date_amount ON transactions(date, amount)",
+            "CREATE INDEX IF NOT EXISTS idx_transaction_category_date ON transactions(category_id, date)",
+            "CREATE INDEX IF NOT EXISTS idx_transaction_payee_date ON transactions(payee_id, date)",
+        ]
+        
+        for idx in indices:
+            connection.execute(text(idx))
+        
+        db.commit()
+        print("✅ Transactions reordered successfully!")
+        
+    except Exception as e:
+        print(f"❌ Error reordering transactions: {e}")
+        db.rollback()
+        sys.exit(1)
+    finally:
+        db.close()
+
+
 def initialise_balances():
     """
     Calculate and cache balance information for all transactions.
     """
     print("\n" + "="*60)
-    print("STEP 2: Initialising Balance Calculations")
+    print("STEP 3: Initialising Balance Calculations")
     print("="*60)
     
     db = SessionLocal()
@@ -70,7 +141,7 @@ def calculate_payee_statistics():
     Calculate most common category, location, and project for each payee.
     """
     print("\n" + "="*60)
-    print("STEP 3: Calculating Payee Statistics")
+    print("STEP 4: Calculating Payee Statistics")
     print("="*60)
     
     db = SessionLocal()
@@ -167,14 +238,15 @@ def main():
         print(f"\n✅ Found {transaction_count} transactions in database")
         print("\nThis script will:")
         print("  1. Update exchange rates")
-        print("  2. Initialise balance calculations")
-        print("  3. Calculate payee statistics")
+        print("  2. Reorder transactions chronologically")
+        print("  3. Initialise balance calculations")
+        print("  4. Calculate payee statistics")
         
     finally:
         db.close()
-    
     # Run all initialisation steps
     update_exchange_rates()
+    reorder_transactions()
     initialise_balances()
     calculate_payee_statistics()
     
