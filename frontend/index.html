@@ -21,11 +21,11 @@
         html { height: 100%; scrollbar-gutter: stable both-edges; }
         body { height: 100%; margin: 0; background: var(--bg); color: var(--text); font-family: 'IBM Plex Mono', monospace; }
 
-        /* Header and toolbar styling */
+        /* Header and toolbar */
         header { display: flex; align-items: center; justify-content: space-between; padding: 18px 20px; position: static; backdrop-filter: blur(8px); background: #FEE5D7; border-bottom: 1px solid #D4B5A0; z-index: 10; }
         h1 { font-size: 30px; margin: 0; letter-spacing: 0.2px; font-family: 'Playfair Display', serif; }
 
-        /* Toolbar controls (buttons, selects, inputs) */
+        /* Toolbar controls */
         .tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
         .tools select, .tools input, .tools button, .dropdown .btn {
             background: var(--bg); color: var(--text); border: 1px solid var(--border);
@@ -35,30 +35,28 @@
         .tools .primary { background: var(--panel); border-color: var(--border); }
         .tools .danger { background: var(--panel); border-color: var(--border); }
 
-        /* Key Performance Indicators (KPI cards) */
+        /* KPI cards */
         .kpis { display: grid; grid-template-columns: repeat(4, minmax(180px, 1fr)); gap: 12px; margin: 12px 20px; }
         .kpi { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
         .kpi h3 { margin: 0 0 6px 0; color: var(--muted); font-size: 14px; font-weight: 600; font-family: 'IBM Plex Sans', sans-serif; text-transform: uppercase; letter-spacing: 2px; }
         .kpi .value { font-size: 22px; font-weight: 700; }
-        /* Force red colour for expense values */
         #ysExpenses, #totExpenses { color: var(--red) !important; }
 
-        /* Main layout grid configurations */
+        /* Layout grids */
         .container { display: grid; grid-template-columns: 1.3fr 0.7fr; gap: 14px; margin: 0 20px 40px; }
-        /* Two-column card grid for charts */
         .two-col-cards { display: grid; padding-inline: var(--page-gutter); grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: stretch; }
         .two-col-cards .card, .container.cat-accounts > .card { height: 100%; }
         .two-col-cards canvas { width: 100% !important; height: 400px; max-width: 100%; }
         .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
 
-        /* Card component base styles */
+        /* Card component */
         .card { background: var(--bg); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
         .card.full { grid-column: 1 / -1; }
         .card .head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--border); background: var(--bg); }
         .card .title { margin: 0; font-size: 18px; font-weight: 700; letter-spacing: 2px; font-family: 'IBM Plex Sans', sans-serif; text-transform: uppercase; }
         .card .content { padding: 12px 14px; }
 
-        /* List layouts and item rows */
+        /* List rows */
         .list { display: flex; flex-direction: column; gap: 8px; }
         .list .row { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); align-items: center; }
         .list.list--2col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
@@ -66,10 +64,9 @@
         .list .row > :first-child { min-width: 0; }
         .list .row .title, #accountsList .row .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         
-        /* Specific list type variations */
         #accountsList .row { grid-template-columns: 1fr auto; padding: 8px 10px; }
         
-        /* Unified layout for Top Expenses and Top Transactions lists */
+        /* Top expenses and transactions lists */
         #topExpenses .row, #topTx .row { display: grid !important; grid-template-columns: 1fr auto !important; align-items: center; gap: 8px; }
         #topExpenses .row > :first-child, #topTx .row > :first-child { min-width: 0; }
         .row strong, .row .muted { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -79,7 +76,7 @@
 
         .title_te { color: var(--muted); font-size: 18px; font-weight: 600; font-family: 'IBM Plex Sans', sans-serif; text-transform: uppercase; letter-spacing: 2px; padding-top: 30px; padding-bottom: 10px; }
 
-        /* Dropdown menu components and navigation */
+        /* Dropdown menus */
         .dropdown { position: relative; }
         .dropdown .btn { display: flex; align-items: center; gap: 8px; }
         .dropdown .btn .count { background: var(--bg); border: 1px solid var(--border); border-radius: 999px; padding: 1px 6px; font-size: 11px; }
@@ -107,7 +104,7 @@
         }
         #navDropdown .navItem:hover { background: var(--panel); }
 
-        /* Category accordion styles */
+        /* Category accordion */
         .cat-group { margin-bottom: 4px; }
         .cat-group-header { 
             display: flex; align-items: center; gap: 8px; padding: 8px; 
@@ -121,7 +118,7 @@
         .cat-group.open .cat-group-children { display: flex; flex-direction: column; gap: 4px; }
         .cat-group-children label { font-size: 12px; padding: 5px 8px; }
 
-        /* Chart containers and utility classes */
+        /* Charts and utilities */
         .cat-monthly .chart-center { display: flex; align-items: center; justify-content: center; padding: 6px 0; }
         .cat-monthly .chart-box { width: 560px; height: 560px; }
         .cat-monthly #catPie { width: 100% !important; height: 100% !important; display: block; padding: 40px; }
@@ -273,8 +270,12 @@
     <section class="two-col-cards">
         <div class="card">
             <div class="head">
-                <h2 class="title">Top 20 Payees</h2>
+                <h2 class="title" id="topPayeesTitle">Top 20 Payees</h2>
                 <div class="tools">
+                    <select id="payeeType">
+                        <option value="payees" selected>Payees</option>
+                        <option value="locations">Locations</option>
+                    </select>
                     <select id="payeeRange"><option value="last12" selected>Last year</option><option value="last6">Last 6 months</option><option value="last3">Last 3 months</option><option value="last1">Last month</option><option value="all">All time</option></select>
                 </div>
             </div>
@@ -298,9 +299,9 @@
     <div class="footer">© Royal Bank of González. 2025</div>
 
 <script>
-// --- Configuration and constants ---
+// Configuration
 const API_BASE = (localStorage.getItem('delfin_api') || 'http://localhost:8000').replace(/\/$/, '');
-const EPS = 0.005; // Small epsilon value for floating-point comparisons
+const EPS = 0.005;
 const PALETTE = [
     '#F5B700', '#386481', '#D52811', '#1B9F9A', '#525252', '#00689D',
     '#C7437D', '#0E9530', '#C59A00', '#6C2FA2', '#F07F2F', '#006400',
@@ -308,25 +309,23 @@ const PALETTE = [
     '#E89BBF', '#5FBF5F', '#E6C266', '#F5B88C'
 ];
 
-// --- Helper functions ---
+// Helpers
 const q = (sel) => document.querySelector(sel);
 const qa = (sel) => Array.from(document.querySelectorAll(sel));
 const fmtMoney = (n, c = 'GBP') => new Intl.NumberFormat('en-GB', { style: 'currency', currency: c, maximumFractionDigits: 2 }).format(n || 0);
 const colour = (i) => PALETTE[i % PALETTE.length];
 
-// --- API calls and caching layer ---
+// API and caching (14-day TTL)
 async function api(path, opts = {}) {
     const res = await fetch(`${API_BASE}${path}`, { headers: { 'Content-Type': 'application/json' }, ...opts });
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
     return res.headers.get('content-type')?.includes('application/json') ? res.json() : res.text();
 }
 
-// Store data in localStorage with expiry (TTL in seconds, default: 14 days)
 function cacheSet(key, data, ttl = 1209600) {
     localStorage.setItem(key, JSON.stringify({ data, expiry: Date.now() + ttl * 1000 }));
 }
 
-// Retrieve cached data, automatically removing expired entries
 function cacheGet(key) {
     const raw = localStorage.getItem(key);
     if (!raw) return null;
@@ -340,17 +339,16 @@ function cacheClearAll() {
     Object.keys(localStorage).filter(k => k.startsWith('cache_')).forEach(k => localStorage.removeItem(k));
 }
 
-// --- Application state ---
+// Application state
 const state = { baseCurrency: 'GBP', months: [], categories: [], accounts: [], excludedAccountIds: new Set(), selectedCategoryIds: new Set() };
 
-// --- Chart rendering utility ---
+// Chart rendering
 function renderChart(canvasId, config, globalVarName) {
     if (window[globalVarName]) window[globalVarName].destroy();
     window[globalVarName] = new Chart(q(canvasId), config);
 }
 
-// --- Business logic functions ---
-// Convert time range key ('last12', 'last6', etc.) to from/to date strings
+// Convert date range key to from/to dates
 function rangeFor(key) {
     const today = new Date();
     let from = null;
@@ -531,7 +529,6 @@ async function loadYearlyTrendAll() {
     const years = [...new Set(state.months.map(m => m.year))].sort((a, b) => a - b);
     if (!years.length) return;
     
-    // Fetch with cache for each year
     const results = await Promise.all(years.map(y => {
         const cacheKey = `cache_yearly_${y}`;
         return cacheGet(cacheKey) || api(`/dashboard/yearly-summary?year=${y}`).then(d => { cacheSet(cacheKey, d); return d; });
@@ -564,12 +561,10 @@ function renderCategoriesList() {
     list.innerHTML = '';
     const term = q('#categoriesSearch').value.toLowerCase();
     
-    // Group categories by parent
     const grouped = {};
-    const noParent = []; // Categories without parent (top-level)
+    const noParent = [];
     
     state.categories.forEach(c => {
-        // Filter by search term
         if (term && !c.name.toLowerCase().includes(term) && !(c.parent && c.parent.toLowerCase().includes(term))) {
             return;
         }
@@ -584,16 +579,13 @@ function renderCategoriesList() {
         }
     });
     
-    // Sort parent categories alphabetically
     const sortedParents = Object.keys(grouped).sort((a, b) => a.localeCompare(b));
     
-    // Render grouped categories (with parent)
     sortedParents.forEach(parentName => {
         const children = grouped[parentName].sort((a, b) => a.name.localeCompare(b.name));
         const group = document.createElement('div');
         group.className = 'cat-group';
         
-        // Check if any child is selected
         const anySelected = children.some(c => state.selectedCategoryIds.has(c.id));
         const allSelected = children.every(c => state.selectedCategoryIds.has(c.id));
         
@@ -611,19 +603,16 @@ function renderCategoriesList() {
         const childrenContainer = group.querySelector('.cat-group-children');
         const parentCheck = group.querySelector('.parent-check');
         
-        // Set indeterminate state
         if (anySelected && !allSelected) {
             parentCheck.indeterminate = true;
         }
         
-        // Toggle accordion on header click (but not on checkbox)
         header.addEventListener('click', (e) => {
             if (e.target.type !== 'checkbox') {
                 group.classList.toggle('open');
             }
         });
         
-        // Parent checkbox toggles all children
         parentCheck.addEventListener('change', (e) => {
             e.stopPropagation();
             children.forEach(c => {
@@ -633,7 +622,6 @@ function renderCategoriesList() {
                     state.selectedCategoryIds.delete(c.id);
                 }
             });
-            // Update child checkboxes
             childrenContainer.querySelectorAll('input[type="checkbox"]').forEach(cb => {
                 cb.checked = e.target.checked;
             });
@@ -641,7 +629,6 @@ function renderCategoriesList() {
             loadCategoriesSeries();
         });
         
-        // Render children
         children.forEach(c => {
             const label = document.createElement('label');
             label.innerHTML = `<input type="checkbox" value="${c.id}" ${state.selectedCategoryIds.has(c.id) ? 'checked' : ''}><span>${c.name}</span>`;
@@ -650,7 +637,6 @@ function renderCategoriesList() {
                 e.target.checked ? state.selectedCategoryIds.add(val) : state.selectedCategoryIds.delete(val);
                 q('#categoriesCount').textContent = state.selectedCategoryIds.size;
                 
-                // Update parent checkbox state
                 const allNowSelected = children.every(ch => state.selectedCategoryIds.has(ch.id));
                 const anyNowSelected = children.some(ch => state.selectedCategoryIds.has(ch.id));
                 parentCheck.checked = allNowSelected;
@@ -663,7 +649,6 @@ function renderCategoriesList() {
         list.appendChild(group);
     });
     
-    // Render top-level categories (no parent) at the end
     if (noParent.length > 0) {
         noParent.sort((a, b) => a.name.localeCompare(b.name)).forEach(c => {
             const label = document.createElement('label');
@@ -705,10 +690,11 @@ async function loadCategoriesSeries() {
     q('#categoriesLegend').innerHTML = datasets.map((ds) => `<div style="display:flex;align-items:center;gap:6px"><span class="dot" style="background:${ds.borderColor}"></span> ${ds.label}</div>`).join('');
 }
 
-// Load and render top payees or top transactions (isTx flag determines which)
+// Load top payees/locations or transactions
 async function loadTopList(url, listId, isTx = false) {
     const { from, to } = rangeFor(q(isTx ? '#txRange' : '#payeeRange').value);
     const txType = isTx ? q('#txType').value : 'expenses';
+    const payeeType = !isTx ? q('#payeeType').value : 'payees';
     const ps = new URLSearchParams({ limit: '20' });
     if (from) ps.set('date_from', from);
     if (to) ps.set('date_to', to);
@@ -717,33 +703,42 @@ async function loadTopList(url, listId, isTx = false) {
         ps.set('type', txType);
     }
 
-    const cacheKey = `cache_${listId}_${from}_${to}_${txType}`;
-    let data = cacheGet(cacheKey) || await api(`${url}?${ps}`).then(d => { cacheSet(cacheKey, d); return d; });
+    const actualUrl = !isTx && payeeType === 'locations' ? '/dashboard/top-locations' : url;
+    
+    const cacheKey = `cache_${listId}_${from}_${to}_${isTx ? txType : payeeType}`;
+    let data = cacheGet(cacheKey) || await api(`${actualUrl}?${ps}`).then(d => { cacheSet(cacheKey, d); return d; });
     const list = q(`#${listId}`);
     list.innerHTML = '';
 
-    // Update title for transactions list
     if (isTx) {
         const count = (data.items || []).length;
         q('#topTxTitle').textContent = txType === 'income' 
             ? `Top ${count} individual income` 
             : `Top ${count} individual expenses`;
+    } else {
+        const count = (data[payeeType] || []).length;
+        q('#topPayeesTitle').textContent = payeeType === 'locations'
+            ? `Top ${count} Locations`
+            : `Top ${count} Payees`;
     }
 
     const isIncome = txType === 'income';
-    (data[isTx ? 'items' : 'payees'] || []).forEach(item => {
+    const dataKey = isTx ? 'items' : payeeType;
+    (data[dataKey] || []).forEach(item => {
         const row = document.createElement('div');
         row.className = 'row';
         if (isTx) {
             row.innerHTML = `<div><strong>${item.payee}</strong><div class="muted">${item.category}</div></div><div class="right"><div class="amt" style="color: var(--${isIncome ? 'green' : 'red'})">${fmtMoney(item.amount, data.base_currency)}</div><div class="date">${new Date(item.date).toLocaleDateString('en-GB')}</div></div>`;
+        } else if (payeeType === 'locations') {
+            row.innerHTML = `<div><strong>${item.name}</strong></div><div class="right"><div class="amt">${fmtMoney(item.total_spent, data.base_currency)}</div><div class="date">${item.transaction_count} tx</div></div>`;
         } else {
-            row.innerHTML = `<div><strong>${item.name}</strong><div class="muted">${item.most_common_category}</div></div><div class="right"><div class="amt">${fmtMoney(item.total_spent, data.base_currency)}</div><div class="date">${item.transaction_count} tx</div></div>`;
+            row.innerHTML = `<div><strong>${item.name}</strong><div class="muted">${item.most_common_category || '—'}</div></div><div class="right"><div class="amt">${fmtMoney(item.total_spent, data.base_currency)}</div><div class="date">${item.transaction_count} tx</div></div>`;
         }
         list.appendChild(row);
     });
 }
 
-// --- Event handlers and UI interactions ---
+// Dropdown controls
 const toggleDropdown = (id, open) => {
     const el = q(id);
     el.classList.toggle('open', open);
@@ -762,7 +757,6 @@ setupDropdown('#navBtn', '#navDropdown');
 setupDropdown('#excludeBtn', '#excludeDropdown', '#excludeSearch');
 setupDropdown('#categoriesBtn', '#categoriesDropdown', '#categoriesSearch');
 
-// Global clicks to close dropdowns
 document.addEventListener('click', (e) => {
     ['#navDropdown', '#excludeDropdown', '#categoriesDropdown'].forEach(id => {
         if (!q(id).contains(e.target)) toggleDropdown(id, false);
@@ -772,7 +766,7 @@ document.addEventListener('click', (e) => {
 q('#btnRefresh').onclick = async () => { cacheClearAll(); init(); };
 q('#btnUpdateRates').onclick = async () => { try { await fetch(`${API_BASE}/exchange-rates/update`, { method: 'POST' }); init(); alert('Rates updated'); } catch(e) { alert(e); }};
 
-// UI control event bindings - auto-apply on change
+// Event bindings
 q('#nwPeriod').onchange = loadNetworth;
 q('#nwRange').onchange = loadNetworth;
 q('#btnPrevMonth').onclick = () => { const s=q('#selectMonth'); if(s.selectedIndex<s.options.length-1) { s.selectedIndex++; s.dispatchEvent(new Event('change')); }};
@@ -782,6 +776,7 @@ q('#selectViewMode').onchange = () => loadMonthlyBreakdown(q('#selectMonth').val
 q('#selectYear').onchange = (e) => loadYearlySummary(e.target.value);
 q('#catPeriod').onchange = loadCategoriesSeries;
 q('#catRange').onchange = loadCategoriesSeries;
+q('#payeeType').onchange = () => loadTopList('/dashboard/top-payees', 'topPayees');
 q('#payeeRange').onchange = () => loadTopList('/dashboard/top-payees', 'topPayees');
 q('#txType').onchange = () => loadTopList('/dashboard/top-individual-expenses', 'topTx', true);
 q('#txRange').onchange = () => loadTopList('/dashboard/top-individual-expenses', 'topTx', true);
@@ -792,7 +787,7 @@ q('#excludeClear').onclick = () => { state.excludedAccountIds.clear(); renderExc
 q('#categoriesSelectAll').onclick = () => { state.categories.forEach(c => state.selectedCategoryIds.add(c.id)); renderCategoriesList(); loadCategoriesSeries(); };
 q('#categoriesClear').onclick = () => { state.selectedCategoryIds.clear(); renderCategoriesList(); loadCategoriesSeries(); };
 
-// --- Application initialisation ---
+// Initialisation
 async function init() {
     try {
         await loadSummary();
