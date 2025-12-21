@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from datetime import datetime
 from typing import Optional
 
@@ -158,9 +158,6 @@ class ExchangeRateBase(BaseModel):
     rate: float
     date: datetime
 
-from pydantic import BaseModel, field_validator
-from datetime import datetime
-from typing import Optional
 
 
 class AccountBase(BaseModel):

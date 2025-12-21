@@ -107,6 +107,20 @@
         }
         #navDropdown .navItem:hover { background: var(--panel); }
 
+        /* Category accordion styles */
+        .cat-group { margin-bottom: 4px; }
+        .cat-group-header { 
+            display: flex; align-items: center; gap: 8px; padding: 8px; 
+            border-radius: 8px; border: 1px solid var(--border); background: var(--panel); 
+            cursor: pointer; font-weight: 600; font-size: 13px;
+        }
+        .cat-group-header:hover { background: var(--card); }
+        .cat-group-header .arrow { transition: transform 0.2s; font-size: 10px; }
+        .cat-group.open .cat-group-header .arrow { transform: rotate(90deg); }
+        .cat-group-children { display: none; padding-left: 16px; margin-top: 4px; }
+        .cat-group.open .cat-group-children { display: flex; flex-direction: column; gap: 4px; }
+        .cat-group-children label { font-size: 12px; padding: 5px 8px; }
+
         /* Chart containers and utility classes */
         .cat-monthly .chart-center { display: flex; align-items: center; justify-content: center; padding: 6px 0; }
         .cat-monthly .chart-box { width: 560px; height: 560px; }
@@ -171,7 +185,7 @@
                             <div class="list" id="excludeList"></div>
                         </div>
                     </div>
-                    <button id="applyNetworth" class="primary">Apply</button>
+                    <button id="applyNetworth" class="primary" style="display:none;">Apply</button>
                 </div>
             </div>
             <div class="content">
@@ -192,22 +206,27 @@
                 <h2 class="title">Monthly category spend</h2>
                 <div class="tools">
                     <button id="btnPrevMonth">◀</button><select id="selectMonth"></select><button id="btnNextMonth">▶</button>
+                    <select id="selectViewMode">
+                        <option value="top">Top expenses</option>
+                        <option value="category">By category</option>
+                        <option value="subcategory">By subcategory</option>
+                    </select>
                 </div>
             </div>
             <div class="content">
                 <div class="chart-center"><div class="chart-box"><canvas id="catPie"></canvas></div></div>
-                <div><h3 class="title_te" style="margin: 6px 15px 8px;">Top 10 expenses this month</h3><div id="topExpenses" class="list list--2col" style="margin: 6px 15px 8px;"></div></div>
+                <div><h3 class="title_te" id="monthlyListTitle" style="margin: 6px 15px 8px;">Top 10 expenses this month</h3><div id="topExpenses" class="list list--2col" style="margin: 6px 15px 8px;"></div></div>
             </div>
         </div>
         <div class="card">
-            <div class="head"><h2 class="title">Balance by account</h2><div class="tools"><button id="refreshAccounts">Refresh</button></div></div>
+            <div class="head"><h2 class="title">Balance by account</h2></div>
             <div class="content"><div id="accountsList" class="list" style="margin-top: 10px;"></div></div>
         </div>
     </section>
 
     <section class="two-col-cards">
         <div class="card">
-            <div class="head"><h2 class="title">Monthly trend (year)</h2><div class="tools"><select id="selectYear"></select><button id="refreshYear">Apply</button></div></div>
+            <div class="head"><h2 class="title">Monthly trend (year)</h2><div class="tools"><select id="selectYear"></select></div></div>
             <div class="content">
                 <canvas id="yearChart" height="400"></canvas>
                 <div class="kpis" style="grid-template-columns: repeat(3, 1fr); margin: 12px 0 0;">
@@ -218,7 +237,7 @@
             </div>
         </div>
         <div class="card">
-            <div class="head"><h2 class="title">Yearly trend</h2><div class="tools"><button id="refreshYearlyTrend">Refresh</button></div></div>
+            <div class="head"><h2 class="title">Yearly trend</h2></div>
             <div class="content">
                 <canvas id="yearlyTrendChart" height="400"></canvas>
                 <div class="kpis" style="grid-template-columns: repeat(3, 1fr); margin: 12px 0 0;">
@@ -239,14 +258,13 @@
                     <select id="catRange"><option value="last12" selected>Last year</option><option value="last6">Last 6 months</option><option value="last3">Last 3 months</option><option value="last1">Last month</option><option value="all">All time</option></select>
                     <div class="dropdown" id="categoriesDropdown">
                         <button class="btn" id="categoriesBtn" onclick="toggleCategories()">Select categories <span class="count" id="categoriesCount">0</span> ▾</button>
-                        <div class="menu" id="categoriesMenu">
+                        <div class="menu" id="categoriesMenu" style="max-height: 400px;">
                             <div class="search" style="margin-bottom: 6px;"><input type="text" id="categoriesSearch" placeholder="Search categories..."></div>
                             <div class="actions" style="margin: 6px 0;"><button id="categoriesSelectAll">Select all</button><button id="categoriesClear">Clear</button></div>
-                            <div class="list" id="categoriesList" style="max-height: 180px; overflow: auto;"></div>
+                            <div class="list" id="categoriesList" style="max-height: 300px; overflow: auto;"></div>
                         </div>
                     </div>
-                    <button id="applyCategories" class="primary">Apply</button>
-                </div>
+                    </div>
             </div>
             <div class="content"><canvas id="categoriesChart" height="200"></canvas><div id="categoriesLegend" class="legend"></div></div>
         </div>
@@ -258,17 +276,19 @@
                 <h2 class="title">Top 20 Payees</h2>
                 <div class="tools">
                     <select id="payeeRange"><option value="last12" selected>Last year</option><option value="last6">Last 6 months</option><option value="last3">Last 3 months</option><option value="last1">Last month</option><option value="all">All time</option></select>
-                    <button id="applyPayees">Apply</button>
                 </div>
             </div>
             <div class="content"><div id="topPayees" class="list"></div></div>
         </div>
         <div class="card">
             <div class="head">
-                <h2 class="title">Top 20 individual expenses</h2>
+                <h2 class="title" id="topTxTitle">Top 20 individual expenses</h2>
                 <div class="tools">
+                    <select id="txType">
+                        <option value="expenses" selected>Expenses</option>
+                        <option value="income">Income</option>
+                    </select>
                     <select id="txRange"><option value="last12" selected>Last year</option><option value="last6">Last 6 months</option><option value="last3">Last 3 months</option><option value="last1">Last month</option><option value="all">All time</option></select>
-                    <button id="applyTx">Apply</button>
                 </div>
             </div>
             <div class="content"><div id="topTx" class="list"></div></div>
@@ -390,6 +410,7 @@ function renderExcludeList() {
             const val = parseInt(e.target.value);
             e.target.checked ? state.excludedAccountIds.add(val) : state.excludedAccountIds.delete(val);
             q('#excludeCount').textContent = state.excludedAccountIds.size;
+            loadNetworth();
         };
         list.appendChild(label);
     });
@@ -441,7 +462,8 @@ async function loadNetworth() {
 }
 
 async function loadAvailableMonths() {
-    const res = await api('/dashboard/available-months');
+    const cacheKey = 'cache_available_months';
+    const res = cacheGet(cacheKey) || await api('/dashboard/available-months').then(d => { cacheSet(cacheKey, d); return d; });
     state.months = res.months || [];
     const sel = q('#selectMonth');
     sel.innerHTML = state.months.map(m => `<option value="${m.value}">${m.label}</option>`).join('');
@@ -449,7 +471,9 @@ async function loadAvailableMonths() {
 }
 
 async function loadMonthlyBreakdown(ym) {
-    const data = await api(`/dashboard/categories/breakdown/${ym}`);
+    const viewMode = q('#selectViewMode').value;
+    const cacheKey = `cache_monthly_${ym}_${viewMode}`;
+    const data = cacheGet(cacheKey) || await api(`/dashboard/categories/breakdown/${ym}?view_mode=${viewMode}`).then(d => { cacheSet(cacheKey, d); return d; });
     const labels = data.categories.map(c => c.name);
     
     renderChart('#catPie', {
@@ -459,17 +483,31 @@ async function loadMonthlyBreakdown(ym) {
     }, '_pie');
 
     const list = q('#topExpenses');
+    const titleEl = q('#monthlyListTitle');
     list.innerHTML = '';
-    (data.top_expenses || []).forEach(tx => {
-        const row = document.createElement('div');
-        row.className = 'row';
-        row.innerHTML = `<div><strong>${tx.payee || '—'}</strong><div class="muted">${tx.category || 'Uncat.'}</div></div><div class="right"><div class="amt">${fmtMoney(tx.amount, data.base_currency)}</div><div class="date">${new Date(tx.date).toLocaleDateString('en-GB')}</div></div>`;
-        list.appendChild(row);
-    });
+    
+    if (viewMode === 'top') {
+        titleEl.textContent = 'Top 10 expenses this month';
+        (data.top_expenses || []).forEach(tx => {
+            const row = document.createElement('div');
+            row.className = 'row';
+            row.innerHTML = `<div><strong>${tx.payee || '—'}</strong><div class="muted">${tx.category || 'Uncat.'}</div></div><div class="right"><div class="amt">${fmtMoney(tx.amount, data.base_currency)}</div><div class="date">${new Date(tx.date).toLocaleDateString('en-GB')}</div></div>`;
+            list.appendChild(row);
+        });
+    } else {
+        titleEl.textContent = viewMode === 'category' ? 'Spending by category' : 'Spending by subcategory';
+        (data.categories || []).forEach(cat => {
+            const row = document.createElement('div');
+            row.className = 'row';
+            row.innerHTML = `<div><strong>${cat.name}</strong><div class="muted">${cat.transaction_count} transactions</div></div><div class="right"><div class="amt">${fmtMoney(cat.amount, data.base_currency)}</div><div class="date">${cat.percentage}%</div></div>`;
+            list.appendChild(row);
+        });
+    }
 }
 
 async function loadYearlySummary(year) {
-    const data = await api(`/dashboard/yearly-summary?year=${year}`);
+    const cacheKey = `cache_yearly_${year}`;
+    const data = cacheGet(cacheKey) || await api(`/dashboard/yearly-summary?year=${year}`).then(d => { cacheSet(cacheKey, d); return d; });
     renderChart('#yearChart', {
         data: {
             labels: data.monthly_data.map(m => m.month),
@@ -493,7 +531,11 @@ async function loadYearlyTrendAll() {
     const years = [...new Set(state.months.map(m => m.year))].sort((a, b) => a - b);
     if (!years.length) return;
     
-    const results = await Promise.all(years.map(y => api(`/dashboard/yearly-summary?year=${y}`)));
+    // Fetch with cache for each year
+    const results = await Promise.all(years.map(y => {
+        const cacheKey = `cache_yearly_${y}`;
+        return cacheGet(cacheKey) || api(`/dashboard/yearly-summary?year=${y}`).then(d => { cacheSet(cacheKey, d); return d; });
+    }));
     const base = results[0]?.base_currency || 'GBP';
     const totals = (prop) => results.map(r => r.summary[prop]);
 
@@ -521,16 +563,121 @@ function renderCategoriesList() {
     const list = q('#categoriesList');
     list.innerHTML = '';
     const term = q('#categoriesSearch').value.toLowerCase();
-    state.categories.filter(c => !term || c.name.toLowerCase().includes(term)).forEach(c => {
-        const label = document.createElement('label');
-        label.innerHTML = `<input type="checkbox" value="${c.id}" ${state.selectedCategoryIds.has(c.id) ? 'checked' : ''}><span>${c.name}</span>`;
-        label.querySelector('input').onchange = (e) => {
-            const val = parseInt(e.target.value);
-            e.target.checked ? state.selectedCategoryIds.add(val) : state.selectedCategoryIds.delete(val);
-            q('#categoriesCount').textContent = state.selectedCategoryIds.size;
-        };
-        list.appendChild(label);
+    
+    // Group categories by parent
+    const grouped = {};
+    const noParent = []; // Categories without parent (top-level)
+    
+    state.categories.forEach(c => {
+        // Filter by search term
+        if (term && !c.name.toLowerCase().includes(term) && !(c.parent && c.parent.toLowerCase().includes(term))) {
+            return;
+        }
+        
+        if (c.parent) {
+            if (!grouped[c.parent]) {
+                grouped[c.parent] = [];
+            }
+            grouped[c.parent].push(c);
+        } else {
+            noParent.push(c);
+        }
     });
+    
+    // Sort parent categories alphabetically
+    const sortedParents = Object.keys(grouped).sort((a, b) => a.localeCompare(b));
+    
+    // Render grouped categories (with parent)
+    sortedParents.forEach(parentName => {
+        const children = grouped[parentName].sort((a, b) => a.name.localeCompare(b.name));
+        const group = document.createElement('div');
+        group.className = 'cat-group';
+        
+        // Check if any child is selected
+        const anySelected = children.some(c => state.selectedCategoryIds.has(c.id));
+        const allSelected = children.every(c => state.selectedCategoryIds.has(c.id));
+        
+        group.innerHTML = `
+            <div class="cat-group-header">
+                <span class="arrow">▶</span>
+                <input type="checkbox" class="parent-check" ${allSelected ? 'checked' : ''} ${anySelected && !allSelected ? 'indeterminate' : ''}>
+                <span>${parentName}</span>
+                <span class="muted" style="margin-left:auto;font-size:11px;">${children.length}</span>
+            </div>
+            <div class="cat-group-children"></div>
+        `;
+        
+        const header = group.querySelector('.cat-group-header');
+        const childrenContainer = group.querySelector('.cat-group-children');
+        const parentCheck = group.querySelector('.parent-check');
+        
+        // Set indeterminate state
+        if (anySelected && !allSelected) {
+            parentCheck.indeterminate = true;
+        }
+        
+        // Toggle accordion on header click (but not on checkbox)
+        header.addEventListener('click', (e) => {
+            if (e.target.type !== 'checkbox') {
+                group.classList.toggle('open');
+            }
+        });
+        
+        // Parent checkbox toggles all children
+        parentCheck.addEventListener('change', (e) => {
+            e.stopPropagation();
+            children.forEach(c => {
+                if (e.target.checked) {
+                    state.selectedCategoryIds.add(c.id);
+                } else {
+                    state.selectedCategoryIds.delete(c.id);
+                }
+            });
+            // Update child checkboxes
+            childrenContainer.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                cb.checked = e.target.checked;
+            });
+            q('#categoriesCount').textContent = state.selectedCategoryIds.size;
+            loadCategoriesSeries();
+        });
+        
+        // Render children
+        children.forEach(c => {
+            const label = document.createElement('label');
+            label.innerHTML = `<input type="checkbox" value="${c.id}" ${state.selectedCategoryIds.has(c.id) ? 'checked' : ''}><span>${c.name}</span>`;
+            label.querySelector('input').onchange = (e) => {
+                const val = parseInt(e.target.value);
+                e.target.checked ? state.selectedCategoryIds.add(val) : state.selectedCategoryIds.delete(val);
+                q('#categoriesCount').textContent = state.selectedCategoryIds.size;
+                
+                // Update parent checkbox state
+                const allNowSelected = children.every(ch => state.selectedCategoryIds.has(ch.id));
+                const anyNowSelected = children.some(ch => state.selectedCategoryIds.has(ch.id));
+                parentCheck.checked = allNowSelected;
+                parentCheck.indeterminate = anyNowSelected && !allNowSelected;
+                loadCategoriesSeries();
+            };
+            childrenContainer.appendChild(label);
+        });
+        
+        list.appendChild(group);
+    });
+    
+    // Render top-level categories (no parent) at the end
+    if (noParent.length > 0) {
+        noParent.sort((a, b) => a.name.localeCompare(b.name)).forEach(c => {
+            const label = document.createElement('label');
+            label.innerHTML = `<input type="checkbox" value="${c.id}" ${state.selectedCategoryIds.has(c.id) ? 'checked' : ''}><span>${c.name}</span>`;
+            label.querySelector('input').onchange = (e) => {
+                const val = parseInt(e.target.value);
+                e.target.checked ? state.selectedCategoryIds.add(val) : state.selectedCategoryIds.delete(val);
+                q('#categoriesCount').textContent = state.selectedCategoryIds.size;
+                loadCategoriesSeries();
+            };
+            list.appendChild(label);
+        });
+    }
+    
     q('#categoriesCount').textContent = state.selectedCategoryIds.size;
 }
 
@@ -539,12 +686,14 @@ async function loadCategoriesSeries() {
     
     const period = q('#catPeriod').value;
     const { from, to } = rangeFor(q('#catRange').value);
+    const catIds = Array.from(state.selectedCategoryIds).sort().join(',');
     const ps = new URLSearchParams();
     if (from) ps.set('date_from', from);
     if (to) ps.set('date_to', to);
-    ps.set('category_ids', Array.from(state.selectedCategoryIds).join(','));
+    ps.set('category_ids', catIds);
 
-    const data = await api(`/dashboard/categories/${period}?${ps}`);
+    const cacheKey = `cache_catseries_${period}_${from}_${to}_${catIds}`;
+    const data = cacheGet(cacheKey) || await api(`/dashboard/categories/${period}?${ps}`).then(d => { cacheSet(cacheKey, d); return d; });
     const datasets = Object.entries(data.categories).map(([name, vals], i) => ({ label: name, data: vals, borderColor: colour(i), tension: 0.1, fill: false }));
 
     renderChart('#categoriesChart', {
@@ -559,21 +708,34 @@ async function loadCategoriesSeries() {
 // Load and render top payees or top transactions (isTx flag determines which)
 async function loadTopList(url, listId, isTx = false) {
     const { from, to } = rangeFor(q(isTx ? '#txRange' : '#payeeRange').value);
+    const txType = isTx ? q('#txType').value : 'expenses';
     const ps = new URLSearchParams({ limit: '20' });
     if (from) ps.set('date_from', from);
     if (to) ps.set('date_to', to);
-    if (isTx) ps.set('exclude_transfers', 'true');
+    if (isTx) {
+        ps.set('exclude_transfers', 'true');
+        ps.set('type', txType);
+    }
 
-    const cacheKey = `cache_${listId}_${from}_${to}`;
+    const cacheKey = `cache_${listId}_${from}_${to}_${txType}`;
     let data = cacheGet(cacheKey) || await api(`${url}?${ps}`).then(d => { cacheSet(cacheKey, d); return d; });
     const list = q(`#${listId}`);
     list.innerHTML = '';
 
+    // Update title for transactions list
+    if (isTx) {
+        const count = (data.items || []).length;
+        q('#topTxTitle').textContent = txType === 'income' 
+            ? `Top ${count} individual income` 
+            : `Top ${count} individual expenses`;
+    }
+
+    const isIncome = txType === 'income';
     (data[isTx ? 'items' : 'payees'] || []).forEach(item => {
         const row = document.createElement('div');
         row.className = 'row';
         if (isTx) {
-            row.innerHTML = `<div><strong>${item.payee}</strong><div class="muted">${item.category}</div></div><div class="right"><div class="amt">${fmtMoney(item.amount, data.base_currency)}</div><div class="date">${new Date(item.date).toLocaleDateString('en-GB')}</div></div>`;
+            row.innerHTML = `<div><strong>${item.payee}</strong><div class="muted">${item.category}</div></div><div class="right"><div class="amt" style="color: var(--${isIncome ? 'green' : 'red'})">${fmtMoney(item.amount, data.base_currency)}</div><div class="date">${new Date(item.date).toLocaleDateString('en-GB')}</div></div>`;
         } else {
             row.innerHTML = `<div><strong>${item.name}</strong><div class="muted">${item.most_common_category}</div></div><div class="right"><div class="amt">${fmtMoney(item.total_spent, data.base_currency)}</div><div class="date">${item.transaction_count} tx</div></div>`;
         }
@@ -610,23 +772,25 @@ document.addEventListener('click', (e) => {
 q('#btnRefresh').onclick = async () => { cacheClearAll(); init(); };
 q('#btnUpdateRates').onclick = async () => { try { await fetch(`${API_BASE}/exchange-rates/update`, { method: 'POST' }); init(); alert('Rates updated'); } catch(e) { alert(e); }};
 
-// UI control event bindings
-q('#applyNetworth').onclick = loadNetworth;
-q('#refreshAccounts').onclick = loadAccounts;
+// UI control event bindings - auto-apply on change
+q('#nwPeriod').onchange = loadNetworth;
+q('#nwRange').onchange = loadNetworth;
 q('#btnPrevMonth').onclick = () => { const s=q('#selectMonth'); if(s.selectedIndex<s.options.length-1) { s.selectedIndex++; s.dispatchEvent(new Event('change')); }};
 q('#btnNextMonth').onclick = () => { const s=q('#selectMonth'); if(s.selectedIndex>0) { s.selectedIndex--; s.dispatchEvent(new Event('change')); }};
 q('#selectMonth').onchange = (e) => loadMonthlyBreakdown(e.target.value);
-q('#refreshYear').onclick = () => loadYearlySummary(q('#selectYear').value);
-q('#refreshYearlyTrend').onclick = loadYearlyTrendAll;
-q('#applyCategories').onclick = loadCategoriesSeries;
+q('#selectViewMode').onchange = () => loadMonthlyBreakdown(q('#selectMonth').value);
+q('#selectYear').onchange = (e) => loadYearlySummary(e.target.value);
+q('#catPeriod').onchange = loadCategoriesSeries;
+q('#catRange').onchange = loadCategoriesSeries;
+q('#payeeRange').onchange = () => loadTopList('/dashboard/top-payees', 'topPayees');
+q('#txType').onchange = () => loadTopList('/dashboard/top-individual-expenses', 'topTx', true);
+q('#txRange').onchange = () => loadTopList('/dashboard/top-individual-expenses', 'topTx', true);
 q('#excludeSearch').oninput = renderExcludeList;
 q('#categoriesSearch').oninput = renderCategoriesList;
-q('#excludeSelectAll').onclick = () => { state.accounts.forEach(a => state.excludedAccountIds.add(a.id)); renderExcludeList(); };
-q('#excludeClear').onclick = () => { state.excludedAccountIds.clear(); renderExcludeList(); };
-q('#categoriesSelectAll').onclick = () => { state.categories.forEach(c => state.selectedCategoryIds.add(c.id)); renderCategoriesList(); };
-q('#categoriesClear').onclick = () => { state.selectedCategoryIds.clear(); renderCategoriesList(); };
-q('#applyPayees').onclick = () => loadTopList('/dashboard/top-payees', 'topPayees');
-q('#applyTx').onclick = () => loadTopList('/dashboard/top-individual-expenses', 'topTx', true);
+q('#excludeSelectAll').onclick = () => { state.accounts.forEach(a => state.excludedAccountIds.add(a.id)); renderExcludeList(); loadNetworth(); };
+q('#excludeClear').onclick = () => { state.excludedAccountIds.clear(); renderExcludeList(); loadNetworth(); };
+q('#categoriesSelectAll').onclick = () => { state.categories.forEach(c => state.selectedCategoryIds.add(c.id)); renderCategoriesList(); loadCategoriesSeries(); };
+q('#categoriesClear').onclick = () => { state.selectedCategoryIds.clear(); renderCategoriesList(); loadCategoriesSeries(); };
 
 // --- Application initialisation ---
 async function init() {

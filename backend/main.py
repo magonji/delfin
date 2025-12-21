@@ -1446,6 +1446,7 @@ def get_categories_evolution(
 ):
     """
     Get category spending evolution with HISTORICAL exchange rates.
+    Includes all periods in range, even those with zero spending.
     """
     cat_ids = [int(x) for x in category_ids.split(',') if x.strip().isdigit()]
     if not cat_ids:
@@ -1461,25 +1462,65 @@ def get_categories_evolution(
     # Get transactions
     transactions = db.query(Transaction).filter(and_(*filters)).order_by(Transaction.date).all()
     
-    if not transactions:
+    # Get category names for all requested categories (even if no transactions)
+    category_names = {}
+    for cat_id in cat_ids:
+        cat = db.query(Category).filter(Category.id == cat_id).first()
+        if cat:
+            category_names[cat_id] = cat.name
+
+    if not category_names:
         return {"periods": [], "categories": {}}
 
-    # Date range
-    min_date = _to_date(transactions[0].date)
-    max_date = _to_date(transactions[-1].date)
+    # Determine date range
+    if date_from and date_to:
+        min_date = date_from
+        max_date = date_to
+    elif transactions:
+        min_date = _to_date(transactions[0].date) if not date_from else date_from
+        max_date = _to_date(transactions[-1].date) if not date_to else date_to
+    else:
+        # No transactions and no date range specified
+        return {"periods": [], "categories": {cat_name: [] for cat_name in category_names.values()}}
 
     # Get currencies
-    currencies = list(set([t.currency for t in transactions if t.currency]))
+    currencies = list(set([t.currency for t in transactions if t.currency])) if transactions else []
 
     # Load historical rates
-    historical_rates = get_rates_bulk(db, currencies, min_date, max_date)
+    historical_rates = get_rates_bulk(db, currencies, min_date, max_date) if currencies else {}
 
     # Base currency
     base_currency = "GBP"
 
-    # Group by period and category
-    data_by_period = {}
+    # Generate all periods in the range
+    all_periods = []
+    current_date = min_date
     
+    if period == "monthly":
+        # Start from first day of the month
+        current_date = date(min_date.year, min_date.month, 1)
+        while current_date <= max_date:
+            all_periods.append(current_date.strftime('%Y-%m'))
+            # Move to next month
+            if current_date.month == 12:
+                current_date = date(current_date.year + 1, 1, 1)
+            else:
+                current_date = date(current_date.year, current_date.month + 1, 1)
+    elif period == "weekly":
+        # Start from Monday of the first week
+        current_date = min_date - timedelta(days=min_date.weekday())
+        while current_date <= max_date:
+            all_periods.append(current_date.strftime('%Y-%m-%d'))
+            current_date += timedelta(days=7)
+    else:  # daily
+        while current_date <= max_date:
+            all_periods.append(current_date.strftime('%Y-%m-%d'))
+            current_date += timedelta(days=1)
+
+    # Initialize data structure with zeros for all periods and categories
+    data_by_period = {p: {cat_name: 0.0 for cat_name in category_names.values()} for p in all_periods}
+    
+    # Process transactions
     for trans in transactions:
         trans_date = _to_date(trans.date)
         rates_for_day = historical_rates.get(trans_date, {'GBP': 1.0})
@@ -1497,32 +1538,20 @@ def get_categories_evolution(
         else:  # daily
             period_key = trans_date.strftime('%Y-%m-%d')
 
-        if period_key not in data_by_period:
-            data_by_period[period_key] = {}
-        
         cat_name = trans.category.name if trans.category else "Uncategorized"
-        if cat_name not in data_by_period[period_key]:
-            data_by_period[period_key][cat_name] = 0
-        
-        data_by_period[period_key][cat_name] += converted
+        if period_key in data_by_period and cat_name in data_by_period[period_key]:
+            data_by_period[period_key][cat_name] += converted
 
-    # Format response
-    periods = sorted(data_by_period.keys())
-    categories = {}
+    # Format response - categories dict with arrays of values for each period
+    categories = {cat_name: [] for cat_name in category_names.values()}
     
-    for trans in transactions:
-        if trans.category:
-            cat_name = trans.category.name
-            if cat_name not in categories:
-                categories[cat_name] = []
-
-    for period_key in periods:
+    for period_key in all_periods:
         for cat_name in categories:
             value = data_by_period[period_key].get(cat_name, 0)
             categories[cat_name].append(round(value, 2))
 
     return {
-        "periods": periods,
+        "periods": all_periods,
         "categories": categories,
         "base_currency": base_currency
     }
@@ -1530,10 +1559,16 @@ def get_categories_evolution(
 @app.get("/dashboard/categories/breakdown/{year_month}")
 def get_monthly_category_breakdown(
     year_month: str,
+    view_mode: str = Query("top", description="View mode: 'top' for top expenses, 'category' for parent categories, 'subcategory' for full category names"),
     db: Session = Depends(get_db)
 ):
     """
     Get category breakdown for a month with HISTORICAL rates and top expenses.
+    
+    view_mode options:
+    - 'top': Shows top 10 individual expenses (default)
+    - 'category': Groups by parent category (uses 'parent' field from database)
+    - 'subcategory': Groups by full category name
     """
     try:
         year, month = map(int, year_month.split('-'))
@@ -1602,29 +1637,42 @@ def get_monthly_category_breakdown(
         else:
             total_expenses += abs(converted)
             
+            # Get category info
+            cat_name = trans.category.name if trans.category else "Uncategorised"
+            # Get parent category from the database field
+            # If no parent exists, the category itself is a top-level category
+            # so it should appear in both category and subcategory views
+            parent_name = trans.category.parent if (trans.category and trans.category.parent) else cat_name
+            
             # Track for top expenses
             all_expenses.append({
                 "date": trans_date.isoformat(),
                 "amount": abs(converted),
-                "category": trans.category.name if trans.category else "Uncategorised",
+                "category": cat_name,
+                "parent_category": parent_name,
                 "payee": trans.payee.name if trans.payee else "Unknown",
                 "note": trans.note
             })
 
-            # Category aggregation
-            cat_id = trans.category_id or 0
-            cat_name = trans.category.name if trans.category else "Uncategorised"
+            # Determine grouping key based on view_mode
+            if view_mode == "category":
+                # Group by parent category (from database 'parent' field)
+                # Categories without parent are treated as their own parent
+                cat_key = parent_name
+            else:
+                # 'subcategory' or 'top' - use the category name
+                # Categories without parent appear here too (they are both category and subcategory)
+                cat_key = cat_name
 
-            if cat_id not in category_data:
-                category_data[cat_id] = {
-                    "id": cat_id,
-                    "name": cat_name,
+            if cat_key not in category_data:
+                category_data[cat_key] = {
+                    "name": cat_key,
                     "amount": 0,
                     "transaction_count": 0
                 }
             
-            category_data[cat_id]["amount"] += abs(converted)
-            category_data[cat_id]["transaction_count"] += 1
+            category_data[cat_key]["amount"] += abs(converted)
+            category_data[cat_key]["transaction_count"] += 1
 
     # Sort categories by amount
     categories = sorted(category_data.values(), key=lambda x: x["amount"], reverse=True)[:20]
@@ -1934,21 +1982,24 @@ def get_available_months(db: Session = Depends(get_db)):
     }
 
 # === NUEVO ENDPOINT: Top N gastos individuales (excluye traspasos) ===
-from fastapi import Query
-
 @app.get("/dashboard/top-individual-expenses")
 def get_top_individual_expenses(
     limit: int = Query(20),
     date_from: Optional[date] = Query(None),
     date_to: Optional[date] = Query(None),
     exclude_transfers: bool = Query(True),
+    type: str = Query("expenses", description="Type: 'expenses' or 'income'"),
     db: Session = Depends(get_db)
 ):
     """
-    Get top individual expenses with HISTORICAL exchange rates.
+    Get top individual expenses or income with HISTORICAL exchange rates.
     """
-    # Build filters
-    filters = [Transaction.amount < 0]
+    # Build filters based on type
+    if type == "income":
+        filters = [Transaction.amount > 0]
+    else:
+        filters = [Transaction.amount < 0]
+    
     if date_from:
         filters.append(Transaction.date >= _as_datetime_floor(date_from))
     if date_to:
@@ -1959,13 +2010,16 @@ def get_top_individual_expenses(
             Transaction.payee_id.isnot(None)
         ))
 
-    # Get transactions
-    transactions = db.query(Transaction).filter(and_(*filters)).order_by(Transaction.amount).all()
+    # Get transactions - order depends on type
+    if type == "income":
+        transactions = db.query(Transaction).filter(and_(*filters)).order_by(Transaction.amount.desc()).all()
+    else:
+        transactions = db.query(Transaction).filter(and_(*filters)).order_by(Transaction.amount).all()
 
     if not transactions:
         return {"items": [], "base_currency": "GBP"}
 
-    # Take top expenses by absolute amount
+    # Take top by absolute amount
     transactions = transactions[:limit * 2]  # Get extra to ensure we have enough after conversion
 
     # Date range
