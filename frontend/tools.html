@@ -459,10 +459,11 @@
                 <div id="importSuccessMessage" class="success-message"></div>
                 <div id="importErrorMessage" class="error-message"></div>
                 <div id="uploadSection">
-                    <div class="form-group" style="padding: 0; margin-bottom: 20px;"><label>Select Account</label><select id="importAccount"></select></div>
+                    <div class="form-group" style="padding: 0; margin-bottom: 20px;"><label>Select Account</label><select id="importAccount" onchange="handleAccountSelection()"></select></div>
                     <div style="border: 2px dashed var(--border); border-radius: 10px; padding: 40px; text-align: center; background: #fff;">
                         <input type="file" id="fileInput" accept=".csv" style="display: none;" onchange="handleFileUpload(event)">
-                        <button onclick="document.getElementById('fileInput').click()">Choose CSV File</button>
+                        <button id="chooseFileBtn" onclick="document.getElementById('fileInput').click()" disabled style="opacity: 0.5; cursor: not-allowed;">Choose CSV File</button>
+                        <p id="selectAccountHint" style="margin-top: 10px; font-size: 12px; color: var(--muted);">Please select an account first</p>
                     </div>
                 </div>
                 <div id="previewSection" style="display: none;">
@@ -600,9 +601,8 @@
             document.getElementById(modalId).style.display = 'none';
         }
 
-        // Función maestra para mostrar notificaciones
+        // Toast notification system
         function showToast(message, type = 'success') {
-            // Crear el contenedor si no existe
             let container = document.getElementById('toast-container');
             if (!container) {
                 container = document.createElement('div');
@@ -610,11 +610,9 @@
                 document.body.appendChild(container);
             }
 
-            // Crear el toast
             const toast = document.createElement('div');
             toast.className = `toast ${type}`;
             
-            // Icono según tipo
             const icon = type === 'success' ? '✅' : '⚠️';
             
             toast.innerHTML = `
@@ -625,13 +623,10 @@
                 <span style="font-size:18px; margin-left:15px; opacity:0.6;">&times;</span>
             `;
 
-            // Eliminar al hacer click
             toast.onclick = () => removeToast(toast);
 
-            // Añadir al contenedor
             container.appendChild(toast);
 
-            // Auto eliminar a los 5 segundos (más tiempo para leer errores)
             setTimeout(() => removeToast(toast), type === 'error' ? 6000 : 3000);
         }
 
@@ -642,7 +637,7 @@
             }, 400);
         }
 
-        // Reemplazamos las funciones antiguas para que usen el nuevo sistema
+        // Legacy function wrappers
         function showSuccess(message) { showToast(message, 'success'); }
         function showError(message) { showToast(message, 'error'); }
         function showImportSuccess(message) { showToast(message, 'success'); }
@@ -1202,6 +1197,25 @@
             }
         }
 
+        // Handle account selection - enable/disable file upload button
+        function handleAccountSelection() {
+            const accountId = document.getElementById('importAccount').value;
+            const fileBtn = document.getElementById('chooseFileBtn');
+            const hint = document.getElementById('selectAccountHint');
+            
+            if (accountId) {
+                fileBtn.disabled = false;
+                fileBtn.style.opacity = '1';
+                fileBtn.style.cursor = 'pointer';
+                hint.style.display = 'none';
+            } else {
+                fileBtn.disabled = true;
+                fileBtn.style.opacity = '0.5';
+                fileBtn.style.cursor = 'not-allowed';
+                hint.style.display = 'block';
+            }
+        }
+
         // Handle file upload
         async function handleFileUpload(event) {
             const file = event.target.files[0];
@@ -1451,56 +1465,50 @@
             return values;
         }
 
-        // Check for duplicate transactions
+        // Check for duplicate transactions using batch endpoint (much faster)
         async function checkDuplicates() {
-            console.log('=== Starting duplicate check ===');
+            console.log('=== Starting batch duplicate check ===');
             console.log(`Total transactions to check: ${parsedTransactions.length}`);
             
-            // Check each transaction against the backend API
-            for (let i = 0; i < parsedTransactions.length; i++) {
-                const trans = parsedTransactions[i];
-                try {
-                    const checkData = {
-                        date: trans.date,
-                        amount: trans.amount,
-                        account_id: trans.account_id
-                    };
+            if (parsedTransactions.length === 0) return;
+            
+            try {
+                // Prepare batch request data
+                const checkData = parsedTransactions.map(trans => ({
+                    date: trans.date,
+                    amount: trans.amount,
+                    account_id: trans.account_id
+                }));
+                
+                console.log('Sending batch request for', checkData.length, 'transactions');
+                
+                const response = await fetch(`${API_URL}/transactions/check-duplicates-batch`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(checkData)
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
                     
-                    console.log(`\n--- Checking transaction ${i+1}/${parsedTransactions.length} ---`);
-                    console.log('Data being sent:', checkData);
-                    
-                    // Send the complete date string (including time)
-                    const response = await fetch(`${API_URL}/transactions/check-duplicate`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify(checkData)
+                    // Apply results to each transaction
+                    result.duplicates.forEach((isDuplicate, index) => {
+                        parsedTransactions[index].isDuplicate = isDuplicate;
                     });
                     
-                    if (response.ok) {
-                        const result = await response.json();
-                        trans.isDuplicate = result.exists || false;
-                        console.log('Result:', result);
-                        if (result.exists) {
-                            console.log('✅ DUPLICATE FOUND:', trans.description, trans.amount, trans.date);
-                        } else {
-                            console.log('⚪ Not a duplicate');
-                        }
-                    } else {
-                        const errorText = await response.text();
-                        console.error('❌ Failed to check duplicate. Status:', response.status, 'Error:', errorText);
-                        trans.isDuplicate = false;
-                    }
-                } catch (error) {
-                    console.error('❌ Error checking duplicate:', error);
-                    trans.isDuplicate = false;
+                    const duplicateCount = result.duplicates.filter(d => d).length;
+                    console.log(`=== Batch duplicate check complete ===`);
+                    console.log(`Found ${duplicateCount} duplicates out of ${parsedTransactions.length} transactions`);
+                } else {
+                    console.error('Batch duplicate check failed, falling back to individual checks');
+                    // Fallback: mark all as non-duplicate rather than slow individual checks
+                    parsedTransactions.forEach(t => t.isDuplicate = false);
                 }
+            } catch (error) {
+                console.error('Error in batch duplicate check:', error);
+                // Fallback: mark all as non-duplicate
+                parsedTransactions.forEach(t => t.isDuplicate = false);
             }
-            
-            const duplicateCount = parsedTransactions.filter(t => t.isDuplicate).length;
-            console.log(`\n=== Duplicate check complete ===`);
-            console.log(`Found ${duplicateCount} duplicates out of ${parsedTransactions.length} transactions`);
         }
 
         // Cancel import
@@ -1529,7 +1537,7 @@
                 
                 const row = document.createElement('tr');
                 if (trans.isDuplicate) row.classList.add('duplicate');
-                if (trans.skip) row.classList.add('skipped'); // Aseguramos que se vea skipped si se recarga
+                if (trans.skip) row.classList.add('skipped');
                 
                 // Date formatting
                 const dateObj = new Date(trans.date);
@@ -1609,7 +1617,7 @@
                 
                 tbody.appendChild(row);
 
-                // Try to auto-suggest payee (funcionalidad original preservada)
+                // Auto-suggest payee for non-duplicate transactions
                 if (!trans.isDuplicate && trans.type === 'transaction') {
                     setTimeout(() => autoSuggestPayee(trans.description, index), 10);
                 }
@@ -1633,10 +1641,9 @@
             return Array.from(parents).sort();
         }
 
-        // Handle type change (Transaction vs Transfer)
+        // Handle transaction type change (Transaction vs Transfer)
         function handleTypeChange(index) {
             const type = document.getElementById(`type_${index}`).value;
-            // Ahora apuntamos al contenedor del payee para mantener el layout limpio
             const payeeContainer = document.getElementById(`payee_container_${index}`) || document.getElementById(`payee_${index}`);
             const accountSelect = document.getElementById(`account_${index}`);
             const categoryParent = document.getElementById(`parentCategory_${index}`);
@@ -1656,7 +1663,7 @@
                 accountSelect.onchange = () => checkCurrencyDifference(index);
                 
             } else {
-                if(payeeContainer) payeeContainer.style.display = 'flex'; // Usamos flex para el gap
+                if(payeeContainer) payeeContainer.style.display = 'flex';
                 accountSelect.style.display = 'none';
                 categoryParent.disabled = false;
                 locationSelect.disabled = false;
@@ -1675,7 +1682,6 @@
             
             parsedTransactions[index].skip = skipCheckbox.checked;
             
-            // Usamos toggle class en lugar de estilos inline para mantenerlo limpio
             if (skipCheckbox.checked) {
                 row.classList.add('skipped');
             } else {
@@ -1813,7 +1819,7 @@
             }
         }
 
-        // Añade esta función después de las otras funciones de payees
+        // Recalculate statistics for all payees
         async function updateAllPayeeStatistics(event) {
             console.log('updateAllPayeeStatistics called');
             
@@ -1903,8 +1909,6 @@
             
             if (!sourcePayee || !sourceDescription) return;
             
-            let updatedCount = 0;
-            
             // Apply to all other transactions with same description
             parsedTransactions.forEach((trans, index) => {
                 if (index !== sourceIndex && trans.description === sourceDescription) {
@@ -1926,15 +1930,9 @@
                     setTimeout(() => {
                         row.style.backgroundColor = '';
                     }, 1000);
-                    
-                    updatedCount++;
                 }
             });
-            
-            // Show a message if multiple rows were updated
-            if (updatedCount > 0) {
-                showSuccess(`Updated payee for ${updatedCount + 1} transaction(s) with the same description`);
-            }
+            // No toast message - visual highlight is enough feedback
         }
 
         // Handle parent category change
@@ -2001,131 +1999,163 @@
             
             if (!confirm(`Import ${transactionsToImport.length} transactions?`)) return;
             
-            // Indicador de carga
+            // Show loading indicator
             showToast('⏳ Importing transactions... please wait', 'success');
             
-            // Deshabilitar botón
+            // Disable button during import
             const importButton = document.querySelector('button[onclick*="importTransactions"]');
             if (importButton) importButton.disabled = true;
 
             let successCount = 0;
             let errorCount = 0;
             let createdPayeesCount = 0;
+            let transferCount = 0;
 
             try {
+                // ============================================
+                // PHASE 1: Create any new payees (still sequential but usually few)
+                // ============================================
+                const payeesToCreate = new Set();
+                const payeeNameToIdMap = {};
+                
+                // Build map of existing payees
+                allPayees.forEach(p => {
+                    payeeNameToIdMap[p.name.toLowerCase()] = p.id;
+                });
+                
+                // Find new payees needed
                 for (let i = 0; i < parsedTransactions.length; i++) {
                     const trans = parsedTransactions[i];
                     if (trans.isDuplicate || trans.skip) continue;
-
+                    
                     const type = document.getElementById(`type_${i}`).value;
-
-                    // --- LÓGICA DE TRANSFERENCIAS ---
-                    if (type === 'transfer') {
-                        const destinationAccountId = parseInt(document.getElementById(`account_${i}`).value);
-                        
-                        if (!destinationAccountId) {
-                            errorCount++; continue;
-                        }
-
-                        // Calcular dirección y conversión (lógica original mantenida simplificada)
-                        const isOutgoing = trans.amount < 0;
-                        const absoluteAmount = Math.abs(trans.amount);
-                        const convertedInput = document.getElementById(`convertedAmount_${i}`);
-                        let convertedVal = convertedInput ? parseFloat(convertedInput.value) : null;
-                        
-                        const payload = {
-                            date: trans.date,
-                            from_account_id: isOutgoing ? trans.account_id : destinationAccountId,
-                            to_account_id: isOutgoing ? destinationAccountId : trans.account_id,
-                            from_amount: isOutgoing ? absoluteAmount : (convertedVal || absoluteAmount),
-                            to_amount: isOutgoing ? (convertedVal || absoluteAmount) : absoluteAmount,
-                            note: trans.note
-                        };
-
-                        const res = await fetch(`${API_URL}/transactions/transfers`, {
+                    if (type === 'transfer') continue;
+                    
+                    const payeeName = document.getElementById(`payee_${i}`).value.trim();
+                    if (payeeName && !payeeNameToIdMap[payeeName.toLowerCase()]) {
+                        payeesToCreate.add(payeeName);
+                    }
+                }
+                
+                // Create new payees
+                for (const payeeName of payeesToCreate) {
+                    try {
+                        const res = await fetch(`${API_URL}/payees`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(payload)
+                            body: JSON.stringify({ name: payeeName })
                         });
-
-                        if (res.ok) successCount++;
-                        else errorCount++;
-
-                    } 
-                    // --- LÓGICA DE TRANSACCIONES REGULARES ---
-                    else {
-                        const payeeNameInput = document.getElementById(`payee_${i}`).value.trim();
-                        let finalPayeeId = null;
-
-                        // 1. Gestión inteligente del Payee
-                        if (payeeNameInput) {
-                            // Buscar en el array local (que se actualiza en tiempo real)
-                            let existingPayee = allPayees.find(p => p.name.toLowerCase() === payeeNameInput.toLowerCase());
-
-                            if (existingPayee) {
-                                finalPayeeId = existingPayee.id;
-                            } else {
-                                // NO EXISTE: LO CREAMOS
-                                try {
-                                    const createRes = await fetch(`${API_URL}/payees`, {
-                                        method: 'POST',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({ name: payeeNameInput })
-                                    });
-
-                                    if (createRes.ok) {
-                                        const newPayee = await createRes.json();
-                                        // IMPORTANTE: Agregamos el nuevo payee a la lista local inmediatamente
-                                        // para que la siguiente transacción del bucle lo encuentre y no intente crearlo otra vez
-                                        allPayees.push(newPayee); 
-                                        finalPayeeId = newPayee.id;
-                                        createdPayeesCount++;
-                                    } else {
-                                        console.warn(`Could not create payee: ${payeeNameInput}`);
-                                        // Si falla la creación, seguimos pero sin payee_id (o podrías contar error)
-                                    }
-                                } catch (err) {
-                                    console.error('Error creating payee via API', err);
-                                }
-                            }
+                        if (res.ok) {
+                            const newPayee = await res.json();
+                            allPayees.push(newPayee);
+                            payeeNameToIdMap[payeeName.toLowerCase()] = newPayee.id;
+                            createdPayeesCount++;
                         }
-
-                        // 2. Preparar payload
-                        const categoryId = document.getElementById(`category_${i}`).value;
-                        const locationId = document.getElementById(`location_${i}`).value;
-                        const projectId = document.getElementById(`project_${i}`).value;
-
-                        const payload = {
-                            date: trans.date,
-                            amount: trans.amount,
-                            currency: 'GBP',
-                            account_id: trans.account_id,
-                            category_id: categoryId ? parseInt(categoryId) : null,
-                            payee_id: finalPayeeId,
-                            location_id: locationId ? parseInt(locationId) : null,
-                            project_id: projectId ? parseInt(projectId) : null,
-                            note: trans.note
-                        };
-
-                        // CAMBIO AQUÍ: Añadimos ?skip_recalculation=true para evitar el error 500 y acelerar
-                        const res = await fetch(`${API_URL}/transactions?skip_recalculation=true`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(payload)
-                        });
-
-                        if (res.ok) successCount++;
-                        else errorCount++;
+                    } catch (err) {
+                        console.warn('Could not create payee:', payeeName);
+                    }
+                }
+                
+                // ============================================
+                // PHASE 2: Process transfers (still sequential - usually few)
+                // ============================================
+                for (let i = 0; i < parsedTransactions.length; i++) {
+                    const trans = parsedTransactions[i];
+                    if (trans.isDuplicate || trans.skip) continue;
+                    
+                    const type = document.getElementById(`type_${i}`).value;
+                    if (type !== 'transfer') continue;
+                    
+                    const destinationAccountId = parseInt(document.getElementById(`account_${i}`).value);
+                    if (!destinationAccountId) {
+                        errorCount++; continue;
+                    }
+                    
+                    const isOutgoing = trans.amount < 0;
+                    const absoluteAmount = Math.abs(trans.amount);
+                    const convertedInput = document.getElementById(`convertedAmount_${i}`);
+                    let convertedVal = convertedInput ? parseFloat(convertedInput.value) : null;
+                    
+                    const payload = {
+                        date: trans.date,
+                        from_account_id: isOutgoing ? trans.account_id : destinationAccountId,
+                        to_account_id: isOutgoing ? destinationAccountId : trans.account_id,
+                        from_amount: isOutgoing ? absoluteAmount : (convertedVal || absoluteAmount),
+                        to_amount: isOutgoing ? (convertedVal || absoluteAmount) : absoluteAmount,
+                        note: trans.note
+                    };
+                    
+                    const res = await fetch(`${API_URL}/transactions/transfers`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    
+                    if (res.ok) { successCount++; transferCount++; }
+                    else errorCount++;
+                }
+                
+                // ============================================
+                // PHASE 3: Batch create regular transactions (FAST!)
+                // ============================================
+                const regularTransactions = [];
+                
+                for (let i = 0; i < parsedTransactions.length; i++) {
+                    const trans = parsedTransactions[i];
+                    if (trans.isDuplicate || trans.skip) continue;
+                    
+                    const type = document.getElementById(`type_${i}`).value;
+                    if (type === 'transfer') continue;
+                    
+                    const payeeName = document.getElementById(`payee_${i}`).value.trim();
+                    const payeeId = payeeName ? (payeeNameToIdMap[payeeName.toLowerCase()] || null) : null;
+                    
+                    const categoryId = document.getElementById(`category_${i}`).value;
+                    const locationId = document.getElementById(`location_${i}`).value;
+                    const projectId = document.getElementById(`project_${i}`).value;
+                    
+                    regularTransactions.push({
+                        date: trans.date,
+                        amount: trans.amount,
+                        currency: 'GBP',
+                        account_id: trans.account_id,
+                        category_id: categoryId ? parseInt(categoryId) : null,
+                        payee_id: payeeId,
+                        location_id: locationId ? parseInt(locationId) : null,
+                        project_id: projectId ? parseInt(projectId) : null,
+                        note: trans.note
+                    });
+                }
+                
+                // Send batch request if we have regular transactions
+                if (regularTransactions.length > 0) {
+                    console.log(`Sending batch of ${regularTransactions.length} transactions`);
+                    
+                    const batchRes = await fetch(`${API_URL}/transactions/batch`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(regularTransactions)
+                    });
+                    
+                    if (batchRes.ok) {
+                        const result = await batchRes.json();
+                        successCount += result.created;
+                        errorCount += result.errors.length;
+                        console.log('Batch result:', result);
+                    } else {
+                        console.error('Batch creation failed');
+                        errorCount += regularTransactions.length;
                     }
                 }
 
-                // Resumen Final
+                // ============================================
+                // PHASE 4: Recalculate balances once at the end
+                // ============================================
                 if (createdPayeesCount > 0) {
                     showToast(`Created ${createdPayeesCount} new payees automatically`, 'success');
                 }
 
                 if (errorCount === 0) {
-                    // Recalcular balances una sola vez al final
                     showToast('🔄 Recalculating all balances...', 'success');
                     
                     try {
@@ -2133,7 +2163,7 @@
                             method: 'POST'
                         });
                         
-            if (recalcRes.ok) {
+                        if (recalcRes.ok) {
                             showToast(`✅ Successfully imported ${successCount} transactions and updated balances!`, 'success');
                             setTimeout(() => {
                                 closeModal('importModal');

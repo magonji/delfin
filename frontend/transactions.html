@@ -1090,6 +1090,10 @@
             const curr = getCurrencySymbol(t.currency);
             const isSel = selectedTransactions.includes(t.id);
             
+            // Get the account currency (balance is always in account currency)
+            const account = allAccountsIncludingClosed.find(a => a.id === t.account_id);
+            const accountCurrency = account ? account.currency : t.currency;
+            
             // Format amounts with thousands separator
             const formattedAmount = formatAmount(t.amount);
             const formattedBalanceAccount = t.account_balance_after ? formatAmount(t.account_balance_after) : '';
@@ -1116,8 +1120,8 @@
                 </div>
                 <div class="t-cell t-right" title="${t.note || ''}" style="color:#555">${t.note || ''}</div>
                 <div class="t-cell t-amount ${t.amount < 0 ? 'amount-negative' : 'amount-positive'}">${formatMoneyWithSymbol(t.amount, t.currency)}</div>
-                <div class="t-cell t-amount balance-cell" style="color: ${balanceAccountColor}">${formattedBalanceAccount ? formatMoneyWithSymbol(t.account_balance_after, t.currency) : ''}</div>
-                <div class="t-cell t-amount balance-cell" style="color: ${balanceTotalColor}">${formattedBalanceTotal ? formatMoneyWithSymbol(t.total_balance_after, t.currency) : ''}</div>
+                <div class="t-cell t-amount balance-cell" style="color: ${balanceAccountColor}">${formattedBalanceAccount ? formatMoneyWithSymbol(t.account_balance_after, accountCurrency) : ''}</div>
+                <div class="t-cell t-amount balance-cell" style="color: ${balanceTotalColor}">${formattedBalanceTotal ? formatMoneyWithSymbol(t.total_balance_after, 'GBP') : ''}</div>
                 <div class="action-buttons">
                     <button onclick="event.stopPropagation(); editTransaction(${t.id})" class="btn-xs">✎</button>
                     <button onclick="event.stopPropagation(); deleteTransaction(${t.id})" class="btn-xs">×</button>

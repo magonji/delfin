@@ -839,6 +839,125 @@ def check_duplicate_transaction(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error checking duplicate: {str(e)}")
 
+
+@app.post("/transactions/check-duplicates-batch")
+def check_duplicates_batch(
+    transactions: List[schemas.DuplicateCheck],
+    db: Session = Depends(get_db)
+):
+    """
+    Check multiple transactions for duplicates in a single request.
+    Much more efficient than checking one by one during CSV import.
+    
+    Args:
+        transactions: List of DuplicateCheck objects with date, amount, and account_id
+    
+    Returns:
+        List of booleans indicating whether each transaction is a duplicate
+    """
+    try:
+        if not transactions:
+            return {"duplicates": []}
+        
+        # Get unique account IDs
+        account_ids = list(set(t.account_id for t in transactions))
+        
+        # Parse all dates and find date range
+        parsed_dates = []
+        for t in transactions:
+            date_part = t.date.split('T')[0] if 'T' in t.date else t.date
+            parsed_dates.append(datetime.fromisoformat(date_part).date())
+        
+        min_date = min(parsed_dates)
+        max_date = max(parsed_dates)
+        
+        # Fetch all existing transactions in that date range for those accounts (single query)
+        # Get raw date string from SQLite and the other fields
+        existing = db.query(
+            Transaction.date,
+            Transaction.amount,
+            Transaction.account_id
+        ).filter(
+            Transaction.account_id.in_(account_ids),
+            func.date(Transaction.date) >= min_date.isoformat(),
+            func.date(Transaction.date) <= max_date.isoformat()
+        ).all()
+        
+        # Build a set of (date_str, amount, account_id) tuples for O(1) lookup
+        # Convert date to YYYY-MM-DD string format for consistent comparison
+        existing_set = set()
+        for tx in existing:
+            # Handle both datetime objects and strings
+            if hasattr(tx.date, 'date'):
+                tx_date_str = tx.date.date().isoformat()
+            elif hasattr(tx.date, 'isoformat'):
+                tx_date_str = tx.date.isoformat()
+            else:
+                # It's already a string, extract date part
+                tx_date_str = str(tx.date).split('T')[0].split(' ')[0]
+            
+            existing_set.add((tx_date_str, round(float(tx.amount), 2), tx.account_id))
+        
+        # Check each transaction against the set
+        results = []
+        for i, t in enumerate(transactions):
+            tx_date_str = parsed_dates[i].isoformat()
+            tx_amount = round(float(t.amount), 2)
+            is_duplicate = (tx_date_str, tx_amount, t.account_id) in existing_set
+            results.append(is_duplicate)
+        
+        return {"duplicates": results}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error checking duplicates: {str(e)}")
+
+
+@app.post("/transactions/batch")
+def create_transactions_batch(
+    transactions: List[schemas.TransactionCreate],
+    db: Session = Depends(get_db)
+):
+    """
+    Create multiple transactions in a single request.
+    Balances are NOT recalculated here - call /admin/initialise-balances after.
+    
+    Args:
+        transactions: List of TransactionCreate objects
+    
+    Returns:
+        Summary of created transactions
+    """
+    try:
+        created_count = 0
+        errors = []
+        
+        for i, trans in enumerate(transactions):
+            # Validate required fields
+            if trans.amount is None or trans.date is None or trans.account_id is None:
+                errors.append({"index": i, "error": "Missing required fields"})
+                continue
+            
+            try:
+                db_transaction = models.Transaction(**trans.dict())
+                db.add(db_transaction)
+                created_count += 1
+            except Exception as e:
+                errors.append({"index": i, "error": str(e)})
+        
+        # Commit all at once
+        db.commit()
+        
+        return {
+            "created": created_count,
+            "errors": errors,
+            "total_submitted": len(transactions)
+        }
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Batch creation failed: {str(e)}")
+
+
 @app.post("/transactions", response_model=schemas.TransactionResponse)
 def create_transaction(
     transaction: schemas.TransactionCreate,
