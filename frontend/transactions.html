@@ -732,6 +732,7 @@
         const API_URL = 'http://localhost:8000';
         // --- Configuration and global state ---
         let allCategories = [], allPayees = [], allAccounts = [], allAccountsIncludingClosed = [], allLocations = [], regularTransactions = [], transferTransactions = [];
+        let accountsMap = new Map(); // For O(1) account lookups
         let transactionsSkip = 0; const LIMIT = 100;
         let isLoadingTransactions = false, hasMoreTransactions = true;
         let bulkEditMode = false, selectedTransactions = [], selectedTransfers = [], currentBulkType = null;
@@ -780,18 +781,14 @@
             Object.keys(localStorage).filter(k => k.startsWith('cache_')).forEach(k => localStorage.removeItem(k));
         }
         
-        // Event listeners for refresh buttons
         document.querySelector('#btnRefresh').onclick = async () => {
             try {
-                // Show loading state
                 const btnRefresh = document.querySelector('#btnRefresh');
                 const originalText = btnRefresh.textContent;
                 btnRefresh.disabled = true;
                 
-                // Clear cache
                 cacheClearAll();
                 
-                // Step 2: Recalculate balances in the backend
                 btnRefresh.textContent = '⏳ Recalculating balances...';
                 const balanceResponse = await fetch(`${API_URL}/admin/initialise-balances`, {
                     method: 'POST'
@@ -801,11 +798,9 @@
                     throw new Error('Failed to recalculate balances');
                 }
                 
-                // Step 3: Reload transactions with fresh data
                 btnRefresh.textContent = '⏳ Refreshing display...';
                 await loadRecentTransactions(true); 
                 
-                // Restore button state
                 btnRefresh.textContent = originalText;
                 btnRefresh.disabled = false;
                 
@@ -814,7 +809,6 @@
                 console.error('Error during refresh:', error);
                 alert('Error refreshing data: ' + error.message);
                 
-                // Restore button state
                 const btnRefresh = document.querySelector('#btnRefresh');
                 btnRefresh.textContent = '🔄 Refresh';
                 btnRefresh.disabled = false;
@@ -890,9 +884,9 @@
         // --- Data loading from API ---
         async function loadAccounts() {
             try { 
-                // Load all accounts including closed for filters
                 allAccountsIncludingClosed = await (await fetch(`${API_URL}/accounts?include_closed=true`)).json();
-                // Keep only active accounts for transaction forms
+                accountsMap.clear();
+                allAccountsIncludingClosed.forEach(a => accountsMap.set(a.id, a));
                 allAccounts = allAccountsIncludingClosed.filter(a => a.is_active); 
                 populateAllAccountDropdowns(); 
             } catch (e) { console.error(e); }
@@ -900,14 +894,13 @@
         function populateAllAccountDropdowns() {
             const createOpt = (acc) => `<option value="${acc.id}" data-currency="${acc.currency}">${acc.name} (${acc.currency})</option>`;
             const newOpt = `<option value="__NEW__" style="color:#667eea;font-weight:bold">➕ Add new</option>`;
-            // Transaction forms: only active accounts
+            // Transaction forms
             ['account', 'fromAccount', 'toAccount'].forEach(id => document.getElementById(id).innerHTML = '<option value="">Select...</option>' + allAccounts.map(createOpt).join('') + newOpt);
-            // Filter: all accounts including closed (sorted alphabetically)
+            // Filters (include closed)
             const sortedAccountsForFilter = [...allAccountsIncludingClosed].sort((a, b) => a.name.localeCompare(b.name));
             document.getElementById('filterAccount').innerHTML = '<option value="">All accounts</option>' + sortedAccountsForFilter.map(a => `<option value="${a.id}">${a.name}${!a.is_active ? ' (closed)' : ''}</option>`).join('');
-            // Bulk edit: only active accounts
+            // Bulk edit
             document.getElementById('bulkAccount').innerHTML = '<option value="">Don\'t change</option>' + allAccounts.map(createOpt).join('');
-            // Bulk edit transfers: only active accounts
             document.getElementById('bulkTransferFromAccount').innerHTML = '<option value="">Don\'t change</option>' + allAccounts.map(createOpt).join('');
             document.getElementById('bulkTransferToAccount').innerHTML = '<option value="">Don\'t change</option>' + allAccounts.map(createOpt).join('');
         }
@@ -918,7 +911,7 @@
         function populateAllCategoryDropdowns() {
             const parents = [...new Set(allCategories.map(c => c.parent || c.name))].sort();
             const opts = parents.map(p => `<option value="${p}">${p}</option>`).join('');
-            // Filter: categories sorted alphabetically
+            // Filters
             const sortedCategoriesForFilter = [...allCategories].sort((a, b) => {
                 const aName = (a.parent ? a.parent + ' > ' : '') + a.name;
                 const bName = (b.parent ? b.parent + ' > ' : '') + b.name;
@@ -985,7 +978,7 @@
                 });
 
                 const paired = new Set();
-                const pendingTransfers = []; // To search for pairs in the API
+                const pendingTransfers = [];
                 
                 transfersOut.forEach(out => {
                     const match = transfersIn.find(i => i.date === out.date && i.account_id !== out.account_id && !paired.has(i.id));
@@ -998,7 +991,6 @@
                             note: out.note || match.note, from_balance: out.account_balance_after, to_balance: match.account_balance_after
                         });
                     } else if (filtersActive && activeFilters.accountId) {
-                        // Save to search for the pair later
                         pendingTransfers.push({type: 'out', data: out});
                     } else {
                         newReg.push(out);
@@ -1007,7 +999,6 @@
                 transfersIn.forEach(i => { 
                     if (!paired.has(i.id)) {
                         if (filtersActive && activeFilters.accountId) {
-                            // Save to search for the pair later
                             pendingTransfers.push({type: 'in', data: i});
                         } else {
                             newReg.push(i);
@@ -1015,15 +1006,26 @@
                     }
                 });
                 
-                // Search for pairs of pending transfers
-                for (const pending of pendingTransfers) {
-                    try {
-                        // Search for transactions on the same day with location Transfer
-                        const searchParams = new URLSearchParams({
-                            start_date: pending.data.date.split('T')[0],
-                            end_date: pending.data.date.split('T')[0]
-                        });
-                        const relatedData = await (await fetch(`${API_URL}/transactions?${searchParams.toString()}`)).json();
+                // Batch fetch transfer partners grouped by date
+                if (pendingTransfers.length > 0) {
+                    const dateGroups = new Map();
+                    pendingTransfers.forEach(p => {
+                        const dateKey = p.data.date.split('T')[0];
+                        if (!dateGroups.has(dateKey)) dateGroups.set(dateKey, []);
+                        dateGroups.get(dateKey).push(p);
+                    });
+                    
+                    const datePromises = Array.from(dateGroups.keys()).map(async dateKey => {
+                        const searchParams = new URLSearchParams({ start_date: dateKey, end_date: dateKey });
+                        return { dateKey, data: await (await fetch(`${API_URL}/transactions?${searchParams.toString()}`)).json() };
+                    });
+                    
+                    const dateResults = await Promise.all(datePromises);
+                    const relatedDataByDate = new Map(dateResults.map(r => [r.dateKey, r.data]));
+                    
+                    for (const pending of pendingTransfers) {
+                        const dateKey = pending.data.date.split('T')[0];
+                        const relatedData = relatedDataByDate.get(dateKey) || [];
                         
                         let partner = null;
                         if (pending.type === 'out') {
@@ -1059,9 +1061,6 @@
                                 newReg.push(pending.data);
                             }
                         }
-                    } catch (err) {
-                        console.error('Error fetching transfer partner:', err);
-                        newReg.push(pending.data);
                     }
                 }
                 
@@ -1082,24 +1081,16 @@
             ).join('') || '<p style="text-align:center;padding:20px;color:#888">No transactions</p>';
         }
 
-        // --- Display rendering functions (CSS Grid layout) ---
+        // --- Display functions ---
         function displayRegularTransaction(t) {
             const dateObj = new Date(t.date);
             const dateStr = `${dateObj.getDate().toString().padStart(2,'0')}/${(dateObj.getMonth()+1).toString().padStart(2,'0')}/${dateObj.getFullYear().toString().slice(-2)}`;
             const timeStr = dateObj.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
-            const curr = getCurrencySymbol(t.currency);
             const isSel = selectedTransactions.includes(t.id);
             
-            // Get the account currency (balance is always in account currency)
-            const account = allAccountsIncludingClosed.find(a => a.id === t.account_id);
+            const account = accountsMap.get(t.account_id);
             const accountCurrency = account ? account.currency : t.currency;
             
-            // Format amounts with thousands separator
-            const formattedAmount = formatAmount(t.amount);
-            const formattedBalanceAccount = t.account_balance_after ? formatAmount(t.account_balance_after) : '';
-            const formattedBalanceTotal = t.total_balance_after ? formatAmount(t.total_balance_after) : '';
-            
-            // Determine balance colours
             const balanceAccountColor = t.account_balance_after >= 0 ? 'var(--green)' : 'var(--red)';
             const balanceTotalColor = t.total_balance_after >= 0 ? 'var(--green)' : 'var(--red)';
             
@@ -1120,8 +1111,8 @@
                 </div>
                 <div class="t-cell t-right" title="${t.note || ''}" style="color:#555">${t.note || ''}</div>
                 <div class="t-cell t-amount ${t.amount < 0 ? 'amount-negative' : 'amount-positive'}">${formatMoneyWithSymbol(t.amount, t.currency)}</div>
-                <div class="t-cell t-amount balance-cell" style="color: ${balanceAccountColor}">${formattedBalanceAccount ? formatMoneyWithSymbol(t.account_balance_after, accountCurrency) : ''}</div>
-                <div class="t-cell t-amount balance-cell" style="color: ${balanceTotalColor}">${formattedBalanceTotal ? formatMoneyWithSymbol(t.total_balance_after, 'GBP') : ''}</div>
+                <div class="t-cell t-amount balance-cell" style="color: ${balanceAccountColor}">${t.account_balance_after != null ? formatMoneyWithSymbol(t.account_balance_after, accountCurrency) : ''}</div>
+                <div class="t-cell t-amount balance-cell" style="color: ${balanceTotalColor}">${t.total_balance_after != null ? formatMoneyWithSymbol(t.total_balance_after, 'GBP') : ''}</div>
                 <div class="action-buttons">
                     <button onclick="event.stopPropagation(); editTransaction(${t.id})" class="btn-xs">✎</button>
                     <button onclick="event.stopPropagation(); deleteTransaction(${t.id})" class="btn-xs">×</button>
@@ -1133,21 +1124,11 @@
             const dateObj = new Date(t.date);
             const dateStr = `${dateObj.getDate().toString().padStart(2,'0')}/${(dateObj.getMonth()+1).toString().padStart(2,'0')}/${dateObj.getFullYear().toString().slice(-2)}`;
             const timeStr = dateObj.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
-            const fromSym = getCurrencySymbol(t.from_currency);
-            const toSym = getCurrencySymbol(t.to_currency);
             const diffCurr = t.from_currency !== t.to_currency;
             
-            // Format amounts
-            const formattedFromAmount = formatAmount(t.from_amount);
-            const formattedToAmount = formatAmount(t.to_amount);
-            const formattedFromBalance = formatAmount(t.from_balance);
-            const formattedToBalance = formatAmount(t.to_balance);
-            
-            // Determine balance colours
             const fromBalanceColor = t.from_balance >= 0 ? 'var(--green)' : 'var(--red)';
             const toBalanceColor = t.to_balance >= 0 ? 'var(--green)' : 'var(--red)';
             
-            // Amount: if same currency, display in black without hover; if different, display with hover
             let amountHtml;
             if (diffCurr) {
                 amountHtml = `<span class="amount-primary" style="color:#d97706">-${formatMoneyWithSymbol(t.from_amount, t.from_currency)}</span>`;
@@ -1156,15 +1137,7 @@
                 amountHtml = `<span style="color:#333">${formatMoneyWithSymbol(t.from_amount, t.from_currency)}</span>`;
             }
             
-            // Exchange rate for hover (only if different currencies)
-            let rateDisplay = '';
-            if (diffCurr) {
-                const rate = (t.to_amount / t.from_amount).toFixed(4);
-                rateDisplay = `<span class="rate-display">💱 1 ${t.from_currency} = ${rate} ${t.to_currency}</span>`;
-            }
-            
-            // Balance: display only the first by default, second on hover with colours by sign
-            // Arrows in front with spacing
+            const rateDisplay = diffCurr ? `<span class="rate-display">💱 1 ${t.from_currency} = ${(t.to_amount / t.from_amount).toFixed(4)} ${t.to_currency}</span>` : '';
             const balanceHtml = `<span class="balance-primary" style="color:${fromBalanceColor}">↗ ${formatMoneyWithSymbol(t.from_balance, t.from_currency)}</span><span class="balance-secondary" style="color:${toBalanceColor}">↘ ${formatMoneyWithSymbol(t.to_balance, t.to_currency)}</span>`;
 
             const tid = `${t.transfer_out_id}_${t.transfer_in_id}`;
@@ -1290,17 +1263,15 @@
         }
       
 
-        // --- Bulk Edit Logic ---
+        // --- Bulk edit ---
 
         function toggleBulkMode() {
             bulkEditMode = !bulkEditMode;
             
-            // Toggle UI states
             document.getElementById('bulkControls').classList.toggle('active', bulkEditMode);
             document.getElementById('transactionsList').classList.toggle('bulk-edit-mode');
             
             if (!bulkEditMode) {
-                // Reset everything if cancelling
                 cancelBulkEdit();
             }
         }
@@ -1362,7 +1333,6 @@
             document.getElementById('transactionEditFields').style.display = currentBulkType === 'tx' ? 'block' : 'none';
             document.getElementById('transferEditFields').style.display = currentBulkType === 'tr' ? 'block' : 'none';
             
-            // Show correct buttons in the header
             const applyBtn = document.getElementById('bulkApplyBtn');
             const deleteBtn = document.getElementById('bulkDeleteBtn');
             
@@ -1378,10 +1348,8 @@
                 deleteBtn.onclick = bulkDeleteTransfers;
             }
             
-            // Disable items of the opposite type to prevent mixing
             document.querySelectorAll(currentBulkType === 'tx' ? '[data-transfer-id]' : '[data-transaction-id]').forEach(e => e.classList.add('disabled'));
             
-            // Visual updates
             document.querySelectorAll('.transaction-item').forEach(el => {
                 const isSel = (el.dataset.transactionId && selectedTransactions.includes(parseInt(el.dataset.transactionId))) || 
                               (el.dataset.transferId && selectedTransfers.includes(el.dataset.transferId));
@@ -1393,7 +1361,6 @@
         function selectAllVisible() {
             if(!bulkEditMode) return;
             
-            // Detect type based on first available item
             const firstItem = document.querySelector('.transaction-item:not(.disabled)');
             if(!firstItem) return;
             
@@ -1420,38 +1387,32 @@
             updateBulkUI(); 
         }
 
-        // Basic Auto-complete / Modal helpers (Generic)
+        // Payee autofill
         async function handlePayeeBlur() {
             const payeeName = document.getElementById('payee').value.trim();
             if (!payeeName) return;
             
-            // Don't autofill if we're editing an existing transaction
             if (document.getElementById('transactionForm').dataset.editingId) return;
             
-            // Find the payee in our loaded payees list (case insensitive)
             const payee = allPayees.find(p => 
                 p.name.toLowerCase() === payeeName.toLowerCase()
             );
             
-            if (!payee) return; // Payee not found in database
+            if (!payee) return;
             
             try {
-                // Autofill parent category if not already set
                 if (payee.most_common_category_id) {
                     const category = allCategories.find(c => c.id === payee.most_common_category_id);
                     if (category) {
                         const parentCategorySelect = document.getElementById('parentCategory');
                         if (!parentCategorySelect.value && category.parent) {
-                            // Find the parent option
                             const parentOption = Array.from(parentCategorySelect.options).find(
                                 opt => opt.textContent === category.parent
                             );
                             if (parentOption) {
                                 parentCategorySelect.value = parentOption.value;
-                                // Trigger change event to populate subcategories
                                 parentCategorySelect.dispatchEvent(new Event('change'));
                                 
-                                // Small delay to allow subcategories to populate
                                 setTimeout(() => {
                                     const categorySelect = document.getElementById('category');
                                     if (!categorySelect.value) {
@@ -1463,7 +1424,6 @@
                     }
                 }
                 
-                // Autofill location if not already set
                 if (payee.most_common_location_id) {
                     const locationSelect = document.getElementById('location');
                     if (!locationSelect.value) {
@@ -1471,7 +1431,6 @@
                     }
                 }
                 
-                // Autofill project if not already set
                 if (payee.most_common_project_id) {
                     const projectSelect = document.getElementById('project');
                     if (!projectSelect.value) {
@@ -1487,7 +1446,6 @@
         function closeModal(id) { document.getElementById(id).classList.remove('active'); document.querySelectorAll('form').forEach(f=>f.reset()); }
         function openTransactionModal() { 
             openModal('transactionModal'); 
-            // Set current date and time as default
             const now = new Date();
             const dateStr = now.toISOString().split('T')[0];
             const timeStr = now.toTimeString().split(' ')[0].substring(0,5);
@@ -1497,7 +1455,6 @@
         function closeTransactionModal() { closeModal('transactionModal'); delete document.getElementById('transactionForm').dataset.editingId; document.getElementById('transactionForm').querySelector('button[type="submit"]').textContent='Save Transaction'; }
         function openTransferModal() { 
             openModal('transferModal'); 
-            // Set current date and time as default
             const now = new Date();
             const dateStr = now.toISOString().split('T')[0];
             const timeStr = now.toTimeString().split(' ')[0].substring(0,5);
@@ -1534,13 +1491,11 @@
             const bulkLocationId = document.getElementById('bulkLocation').value;
             const bulkProjectId = document.getElementById('bulkProject').value;
             
-            // If nothing to change, exit
             if(!bulkPayee && !bulkAccountId && !bulkCategoryId && !bulkLocationId && !bulkProjectId) {
                 alert('No changes selected');
                 return;
             }
             
-            // Confirmation
             const changes = [];
             if(bulkPayee) changes.push(`Payee: ${bulkPayee}`);
             if(bulkAccountId) {
@@ -1564,17 +1519,11 @@
             if(!confirm(confirmMsg)) return;
             
             try {
-                // Process each selected transaction
                 for(const txId of selectedTransactions) {
-                    // Get current transaction
                     const current = await (await fetch(`${API_URL}/transactions/${txId}`)).json();
-                    
-                    // Prepare updated data
                     const updates = { ...current };
                     
-                    // Apply changes only to fields that have values
                     if(bulkPayee) {
-                        // Search for or create the payee
                         let payeeId = null;
                         const exist = allPayees.find(p => p.name.toLowerCase() === bulkPayee.toLowerCase());
                         if(exist) {
@@ -1591,7 +1540,6 @@
                     }
                     if(bulkAccountId) {
                         updates.account_id = parseInt(bulkAccountId);
-                        // Update currency according to the account
                         const account = allAccounts.find(a => a.id === parseInt(bulkAccountId));
                         if(account) updates.currency = account.currency;
                     }
@@ -1599,7 +1547,6 @@
                     if(bulkLocationId) updates.location_id = parseInt(bulkLocationId);
                     if(bulkProjectId) updates.project_id = parseInt(bulkProjectId);
                     
-                    // Update the transaction
                     await fetch(`${API_URL}/transactions/${txId}`, {
                         method: 'PUT',
                         body: JSON.stringify(updates),
@@ -1619,18 +1566,15 @@
         async function applyBulkTransferEdit() {
             if(selectedTransfers.length === 0) return;
             
-            // Get form values
             const bulkFromAccountId = document.getElementById('bulkTransferFromAccount').value;
             const bulkToAccountId = document.getElementById('bulkTransferToAccount').value;
             const bulkNote = document.getElementById('bulkTransferNote').value.trim();
             
-            // If nothing to change, exit
             if(!bulkFromAccountId && !bulkToAccountId && !bulkNote) {
                 alert('No changes selected');
                 return;
             }
             
-            // Confirmation
             const changes = [];
             if(bulkFromAccountId) {
                 const account = allAccounts.find(a => a.id === parseInt(bulkFromAccountId));
@@ -1646,19 +1590,15 @@
             if(!confirm(confirmMsg)) return;
             
             try {
-                // Procesar cada transfer seleccionado
                 for(const transferId of selectedTransfers) {
                     const [outId, inId] = transferId.split('_').map(id => parseInt(id));
                     
-                    // Get both transactions from the transfer
                     const outTx = await (await fetch(`${API_URL}/transactions/${outId}`)).json();
                     const inTx = await (await fetch(`${API_URL}/transactions/${inId}`)).json();
                     
-                    // Prepare updates
                     const outUpdates = { ...outTx };
                     const inUpdates = { ...inTx };
                     
-                    // Apply account changes
                     if(bulkFromAccountId) {
                         outUpdates.account_id = parseInt(bulkFromAccountId);
                         const account = allAccounts.find(a => a.id === parseInt(bulkFromAccountId));
@@ -1670,13 +1610,11 @@
                         if(account) inUpdates.currency = account.currency;
                     }
                     
-                    // Apply note to both transactions
                     if(bulkNote) {
                         outUpdates.note = bulkNote;
                         inUpdates.note = bulkNote;
                     }
                     
-                    // Update both transactions
                     await fetch(`${API_URL}/transactions/${outId}`, {
                         method: 'PUT',
                         body: JSON.stringify(outUpdates),

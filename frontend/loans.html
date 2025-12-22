@@ -31,15 +31,14 @@
         h1 { font-size: 30px; margin: 0; font-family: 'Playfair Display', serif; }
 
         /* Toolbar controls and buttons */
-        .tools { display: flex; gap: 8px; align-items: center; }
-        .tools button, .dropdown .btn {
+        .tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+        .tools select, .tools input, .tools button, .dropdown .btn {
             background: var(--bg); color: var(--text); border: 1px solid var(--border);
-            border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer;
-            transition: transform 0.1s;
+            border-radius: 8px; padding: 6px 10px; font-size: 12px; cursor: pointer;
         }
-        .tools button:active { transform: translateY(1px); }
+        .tools button { cursor: pointer; }
         .tools .primary { background: var(--panel); border-color: var(--border); }
-        .tools .danger { background: var(--card); border-color: var(--border); }
+        .tools .danger { background: var(--panel); border-color: var(--border); }
 
         /* Dropdown menu component */
 
@@ -215,24 +214,22 @@
 <script>
     const API_BASE = (localStorage.getItem('delfin_api') || 'http://localhost:8000').replace(/\/$/, '');
     const q = (sel) => document.querySelector(sel);
-    const CACHE_DURATION = 14 * 24 * 60 * 60 * 1000; // Cache expiry: 14 days in milliseconds
+    const CACHE_DURATION = 14 * 24 * 60 * 60 * 1000;
+    const INTEREST_PATTERN = /interest|fee|interés|comisión/i;
+    const CURRENCY_SYMBOLS = { 'GBP': '£', 'EUR': '€', 'USD': '$', 'JPY': '¥' };
 
-    // Application state
     let globalCurrency = 'GBP';
+    let globalSymbol = '£';
 
-    // --- API calls and caching layer ---
+    // --- API and caching ---
 
     async function api(path, opts = {}) {
-        try {
-            const res = await fetch(`${API_BASE}${path}`, {
-                headers: { 'Content-Type': 'application/json' },
-                ...opts
-            });
-            if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-            return res.json();
-        } catch (e) {
-            throw e;
-        }
+        const res = await fetch(`${API_BASE}${path}`, {
+            headers: { 'Content-Type': 'application/json' },
+            ...opts
+        });
+        if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+        return res.json();
     }
 
     function getCache(key) {
@@ -240,7 +237,7 @@
             const cached = JSON.parse(localStorage.getItem(key));
             if (!cached) return null;
             if (Date.now() - cached.timestamp < CACHE_DURATION) return cached.value;
-            localStorage.removeItem(key); // Remove expired cache entry
+            localStorage.removeItem(key);
         } catch (e) { console.error(e); }
         return null;
     }
@@ -249,11 +246,10 @@
         localStorage.setItem(key, JSON.stringify({ value, timestamp: Date.now() }));
     }
 
-    // --- Data loading and initialisation ---
+    // --- Data loading ---
 
     async function loadData() {
         try {
-            // Load summary data (total owed, interest, etc.)
             let summary = getCache('loans_summary');
             if (!summary) {
                 summary = await api('/loans/summary');
@@ -261,7 +257,6 @@
             }
             updateSummaryUI(summary);
 
-            // Load detailed loan and credit card information
             let details = getCache('loans_details');
             if (!details) {
                 details = await api('/loans/details?include_completed=true');
@@ -277,25 +272,22 @@
 
     function updateSummaryUI(data) {
         globalCurrency = data.base_currency || 'GBP';
-        q('#baseCurrencySum').textContent = globalCurrency;
+        globalSymbol = CURRENCY_SYMBOLS[globalCurrency] || globalCurrency + ' ';
         
+        q('#baseCurrencySum').textContent = globalCurrency;
         q('#activeCreditCards').textContent = data.active_credit_cards;
         q('#activeLoans').textContent = data.active_loans;
-        
-        const sym = getSymbol(globalCurrency);
-        q('#totalOwed').textContent = `${sym}${formatNum(data.total_owed)}`;
-        q('#totalInterest').textContent = `${sym}${formatNum(data.total_interest)}`;
+        q('#totalOwed').textContent = `${globalSymbol}${formatNum(data.total_owed)}`;
+        q('#totalInterest').textContent = `${globalSymbol}${formatNum(data.total_interest)}`;
     }
 
     function renderDashboard(data) {
-        const currency = data.base_currency || globalCurrency;
-        
-        renderSection('activeLoans', data.loans, currency, 'loan');
-        renderSection('completedLoans', data.completed, currency, 'mixed');
-        renderSection('creditCards', data.credit_cards, currency, 'card');
+        renderSection('activeLoans', data.loans, 'loan');
+        renderSection('completedLoans', data.completed, 'mixed');
+        renderSection('creditCards', data.credit_cards, 'card');
     }
 
-    function renderSection(idPrefix, items, currency, type) {
+    function renderSection(idPrefix, items, type) {
         const section = q(`#${idPrefix}Section`);
         const list = q(`#${idPrefix}List`);
         const count = q(`#${idPrefix}Count`);
@@ -308,23 +300,19 @@
         section.style.display = 'block';
         count.textContent = items.length;
         list.innerHTML = items.map(item => {
-            // Determine type for mixed lists
-            let itemType = type;
-            if (type === 'mixed') {
-                itemType = item.account.type === 'CREDIT_CARD' ? 'card' : 'loan';
-            }
-            return displayDebtAccount(item, itemType, currency);
+            const itemType = type === 'mixed' 
+                ? (item.account.type === 'CREDIT_CARD' ? 'card' : 'loan')
+                : type;
+            return displayDebtAccount(item, itemType);
         }).join('');
     }
 
-    // --- Display and rendering functions ---
+    // --- Display functions ---
 
-    function displayDebtAccount(debt, type, currency) {
-        const sym = getSymbol(currency);
+    function displayDebtAccount(debt, type) {
         const isCard = type === 'card' || type === 'credit-card';
         const isCompleted = debt.is_completed;
         
-        // Calculate repayment progress percentage
         let progress = 0;
         if (isCard) {
             const total = debt.borrowed + debt.interest;
@@ -335,14 +323,13 @@
         
         const barClass = isCompleted ? 'completed' : (isCard ? 'credit-card' : 'loan');
         
-        // Format balance/remaining amount with appropriate colour coding
         let balanceDisplay;
         if (isCard) {
             const bal = debt.current_balance;
             const color = bal > 0 ? 'var(--green)' : (bal < 0 ? 'var(--red)' : '#666');
-            balanceDisplay = `<span style="color:${color}">${bal > 0 ? '+' : ''}${sym}${formatNum(bal)}</span>`;
+            balanceDisplay = `<span style="color:${color}">${bal > 0 ? '+' : ''}${globalSymbol}${formatNum(bal)}</span>`;
         } else {
-            balanceDisplay = `<span style="color:${isCompleted ? 'var(--green)' : 'var(--red)'}">${sym}${formatNum(debt.current_owed)}</span>`;
+            balanceDisplay = `<span style="color:${isCompleted ? 'var(--green)' : 'var(--red)'}">${globalSymbol}${formatNum(debt.current_owed)}</span>`;
         }
 
         return `
@@ -369,15 +356,15 @@
                 <div class="loan-stats">
                     <div>
                         <div class="loan-stat-label">${isCard ? 'Charges' : 'Borrowed'}</div>
-                        <div class="loan-stat-value">${sym}${formatNum(debt.borrowed)}</div>
+                        <div class="loan-stat-value">${globalSymbol}${formatNum(debt.borrowed)}</div>
                     </div>
                     <div>
                         <div class="loan-stat-label">Repaid</div>
-                        <div class="loan-stat-value" style="color: var(--green)">${sym}${formatNum(debt.repaid)}</div>
+                        <div class="loan-stat-value" style="color: var(--green)">${globalSymbol}${formatNum(debt.repaid)}</div>
                     </div>
                     <div>
                         <div class="loan-stat-label">Interest</div>
-                        <div class="loan-stat-value" style="color: var(--red)">${sym}${formatNum(debt.interest)}</div>
+                        <div class="loan-stat-value" style="color: var(--red)">${globalSymbol}${formatNum(debt.interest)}</div>
                     </div>
                     <div>
                         <div class="loan-stat-label">${isCard ? 'Balance' : 'Remaining'}</div>
@@ -386,46 +373,43 @@
                 </div>
                 
                 <div class="loan-transactions" id="transactions-${debt.account.id}">
-                    ${renderTransactions(debt.transactions, sym)}
+                    ${renderTransactions(debt.transactions)}
                 </div>
             </div>
         `;
     }
 
-    function renderTransactions(transactions, sym) {
-        if (!transactions || transactions.length === 0) return '<div style="text-align:center;color:#999;font-size:12px;padding:10px">No transactions</div>';
+    function renderTransactions(transactions) {
+        if (!transactions || transactions.length === 0) {
+            return '<div style="text-align:center;color:#999;font-size:12px;padding:10px">No transactions</div>';
+        }
         
         return transactions.map(t => {
-            // Determine transaction type from amount, location, and category
+            const dateObj = new Date(t.date);
             let type = 'Charge';
             if (t.amount > 0) type = 'Payment';
-            if (t.location_name?.includes('Transfer')) type = 'Transfer';
-            const cat = t.category_name?.toLowerCase() || '';
-            if (cat.match(/interest|fee|interés|comisión/)) type = 'Interest';
+            else if (t.location_name?.includes('Transfer')) type = 'Transfer';
+            else if (INTEREST_PATTERN.test(t.category_name || '')) type = 'Interest';
 
             return `
                 <div class="transaction-item">
-                    <div class="transaction-date">${formatDate(t.date)}<br>${new Date(t.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div>
+                    <div class="transaction-date">${dateObj.toLocaleDateString('en-GB')}<br>${dateObj.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'})}</div>
                     <div class="transaction-details">
                         <div class="transaction-type">${type}</div>
                         <div class="transaction-note">${t.payee_name || t.category_name || t.note || ''}</div>
                     </div>
                     <div class="transaction-amount ${t.amount < 0 ? 'amount-negative' : 'amount-positive'}">
-                        ${sym}${formatNum(Math.abs(t.amount))}
+                        ${globalSymbol}${formatNum(Math.abs(t.amount))}
                     </div>
                 </div>
             `;
         }).join('');
     }
 
-    // --- Utility functions ---
+    // --- Utilities ---
 
     function formatNum(n) { return Math.abs(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
     function formatDate(d) { return new Date(d).toLocaleDateString('en-GB'); }
-    function getSymbol(c) { 
-        const s = {'GBP':'£','EUR':'€','USD':'$','JPY':'¥'};
-        return s[c] || c + ' ';
-    }
     
     function toggleTransactions(id) {
         const el = q(`#transactions-${id}`);
@@ -448,7 +432,7 @@
         q('#navDropdown').classList.toggle('open');
     }
 
-    // --- User actions and event handlers ---
+    // --- Event handlers ---
 
     async function refreshCache() {
         localStorage.removeItem('loans_summary');
@@ -465,7 +449,6 @@
         } catch (e) { showError('Failed to update rates'); }
     });
 
-    // Application initialisation
     window.onclick = (e) => {
         if (!e.target.matches('#navBtn')) q('#navDropdown').classList.remove('open');
     }
