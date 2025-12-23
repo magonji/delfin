@@ -529,6 +529,54 @@
         </div>
     </div>
 
+    <!-- Modals for creating new items during CSV import -->
+    <div id="newParentCategoryModal" class="modal">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header"><h3>New Parent Category</h3><button class="close-btn" onclick="closeModal('newParentCategoryModal')">&times;</button></div>
+            <div style="padding: 20px;">
+                <label style="display:block; margin-bottom: 5px;">Name</label>
+                <input type="text" id="newParentCategoryName" style="width: 100%; padding: 8px; margin-bottom: 15px;">
+                <input type="hidden" id="newParentCategoryForIndex">
+                <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                    <button onclick="closeModal('newParentCategoryModal')" style="background: #ccc;">Cancel</button>
+                    <button onclick="saveNewParentCategoryForImport()">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="newSubcategoryModalImport" class="modal">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header"><h3>New Subcategory</h3><button class="close-btn" onclick="closeModal('newSubcategoryModalImport')">&times;</button></div>
+            <div style="padding: 20px;">
+                <label style="display:block; margin-bottom: 5px;">Parent</label>
+                <input type="text" id="newSubcategoryParentName" readonly style="width: 100%; padding: 8px; margin-bottom: 15px; background: #f0f0f0;">
+                <label style="display:block; margin-bottom: 5px;">Name</label>
+                <input type="text" id="newSubcategoryNameImport" style="width: 100%; padding: 8px; margin-bottom: 15px;">
+                <input type="hidden" id="newSubcategoryForIndex">
+                <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                    <button onclick="closeModal('newSubcategoryModalImport')" style="background: #ccc;">Cancel</button>
+                    <button onclick="saveNewSubcategoryForImport()">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="newLocationModalImport" class="modal">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header"><h3>New Location</h3><button class="close-btn" onclick="closeModal('newLocationModalImport')">&times;</button></div>
+            <div style="padding: 20px;">
+                <label style="display:block; margin-bottom: 5px;">Name</label>
+                <input type="text" id="newLocationNameImport" style="width: 100%; padding: 8px; margin-bottom: 15px;">
+                <input type="hidden" id="newLocationForIndex">
+                <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                    <button onclick="closeModal('newLocationModalImport')" style="background: #ccc;">Cancel</button>
+                    <button onclick="saveNewLocationForImport()">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="footer">© Royal Bank of González. 2025</div>
 
     <script>
@@ -759,6 +807,7 @@
                                 </div>
                                 <div class="item-actions">
                                     <button onclick="editItem('category', ${cat.id})">✏️ Edit</button>
+                                    <button onclick="deleteCategory(${cat.id}, '${cat.name.replace(/'/g, "\\'")}', '${(cat.parent || '').replace(/'/g, "\\'")}')" style="background: #f87171; color: white;">🗑️</button>
                                 </div>
                             </div>
                         `;
@@ -777,6 +826,7 @@
                                 </div>
                                 <div class="item-actions">
                                     <button onclick="editItem('category', ${standaloneCategory.id})">✏️ Edit</button>
+                                    <button onclick="deleteCategory(${standaloneCategory.id}, '${parent.replace(/'/g, "\\'")}', null)" style="background: #f87171; color: white;">🗑️</button>
                                 </div>
                             </div>
                         </div>
@@ -913,6 +963,42 @@
         }
         
         // Edit item
+        async function deleteCategory(id, name, parent) {
+            const categoryType = parent ? 'subcategory' : 'parent category';
+            const fullName = parent ? `${parent} → ${name}` : name;
+            
+            // First confirmation
+            if (!confirm(`Are you sure you want to delete the ${categoryType} "${fullName}"?\n\nThis action cannot be undone.`)) {
+                return;
+            }
+            
+            // Second confirmation with typed name
+            const typedName = prompt(`To confirm deletion, please type the category name exactly:\n\n${name}`);
+            if (typedName !== name) {
+                if (typedName !== null) {
+                    showError('Category name does not match. Deletion cancelled.');
+                }
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/categories/${id}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    showSuccess(`Category "${name}" deleted successfully`);
+                    await loadCategories();
+                    displayCategories();
+                } else {
+                    const error = await response.json();
+                    showError(error.detail || 'Failed to delete category');
+                }
+            } catch (error) {
+                showError('Failed to delete category: ' + error.message);
+            }
+        }
+
         function editItem(type, id) {
             currentEditType = type;
             let item;
@@ -1585,17 +1671,19 @@
                             <select id="parentCategory_${index}" class="import-select" onchange="handleParentCategoryChange(${index})" ${trans.type === 'transfer' ? 'disabled' : ''}>
                                 <option value="">Parent...</option>
                                 ${getUniqueParents().map(p => `<option value="${p}">${p}</option>`).join('')}
+                                <option value="__NEW__" style="color:#667eea;font-weight:bold">➕ Add new...</option>
                             </select>
-                            <select id="category_${index}" class="import-select" disabled>
+                            <select id="category_${index}" class="import-select" onchange="handleSubcategoryChange(${index})" disabled>
                                 <option value="">Subcategory...</option>
                             </select>
                         </div>
                     </td>
                     <td>
                         <div class="gap-small">
-                            <select id="location_${index}" class="import-select" ${trans.type === 'transfer' ? 'disabled' : ''}>
+                            <select id="location_${index}" class="import-select" onchange="handleLocationChange(${index})" ${trans.type === 'transfer' ? 'disabled' : ''}>
                                 <option value="">Loc...</option>
                                 ${allLocations.map(l => `<option value="${l.id}">${l.name}</option>`).join('')}
+                                <option value="__NEW__" style="color:#667eea;font-weight:bold">➕ Add...</option>
                             </select>
                             <select id="project_${index}" class="import-select" ${trans.type === 'transfer' ? 'disabled' : ''}>
                                 <option value="">Proj...</option>
@@ -1937,8 +2025,18 @@
 
         // Handle parent category change
         function handleParentCategoryChange(index) {
-            const parentValue = document.getElementById(`parentCategory_${index}`).value;
+            const parentSelect = document.getElementById(`parentCategory_${index}`);
+            const parentValue = parentSelect.value;
             const categorySelect = document.getElementById(`category_${index}`);
+            
+            // Handle "Add new" option
+            if (parentValue === '__NEW__') {
+                parentSelect.value = '';
+                document.getElementById('newParentCategoryForIndex').value = index;
+                document.getElementById('newParentCategoryName').value = '';
+                openModal('newParentCategoryModal');
+                return;
+            }
             
             categorySelect.innerHTML = '<option value="">Select category...</option>';
             
@@ -1952,17 +2050,162 @@
                 .filter(c => c.parent === parentValue)
                 .sort((a, b) => a.name.localeCompare(b.name));
             
-            if (subcategories.length === 0) {
-                categorySelect.disabled = true;
-                return;
-            }
-            
             categorySelect.disabled = false;
             subcategories.forEach(cat => {
                 const option = document.createElement('option');
                 option.value = cat.id;
                 option.textContent = cat.name;
                 categorySelect.appendChild(option);
+            });
+            
+            // Add "new subcategory" option
+            const newOption = document.createElement('option');
+            newOption.value = '__NEW__';
+            newOption.textContent = '➕ Add new...';
+            newOption.style.color = '#667eea';
+            newOption.style.fontWeight = 'bold';
+            categorySelect.appendChild(newOption);
+        }
+        
+        function handleSubcategoryChange(index) {
+            const categorySelect = document.getElementById(`category_${index}`);
+            if (categorySelect.value === '__NEW__') {
+                categorySelect.value = '';
+                const parentValue = document.getElementById(`parentCategory_${index}`).value;
+                document.getElementById('newSubcategoryForIndex').value = index;
+                document.getElementById('newSubcategoryParentName').value = parentValue;
+                document.getElementById('newSubcategoryNameImport').value = '';
+                openModal('newSubcategoryModalImport');
+            }
+        }
+        
+        function handleLocationChange(index) {
+            const locationSelect = document.getElementById(`location_${index}`);
+            if (locationSelect.value === '__NEW__') {
+                locationSelect.value = '';
+                document.getElementById('newLocationForIndex').value = index;
+                document.getElementById('newLocationNameImport').value = '';
+                openModal('newLocationModalImport');
+            }
+        }
+
+        async function saveNewParentCategoryForImport() {
+            const name = document.getElementById('newParentCategoryName').value.trim();
+            const index = document.getElementById('newParentCategoryForIndex').value;
+            
+            if (!name) { alert('Please enter a category name'); return; }
+            
+            try {
+                const response = await fetch(`${API_URL}/categories`, {
+                    method: 'POST',
+                    body: JSON.stringify({ name: name, parent: null }),
+                    headers: {'Content-Type': 'application/json'}
+                });
+                const newCategory = await response.json();
+                
+                // Reload categories
+                const catResponse = await fetch(`${API_URL}/categories?limit=1000`);
+                allCategories = await catResponse.json();
+                
+                // Update all parent category selectors
+                refreshAllParentCategorySelectors();
+                
+                // Select the new category in the triggering row
+                document.getElementById(`parentCategory_${index}`).value = name;
+                handleParentCategoryChange(index);
+                
+                closeModal('newParentCategoryModal');
+                showSuccess(`Created category: ${name}`);
+            } catch (error) {
+                showError('Failed to create category: ' + error.message);
+            }
+        }
+
+        async function saveNewSubcategoryForImport() {
+            const name = document.getElementById('newSubcategoryNameImport').value.trim();
+            const parent = document.getElementById('newSubcategoryParentName').value;
+            const index = document.getElementById('newSubcategoryForIndex').value;
+            
+            if (!name) { alert('Please enter a subcategory name'); return; }
+            
+            try {
+                const response = await fetch(`${API_URL}/categories`, {
+                    method: 'POST',
+                    body: JSON.stringify({ name: name, parent: parent }),
+                    headers: {'Content-Type': 'application/json'}
+                });
+                const newCategory = await response.json();
+                
+                // Reload categories
+                const catResponse = await fetch(`${API_URL}/categories?limit=1000`);
+                allCategories = await catResponse.json();
+                
+                // Refresh subcategory selector and select new one
+                handleParentCategoryChange(index);
+                document.getElementById(`category_${index}`).value = newCategory.id;
+                
+                closeModal('newSubcategoryModalImport');
+                showSuccess(`Created subcategory: ${name}`);
+            } catch (error) {
+                showError('Failed to create subcategory: ' + error.message);
+            }
+        }
+
+        async function saveNewLocationForImport() {
+            const name = document.getElementById('newLocationNameImport').value.trim();
+            const index = document.getElementById('newLocationForIndex').value;
+            
+            if (!name) { alert('Please enter a location name'); return; }
+            
+            try {
+                const response = await fetch(`${API_URL}/locations`, {
+                    method: 'POST',
+                    body: JSON.stringify({ name: name }),
+                    headers: {'Content-Type': 'application/json'}
+                });
+                const newLocation = await response.json();
+                
+                // Reload locations
+                const locResponse = await fetch(`${API_URL}/locations`);
+                allLocations = await locResponse.json();
+                
+                // Update all location selectors
+                refreshAllLocationSelectors();
+                
+                // Select the new location in the triggering row
+                document.getElementById(`location_${index}`).value = newLocation.id;
+                
+                closeModal('newLocationModalImport');
+                showSuccess(`Created location: ${name}`);
+            } catch (error) {
+                showError('Failed to create location: ' + error.message);
+            }
+        }
+
+        function refreshAllParentCategorySelectors() {
+            const parents = getUniqueParents();
+            parsedTransactions.forEach((trans, index) => {
+                const select = document.getElementById(`parentCategory_${index}`);
+                if (select && !select.disabled) {
+                    const currentValue = select.value;
+                    select.innerHTML = '<option value="">Parent...</option>' +
+                        parents.map(p => `<option value="${p}">${p}</option>`).join('') +
+                        '<option value="__NEW__" style="color:#667eea;font-weight:bold">➕ Add new...</option>';
+                    select.value = currentValue;
+                }
+            });
+        }
+
+        function refreshAllLocationSelectors() {
+            parsedTransactions.forEach((trans, index) => {
+                const select = document.getElementById(`location_${index}`);
+                if (select && !select.disabled) {
+                    const currentValue = select.value;
+                    select.innerHTML = '<option value="">Loc...</option>' +
+                        allLocations.map(l => `<option value="${l.id}">${l.name}</option>`).join('') +
+                        '<option value="__NEW__" style="color:#667eea;font-weight:bold">➕ Add...</option>';
+                    select.value = currentValue;
+                }
             });
         }
 

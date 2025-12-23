@@ -1,62 +1,53 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Text, Index
+"""
+SQLAlchemy models for the Delfin finance application.
+"""
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Text, Index, event
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from backend.database import Base
 
 
 class Account(Base):
-    """
-    Represents a financial account (e.g., Monzo, Bank of Scotland).
-    """
+    """Financial account (e.g., Monzo, Bank of Scotland)."""
     __tablename__ = "accounts"
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, nullable=False, index=True)
-    type = Column(String)  # e.g., "Bank", "Cash", "Credit Card"
-    currency = Column(String, default="GBP", index=True)  # NEW INDEX: filtrado por moneda
+    type = Column(String)
+    currency = Column(String, default="GBP", index=True)
     initial_balance = Column(Float, default=0.0)
     current_balance = Column(Float, default=0.0)
-    is_active = Column(Integer, default=1, index=True)  # NEW INDEX: filtrado activo/inactivo
+    is_active = Column(Integer, default=1, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
-    # Relationships
     transactions = relationship("Transaction", back_populates="account")
 
 
 class Category(Base):
-    """
-    Represents expense/income categories with hierarchical structure.
-    """
+    """Expense/income categories with hierarchical structure."""
     __tablename__ = "categories"
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False, index=True)
-    parent = Column(String, index=True)  # NEW INDEX: consultas jerárquicas
-    type = Column(String, index=True)  # NEW INDEX: filtrado por tipo Income/Expense
+    parent = Column(String, index=True)
+    type = Column(String, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
-    # Relationships
     transactions = relationship("Transaction", back_populates="category")
 
 
 class Payee(Base):
-    """
-    Represents payees/merchants (e.g., ASDA, Lidl, Amazon).
-    """
+    """Payees/merchants (e.g., ASDA, Lidl, Amazon)."""
     __tablename__ = "payees"
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, nullable=False, index=True)
-    
-    # Most common associations (pre-calculated for performance)
     most_common_category_id = Column(Integer, ForeignKey("categories.id"), nullable=True, index=True)
     most_common_location_id = Column(Integer, ForeignKey("locations.id"), nullable=True, index=True)
     most_common_project_id = Column(Integer, ForeignKey("projects.id"), nullable=True, index=True)
-    
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
-    # Relationships
     transactions = relationship("Transaction", back_populates="payee", foreign_keys="Transaction.payee_id")
     most_common_category = relationship("Category", foreign_keys=[most_common_category_id])
     most_common_location = relationship("Location", foreign_keys=[most_common_location_id])
@@ -64,23 +55,18 @@ class Payee(Base):
 
 
 class Location(Base):
-    """
-    Represents geographical locations (e.g., Glasgow, Madrid).
-    """
+    """Geographical locations (e.g., Glasgow, Madrid)."""
     __tablename__ = "locations"
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
-    # Relationships
     transactions = relationship("Transaction", back_populates="location")
 
 
 class Project(Base):
-    """
-    Represents projects for grouping transactions (e.g., "Movimientos comunes").
-    """
+    """Projects for grouping transactions."""
     __tablename__ = "projects"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -88,14 +74,11 @@ class Project(Base):
     description = Column(Text)
     created_at = Column(DateTime, default=datetime.utcnow)
     
-    # Relationships
     transactions = relationship("Transaction", back_populates="project")
 
 
 class Transaction(Base):
-    """
-    Represents individual financial transactions.
-    """
+    """Individual financial transactions."""
     __tablename__ = "transactions"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -104,28 +87,24 @@ class Transaction(Base):
     currency = Column(String, default="GBP", index=True)
     note = Column(Text)
     
-    # Foreign keys
     account_id = Column(Integer, ForeignKey("accounts.id"), index=True)
     category_id = Column(Integer, ForeignKey("categories.id"), index=True)
     payee_id = Column(Integer, ForeignKey("payees.id"), index=True)
     location_id = Column(Integer, ForeignKey("locations.id"), index=True)
     project_id = Column(Integer, ForeignKey("projects.id"), index=True)
     
-    # Cached balance columns
-    account_balance_after = Column(Float, nullable=True, index=True)  # Balance of specific account after transaction
-    total_balance_after = Column(Float, nullable=True, index=True)    # Total balance (all accounts) after transaction
+    account_balance_after = Column(Float, nullable=True, index=True)
+    total_balance_after = Column(Float, nullable=True, index=True)
     
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
-    # Relationships
     account = relationship("Account", back_populates="transactions")
     category = relationship("Category", back_populates="transactions")
     payee = relationship("Payee", back_populates="transactions")
     location = relationship("Location", back_populates="transactions")
     project = relationship("Project", back_populates="transactions")
     
-    # Composite indices
     __table_args__ = (
         Index('idx_transaction_account_date', 'account_id', 'date'),
         Index('idx_transaction_currency_date', 'currency', 'date'),
@@ -136,10 +115,7 @@ class Transaction(Base):
 
 
 class ExchangeRate(Base):
-    """
-    Stores historical exchange rates for currency conversion.
-    Rates are stored with GBP as the base currency.
-    """
+    """Historical exchange rates (GBP as base currency)."""
     __tablename__ = "exchange_rates"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -148,22 +124,17 @@ class ExchangeRate(Base):
     date = Column(DateTime, nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
-    # COMPOSITE INDEX - Crítico para get_latest_exchange_rates()
     __table_args__ = (
-        # Índice compuesto para obtener la tasa más reciente por moneda
         Index('idx_exchange_rate_currency_date', 'currency', 'date'),
     )
 
-# Event listeners para redondear cantidades monetarias antes de guardar
-from sqlalchemy import event
+
+# --- Event listeners to round monetary amounts before saving ---
 
 @event.listens_for(Transaction, 'before_insert')
 @event.listens_for(Transaction, 'before_update')
-def round_transaction_money_amounts(mapper, connection, target):
-    """
-    Redondea cantidades monetarias a 2 decimales antes de guardar en la base de datos.
-    Esto previene la acumulación de errores de punto flotante.
-    """
+def round_transaction_amounts(mapper, connection, target):
+    """Round monetary amounts to 2 decimal places."""
     if target.amount is not None:
         target.amount = round(target.amount, 2)
     if target.account_balance_after is not None:
@@ -174,10 +145,8 @@ def round_transaction_money_amounts(mapper, connection, target):
 
 @event.listens_for(Account, 'before_insert')
 @event.listens_for(Account, 'before_update')
-def round_account_money_amounts(mapper, connection, target):
-    """
-    Redondea balances de cuentas a 2 decimales antes de guardar.
-    """
+def round_account_balances(mapper, connection, target):
+    """Round account balances to 2 decimal places."""
     if target.initial_balance is not None:
         target.initial_balance = round(target.initial_balance, 2)
     if target.current_balance is not None:
@@ -187,8 +156,6 @@ def round_account_money_amounts(mapper, connection, target):
 @event.listens_for(ExchangeRate, 'before_insert')
 @event.listens_for(ExchangeRate, 'before_update')
 def round_exchange_rate(mapper, connection, target):
-    """
-    Redondea tasas de cambio a 6 decimales (más precisión para divisas).
-    """
+    """Round exchange rates to 6 decimal places."""
     if target.rate is not None:
         target.rate = round(target.rate, 6)

@@ -732,12 +732,132 @@
         const API_URL = 'http://localhost:8000';
         // --- Configuration and global state ---
         let allCategories = [], allPayees = [], allAccounts = [], allAccountsIncludingClosed = [], allLocations = [], regularTransactions = [], transferTransactions = [];
-        let accountsMap = new Map(); // For O(1) account lookups
+        let accountsMap = new Map();
         let transactionsSkip = 0; const LIMIT = 100;
         let isLoadingTransactions = false, hasMoreTransactions = true;
         let bulkEditMode = false, selectedTransactions = [], selectedTransfers = [], currentBulkType = null;
         let activeFilters = { startDate: null, endDate: null, accountId: null, categoryId: null, searchText: null };
         let filtersActive = false;
+        let targetTransactionId = null;
+        let targetTransferId = null;
+        let isScrollingToTarget = false;
+
+        function setScrollTarget(transactionId, transferId = null) {
+            targetTransactionId = transactionId;
+            targetTransferId = transferId;
+        }
+        
+        function findAndScrollToTarget() {
+            let el = null;
+            if (targetTransactionId) {
+                el = document.querySelector(`[data-transaction-id="${targetTransactionId}"]`);
+            } else if (targetTransferId) {
+                el = document.querySelector(`[data-transfer-id="${targetTransferId}"]`);
+            }
+            
+            if (el) {
+                el.scrollIntoView({ block: 'center' });
+                el.style.transition = 'background-color 0.3s';
+                el.style.backgroundColor = '#fff3cd';
+                setTimeout(() => el.style.backgroundColor = '', 1000);
+                targetTransactionId = null;
+                targetTransferId = null;
+                isScrollingToTarget = false;
+                return true;
+            }
+            return false;
+        }
+        
+        async function scrollToTarget() {
+            if (!targetTransactionId && !targetTransferId) return;
+            if (isScrollingToTarget) return;
+            
+            isScrollingToTarget = true;
+            
+            // Wait for any ongoing load to finish
+            while (isLoadingTransactions) {
+                await new Promise(r => setTimeout(r, 50));
+            }
+            
+            if (findAndScrollToTarget()) return;
+            
+            const maxAttempts = 50;
+            let attempts = 0;
+            
+            while (attempts < maxAttempts && hasMoreTransactions && (targetTransactionId || targetTransferId)) {
+                // Wait if something else is loading
+                while (isLoadingTransactions) {
+                    await new Promise(r => setTimeout(r, 50));
+                }
+                
+                await loadMoreTransactionsOnly();
+                attempts++;
+                
+                if (findAndScrollToTarget()) return;
+            }
+            
+            targetTransactionId = null;
+            targetTransferId = null;
+            isScrollingToTarget = false;
+        }
+        
+        async function loadMoreTransactionsOnly() {
+            if (isLoadingTransactions || !hasMoreTransactions) return;
+            isLoadingTransactions = true;
+            
+            try {
+                const params = new URLSearchParams({ skip: transactionsSkip, limit: LIMIT });
+                if (filtersActive) {
+                    if (activeFilters.startDate) params.append('start_date', activeFilters.startDate);
+                    if (activeFilters.endDate) params.append('end_date', activeFilters.endDate);
+                    if (activeFilters.accountId) params.append('account_id', activeFilters.accountId);
+                    if (activeFilters.categoryId) params.append('category_id', activeFilters.categoryId);
+                    if (activeFilters.searchText) params.append('search', activeFilters.searchText);
+                }
+
+                const data = await (await fetch(`${API_URL}/transactions?${params.toString()}`)).json();
+                if (data.length < LIMIT) hasMoreTransactions = false;
+
+                const newReg = [], transfersOut = [], transfersIn = [];
+                data.forEach(t => {
+                    if (t.location_name === 'Transfer Out') transfersOut.push(t);
+                    else if (t.location_name === 'Transfer In') transfersIn.push(t);
+                    else newReg.push(t);
+                });
+
+                const paired = new Set();
+                transfersOut.forEach(out => {
+                    const match = transfersIn.find(i => i.date === out.date && i.account_id !== out.account_id && !paired.has(i.id));
+                    if (match) {
+                        paired.add(out.id); paired.add(match.id);
+                        transferTransactions.push({
+                            transfer_out_id: out.id, transfer_in_id: match.id, date: out.date,
+                            from_account_name: out.account_name, from_amount: Math.abs(out.amount), from_currency: out.currency,
+                            to_account_name: match.account_name, to_amount: match.amount, to_currency: match.currency,
+                            note: out.note || match.note, from_balance: out.account_balance_after, to_balance: match.account_balance_after
+                        });
+                    } else {
+                        newReg.push(out);
+                    }
+                });
+                transfersIn.forEach(i => { if (!paired.has(i.id)) newReg.push(i); });
+                
+                regularTransactions.push(...newReg);
+                transactionsSkip += LIMIT;
+                displayCombinedTransactionsNoScroll();
+            } catch (e) { console.error(e); } finally { isLoadingTransactions = false; }
+        }
+        
+        function displayCombinedTransactionsNoScroll() {
+            const combined = [
+                ...regularTransactions.map(t => ({...t, type: 'tx'})),
+                ...transferTransactions.map(t => ({...t, type: 'tr'}))
+            ].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            document.getElementById('transactionsList').innerHTML = combined.map(t => 
+                t.type === 'tx' ? displayRegularTransaction(t) : displayTransferItem(t)
+            ).join('') || '<p style="text-align:center;padding:20px;color:#888">No transactions</p>';
+        }
 
         function parseMoneyAmount(value) {
             return Math.round(parseFloat(value) * 100) / 100;
@@ -1079,6 +1199,10 @@
             document.getElementById('transactionsList').innerHTML = combined.map(t => 
                 t.type === 'tx' ? displayRegularTransaction(t) : displayTransferItem(t)
             ).join('') || '<p style="text-align:center;padding:20px;color:#888">No transactions</p>';
+            
+            if ((targetTransactionId || targetTransferId) && !isScrollingToTarget) {
+                setTimeout(() => scrollToTarget(), 50);
+            }
         }
 
         // --- Display functions ---
@@ -1232,10 +1356,38 @@
             else document.getElementById('toAmountGroup').classList.add('hidden');
         }
 
-        async function deleteTransaction(id) { if(confirm('Delete?')) { await fetch(`${API_URL}/transactions/${id}`, {method:'DELETE'}); loadRecentTransactions(true); } }
-        async function deleteTransfer(outId, inId) { if(confirm('Delete transfer?')) { await fetch(`${API_URL}/transactions/${outId}`, {method:'DELETE'}); await fetch(`${API_URL}/transactions/${inId}`, {method:'DELETE'}); loadRecentTransactions(true); } }
+        async function deleteTransaction(id) { 
+            if(confirm('Delete?')) { 
+                // Find adjacent transaction to scroll to after delete
+                const allItems = [...document.querySelectorAll('[data-transaction-id], [data-transfer-id]')];
+                const currentIdx = allItems.findIndex(el => el.dataset.transactionId == id);
+                const nextItem = allItems[currentIdx + 1] || allItems[currentIdx - 1];
+                if (nextItem) {
+                    if (nextItem.dataset.transactionId) setScrollTarget(nextItem.dataset.transactionId);
+                    else if (nextItem.dataset.transferId) setScrollTarget(null, nextItem.dataset.transferId);
+                }
+                await fetch(`${API_URL}/transactions/${id}`, {method:'DELETE'}); 
+                loadRecentTransactions(true); 
+            } 
+        }
+        async function deleteTransfer(outId, inId) { 
+            if(confirm('Delete transfer?')) { 
+                const tid = `${outId}_${inId}`;
+                const allItems = [...document.querySelectorAll('[data-transaction-id], [data-transfer-id]')];
+                const currentIdx = allItems.findIndex(el => el.dataset.transferId === tid);
+                const nextItem = allItems[currentIdx + 1] || allItems[currentIdx - 1];
+                if (nextItem) {
+                    if (nextItem.dataset.transactionId) setScrollTarget(nextItem.dataset.transactionId);
+                    else if (nextItem.dataset.transferId) setScrollTarget(null, nextItem.dataset.transferId);
+                }
+                await fetch(`${API_URL}/transactions/${outId}`, {method:'DELETE'}); 
+                await fetch(`${API_URL}/transactions/${inId}`, {method:'DELETE'}); 
+                loadRecentTransactions(true); 
+            } 
+        }
         
         async function editTransaction(id) {
+            setScrollTarget(id);
             const t = await (await fetch(`${API_URL}/transactions/${id}`)).json();
             openTransactionModal();
             const d = new Date(t.date); document.getElementById('date').valueAsDate = d; document.getElementById('time').value = d.toTimeString().slice(0,5);
@@ -1244,13 +1396,17 @@
                 const c = allCategories.find(x=>x.id===t.category_id); 
                 if(c?.parent) { document.getElementById('parentCategory').value = c.parent; loadSubcategories(c.parent); setTimeout(()=>document.getElementById('category').value=t.category_id, 100); }
             }
-            if(t.payee_name) document.getElementById('payee').value = t.payee_name;
+            if(t.payee_id) {
+                const payee = allPayees.find(p => p.id === t.payee_id);
+                if(payee) document.getElementById('payee').value = payee.name;
+            }
             if(t.location_id) document.getElementById('location').value = t.location_id;
             if(t.project_id) document.getElementById('project').value = t.project_id;
             const f = document.getElementById('transactionForm'); f.dataset.editingId = id; f.querySelector('button[type="submit"]').textContent = 'Update';
         }
 
         async function editTransfer(outId, inId) {
+            setScrollTarget(null, `${outId}_${inId}`);
             const o = await (await fetch(`${API_URL}/transactions/${outId}`)).json();
             const i = await (await fetch(`${API_URL}/transactions/${inId}`)).json();
             openTransferModal();
@@ -1443,7 +1599,12 @@
             }
         }
         function openModal(id) { document.getElementById(id).classList.add('active'); }
-        function closeModal(id) { document.getElementById(id).classList.remove('active'); document.querySelectorAll('form').forEach(f=>f.reset()); }
+        function closeModal(id) { 
+            const modal = document.getElementById(id);
+            modal.classList.remove('active'); 
+            const form = modal.querySelector('form');
+            if (form) form.reset();
+        }
         function openTransactionModal() { 
             openModal('transactionModal'); 
             const now = new Date();
@@ -1463,8 +1624,35 @@
         }
         function closeTransferModal() { closeModal('transferModal'); delete document.getElementById('transferForm').dataset.editingOutId; document.getElementById('transferForm').querySelector('button[type="submit"]').textContent='Save Transfer'; }
         
-        async function saveNewCategory(){ /* ...implementation... */ closeModal('newCategoryModal'); loadCategories(); }
-        async function saveNewSubcategory(){ /* ...implementation... */ closeModal('newSubcategoryModal'); loadCategories(); }
+        async function saveNewCategory(){ 
+            const name = document.getElementById('newCategoryName').value.trim();
+            if (!name) { alert('Please enter a category name'); return; }
+            await fetch(`${API_URL}/categories`, {
+                method: 'POST',
+                body: JSON.stringify({ name: name, parent: null }),
+                headers: {'Content-Type': 'application/json'}
+            });
+            closeModal('newCategoryModal');
+            document.getElementById('newCategoryName').value = '';
+            await loadCategories();
+        }
+        async function saveNewSubcategory(){ 
+            const name = document.getElementById('newSubcategoryName').value.trim();
+            const parent = document.getElementById('newSubcategoryParent').value;
+            if (!name) { alert('Please enter a subcategory name'); return; }
+            if (!parent) { alert('Parent category is required'); return; }
+            const response = await fetch(`${API_URL}/categories`, {
+                method: 'POST',
+                body: JSON.stringify({ name: name, parent: parent }),
+                headers: {'Content-Type': 'application/json'}
+            });
+            const newCategory = await response.json();
+            closeModal('newSubcategoryModal');
+            document.getElementById('newSubcategoryName').value = '';
+            await loadCategories();
+            loadSubcategories(parent);
+            document.getElementById('category').value = newCategory.id;
+        }
         async function saveNewLocation(){ const n=document.getElementById('newLocationName').value; await fetch(`${API_URL}/locations`,{method:'POST',body:JSON.stringify({name:n}),headers:{'Content-Type':'application/json'}}); closeModal('newLocationModal'); loadLocations(); }
         async function saveNewProject(){ const n=document.getElementById('newProjectName').value; await fetch(`${API_URL}/projects`,{method:'POST',body:JSON.stringify({name:n}),headers:{'Content-Type':'application/json'}}); closeModal('newProjectModal'); loadProjects(); }
         async function saveNewAccount(){ const n=document.getElementById('newAccountName').value; const c=document.getElementById('newAccountCurrency').value; await fetch(`${API_URL}/accounts`,{method:'POST',body:JSON.stringify({name:n,currency:c,type:'Regular',initial_balance:0}),headers:{'Content-Type':'application/json'}}); closeModal('newAccountModal'); loadAccounts(); }

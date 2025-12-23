@@ -3,17 +3,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from datetime import datetime, date, timedelta, time  # <-- añadido 'time'
-from sqlalchemy import func as sql_func, case, and_, or_
+from datetime import datetime, date, timedelta, time
+from sqlalchemy import func as sql_func, case, and_, or_, func
 import shutil
 import os
 from backend.database import get_db, engine
 from backend import models, schemas
 from backend.models import Account, Category, Payee, Location, Project, Transaction, ExchangeRate
 from backend.schemas import ExchangeRateResponse
-from backend.balance_calculator import recalculate_balances_from_transaction, initialise_all_balances
-from sqlalchemy import func
-from backend.exchange_rate_helpers import get_rates_bulk, get_latest_rates
+from backend.helpers import (
+    recalculate_balances_from_transaction, 
+    initialise_all_balances,
+    get_rates_bulk, 
+    get_latest_rates
+)
 
 # Create tables if they don't exist
 models.Base.metadata.create_all(bind=engine)
@@ -139,6 +142,45 @@ def create_category(
     db.commit()
     db.refresh(db_category)
     return db_category
+
+
+@app.delete("/categories/{category_id}")
+def delete_category(
+    category_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Delete a category. Will fail if transactions are using this category.
+    """
+    category = db.query(models.Category).filter(models.Category.id == category_id).first()
+    if not category:
+        raise HTTPException(status_code=404, detail="Category not found")
+    
+    # Check if any transactions use this category
+    transaction_count = db.query(models.Transaction).filter(
+        models.Transaction.category_id == category_id
+    ).count()
+    
+    if transaction_count > 0:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Cannot delete category: {transaction_count} transactions are using it"
+        )
+    
+    # Check if this is a parent category with subcategories
+    if not category.parent:
+        subcategories = db.query(models.Category).filter(
+            models.Category.parent == category.name
+        ).count()
+        if subcategories > 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot delete parent category: {subcategories} subcategories exist"
+            )
+    
+    db.delete(category)
+    db.commit()
+    return {"message": f"Category '{category.name}' deleted successfully"}
 
 
 # ============================================
@@ -1042,12 +1084,10 @@ def update_transaction(
     
     if trigger_transaction:
         recalculate_balances_from_transaction(db, trigger_transaction.id, affected_account_ids)
-        db.commit()  # Commit después de recalcular
+        db.commit()
     else:
-        # If no earlier transaction exists, recalculate from the beginning
-        from backend.balance_calculator import initialise_all_balances
         initialise_all_balances(db)
-        db.commit()  # Commit después de inicializar
+        db.commit()
 
     db.refresh(db_transaction)
     return db_transaction
