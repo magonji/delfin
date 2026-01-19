@@ -415,6 +415,41 @@
 
         /* Badge for base currency display */
         .badge { padding: 4px 8px; border-radius: 999px; font-size: 11px; background: var(--card); border: 1px solid var(--border); font-weight: 600; }
+        
+        /* Help icon */
+        .help-icon {
+            color: var(--muted);
+            font-size: 16px;
+            cursor: pointer;
+        }
+        .help-icon:hover {
+            color: var(--text);
+        }
+        
+        /* Keyboard shortcuts modal */
+        .shortcut-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border);
+            font-size: 13px;
+        }
+        .shortcut-row:last-child {
+            border-bottom: none;
+        }
+        .shortcut-row span {
+            color: var(--text);
+        }
+        kbd {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 11px;
+            color: var(--text);
+        }
 
         /* Navigation dropdown menu */
         .dropdown { position: relative; }
@@ -447,9 +482,10 @@
     <header>
         <h1>🐬 Delfin · The Transactions</h1>
         <div class="tools">
-            <span class="badge" id="baseCurrency">—</span>
-            <button id="btnRefresh" class="primary">🔄 Refresh</button>
-            <button id="btnUpdateRates" class="danger">💱 Update rates</button>
+            <span class="help-icon" onclick="openModal('shortcutsModal')" title="Keyboard shortcuts">ⓘ</span>
+            <span class="badge" id="baseCurrency" title="Base currency">—</span>
+            <button id="btnRefresh" class="primary" title="Reload all data and recalculate balances">🔄 Refresh</button>
+            <button id="btnUpdateRates" class="danger" title="Fetch latest exchange rates">💱 Update rates</button>
             <div class="dropdown" id="navDropdown">
                 <button class="btn" id="navBtn" onclick="toggleNav()">📂 Menu ▾</button>
                 <div class="menu" id="navMenu">
@@ -473,25 +509,25 @@
         <div class="card">
                         
             <div id="filters">
-                <input type="text" id="filterSearch" placeholder="Search note or payee...">
+                <input type="text" id="filterSearch" placeholder="Search note or payee..." title="Search in notes and payee names">
 
-                <input type="date" id="filterStartDate">
-                <input type="date" id="filterEndDate">
+                <input type="date" id="filterStartDate" title="From date">
+                <input type="date" id="filterEndDate" title="To date">
 
-                <select id="filterAccount"><option value="">All accounts</option></select>
-                <select id="filterCategory"><option value="">All categories</option></select>
+                <select id="filterAccount" title="Filter by account"><option value="">All accounts</option></select>
+                <select id="filterCategory" title="Filter by category"><option value="">All categories</option></select>
 
                 <div class="filter-actions">
-                    <button onclick="applyFilters()" style="background: var(--card);">Apply</button>
-                    <button onclick="clearFilters()">Clear</button>
+                    <button onclick="applyFilters()" style="background: var(--card);" title="Apply filters">Apply</button>
+                    <button onclick="clearFilters()" title="Clear all filters">Clear</button>
                 </div>
 
                 <div class="bulk-controls" id="bulkControls">
-                    <button class="btn-bulk-main" onclick="toggleBulkMode()">Bulk Edit</button>
+                    <button class="btn-bulk-main" onclick="toggleBulkMode()" title="Edit multiple transactions at once">Bulk Edit</button>
                     <div class="bulk-actions-inline">
-                        <button class="btn-bulk-action" onclick="selectAllVisible()" style="background: var(--btn-green); color: white; border:none;">All</button>
-                        <button class="btn-bulk-action" onclick="deselectAll()" style="background: var(--btn-yellow); border:none;">None</button>
-                        <button class="btn-bulk-action" onclick="toggleBulkMode()" style="background: var(--btn-red); color: white; border:none;">&times;</button>
+                        <button class="btn-bulk-action" onclick="selectAllVisible()" style="background: var(--btn-green); color: white; border:none;" title="Select all visible">All</button>
+                        <button class="btn-bulk-action" onclick="deselectAll()" style="background: var(--btn-yellow); border:none;" title="Deselect all">None</button>
+                        <button class="btn-bulk-action" onclick="toggleBulkMode()" style="background: var(--btn-red); color: white; border:none;" title="Exit bulk edit mode">&times;</button>
                     </div>
                 </div>
             </div>
@@ -782,6 +818,30 @@
             <div class="modal-footer" style="padding: 15px 25px; border-top: 1px solid var(--border);">
                 <button id="confirmYesBtn" class="btn-save" style="background: var(--red);">Delete</button>
                 <button id="confirmNoBtn" class="btn-cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="shortcutsModal" class="modal">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h3>Keyboard Shortcuts</h3>
+                <button class="modal-close" onclick="closeModal('shortcutsModal')">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 20px 25px;">
+                <div style="margin-bottom: 15px;">
+                    <strong style="color: var(--muted); font-size: 12px; text-transform: uppercase;">Global</strong>
+                    <div class="shortcut-row"><kbd>N</kbd><span>New transaction</span></div>
+                    <div class="shortcut-row"><kbd>T</kbd><span>New transfer</span></div>
+                </div>
+                <div>
+                    <strong style="color: var(--muted); font-size: 12px; text-transform: uppercase;">In modals</strong>
+                    <div class="shortcut-row"><kbd>Esc</kbd><span>Close / Cancel</span></div>
+                    <div class="shortcut-row"><kbd>Shift</kbd> + <kbd>Enter</kbd><span>Save & New</span></div>
+                    <div class="shortcut-row"><kbd>Enter</kbd><span>Save (in note field)</span></div>
+                    <div class="shortcut-row"><kbd>↑</kbd> / <kbd>↓</kbd><span>Date ± 1 day</span></div>
+                    <div class="shortcut-row"><kbd>Shift</kbd> + <kbd>↑</kbd> / <kbd>↓</kbd><span>Date ± 1 month</span></div>
+                </div>
             </div>
         </div>
     </div>
@@ -1160,6 +1220,96 @@
             document.getElementById('transferForm').addEventListener('submit', handleTransferSubmit);
             document.getElementById('payee').addEventListener('blur', handlePayeeBlur);
             window.addEventListener('click', (e) => { if(e.target.classList.contains('modal')) e.target.classList.remove('active'); });
+            
+            // --- Keyboard shortcuts ---
+            document.addEventListener('keydown', handleGlobalKeyboard);
+        }
+        
+        function handleGlobalKeyboard(e) {
+            const transactionModalOpen = document.getElementById('transactionModal').classList.contains('active');
+            const transferModalOpen = document.getElementById('transferModal').classList.contains('active');
+            const anyModalOpen = transactionModalOpen || transferModalOpen || 
+                                 document.querySelector('.modal.active') !== null;
+            const isInputFocused = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName);
+            
+            // --- Global shortcuts (when no modal is open and not typing in an input) ---
+            if (!anyModalOpen && !isInputFocused) {
+                if (e.key === 'n' || e.key === 'N') {
+                    e.preventDefault();
+                    openTransactionModal();
+                    return;
+                }
+                if (e.key === 't' || e.key === 'T') {
+                    e.preventDefault();
+                    openTransferModal();
+                    return;
+                }
+            }
+            
+            // --- Modal shortcuts ---
+            if (transactionModalOpen || transferModalOpen) {
+                // Escape to close
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    if (transactionModalOpen) closeTransactionModal();
+                    if (transferModalOpen) closeTransferModal();
+                    return;
+                }
+                
+                // Shift+Enter for Save & New
+                if (e.key === 'Enter' && e.shiftKey) {
+                    e.preventDefault();
+                    if (transactionModalOpen) saveTransactionAndNew();
+                    if (transferModalOpen) saveTransferAndNew();
+                    return;
+                }
+                
+                // Enter on last field (note/transferNote) to save
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    const activeEl = document.activeElement;
+                    if (transactionModalOpen && activeEl.id === 'note') {
+                        e.preventDefault();
+                        document.getElementById('transactionForm').requestSubmit();
+                        return;
+                    }
+                    if (transferModalOpen && activeEl.id === 'transferNote') {
+                        e.preventDefault();
+                        document.getElementById('transferForm').requestSubmit();
+                        return;
+                    }
+                }
+                
+                // Arrow keys for date adjustment
+                if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                    const dateInput = transactionModalOpen ? document.getElementById('date') : document.getElementById('transferDate');
+                    const activeEl = document.activeElement;
+                    
+                    // Only if not focused on a select or the date input itself
+                    if (activeEl.tagName !== 'SELECT' && activeEl.type !== 'date') {
+                        e.preventDefault();
+                        const currentDate = new Date(dateInput.value);
+                        
+                        if (e.shiftKey) {
+                            // Shift+Arrow: adjust by month
+                            if (e.key === 'ArrowUp') {
+                                currentDate.setMonth(currentDate.getMonth() + 1);
+                            } else {
+                                currentDate.setMonth(currentDate.getMonth() - 1);
+                            }
+                        } else {
+                            // Arrow: adjust by day
+                            if (e.key === 'ArrowUp') {
+                                currentDate.setDate(currentDate.getDate() + 1);
+                            } else {
+                                currentDate.setDate(currentDate.getDate() - 1);
+                            }
+                        }
+                        
+                        dateInput.value = currentDate.toISOString().split('T')[0];
+                        return;
+                    }
+                }
+            }
         }
 
         // --- Data loading from API ---
