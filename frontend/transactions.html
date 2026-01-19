@@ -210,8 +210,36 @@
         }
         .btn-save { background: var(--text); color: white; }
         .btn-save:hover { opacity: 0.9; }
+        .btn-save-new { background: var(--btn-green); color: white; }
+        .btn-save-new:hover { opacity: 0.9; }
         .btn-cancel { background: transparent; border: 1px solid var(--border) !important; color: var(--muted); }
         .btn-cancel:hover { background: #fff; color: var(--text); }
+        
+        /* Batch mode indicator */
+        .batch-indicator {
+            background: var(--yellow);
+            color: var(--text);
+            padding: 8px 15px;
+            border-radius: 6px;
+            font-size: 13px;
+            display: none;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+        .batch-indicator.active { display: flex; }
+        .batch-indicator .count { font-weight: 700; }
+        
+        /* Modal footer with 3 buttons */
+        .modal-footer-batch {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .modal-footer-batch .btn-save-new {
+            grid-column: 1 / -1;
+        }
 
         @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
@@ -657,6 +685,9 @@
         <div class="modal-content">
             <div class="modal-header"><h3>New Transaction</h3><button class="modal-close" onclick="closeTransactionModal()">&times;</button></div>
             <div class="modal-body">
+                <div id="transactionBatchIndicator" class="batch-indicator">
+                    ⏳ <span class="count" id="transactionBatchCount">0</span> transaction(s) pending · balances will update on save/cancel
+                </div>
                 <form id="transactionForm">
                     <div class="form-row">
                         <div class="form-group"><label>Date</label><input type="date" id="date" required></div>
@@ -681,8 +712,9 @@
                     <div class="form-group"><label>Project</label><select id="project"><option value="">Select...</option></select></div>
                     <div class="form-group"><label>Note</label><textarea id="note" rows="2"></textarea></div>
                     
-                    <div class="modal-footer">
-                        <button type="submit" class="btn-save">Save Transaction</button>
+                    <div class="modal-footer-batch">
+                        <button type="button" class="btn-save-new" onclick="saveTransactionAndNew()">💾 Save & New</button>
+                        <button type="submit" class="btn-save">Save</button>
                         <button type="button" class="btn-cancel" onclick="closeTransactionModal()">Cancel</button>
                     </div>
                 </form>
@@ -694,6 +726,9 @@
         <div class="modal-content">
             <div class="modal-header"><h3>New Transfer</h3><button class="modal-close" onclick="closeTransferModal()">&times;</button></div>
             <div class="modal-body">
+                <div id="transferBatchIndicator" class="batch-indicator">
+                    ⏳ <span class="count" id="transferBatchCount">0</span> transfer(s) pending · balances will update on save/cancel
+                </div>
                 <form id="transferForm">
                     <div class="form-row">
                         <div class="form-group"><label>Date</label><input type="date" id="transferDate" required></div>
@@ -711,8 +746,9 @@
                         </div>
                     </div>
                     <div class="form-group"><label>Note</label><textarea id="transferNote" rows="2"></textarea></div>
-                    <div class="modal-footer">
-                        <button type="submit" class="btn-save">Save Transfer</button>
+                    <div class="modal-footer-batch">
+                        <button type="button" class="btn-save-new" onclick="saveTransferAndNew()">💾 Save & New</button>
+                        <button type="submit" class="btn-save">Save</button>
                         <button type="button" class="btn-cancel" onclick="closeTransferModal()">Cancel</button>
                     </div>
                 </form>
@@ -751,6 +787,11 @@
         let targetTransactionId = null;
         let targetTransferId = null;
         let isScrollingToTarget = false;
+        
+        // --- Batch mode state for quick entry ---
+        let transactionBatchCount = 0;
+        let transferBatchCount = 0;
+        let batchAffectedAccounts = new Set();  // Track accounts that need balance recalculation
         
         // Custom confirm dialog (replaces browser confirm which may be blocked)
         let confirmResolve = null;
@@ -1427,7 +1468,20 @@
 
         async function handleTransactionSubmit(e) {
             e.preventDefault();
-            const isEdit = e.target.dataset.editingId;
+            await saveTransaction(false);  // false = no es "save and new", debe cerrar y recalcular
+        }
+        
+        // Core function to save a transaction
+        async function saveTransaction(saveAndNew = false) {
+            const form = document.getElementById('transactionForm');
+            const isEdit = form.dataset.editingId;
+            
+            // Validate required fields
+            if (!document.getElementById('amount').value || !document.getElementById('account').value) {
+                alert('Please fill in Amount and Account');
+                return false;
+            }
+            
             const payeeName = document.getElementById('payee').value.trim();
             let payeeId = null;
             if (payeeName) {
@@ -1435,37 +1489,223 @@
                 if(exist) payeeId = exist.id;
                 else payeeId = (await (await fetch(`${API_URL}/payees`, { method:'POST', body:JSON.stringify({name:payeeName}), headers:{'Content-Type':'application/json'} })).json()).id;
             }
+            
+            const accountId = parseInt(document.getElementById('account').value);
             const data = {
                 date: `${document.getElementById('date').value}T${document.getElementById('time').value}:00`,
                 amount: parseMoneyAmount(document.getElementById('amount').value),
                 currency: document.getElementById('account').selectedOptions[0].dataset.currency,
-                account_id: parseInt(document.getElementById('account').value),
+                account_id: accountId,
                 category_id: document.getElementById('category').value ? parseInt(document.getElementById('category').value) : null,
                 payee_id: payeeId,
                 location_id: document.getElementById('location').value ? parseInt(document.getElementById('location').value) : null,
                 project_id: document.getElementById('project').value ? parseInt(document.getElementById('project').value) : null,
                 note: document.getElementById('note').value
             };
-            const res = await fetch(`${API_URL}/transactions${isEdit ? '/'+isEdit : ''}`, { method: isEdit?'PUT':'POST', body:JSON.stringify(data), headers:{'Content-Type':'application/json'} });
-            if(res.ok) { closeTransactionModal(); loadRecentTransactions(true); loadPayees(); }
+            
+            // Track affected account for later recalculation
+            batchAffectedAccounts.add(accountId);
+            
+            // If saveAndNew, skip balance recalculation
+            const skipRecalc = saveAndNew && !isEdit;
+            const url = `${API_URL}/transactions${isEdit ? '/'+isEdit : ''}${skipRecalc ? '?skip_recalculation=true' : ''}`;
+            
+            const res = await fetch(url, { 
+                method: isEdit ? 'PUT' : 'POST', 
+                body: JSON.stringify(data), 
+                headers: {'Content-Type': 'application/json'} 
+            });
+            
+            if (!res.ok) {
+                alert('Error saving transaction');
+                return false;
+            }
+            
+            // Reload payees list in case a new one was created
+            loadPayees();
+            
+            if (saveAndNew && !isEdit) {
+                // Increment batch counter and update UI
+                transactionBatchCount++;
+                updateTransactionBatchIndicator();
+                resetTransactionFormForNew();
+                return true;
+            } else {
+                // Final save: recalculate balances if we have pending batch items
+                if (transactionBatchCount > 0) {
+                    await recalculateAffectedBalances();
+                }
+                closeTransactionModal();
+                loadRecentTransactions(true);
+                return true;
+            }
+        }
+        
+        // Save and prepare form for new transaction
+        async function saveTransactionAndNew() {
+            await saveTransaction(true);
+        }
+        
+        // Reset form for new entry while keeping date and account
+        function resetTransactionFormForNew() {
+            // Keep: date, account
+            // Clear: time, amount, payee, category, location, project, note
+            const now = new Date();
+            document.getElementById('time').value = now.toTimeString().split(' ')[0].substring(0,5);
+            document.getElementById('amount').value = '';
+            document.getElementById('payee').value = '';
+            document.getElementById('parentCategory').value = '';
+            document.getElementById('category').value = '';
+            document.getElementById('category').disabled = true;
+            document.getElementById('location').value = '';
+            document.getElementById('project').value = '';
+            document.getElementById('note').value = '';
+            
+            // Focus on amount for quick entry
+            document.getElementById('amount').focus();
+        }
+        
+        // Update the batch indicator UI
+        function updateTransactionBatchIndicator() {
+            const indicator = document.getElementById('transactionBatchIndicator');
+            const countEl = document.getElementById('transactionBatchCount');
+            countEl.textContent = transactionBatchCount;
+            if (transactionBatchCount > 0) {
+                indicator.classList.add('active');
+            } else {
+                indicator.classList.remove('active');
+            }
         }
 
         async function handleTransferSubmit(e) {
             e.preventDefault();
-            const form = e.target;
+            await saveTransfer(false);  // false = no es "save and new"
+        }
+        
+        // Core function to save a transfer
+        async function saveTransfer(saveAndNew = false) {
+            const form = document.getElementById('transferForm');
             const isEdit = form.dataset.editingOutId;
-            if(isEdit) { await fetch(`${API_URL}/transactions/${form.dataset.editingOutId}`, {method:'DELETE'}); await fetch(`${API_URL}/transactions/${form.dataset.editingInId}`, {method:'DELETE'}); }
+            
+            // Validate required fields
+            if (!document.getElementById('fromAmount').value || !document.getElementById('fromAccount').value || !document.getElementById('toAccount').value) {
+                alert('Please fill in all required fields');
+                return false;
+            }
+            
+            if(isEdit) { 
+                await fetch(`${API_URL}/transactions/${form.dataset.editingOutId}`, {method:'DELETE'}); 
+                await fetch(`${API_URL}/transactions/${form.dataset.editingInId}`, {method:'DELETE'}); 
+            }
+            
+            const fromAccountId = parseInt(document.getElementById('fromAccount').value);
+            const toAccountId = parseInt(document.getElementById('toAccount').value);
             
             const data = {
                 date: `${document.getElementById('transferDate').value}T${document.getElementById('transferTime').value}:00`,
-                from_account_id: parseInt(document.getElementById('fromAccount').value),
-                to_account_id: parseInt(document.getElementById('toAccount').value),
+                from_account_id: fromAccountId,
+                to_account_id: toAccountId,
                 from_amount: parseMoneyAmount(document.getElementById('fromAmount').value),
                 to_amount: document.getElementById('toAmount').value ? parseMoneyAmount(document.getElementById('toAmount').value) : null,
                 note: document.getElementById('transferNote').value
             };
-            const res = await fetch(`${API_URL}/transactions/transfers`, { method:'POST', body:JSON.stringify(data), headers:{'Content-Type':'application/json'} });
-            if(res.ok) { closeTransferModal(); loadRecentTransactions(true); }
+            
+            // Track affected accounts
+            batchAffectedAccounts.add(fromAccountId);
+            batchAffectedAccounts.add(toAccountId);
+            
+            // If saveAndNew, skip balance recalculation
+            const skipRecalc = saveAndNew && !isEdit;
+            const url = `${API_URL}/transactions/transfers${skipRecalc ? '?skip_recalculation=true' : ''}`;
+            
+            const res = await fetch(url, { 
+                method: 'POST', 
+                body: JSON.stringify(data), 
+                headers: {'Content-Type': 'application/json'} 
+            });
+            
+            if (!res.ok) {
+                alert('Error saving transfer');
+                return false;
+            }
+            
+            if (saveAndNew && !isEdit) {
+                // Increment batch counter and update UI
+                transferBatchCount++;
+                updateTransferBatchIndicator();
+                resetTransferFormForNew();
+                return true;
+            } else {
+                // Final save: recalculate balances if we have pending batch items
+                if (transferBatchCount > 0) {
+                    await recalculateAffectedBalances();
+                }
+                closeTransferModal();
+                loadRecentTransactions(true);
+                return true;
+            }
+        }
+        
+        // Save and prepare form for new transfer
+        async function saveTransferAndNew() {
+            await saveTransfer(true);
+        }
+        
+        // Reset form for new transfer while keeping date and accounts
+        function resetTransferFormForNew() {
+            // Keep: date, fromAccount, toAccount
+            // Clear: time, amounts, note
+            const now = new Date();
+            document.getElementById('transferTime').value = now.toTimeString().split(' ')[0].substring(0,5);
+            document.getElementById('fromAmount').value = '';
+            document.getElementById('toAmount').value = '';
+            document.getElementById('transferNote').value = '';
+            
+            // Focus on amount for quick entry
+            document.getElementById('fromAmount').focus();
+        }
+        
+        // Update the transfer batch indicator UI
+        function updateTransferBatchIndicator() {
+            const indicator = document.getElementById('transferBatchIndicator');
+            const countEl = document.getElementById('transferBatchCount');
+            countEl.textContent = transferBatchCount;
+            if (transferBatchCount > 0) {
+                indicator.classList.add('active');
+            } else {
+                indicator.classList.remove('active');
+            }
+        }
+        
+        // Recalculate balances for all affected accounts
+        async function recalculateAffectedBalances() {
+            if (batchAffectedAccounts.size === 0) return;
+            
+            try {
+                // Call the backend to recalculate balances for affected accounts
+                const accountIds = Array.from(batchAffectedAccounts);
+                await fetch(`${API_URL}/admin/recalculate-balances-for-accounts`, {
+                    method: 'POST',
+                    body: JSON.stringify({ account_ids: accountIds }),
+                    headers: { 'Content-Type': 'application/json' }
+                });
+            } catch (error) {
+                console.error('Error recalculating balances:', error);
+            }
+            
+            // Reset batch state
+            batchAffectedAccounts.clear();
+        }
+        
+        // Reset batch state when modal is closed
+        function resetTransactionBatchState() {
+            transactionBatchCount = 0;
+            updateTransactionBatchIndicator();
+        }
+        
+        function resetTransferBatchState() {
+            transferBatchCount = 0;
+            updateTransferBatchIndicator();
         }
 
         function checkTransferCurrencies() {
@@ -1747,8 +1987,23 @@
             const timeStr = now.toTimeString().split(' ')[0].substring(0,5);
             document.getElementById('date').value = dateStr;
             document.getElementById('time').value = timeStr;
+            
+            // If filtering by account, preselect that account
+            if (filtersActive && activeFilters.accountId) {
+                document.getElementById('account').value = activeFilters.accountId;
+            }
         }
-        function closeTransactionModal() { closeModal('transactionModal'); delete document.getElementById('transactionForm').dataset.editingId; document.getElementById('transactionForm').querySelector('button[type="submit"]').textContent='Save Transaction'; }
+        async function closeTransactionModal() { 
+            // If there are pending batch transactions, recalculate balances
+            if (transactionBatchCount > 0) {
+                await recalculateAffectedBalances();
+                loadRecentTransactions(true);
+            }
+            resetTransactionBatchState();
+            closeModal('transactionModal'); 
+            delete document.getElementById('transactionForm').dataset.editingId; 
+            document.getElementById('transactionForm').querySelector('button[type="submit"]').textContent='Save'; 
+        }
         function openTransferModal() { 
             openModal('transferModal'); 
             const now = new Date();
@@ -1757,7 +2012,17 @@
             document.getElementById('transferDate').value = dateStr;
             document.getElementById('transferTime').value = timeStr;
         }
-        function closeTransferModal() { closeModal('transferModal'); delete document.getElementById('transferForm').dataset.editingOutId; document.getElementById('transferForm').querySelector('button[type="submit"]').textContent='Save Transfer'; }
+        async function closeTransferModal() { 
+            // If there are pending batch transfers, recalculate balances
+            if (transferBatchCount > 0) {
+                await recalculateAffectedBalances();
+                loadRecentTransactions(true);
+            }
+            resetTransferBatchState();
+            closeModal('transferModal'); 
+            delete document.getElementById('transferForm').dataset.editingOutId; 
+            document.getElementById('transferForm').querySelector('button[type="submit"]').textContent='Save'; 
+        }
         
         async function saveNewCategory(){ 
             const name = document.getElementById('newCategoryName').value.trim();

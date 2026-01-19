@@ -1343,6 +1343,43 @@ def recalculate_balances_for_accounts(db: Session, account_ids: List[int]):
         account.current_balance = round(running_balance, 2)
 
 
+class RecalculateBalancesRequest(BaseModel):
+    """Schema for recalculate balances request."""
+    account_ids: List[int]
+
+
+@app.post("/admin/recalculate-balances-for-accounts")
+def recalculate_balances_for_accounts_endpoint(
+    request: RecalculateBalancesRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Recalculate balances for specific accounts.
+    Useful after batch entry of transactions/transfers.
+    
+    Args:
+        request: Object containing list of account IDs to recalculate
+    
+    Returns:
+        Summary of recalculated accounts
+    """
+    if not request.account_ids:
+        return {"message": "No accounts to recalculate", "accounts_processed": 0}
+    
+    try:
+        recalculate_balances_for_accounts(db, request.account_ids)
+        db.commit()
+        
+        return {
+            "message": "Balances recalculated successfully",
+            "accounts_processed": len(request.account_ids),
+            "account_ids": request.account_ids
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error recalculating balances: {str(e)}")
+
+
 @app.get("/transactions/batch")
 def get_transactions_batch(
     ids: str = Query(..., description="Comma-separated list of transaction IDs"),
@@ -1413,11 +1450,16 @@ def get_transactions_batch(
 @app.post("/transactions/transfers")
 def create_transfer(
     transfer: schemas.TransferCreate,
+    skip_recalculation: bool = Query(False),
     db: Session = Depends(get_db)
 ):
     """
     Create a transfer between two accounts.
     Creates two transactions: one outgoing and one incoming.
+    
+    Args:
+        transfer: Transfer details
+        skip_recalculation: If True, skip balance recalculation (useful for batch entry)
     """
     # Get or create Transfer In and Transfer Out locations
     transfer_in_loc = db.query(models.Location).filter(
@@ -1473,15 +1515,17 @@ def create_transfer(
     db.add(transaction_in)
     db.flush()
 
-    # Recalculate balances for both accounts
-    # Use the earlier transaction ID to start recalculation
-    earlier_transaction_id = min(transaction_out.id, transaction_in.id)
-    recalculate_balances_from_transaction(
-        db,
-        earlier_transaction_id,
-        [transfer.from_account_id, transfer.to_account_id]
-    )
-    db.commit()  # Commit después de recalcular
+    # Recalculate balances for both accounts (unless skipped for batch mode)
+    if not skip_recalculation:
+        # Use the earlier transaction ID to start recalculation
+        earlier_transaction_id = min(transaction_out.id, transaction_in.id)
+        recalculate_balances_from_transaction(
+            db,
+            earlier_transaction_id,
+            [transfer.from_account_id, transfer.to_account_id]
+        )
+    
+    db.commit()
 
     db.refresh(transaction_out)
     db.refresh(transaction_in)
