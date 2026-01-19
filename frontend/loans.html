@@ -133,6 +133,12 @@
         .transaction-type { font-weight: 600; font-size: 13px; margin-bottom: 2px; }
         .transaction-note { font-size: 11px; color: var(--muted); }
         .transaction-amount { font-weight: bold; font-size: 14px; }
+        
+        /* Transaction type styling */
+        .type-payment { color: var(--green); }
+        .type-charge { color: var(--text); }
+        .type-interest { color: var(--red); }
+        .type-transfer { color: var(--muted); }
 
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     </style>
@@ -212,17 +218,36 @@
     <div class="footer">© Royal Bank of González. 2025</div>
         
 <script>
+    // =============================================================================
+    // CONFIGURATION & CONSTANTS
+    // =============================================================================
+    
     const API_BASE = (localStorage.getItem('delfin_api') || 'http://localhost:8000').replace(/\/$/, '');
     const q = (sel) => document.querySelector(sel);
+    
+    // Cache duration: 14 days in milliseconds
     const CACHE_DURATION = 14 * 24 * 60 * 60 * 1000;
-    const INTEREST_PATTERN = /interest|fee|interés|comisión/i;
+    
+    // Pattern to identify interest/fee transactions (matches category names)
+    const INTEREST_PATTERN = /interest|fee|hipoteca|comisiones|interés|comisión/i;
+    
+    // Currency symbol mapping
     const CURRENCY_SYMBOLS = { 'GBP': '£', 'EUR': '€', 'USD': '$', 'JPY': '¥' };
 
+    // Global state for currency display
     let globalCurrency = 'GBP';
     let globalSymbol = '£';
 
-    // --- API and caching ---
+    // =============================================================================
+    // API & CACHING LAYER
+    // =============================================================================
 
+    /**
+     * Makes an API request to the backend
+     * @param {string} path - API endpoint path
+     * @param {object} opts - Fetch options (method, body, etc.)
+     * @returns {Promise<object>} - Parsed JSON response
+     */
     async function api(path, opts = {}) {
         const res = await fetch(`${API_BASE}${path}`, {
             headers: { 'Content-Type': 'application/json' },
@@ -232,6 +257,11 @@
         return res.json();
     }
 
+    /**
+     * Retrieves cached data if still valid
+     * @param {string} key - LocalStorage key
+     * @returns {object|null} - Cached value or null if expired/missing
+     */
     function getCache(key) {
         try {
             const cached = JSON.parse(localStorage.getItem(key));
@@ -242,14 +272,25 @@
         return null;
     }
 
+    /**
+     * Stores data in cache with timestamp
+     * @param {string} key - LocalStorage key
+     * @param {object} value - Data to cache
+     */
     function setCache(key, value) {
         localStorage.setItem(key, JSON.stringify({ value, timestamp: Date.now() }));
     }
 
-    // --- Data loading ---
+    // =============================================================================
+    // DATA LOADING
+    // =============================================================================
 
+    /**
+     * Loads loan data from cache or API and renders the dashboard
+     */
     async function loadData() {
         try {
+            // Load summary data (KPIs)
             let summary = getCache('loans_summary');
             if (!summary) {
                 summary = await api('/loans/summary');
@@ -257,6 +298,7 @@
             }
             updateSummaryUI(summary);
 
+            // Load detailed loan/card data with transactions
             let details = getCache('loans_details');
             if (!details) {
                 details = await api('/loans/details?include_completed=true');
@@ -270,6 +312,10 @@
         }
     }
 
+    /**
+     * Updates the KPI cards with summary statistics
+     * @param {object} data - Summary data from API
+     */
     function updateSummaryUI(data) {
         globalCurrency = data.base_currency || 'GBP';
         globalSymbol = CURRENCY_SYMBOLS[globalCurrency] || globalCurrency + ' ';
@@ -281,12 +327,22 @@
         q('#totalInterest').textContent = `${globalSymbol}${formatNum(data.total_interest)}`;
     }
 
+    /**
+     * Renders all dashboard sections (active loans, completed, credit cards)
+     * @param {object} data - Detailed loan data from API
+     */
     function renderDashboard(data) {
         renderSection('activeLoans', data.loans, 'loan');
         renderSection('completedLoans', data.completed, 'mixed');
         renderSection('creditCards', data.credit_cards, 'card');
     }
 
+    /**
+     * Renders a single section of the dashboard
+     * @param {string} idPrefix - HTML element ID prefix
+     * @param {array} items - Array of loan/card objects
+     * @param {string} type - 'loan', 'card', or 'mixed'
+     */
     function renderSection(idPrefix, items, type) {
         const section = q(`#${idPrefix}Section`);
         const list = q(`#${idPrefix}List`);
@@ -307,31 +363,90 @@
         }).join('');
     }
 
-    // --- Display functions ---
+    // =============================================================================
+    // DISPLAY FUNCTIONS
+    // =============================================================================
 
+    /**
+     * Generates HTML for a single loan or credit card display card
+     * Includes progress bar, statistics, and estimated interest rate (for loans)
+     * 
+     * @param {object} debt - Loan/card data object
+     * @param {string} type - 'loan' or 'card'
+     * @returns {string} - HTML string for the card
+     */
     function displayDebtAccount(debt, type) {
+        // Determine account type
         const isCard = type === 'card' || type === 'credit-card';
         const isCompleted = debt.is_completed;
         
-        let progress = 0;
-        if (isCard) {
-            const total = debt.borrowed + debt.interest;
-            progress = total > 0 ? (debt.repaid / total) * 100 : 0;
-        } else {
-            progress = debt.borrowed > 0 ? (debt.repaid / debt.borrowed) * 100 : 0;
+        // Calculate repayment progress as percentage
+        const totalLiability = debt.borrowed + debt.interest;
+        let progress = totalLiability > 0 ? (debt.repaid / totalLiability) * 100 : 0;
+
+        // -------------------------------------------------------------------------
+        // ESTIMATED INTEREST RATE CALCULATION (loans only)
+        // Uses XIRR (Extended Internal Rate of Return) to estimate the effective
+        // annual interest rate based on actual cash flows and their dates.
+        // -------------------------------------------------------------------------
+        let estimatedRate = null;
+        if (!isCard && debt.transactions && debt.transactions.length > 0) {
+            try {
+                // Build cash flow arrays for XIRR calculation
+                // Initial borrowed amount is a positive inflow (from lender's perspective)
+                const flows = [debt.borrowed];
+                const dates = [new Date(debt.open_date)];
+
+                // Add repayments as negative outflows (money leaving the borrower)
+                debt.transactions.forEach(t => {
+                    if (t.amount > 0) { 
+                        flows.push(-t.amount);
+                        dates.push(new Date(t.date));
+                    }
+                });
+
+                // If there's remaining debt, treat it as a future "balloon payment" today
+                // This allows rate estimation even for ongoing loans
+                if (debt.current_owed > 0.01) {
+                    flows.push(-debt.current_owed);
+                    dates.push(new Date());
+                }
+
+                // Only calculate if we have at least the initial loan plus one payment/balance
+                if (flows.length >= 2) {
+                    const rateDecimal = calculateXIRR(flows, dates);
+                    if (!isNaN(rateDecimal) && isFinite(rateDecimal)) {
+                        // Format with appropriate precision
+                        const ratePercent = rateDecimal * 100;
+                        if (ratePercent >= 0 && ratePercent < 100) {
+                            estimatedRate = ratePercent.toFixed(1);
+                        } else if (ratePercent >= 100) {
+                            estimatedRate = ratePercent.toFixed(0);
+                        }
+                        // Negative or extremely high rates are shown as N/A
+                    }
+                }
+            } catch (e) {
+                console.warn('Error calculating XIRR for', debt.account.name, e);
+                estimatedRate = null;
+            }
         }
-        
+
+        // Determine progress bar colour based on status
         const barClass = isCompleted ? 'completed' : (isCard ? 'credit-card' : 'loan');
         
+        // Format balance display with appropriate colour
         let balanceDisplay;
         if (isCard) {
             const bal = debt.current_balance;
             const color = bal > 0 ? 'var(--green)' : (bal < 0 ? 'var(--red)' : '#666');
-            balanceDisplay = `<span style="color:${color}">${bal > 0 ? '+' : ''}${globalSymbol}${formatNum(bal)}</span>`;
+            const sign = bal < 0 ? '-' : (bal > 0 ? '+' : '');
+            balanceDisplay = `<span style="color:${color}">${sign}${globalSymbol}${formatNum(bal)}</span>`;
         } else {
             balanceDisplay = `<span style="color:${isCompleted ? 'var(--green)' : 'var(--red)'}">${globalSymbol}${formatNum(debt.current_owed)}</span>`;
         }
 
+        // Generate the HTML card
         return `
             <div class="loan-card">
                 <div class="loan-header" onclick="toggleTransactions(${debt.account.id})">
@@ -345,6 +460,7 @@
                 <div class="loan-info">
                     <span>${isCard ? '💳 Credit Card' : '📋 Loan'}</span>
                     <span>📅 ${formatDate(debt.open_date)}</span>
+                    ${!isCard && estimatedRate ? `<span>📈 ${estimatedRate}% APR</span>` : ''}
                     ${debt.close_date ? `<span>✅ Closed: ${formatDate(debt.close_date)}</span>` : ''}
                     <span>🏦 ${debt.lender_name}</span>
                 </div>
@@ -364,7 +480,7 @@
                     </div>
                     <div>
                         <div class="loan-stat-label">Interest</div>
-                        <div class="loan-stat-value" style="color: var(--red)">${globalSymbol}${formatNum(debt.interest)}</div>
+                        <div class="loan-stat-value" style="color: var(--yellow)">${globalSymbol}${formatNum(debt.interest)}</div>
                     </div>
                     <div>
                         <div class="loan-stat-label">${isCard ? 'Balance' : 'Remaining'}</div>
@@ -379,6 +495,11 @@
         `;
     }
 
+    /**
+     * Renders the transaction list for a loan/card
+     * @param {array} transactions - Array of transaction objects
+     * @returns {string} - HTML string for transaction list
+     */
     function renderTransactions(transactions) {
         if (!transactions || transactions.length === 0) {
             return '<div style="text-align:center;color:#999;font-size:12px;padding:10px">No transactions</div>';
@@ -386,19 +507,48 @@
         
         return transactions.map(t => {
             const dateObj = new Date(t.date);
-            let type = 'Charge';
-            if (t.amount > 0) type = 'Payment';
-            else if (t.location_name?.includes('Transfer')) type = 'Transfer';
-            else if (INTEREST_PATTERN.test(t.category_name || '')) type = 'Interest';
+            const isInterest = INTEREST_PATTERN.test(t.category_name || '');
+            const isTransfer = t.location_name?.includes('Transfer');
+            
+            // Determine transaction type and styling
+            let type, typeClass, amountClass;
+            
+            if (t.amount > 0) {
+                // Positive amount = money going into the account (payment)
+                if (isInterest) {
+                    type = 'Interest Payment';
+                    typeClass = 'type-interest';
+                    amountClass = 'amount-negative';
+                } else {
+                    type = 'Payment';
+                    typeClass = 'type-payment';
+                    amountClass = 'amount-positive';
+                }
+            } else {
+                // Negative amount = money going out (charge/borrow)
+                if (isInterest) {
+                    type = 'Interest';
+                    typeClass = 'type-interest';
+                    amountClass = 'amount-negative';
+                } else if (isTransfer) {
+                    type = 'Transfer Out';
+                    typeClass = 'type-transfer';
+                    amountClass = 'amount-negative';
+                } else {
+                    type = 'Charge';
+                    typeClass = 'type-charge';
+                    amountClass = 'amount-negative';
+                }
+            }
 
             return `
                 <div class="transaction-item">
                     <div class="transaction-date">${dateObj.toLocaleDateString('en-GB')}<br>${dateObj.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'})}</div>
                     <div class="transaction-details">
-                        <div class="transaction-type">${type}</div>
+                        <div class="transaction-type ${typeClass}">${type}</div>
                         <div class="transaction-note">${t.payee_name || t.category_name || t.note || ''}</div>
                     </div>
-                    <div class="transaction-amount ${t.amount < 0 ? 'amount-negative' : 'amount-positive'}">
+                    <div class="transaction-amount ${amountClass}">
                         ${globalSymbol}${formatNum(Math.abs(t.amount))}
                     </div>
                 </div>
@@ -406,11 +556,32 @@
         }).join('');
     }
 
-    // --- Utilities ---
+    // =============================================================================
+    // UTILITY FUNCTIONS
+    // =============================================================================
 
-    function formatNum(n) { return Math.abs(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
-    function formatDate(d) { return new Date(d).toLocaleDateString('en-GB'); }
+    /**
+     * Formats a number with thousand separators and 2 decimal places
+     * @param {number} n - Number to format
+     * @returns {string} - Formatted string (e.g., "1,234.56")
+     */
+    function formatNum(n) { 
+        return Math.abs(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','); 
+    }
     
+    /**
+     * Formats a date string to UK format (DD/MM/YYYY)
+     * @param {string} d - Date string
+     * @returns {string} - Formatted date
+     */
+    function formatDate(d) { 
+        return new Date(d).toLocaleDateString('en-GB'); 
+    }
+    
+    /**
+     * Toggles the expanded state of a loan's transaction list
+     * @param {number} id - Account ID
+     */
     function toggleTransactions(id) {
         const el = q(`#transactions-${id}`);
         const btn = q(`#toggle-${id}`);
@@ -418,9 +589,18 @@
         btn.style.transform = el.classList.contains('expanded') ? 'rotate(180deg)' : 'rotate(0deg)';
     }
 
+    // =============================================================================
+    // MESSAGE DISPLAY
+    // =============================================================================
+
     function showSuccess(msg) { msgBox('successMessage', msg); }
     function showError(msg) { msgBox('errorMessage', msg); }
     
+    /**
+     * Displays a temporary message box
+     * @param {string} id - Element ID for the message box
+     * @param {string} msg - Message to display
+     */
     function msgBox(id, msg) {
         const el = q(`#${id}`);
         el.textContent = msg;
@@ -428,12 +608,18 @@
         setTimeout(() => el.style.display = 'none', 3000);
     }
 
+    /** Toggles the navigation dropdown menu */
     function toggleNav() {
         q('#navDropdown').classList.toggle('open');
     }
 
-    // --- Event handlers ---
+    // =============================================================================
+    // EVENT HANDLERS
+    // =============================================================================
 
+    /**
+     * Clears the local cache and reloads all data from the API
+     */
     async function refreshCache() {
         localStorage.removeItem('loans_summary');
         localStorage.removeItem('loans_details');
@@ -441,6 +627,7 @@
         await loadData();
     }
 
+    // Update exchange rates button handler
     q('#btnUpdateRates').addEventListener('click', async () => {
         try {
             await api('/exchange-rates/update', { method: 'POST' });
@@ -449,11 +636,137 @@
         } catch (e) { showError('Failed to update rates'); }
     });
 
+    // Close dropdown when clicking outside
     window.onclick = (e) => {
         if (!e.target.matches('#navBtn')) q('#navDropdown').classList.remove('open');
     }
     
+    // Load data when DOM is ready
     document.addEventListener('DOMContentLoaded', loadData);
+
+    // =============================================================================
+    // XIRR CALCULATION (Extended Internal Rate of Return)
+    // =============================================================================
+    
+    /**
+     * Calculates the annualised Internal Rate of Return for irregular cash flows.
+     * 
+     * XIRR finds the discount rate that makes the Net Present Value (NPV) of all
+     * cash flows equal to zero. Unlike standard IRR, it handles payments that
+     * occur on arbitrary dates rather than regular intervals.
+     * 
+     * The calculation uses Newton-Raphson iteration to solve:
+     *   Σ (cashflow[i] / (1 + rate)^(days[i]/365)) = 0
+     * 
+     * @param {number[]} values - Array of cash flows (positive = inflow, negative = outflow)
+     * @param {Date[]} dates - Array of dates corresponding to each cash flow
+     * @param {number} guess - Initial rate estimate (default: 0.1 = 10%)
+     * @returns {number} - Annualised rate as decimal (e.g., 0.05 = 5%), or NaN if no solution
+     * 
+     * @example
+     *   // Loan of £10,000 on 1 Jan, repaid £11,000 on 1 Jan next year
+     *   calculateXIRR([10000, -11000], [new Date('2024-01-01'), new Date('2025-01-01')])
+     *   // Returns: 0.10 (10% annual rate)
+     */
+    function calculateXIRR(values, dates, guess = 0.1) {
+        // Input validation
+        if (!values || !dates || values.length < 2 || values.length !== dates.length) {
+            return NaN;
+        }
+        
+        // IRR requires at least one positive and one negative cash flow
+        const hasPositive = values.some(v => v > 0);
+        const hasNegative = values.some(v => v < 0);
+        if (!hasPositive || !hasNegative) {
+            return NaN;
+        }
+        
+        /**
+         * NPV function: calculates the sum of discounted cash flows
+         * @param {number} r - Discount rate to test
+         * @returns {number} - NPV at this rate (should be 0 at the IRR)
+         */
+        const fx = (r) => {
+            // Guard against rates that would cause mathematical errors
+            if (r <= -1) return Infinity;
+            
+            let sum = 0;
+            for (let i = 0; i < values.length; i++) {
+                // Calculate days from first cash flow
+                const days = (dates[i] - dates[0]) / (1000 * 60 * 60 * 24);
+                const exponent = days / 365;
+                const base = 1 + r;
+                
+                // Prevent Math.pow errors with negative base
+                if (base <= 0) return Infinity;
+                
+                sum += values[i] / Math.pow(base, exponent);
+            }
+            return sum;
+        };
+
+        /**
+         * Derivative of NPV function (needed for Newton-Raphson)
+         * @param {number} r - Discount rate
+         * @returns {number} - Derivative of NPV with respect to rate
+         */
+        const dfx = (r) => {
+            if (r <= -1) return 0;
+            
+            let sum = 0;
+            for (let i = 0; i < values.length; i++) {
+                const days = (dates[i] - dates[0]) / (1000 * 60 * 60 * 24);
+                const exponent = days / 365;
+                const base = 1 + r;
+                
+                if (base <= 0) return 0;
+                
+                sum += -exponent * values[i] / Math.pow(base, exponent + 1);
+            }
+            return sum;
+        };
+
+        // Try multiple starting guesses to improve convergence
+        // Different loan structures may converge better from different starting points
+        const guesses = [guess, 0.05, 0.15, 0.25, 0.5, -0.5];
+        
+        for (const initialGuess of guesses) {
+            let rate = initialGuess;
+            let converged = false;
+            
+            // Newton-Raphson iteration: rate_new = rate - f(rate) / f'(rate)
+            for (let i = 0; i < 100; i++) {
+                const y = fx(rate);
+                const dy = dfx(rate);
+                
+                // Check for numerical issues
+                if (!isFinite(y) || !isFinite(dy)) break;
+                if (Math.abs(dy) < 1e-12) break; // Derivative too small
+                
+                const newRate = rate - y / dy;
+                
+                // Clamp the change to prevent wild oscillations
+                const maxChange = 1.0;
+                const clampedRate = Math.max(rate - maxChange, Math.min(rate + maxChange, newRate));
+                
+                // Check for convergence (rate has stabilised)
+                if (Math.abs(clampedRate - rate) < 1e-8) {
+                    converged = true;
+                    rate = clampedRate;
+                    break;
+                }
+                rate = clampedRate;
+            }
+            
+            // Accept the result if it converged to a reasonable rate (-99% to 1000%)
+            if (converged && rate > -0.99 && rate < 10) {
+                return rate;
+            }
+        }
+        
+        // No solution found
+        return NaN;
+    }
 </script>
 </body>
 </html>

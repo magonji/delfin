@@ -227,14 +227,9 @@
             display: none; 
             z-index: 999; 
             border-top: 2px solid var(--border);
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.3s ease;
         }
         .bulk-edit-bar.active { 
             display: block; 
-            max-height: calc(100vh - 700px - 20px); /* Transaction list height + margin */
-            min-height: 150px;
         }
         
         .bulk-edit-header {
@@ -261,8 +256,7 @@
         
         .bulk-edit-content {
             padding: 15px 25px;
-            overflow-y: auto;
-            max-height: calc(100vh - 700px - 80px); /* Deduct header and margin */
+            background: var(--bg);
         }
         
         .bulk-form-grid {
@@ -726,6 +720,22 @@
         </div>
     </div>
 
+    <!-- Custom Confirm Modal (replaces browser confirm which may be blocked) -->
+    <div id="confirmModal" class="modal">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h3 id="confirmTitle">Confirm</h3>
+            </div>
+            <div class="modal-body">
+                <p id="confirmMessage" style="margin: 0; font-size: 14px;"></p>
+            </div>
+            <div class="modal-footer" style="padding: 15px 25px; border-top: 1px solid var(--border);">
+                <button id="confirmYesBtn" class="btn-save" style="background: var(--red);">Delete</button>
+                <button id="confirmNoBtn" class="btn-cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <div class="footer">© Royal Bank of González. 2025</div>
 
     <script>
@@ -741,6 +751,27 @@
         let targetTransactionId = null;
         let targetTransferId = null;
         let isScrollingToTarget = false;
+        
+        // Custom confirm dialog (replaces browser confirm which may be blocked)
+        let confirmResolve = null;
+        function customConfirm(message, title = 'Confirm') {
+            return new Promise((resolve) => {
+                confirmResolve = resolve;
+                document.getElementById('confirmTitle').textContent = title;
+                document.getElementById('confirmMessage').textContent = message;
+                document.getElementById('confirmModal').classList.add('active');
+            });
+        }
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('confirmYesBtn').onclick = () => {
+                document.getElementById('confirmModal').classList.remove('active');
+                if(confirmResolve) confirmResolve(true);
+            };
+            document.getElementById('confirmNoBtn').onclick = () => {
+                document.getElementById('confirmModal').classList.remove('active');
+                if(confirmResolve) confirmResolve(false);
+            };
+        });
 
         function setScrollTarget(transactionId, transferId = null) {
             targetTransactionId = transactionId;
@@ -826,8 +857,21 @@
                 });
 
                 const paired = new Set();
+                
+                // O(n) optimization: index transfersIn by date for fast lookup
+                const transfersInByDate = new Map();
+                transfersIn.forEach(t => {
+                    const key = t.date;
+                    if (!transfersInByDate.has(key)) {
+                        transfersInByDate.set(key, []);
+                    }
+                    transfersInByDate.get(key).push(t);
+                });
+                
                 transfersOut.forEach(out => {
-                    const match = transfersIn.find(i => i.date === out.date && i.account_id !== out.account_id && !paired.has(i.id));
+                    // O(1) lookup by date instead of O(n) find
+                    const candidates = transfersInByDate.get(out.date) || [];
+                    const match = candidates.find(i => i.account_id !== out.account_id && !paired.has(i.id));
                     if (match) {
                         paired.add(out.id); paired.add(match.id);
                         transferTransactions.push({
@@ -972,8 +1016,19 @@
         }
 
         document.addEventListener('DOMContentLoaded', async () => {
-            await Promise.all([loadAccounts(), loadCategories(), loadPayees(), loadLocations(), loadProjects()]);
-            await loadRecentTransactions();
+            // Load ALL data in parallel for faster initial load
+            // Transaction fetch doesn't depend on dropdown data - they're used only for rendering
+            const [, , , , , transactionsData] = await Promise.all([
+                loadAccounts(), 
+                loadCategories(), 
+                loadPayees(), 
+                loadLocations(), 
+                loadProjects(),
+                fetchTransactionsData()  // Fetch raw data in parallel
+            ]);
+            
+            // Now render transactions (dropdowns are already populated)
+            processAndDisplayTransactions(transactionsData);
             
             const transactionsList = document.getElementById('transactionsList');
             transactionsList.addEventListener('scroll', () => {
@@ -986,6 +1041,57 @@
             
             setupEventListeners();
         });
+        
+        // Helper to fetch transaction data without processing (for parallel loading)
+        async function fetchTransactionsData() {
+            const params = new URLSearchParams({ skip: 0, limit: LIMIT });
+            return await (await fetch(`${API_URL}/transactions?${params.toString()}`)).json();
+        }
+        
+        // Process fetched transaction data and display
+        function processAndDisplayTransactions(data) {
+            if (data.length < LIMIT) hasMoreTransactions = false;
+            
+            const newReg = [], transfersOut = [], transfersIn = [];
+            data.forEach(t => {
+                if (t.location_name === 'Transfer Out') transfersOut.push(t);
+                else if (t.location_name === 'Transfer In') transfersIn.push(t);
+                else newReg.push(t);
+            });
+
+            const paired = new Set();
+            
+            // O(n) optimization: index transfersIn by date
+            const transfersInByDate = new Map();
+            transfersIn.forEach(t => {
+                const key = t.date;
+                if (!transfersInByDate.has(key)) {
+                    transfersInByDate.set(key, []);
+                }
+                transfersInByDate.get(key).push(t);
+            });
+            
+            transfersOut.forEach(out => {
+                const candidates = transfersInByDate.get(out.date) || [];
+                const match = candidates.find(i => i.account_id !== out.account_id && !paired.has(i.id));
+                if (match) {
+                    paired.add(out.id); paired.add(match.id);
+                    transferTransactions.push({
+                        transfer_out_id: out.id, transfer_in_id: match.id, date: out.date,
+                        from_account_name: out.account_name, from_amount: Math.abs(out.amount), from_currency: out.currency,
+                        to_account_name: match.account_name, to_amount: match.amount, to_currency: match.currency,
+                        note: out.note || match.note, from_balance: out.account_balance_after, to_balance: match.account_balance_after
+                    });
+                } else {
+                    newReg.push(out);
+                }
+            });
+            transfersIn.forEach(i => { if (!paired.has(i.id)) newReg.push(i); });
+            
+            regularTransactions.push(...newReg);
+            transactionsSkip = LIMIT;
+            displayCombinedTransactions();
+        }
 
         function setupEventListeners() {
             document.getElementById('parentCategory').addEventListener('change', (e) => { if (e.target.value === '__NEW__') { openModal('newCategoryModal'); e.target.value = ''; } else loadSubcategories(e.target.value); });
@@ -1100,8 +1206,20 @@
                 const paired = new Set();
                 const pendingTransfers = [];
                 
+                // O(n) optimization: index transfersIn by date for fast lookup
+                const transfersInByDate = new Map();
+                transfersIn.forEach(t => {
+                    const key = t.date;
+                    if (!transfersInByDate.has(key)) {
+                        transfersInByDate.set(key, []);
+                    }
+                    transfersInByDate.get(key).push(t);
+                });
+                
                 transfersOut.forEach(out => {
-                    const match = transfersIn.find(i => i.date === out.date && i.account_id !== out.account_id && !paired.has(i.id));
+                    // O(1) lookup by date instead of O(n) find
+                    const candidates = transfersInByDate.get(out.date) || [];
+                    const match = candidates.find(i => i.account_id !== out.account_id && !paired.has(i.id));
                     if (match) {
                         paired.add(out.id); paired.add(match.id);
                         transferTransactions.push({
@@ -1357,8 +1475,10 @@
         }
 
         async function deleteTransaction(id) { 
-            if(confirm('Delete?')) { 
-                // Find adjacent transaction to scroll to after delete
+            const confirmed = await customConfirm('Delete this transaction?', 'Delete Transaction');
+            if(!confirmed) return;
+            
+            try {
                 const allItems = [...document.querySelectorAll('[data-transaction-id], [data-transfer-id]')];
                 const currentIdx = allItems.findIndex(el => el.dataset.transactionId == id);
                 const nextItem = allItems[currentIdx + 1] || allItems[currentIdx - 1];
@@ -1366,12 +1486,20 @@
                     if (nextItem.dataset.transactionId) setScrollTarget(nextItem.dataset.transactionId);
                     else if (nextItem.dataset.transferId) setScrollTarget(null, nextItem.dataset.transferId);
                 }
-                await fetch(`${API_URL}/transactions/${id}`, {method:'DELETE'}); 
-                loadRecentTransactions(true); 
-            } 
+                const response = await fetch(`${API_URL}/transactions/${id}`, {method:'DELETE'});
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                await loadRecentTransactions(true); 
+            } catch(error) {
+                console.error('Error deleting transaction:', error);
+                alert('Error deleting transaction: ' + error.message);
+            }
         }
+        
         async function deleteTransfer(outId, inId) { 
-            if(confirm('Delete transfer?')) { 
+            const confirmed = await customConfirm('Delete this transfer?', 'Delete Transfer');
+            if(!confirmed) return;
+            
+            try {
                 const tid = `${outId}_${inId}`;
                 const allItems = [...document.querySelectorAll('[data-transaction-id], [data-transfer-id]')];
                 const currentIdx = allItems.findIndex(el => el.dataset.transferId === tid);
@@ -1380,10 +1508,17 @@
                     if (nextItem.dataset.transactionId) setScrollTarget(nextItem.dataset.transactionId);
                     else if (nextItem.dataset.transferId) setScrollTarget(null, nextItem.dataset.transferId);
                 }
-                await fetch(`${API_URL}/transactions/${outId}`, {method:'DELETE'}); 
-                await fetch(`${API_URL}/transactions/${inId}`, {method:'DELETE'}); 
-                loadRecentTransactions(true); 
-            } 
+                const response = await fetch(`${API_URL}/transactions/batch-delete`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify([outId, inId])
+                });
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                await loadRecentTransactions(true); 
+            } catch(error) {
+                console.error('Error deleting transfer:', error);
+                alert('Error deleting transfer: ' + error.message);
+            }
         }
         
         async function editTransaction(id) {
@@ -1707,25 +1842,26 @@
             if(!confirm(confirmMsg)) return;
             
             try {
-                for(const txId of selectedTransactions) {
-                    const current = await (await fetch(`${API_URL}/transactions/${txId}`)).json();
-                    const updates = { ...current };
-                    
-                    if(bulkPayee) {
-                        let payeeId = null;
-                        const exist = allPayees.find(p => p.name.toLowerCase() === bulkPayee.toLowerCase());
-                        if(exist) {
-                            payeeId = exist.id;
-                        } else {
-                            const newPayee = await (await fetch(`${API_URL}/payees`, { 
-                                method:'POST', 
-                                body:JSON.stringify({name:bulkPayee}), 
-                                headers:{'Content-Type':'application/json'} 
-                            })).json();
-                            payeeId = newPayee.id;
-                        }
-                        updates.payee_id = payeeId;
+                // Handle payee creation first if needed (only once, not per transaction)
+                let payeeId = null;
+                if(bulkPayee) {
+                    const exist = allPayees.find(p => p.name.toLowerCase() === bulkPayee.toLowerCase());
+                    if(exist) {
+                        payeeId = exist.id;
+                    } else {
+                        const newPayee = await (await fetch(`${API_URL}/payees`, { 
+                            method:'POST', 
+                            body:JSON.stringify({name:bulkPayee}), 
+                            headers:{'Content-Type':'application/json'} 
+                        })).json();
+                        payeeId = newPayee.id;
                     }
+                }
+                
+                // Build batch update request
+                const batchUpdates = selectedTransactions.map(txId => {
+                    const updates = {};
+                    if(payeeId) updates.payee_id = payeeId;
                     if(bulkAccountId) {
                         updates.account_id = parseInt(bulkAccountId);
                         const account = allAccounts.find(a => a.id === parseInt(bulkAccountId));
@@ -1734,18 +1870,25 @@
                     if(bulkCategoryId) updates.category_id = parseInt(bulkCategoryId);
                     if(bulkLocationId) updates.location_id = parseInt(bulkLocationId);
                     if(bulkProjectId) updates.project_id = parseInt(bulkProjectId);
-                    
-                    await fetch(`${API_URL}/transactions/${txId}`, {
-                        method: 'PUT',
-                        body: JSON.stringify(updates),
-                        headers: {'Content-Type': 'application/json'}
-                    });
+                    return { id: txId, updates };
+                });
+                
+                // Single batch request instead of N individual requests
+                const response = await fetch(`${API_URL}/transactions/batch-update`, {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ transactions: batchUpdates })
+                });
+                
+                if(!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 
-                alert(`Updated ${selectedTransactions.length} transaction${selectedTransactions.length > 1 ? 's' : ''}`);
+                const result = await response.json();
+                alert(`Updated ${result.updated} transaction${result.updated > 1 ? 's' : ''}`);
                 cancelBulkEdit();
                 loadRecentTransactions(true);
-                loadPayees(); // Reload payees if a new one was created
+                if(bulkPayee) loadPayees(); // Reload payees if a new one was created
             } catch(error) {
                 console.error('Error applying bulk edit:', error);
                 alert('Error updating transactions');
@@ -1778,41 +1921,52 @@
             if(!confirm(confirmMsg)) return;
             
             try {
+                // Collect all transaction IDs for the batch request
+                const allTransactionIds = [];
+                for(const transferId of selectedTransfers) {
+                    const [outId, inId] = transferId.split('_').map(id => parseInt(id));
+                    allTransactionIds.push(outId, inId);
+                }
+                
+                // Build batch updates - we need to know which are "out" and which are "in"
+                const batchUpdates = [];
                 for(const transferId of selectedTransfers) {
                     const [outId, inId] = transferId.split('_').map(id => parseInt(id));
                     
-                    const outTx = await (await fetch(`${API_URL}/transactions/${outId}`)).json();
-                    const inTx = await (await fetch(`${API_URL}/transactions/${inId}`)).json();
-                    
-                    const outUpdates = { ...outTx };
-                    const inUpdates = { ...inTx };
-                    
+                    // Updates for outgoing transaction
+                    const outUpdates = {};
                     if(bulkFromAccountId) {
                         outUpdates.account_id = parseInt(bulkFromAccountId);
                         const account = allAccounts.find(a => a.id === parseInt(bulkFromAccountId));
                         if(account) outUpdates.currency = account.currency;
                     }
+                    if(bulkNote) outUpdates.note = bulkNote;
+                    if(Object.keys(outUpdates).length > 0) {
+                        batchUpdates.push({ id: outId, updates: outUpdates });
+                    }
+                    
+                    // Updates for incoming transaction
+                    const inUpdates = {};
                     if(bulkToAccountId) {
                         inUpdates.account_id = parseInt(bulkToAccountId);
                         const account = allAccounts.find(a => a.id === parseInt(bulkToAccountId));
                         if(account) inUpdates.currency = account.currency;
                     }
-                    
-                    if(bulkNote) {
-                        outUpdates.note = bulkNote;
-                        inUpdates.note = bulkNote;
+                    if(bulkNote) inUpdates.note = bulkNote;
+                    if(Object.keys(inUpdates).length > 0) {
+                        batchUpdates.push({ id: inId, updates: inUpdates });
                     }
-                    
-                    await fetch(`${API_URL}/transactions/${outId}`, {
-                        method: 'PUT',
-                        body: JSON.stringify(outUpdates),
-                        headers: {'Content-Type': 'application/json'}
-                    });
-                    await fetch(`${API_URL}/transactions/${inId}`, {
-                        method: 'PUT',
-                        body: JSON.stringify(inUpdates),
-                        headers: {'Content-Type': 'application/json'}
-                    });
+                }
+                
+                // Single batch request instead of N*2 individual requests
+                const response = await fetch(`${API_URL}/transactions/batch-update`, {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ transactions: batchUpdates })
+                });
+                
+                if(!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 
                 alert(`Updated ${selectedTransfers.length} transfer${selectedTransfers.length > 1 ? 's' : ''}`);
@@ -1826,39 +1980,75 @@
         async function bulkDeleteTransactions() { 
             if(selectedTransactions.length === 0) return;
             
-            const confirmMsg = `Are you sure you want to delete ${selectedTransactions.length} transaction${selectedTransactions.length > 1 ? 's' : ''}?\n\nThis action cannot be undone.`;
-            if(!confirm(confirmMsg)) return;
+            const count = selectedTransactions.length;
+            const confirmed = await customConfirm(
+                `Are you sure you want to delete ${count} transaction${count > 1 ? 's' : ''}?\n\nThis action cannot be undone.`,
+                'Delete Transactions'
+            );
+            if(!confirmed) return;
+            
+            const ids = [...selectedTransactions];
             
             try {
-                for(let id of selectedTransactions) {
-                    await fetch(`${API_URL}/transactions/${id}`, {method:'DELETE'});
+                const response = await fetch(`${API_URL}/transactions/batch-delete`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(ids)
+                });
+                
+                if(!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
                 }
-                alert(`Deleted ${selectedTransactions.length} transaction${selectedTransactions.length > 1 ? 's' : ''}`);
+                
+                const result = await response.json();
                 cancelBulkEdit(); 
-                loadRecentTransactions(true);
+                alert(`Deleted ${result.deleted} transaction${result.deleted > 1 ? 's' : ''}`);
+                await loadRecentTransactions(true);
             } catch(error) {
                 console.error('Error deleting transactions:', error);
-                alert('Error deleting transactions');
+                alert('Error deleting transactions: ' + error.message);
+                isLoadingTransactions = false;
             }
         }
+        
         async function bulkDeleteTransfers() { 
             if(selectedTransfers.length === 0) return;
             
-            const confirmMsg = `Are you sure you want to delete ${selectedTransfers.length} transfer${selectedTransfers.length > 1 ? 's' : ''}?\n\nThis action cannot be undone.`;
-            if(!confirm(confirmMsg)) return;
+            const count = selectedTransfers.length;
+            const confirmed = await customConfirm(
+                `Are you sure you want to delete ${count} transfer${count > 1 ? 's' : ''}?\n\nThis action cannot be undone.`,
+                'Delete Transfers'
+            );
+            if(!confirmed) return;
+            
+            const ids = [...selectedTransfers];
             
             try {
-                for(let id of selectedTransfers) { 
-                    const [o,i]=id.split('_'); 
-                    await fetch(`${API_URL}/transactions/${o}`, {method:'DELETE'}); 
-                    await fetch(`${API_URL}/transactions/${i}`, {method:'DELETE'}); 
+                const allTransactionIds = [];
+                for(let id of ids) { 
+                    const [outId, inId] = id.split('_').map(Number);
+                    allTransactionIds.push(outId, inId);
                 }
-                alert(`Deleted ${selectedTransfers.length} transfer${selectedTransfers.length > 1 ? 's' : ''}`);
+                
+                const response = await fetch(`${API_URL}/transactions/batch-delete`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(allTransactionIds)
+                });
+                
+                if(!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+                
                 cancelBulkEdit(); 
-                loadRecentTransactions(true);
+                alert(`Deleted ${count} transfer${count > 1 ? 's' : ''}`);
+                await loadRecentTransactions(true);
             } catch(error) {
                 console.error('Error deleting transfers:', error);
-                alert('Error deleting transfers');
+                alert('Error deleting transfers: ' + error.message);
+                isLoadingTransactions = false;
             }
         }
     </script>

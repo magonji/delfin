@@ -388,7 +388,6 @@ async function loadAccounts() {
     list.innerHTML = '';
     state.accounts.forEach(a => {
         const amt = a.current_balance ?? a.initial_balance ?? 0;
-        if (Math.abs(amt) < EPS) return; // Skip accounts with zero or near-zero balances
         const row = document.createElement('div');
         row.className = 'row';
         const color = amt > 0 ? 'var(--green)' : amt < 0 ? 'var(--red)' : 'var(--text)';

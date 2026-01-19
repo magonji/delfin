@@ -106,11 +106,22 @@ class Transaction(Base):
     project = relationship("Project", back_populates="transactions")
     
     __table_args__ = (
+        # Composite indexes for common query patterns
         Index('idx_transaction_account_date', 'account_id', 'date'),
         Index('idx_transaction_currency_date', 'currency', 'date'),
         Index('idx_transaction_date_amount', 'date', 'amount'),
         Index('idx_transaction_category_date', 'category_id', 'date'),
         Index('idx_transaction_payee_date', 'payee_id', 'date'),
+        
+        # Critical index for balance recalculation (account + date ASC + id ASC)
+        Index('idx_transaction_account_date_id_asc', 'account_id', 'date', 'id'),
+        
+        # Index for location-based queries (transfers use location_id heavily)
+        Index('idx_transaction_location_date', 'location_id', 'date'),
+        
+        # Covering index for the main transaction listing query
+        # Helps with: ORDER BY date DESC, id DESC with filters
+        Index('idx_transaction_date_desc_id_desc', 'date', 'id'),
     )
 
 

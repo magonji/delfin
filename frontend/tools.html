@@ -577,6 +577,24 @@
         </div>
     </div>
 
+    <!-- Custom Confirm/Prompt Modal (replaces browser dialogs which may be blocked) -->
+    <div id="customDialogModal" class="modal">
+        <div class="modal-content" style="max-width: 450px;">
+            <div class="modal-header">
+                <h3 id="customDialogTitle">Confirm</h3>
+                <button class="close-btn" onclick="closeCustomDialog(false)">&times;</button>
+            </div>
+            <div style="padding: 20px 25px;">
+                <p id="customDialogMessage" style="margin: 0 0 15px 0; font-size: 14px; line-height: 1.5;"></p>
+                <input type="text" id="customDialogInput" style="display: none; margin-bottom: 15px;">
+            </div>
+            <div style="padding: 15px 25px; border-top: 1px solid var(--border); display: flex; gap: 10px; justify-content: flex-end;">
+                <button id="customDialogCancelBtn" class="secondary" onclick="closeCustomDialog(false)">Cancel</button>
+                <button id="customDialogConfirmBtn" onclick="closeCustomDialog(true)">Confirm</button>
+            </div>
+        </div>
+    </div>
+
     <div class="footer">© Royal Bank of González. 2025</div>
 
     <script>
@@ -585,6 +603,59 @@
         document.addEventListener('click', (e) => { if (document.querySelector('#navDropdown') && !document.querySelector('#navDropdown').contains(e.target)) document.querySelector('#navDropdown').classList.remove('open'); });
 
         const API_URL = 'http://localhost:8000';
+        
+        // Custom dialog system (replaces confirm/prompt which may be blocked)
+        let customDialogResolve = null;
+        let customDialogIsPrompt = false;
+        
+        function customConfirm(message, title = 'Confirm', confirmText = 'Confirm', isDanger = false) {
+            return new Promise((resolve) => {
+                customDialogResolve = resolve;
+                customDialogIsPrompt = false;
+                document.getElementById('customDialogTitle').textContent = title;
+                document.getElementById('customDialogMessage').innerHTML = message.replace(/\n/g, '<br>');
+                document.getElementById('customDialogInput').style.display = 'none';
+                document.getElementById('customDialogConfirmBtn').textContent = confirmText;
+                document.getElementById('customDialogConfirmBtn').style.background = isDanger ? 'var(--danger)' : 'var(--btn-primary)';
+                document.getElementById('customDialogModal').style.display = 'block';
+            });
+        }
+        
+        function customPrompt(message, title = 'Input', defaultValue = '') {
+            return new Promise((resolve) => {
+                customDialogResolve = resolve;
+                customDialogIsPrompt = true;
+                document.getElementById('customDialogTitle').textContent = title;
+                document.getElementById('customDialogMessage').innerHTML = message.replace(/\n/g, '<br>');
+                const input = document.getElementById('customDialogInput');
+                input.style.display = 'block';
+                input.value = defaultValue;
+                input.focus();
+                document.getElementById('customDialogConfirmBtn').textContent = 'OK';
+                document.getElementById('customDialogConfirmBtn').style.background = 'var(--btn-primary)';
+                document.getElementById('customDialogModal').style.display = 'block';
+            });
+        }
+        
+        function closeCustomDialog(confirmed) {
+            document.getElementById('customDialogModal').style.display = 'none';
+            if (customDialogResolve) {
+                if (customDialogIsPrompt) {
+                    customDialogResolve(confirmed ? document.getElementById('customDialogInput').value : null);
+                } else {
+                    customDialogResolve(confirmed);
+                }
+                customDialogResolve = null;
+            }
+        }
+        
+        // Handle Enter key in prompt input
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('customDialogInput').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') closeCustomDialog(true);
+                if (e.key === 'Escape') closeCustomDialog(false);
+            });
+        });
         
         let allCategories = [];
         let allAccounts = [];
@@ -968,12 +1039,19 @@
             const fullName = parent ? `${parent} → ${name}` : name;
             
             // First confirmation
-            if (!confirm(`Are you sure you want to delete the ${categoryType} "${fullName}"?\n\nThis action cannot be undone.`)) {
-                return;
-            }
+            const confirmed = await customConfirm(
+                `Are you sure you want to delete the ${categoryType} "${fullName}"?\n\nThis action cannot be undone.`,
+                'Delete Category',
+                'Delete',
+                true
+            );
+            if (!confirmed) return;
             
             // Second confirmation with typed name
-            const typedName = prompt(`To confirm deletion, please type the category name exactly:\n\n${name}`);
+            const typedName = await customPrompt(
+                `To confirm deletion, please type the category name exactly:\n\n<strong>${name}</strong>`,
+                'Confirm Deletion'
+            );
             if (typedName !== name) {
                 if (typedName !== null) {
                     showError('Category name does not match. Deletion cancelled.');
@@ -1051,7 +1129,7 @@
 
         // Edit parent category name
         async function editParentCategory(oldParentName, subcategoryIds) {
-            const newParentName = prompt(`Edit parent category name:`, oldParentName);
+            const newParentName = await customPrompt(`Edit parent category name:`, 'Edit Parent Category', oldParentName);
             
             if (!newParentName || newParentName.trim() === '') {
                 return;
@@ -1186,9 +1264,12 @@
                 return;
             }
             
-            if (!confirm(`Are you sure you want to close the account "${account_name}"?\n\nClosed accounts will not appear in dropdowns or the dashboard, but all historical data will be preserved.`)) {
-                return;
-            }
+            const confirmed = await customConfirm(
+                `Are you sure you want to close the account "${account_name}"?\n\nClosed accounts will not appear in dropdowns or the dashboard, but all historical data will be preserved.`,
+                'Close Account',
+                'Close Account'
+            );
+            if (!confirmed) return;
             
             try {
                 const response = await fetch(`${API_URL}/accounts/${account_id}/close`, {
@@ -1211,9 +1292,12 @@
 
         // Reopen an account
         async function openAccount(account_id, account_name) {
-            if (!confirm(`Are you sure you want to reopen the account "${account_name}"?`)) {
-                return;
-            }
+            const confirmed = await customConfirm(
+                `Are you sure you want to reopen the account "${account_name}"?`,
+                'Reopen Account',
+                'Reopen'
+            );
+            if (!confirmed) return;
             
             try {
                 const response = await fetch(`${API_URL}/accounts/${account_id}/open`, {
@@ -1911,9 +1995,12 @@
         async function updateAllPayeeStatistics(event) {
             console.log('updateAllPayeeStatistics called');
             
-            if (!confirm('This will recalculate the most common category, location, and project for all payees based on their transaction history. Continue?')) {
-                return;
-            }
+            const confirmed = await customConfirm(
+                'This will recalculate the most common category, location, and project for all payees based on their transaction history. Continue?',
+                'Recalculate Payee Statistics',
+                'Recalculate'
+            );
+            if (!confirmed) return;
             
             console.log('User confirmed, proceeding...');
             
@@ -2240,7 +2327,12 @@
                 return;
             }
             
-            if (!confirm(`Import ${transactionsToImport.length} transactions?`)) return;
+            const confirmed = await customConfirm(
+                `Import ${transactionsToImport.length} transactions?`,
+                'Confirm Import',
+                'Import'
+            );
+            if (!confirmed) return;
             
             // Show loading indicator
             showToast('⏳ Importing transactions... please wait', 'success');
@@ -2398,7 +2490,8 @@
                     showToast(`Created ${createdPayeesCount} new payees automatically`, 'success');
                 }
 
-                if (errorCount === 0) {
+                // ALWAYS recalculate balances if we imported any transactions
+                if (successCount > 0) {
                     showToast('🔄 Recalculating all balances...', 'success');
                     
                     try {
@@ -2407,19 +2500,26 @@
                         });
                         
                         if (recalcRes.ok) {
-                            showToast(`✅ Successfully imported ${successCount} transactions and updated balances!`, 'success');
+                            if (errorCount === 0) {
+                                showToast(`✅ Successfully imported ${successCount} transactions and updated balances!`, 'success');
+                            } else {
+                                showToast(`⚠️ Imported ${successCount} transactions (${errorCount} failed). Balances updated.`, 'error');
+                            }
                             setTimeout(() => {
                                 closeModal('importModal');
                                 cancelImport();
                             }, 1500);
                         } else {
-                            showToast('⚠️ Imported transactions but failed to recalculate balances.', 'error');
+                            showToast('⚠️ Imported transactions but failed to recalculate balances. Run "Recalculate Balances" manually.', 'error');
                         }
                     } catch (err) {
-                        showToast('⚠️ Error triggering balance recalculation.', 'error');
+                        console.error('Balance recalculation error:', err);
+                        showToast('⚠️ Error triggering balance recalculation. Run "Recalculate Balances" manually.', 'error');
                     }
+                } else if (errorCount > 0) {
+                    showToast(`❌ Import failed: ${errorCount} errors. Check console for details.`, 'error');
                 } else {
-                    showToast(`⚠️ Imported ${successCount} items, but ${errorCount} failed. Check console.`, 'error');
+                    showToast('⚠️ No transactions were imported.', 'error');
                 }
 
             } catch (e) {

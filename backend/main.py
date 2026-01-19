@@ -752,6 +752,8 @@ def get_transfers(
     Get transfer transactions grouped together.
     Identifies Transfer In/Out pairs and groups them.
     Supports pagination with skip & limit.
+    
+    Optimized: Uses O(n) algorithm with hash map instead of O(n²) nested loop.
     """
 
     # Get all transactions with Transfer locations
@@ -765,59 +767,70 @@ def get_transfers(
     if not transfer_in_location or not transfer_out_location:
         return []
 
-    # Get all transfer transactions
-    transfers = db.query(models.Transaction).filter(
+    # Get all transfer transactions with eager loading
+    transfers = db.query(models.Transaction).options(
+        joinedload(models.Transaction.account)
+    ).filter(
         or_(
             models.Transaction.location_id == transfer_in_location.id,
             models.Transaction.location_id == transfer_out_location.id
         )
     ).order_by(models.Transaction.date.desc()).all()
 
-    # Group transfers by datetime and amount
+    # O(n) optimization: separate into ins and outs, index by date
+    transfers_in = []
+    transfers_out = []
+    
+    for trans in transfers:
+        if trans.location_id == transfer_in_location.id:
+            transfers_in.append(trans)
+        else:
+            transfers_out.append(trans)
+    
+    # Index transfers_in by date for O(1) lookup
+    transfers_in_by_date = {}
+    for trans in transfers_in:
+        date_key = str(trans.date)
+        if date_key not in transfers_in_by_date:
+            transfers_in_by_date[date_key] = []
+        transfers_in_by_date[date_key].append(trans)
+    
+    # Match transfers - O(n) instead of O(n²)
     grouped_transfers = []
     processed_ids = set()
 
-    for trans in transfers:
-        if trans.id in processed_ids:
+    for trans_out in transfers_out:
+        if trans_out.id in processed_ids:
             continue
-
-        # Look for matching transfer (same datetime, opposite amount)
+        
+        date_key = str(trans_out.date)
+        candidates = transfers_in_by_date.get(date_key, [])
+        
+        # Find matching transfer_in (same date, different account, not yet processed)
         matching = None
-        for other in transfers:
-            if other.id != trans.id and other.id not in processed_ids:
-                # Same datetime, opposite signs
-                if (trans.date == other.date and
-                    trans.amount * other.amount < 0 and
-                    trans.location_id != other.location_id):
-                    matching = other
-                    break
-
+        for trans_in in candidates:
+            if trans_in.id not in processed_ids and trans_in.account_id != trans_out.account_id:
+                matching = trans_in
+                break
+        
         if matching:
-            # Determine which is out and which is in
-            if trans.amount < 0:
-                transfer_out = trans
-                transfer_in = matching
-            else:
-                transfer_out = matching
-                transfer_in = trans
-
             grouped_transfers.append({
-                "id": f"transfer_{transfer_out.id}_{transfer_in.id}",
-                "date": str(trans.date),
-                "from_account_id": transfer_out.account_id,
-                "from_account_name": transfer_out.account.name if transfer_out.account else None,
-                "from_amount": abs(transfer_out.amount),
-                "from_currency": transfer_out.currency,
-                "to_account_id": transfer_in.account_id,
-                "to_account_name": transfer_in.account.name if transfer_in.account else None,
-                "to_amount": transfer_in.amount,
-                "to_currency": transfer_in.currency,
-                "note": transfer_out.note or transfer_in.note,
-                "transfer_out_id": transfer_out.id,
-                "transfer_in_id": transfer_in.id
+                "id": f"transfer_{trans_out.id}_{matching.id}",
+                "date": date_key,
+                "from_account_id": trans_out.account_id,
+                "from_account_name": trans_out.account.name if trans_out.account else None,
+                "from_amount": abs(trans_out.amount),
+                "from_currency": trans_out.currency,
+                "to_account_id": matching.account_id,
+                "to_account_name": matching.account.name if matching.account else None,
+                "to_amount": matching.amount,
+                "to_currency": matching.currency,
+                "note": trans_out.note or matching.note,
+                "transfer_out_id": trans_out.id,
+                "transfer_in_id": matching.id
             })
-
-            processed_ids.add(trans.id)
+            
+            processed_ids.add(trans_out.id)
             processed_ids.add(matching.id)
 
     # Apply pagination to the grouped transfers
@@ -1134,6 +1147,263 @@ def delete_transaction(
             db.commit()
 
     return {"message": "Transaction deleted successfully"}
+
+
+@app.post("/transactions/batch-delete")
+def delete_transactions_batch(
+    transaction_ids: List[int],
+    db: Session = Depends(get_db)
+):
+    """
+    Delete multiple transactions in a single request and recalculate balances ONCE.
+    Much more efficient than deleting one by one.
+    
+    Optimized: Only recalculates affected accounts, not all accounts.
+    
+    Args:
+        transaction_ids: List of transaction IDs to delete
+    
+    Returns:
+        Summary of deleted transactions
+    """
+    if not transaction_ids:
+        return {"deleted": 0, "message": "No transactions to delete"}
+    
+    # Collect affected accounts before deleting
+    affected_accounts = set()
+    deleted_count = 0
+    not_found = []
+    
+    for tx_id in transaction_ids:
+        tx = db.query(models.Transaction).filter(
+            models.Transaction.id == tx_id
+        ).first()
+        
+        if tx:
+            affected_accounts.add(tx.account_id)
+            db.delete(tx)
+            deleted_count += 1
+        else:
+            not_found.append(tx_id)
+    
+    # Flush deletions before recalculating
+    db.flush()
+    
+    # Recalculate balances ONLY for affected accounts (not all accounts)
+    if affected_accounts:
+        recalculate_balances_for_accounts(db, list(affected_accounts))
+    
+    db.commit()
+    
+    result = {
+        "deleted": deleted_count,
+        "affected_accounts": list(affected_accounts),
+        "message": f"Successfully deleted {deleted_count} transactions"
+    }
+    
+    if not_found:
+        result["not_found"] = not_found
+    
+    return result
+
+
+from pydantic import BaseModel
+
+class BatchUpdateItem(BaseModel):
+    """Schema for a single transaction update in batch operations."""
+    id: int
+    updates: dict  # Fields to update (e.g., {"category_id": 5, "payee_id": 10})
+
+class BatchUpdateRequest(BaseModel):
+    """Schema for batch update request."""
+    transactions: List[BatchUpdateItem]
+
+
+@app.put("/transactions/batch-update")
+def update_transactions_batch(
+    request: BatchUpdateRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Update multiple transactions in a single request and recalculate balances ONCE.
+    Much more efficient than updating one by one.
+    
+    Optimized: Only recalculates affected accounts, not all accounts.
+    
+    Args:
+        request: BatchUpdateRequest with list of {id, updates} objects
+    
+    Returns:
+        Summary of updated transactions
+    """
+    if not request.transactions:
+        return {"updated": 0, "message": "No transactions to update"}
+    
+    # Collect affected accounts and track earliest date for recalculation
+    affected_accounts = set()
+    updated_count = 0
+    not_found = []
+    errors = []
+    
+    # Allowed fields that can be updated
+    allowed_fields = {
+        'amount', 'currency', 'note', 'account_id', 'category_id', 
+        'payee_id', 'location_id', 'project_id', 'date'
+    }
+    
+    # Fields that affect balance calculation
+    balance_affecting_fields = {'amount', 'account_id', 'date'}
+    needs_balance_recalc = False
+    
+    for item in request.transactions:
+        tx = db.query(models.Transaction).filter(
+            models.Transaction.id == item.id
+        ).first()
+        
+        if not tx:
+            not_found.append(item.id)
+            continue
+        
+        try:
+            # Track original account for balance recalculation
+            affected_accounts.add(tx.account_id)
+            
+            # Apply updates (only allowed fields)
+            for field, value in item.updates.items():
+                if field in allowed_fields:
+                    # Check if this affects balances
+                    if field in balance_affecting_fields:
+                        needs_balance_recalc = True
+                    
+                    setattr(tx, field, value)
+                    
+                    # If account changed, track new account too
+                    if field == 'account_id' and value:
+                        affected_accounts.add(value)
+            
+            tx.updated_at = datetime.utcnow()
+            updated_count += 1
+            
+        except Exception as e:
+            errors.append({"id": item.id, "error": str(e)})
+    
+    # Flush all updates before recalculating
+    db.flush()
+    
+    # Recalculate balances ONLY for affected accounts (not all accounts)
+    if affected_accounts and needs_balance_recalc:
+        recalculate_balances_for_accounts(db, list(affected_accounts))
+    
+    db.commit()
+    
+    result = {
+        "updated": updated_count,
+        "affected_accounts": list(affected_accounts),
+        "message": f"Successfully updated {updated_count} transactions"
+    }
+    
+    if not_found:
+        result["not_found"] = not_found
+    if errors:
+        result["errors"] = errors
+    
+    return result
+
+
+def recalculate_balances_for_accounts(db: Session, account_ids: List[int]):
+    """
+    Recalculate balances only for specific accounts.
+    Much faster than recalculating all accounts when only a few are affected.
+    """
+    for account_id in account_ids:
+        account = db.query(models.Account).filter(
+            models.Account.id == account_id
+        ).first()
+        
+        if not account:
+            continue
+        
+        # Get all transactions for this account ordered by date and id
+        transactions = db.query(models.Transaction).filter(
+            models.Transaction.account_id == account_id
+        ).order_by(
+            models.Transaction.date.asc(), 
+            models.Transaction.id.asc()
+        ).all()
+        
+        # Calculate running balance
+        running_balance = float(account.initial_balance) if account.initial_balance else 0.0
+        
+        for tx in transactions:
+            if tx.amount is not None:
+                running_balance += float(tx.amount)
+            tx.account_balance_after = round(running_balance, 2)
+        
+        # Update account's current balance
+        account.current_balance = round(running_balance, 2)
+
+
+@app.get("/transactions/batch")
+def get_transactions_batch(
+    ids: str = Query(..., description="Comma-separated list of transaction IDs"),
+    db: Session = Depends(get_db)
+):
+    """
+    Get multiple transactions by IDs in a single request.
+    Much more efficient than fetching one by one.
+    
+    Args:
+        ids: Comma-separated string of transaction IDs (e.g., "1,2,3,4,5")
+    
+    Returns:
+        List of transactions
+    """
+    try:
+        transaction_ids = [int(id.strip()) for id in ids.split(',') if id.strip()]
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid ID format. Use comma-separated integers.")
+    
+    if not transaction_ids:
+        return []
+    
+    # Fetch all transactions in one query with eager loading
+    transactions = db.query(models.Transaction).options(
+        joinedload(models.Transaction.account),
+        joinedload(models.Transaction.category),
+        joinedload(models.Transaction.payee),
+        joinedload(models.Transaction.location),
+        joinedload(models.Transaction.project),
+    ).filter(
+        models.Transaction.id.in_(transaction_ids)
+    ).all()
+    
+    # Build response maintaining order of requested IDs
+    tx_map = {tx.id: tx for tx in transactions}
+    result = []
+    
+    for tx_id in transaction_ids:
+        tx = tx_map.get(tx_id)
+        if tx:
+            result.append({
+                "id": tx.id,
+                "date": tx.date.isoformat() if hasattr(tx.date, "isoformat") else str(tx.date),
+                "amount": float(tx.amount) if tx.amount is not None else None,
+                "currency": tx.currency,
+                "note": tx.note,
+                "account_id": tx.account_id,
+                "category_id": tx.category_id,
+                "payee_id": tx.payee_id,
+                "location_id": tx.location_id,
+                "project_id": tx.project_id,
+                "account_balance_after": tx.account_balance_after,
+                "account_name": tx.account.name if tx.account else None,
+                "category_name": tx.category.name if tx.category else None,
+                "payee_name": tx.payee.name if tx.payee else None,
+                "location_name": tx.location.name if tx.location else None,
+                "project_name": tx.project.name if tx.project else None,
+            })
+    
+    return result
 
 
 # ============================================
@@ -2601,15 +2871,24 @@ def get_loans_details(
 def initialise_balances(db: Session = Depends(get_db)):
     """
     Recalculate balances for all accounts from scratch.
+    This includes:
+    1. account_balance_after for each transaction (per-account running balance)
+    2. total_balance_after for each transaction (global balance across all accounts in base currency)
     """
     print("--- STARTING BALANCE RECALCULATION ---")
     try:
         # Get all accounts
         accounts = db.query(models.Account).all()
+        accounts_map = {acc.id: acc for acc in accounts}
         total_tx_count = 0
+        
+        # PHASE 1: Calculate account_balance_after for each account
+        # Also track each account's running balance at each transaction
+        account_running_balances = {}  # account_id -> running_balance
         
         for account in accounts:
             print(f"Processing account: {account.name} (ID: {account.id})")
+            account_running_balances[account.id] = float(account.initial_balance) if account.initial_balance is not None else 0.0
             
             # Get transactions ordered by date and ID
             transactions = db.query(models.Transaction).filter(
@@ -2617,7 +2896,7 @@ def initialise_balances(db: Session = Depends(get_db)):
             ).order_by(models.Transaction.date.asc(), models.Transaction.id.asc()).all()
             
             # Calculate running balance
-            running_balance = float(account.initial_balance) if account.initial_balance is not None else 0.0
+            running_balance = account_running_balances[account.id]
             
             for t in transactions:
                 if t is None:
@@ -2636,7 +2915,56 @@ def initialise_balances(db: Session = Depends(get_db)):
             
             # Update account's current balance
             account.current_balance = running_balance
+        
+        # PHASE 2: Calculate total_balance_after for all transactions globally
+        print("--- CALCULATING TOTAL BALANCE AFTER ---")
+        
+        # Get exchange rates (to convert to base currency GBP)
+        # ExchangeRate model: currency (foreign), rate (how many units of foreign = 1 GBP)
+        BASE_CURRENCY = 'GBP'
+        exchange_rates = db.query(models.ExchangeRate).order_by(
+            models.ExchangeRate.date.desc()
+        ).all()
+        
+        # Build rate lookup - get most recent rate for each currency
+        rate_to_base = {BASE_CURRENCY: 1.0}
+        seen_currencies = set()
+        for r in exchange_rates:
+            if r.currency not in seen_currencies:
+                # rate is "1 GBP = X foreign", so to convert foreign to GBP: divide by rate
+                rate_to_base[r.currency] = 1.0 / float(r.rate)
+                seen_currencies.add(r.currency)
+        
+        # Get ALL transactions ordered globally by date and ID
+        all_transactions = db.query(models.Transaction).order_by(
+            models.Transaction.date.asc(), 
+            models.Transaction.id.asc()
+        ).all()
+        
+        # Reset running balances to initial values
+        for account in accounts:
+            account_running_balances[account.id] = float(account.initial_balance) if account.initial_balance is not None else 0.0
+        
+        # Process transactions in global order
+        for t in all_transactions:
+            if t is None:
+                continue
             
+            # Update this account's running balance
+            amount = float(t.amount) if t.amount is not None else 0.0
+            account_running_balances[t.account_id] += amount
+            
+            # Calculate total balance across all accounts in base currency
+            total_balance = 0.0
+            for acc_id, balance in account_running_balances.items():
+                acc = accounts_map.get(acc_id)
+                if acc:
+                    currency = acc.currency or BASE_CURRENCY
+                    rate = rate_to_base.get(currency, 1.0)
+                    total_balance += balance * rate
+            
+            t.total_balance_after = round(total_balance, 2)
+        
         # Commit all changes
         db.commit()
         print(f"--- FINISHED: {len(accounts)} accounts, {total_tx_count} transactions ---")
@@ -2770,3 +3098,61 @@ def clean_corrupt_transactions(db: Session = Depends(get_db)):
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Database cleanup failed: {str(e)}")
+
+
+@app.post("/admin/create-indexes")
+def create_database_indexes(db: Session = Depends(get_db)):
+    """
+    Create database indexes to improve query performance.
+    Safe to run multiple times (uses IF NOT EXISTS).
+    
+    This endpoint creates any indexes that aren't defined in models.py
+    but are useful for specific query patterns.
+    """
+    try:
+        from sqlalchemy import text
+        
+        indexes_created = []
+        
+        # Additional indexes not defined in models.py
+        # These complement the SQLAlchemy-defined indexes
+        index_definitions = [
+            # Payee name for case-insensitive search (COLLATE NOCASE)
+            ("idx_payee_name_nocase", "payees", "name COLLATE NOCASE"),
+            
+            # Note search optimization (helps with prefix searches)
+            ("idx_transaction_note", "transactions", "note"),
+            
+            # Exchange rate lookup optimization
+            ("idx_exchange_rate_lookup", "exchange_rates", "currency, date DESC"),
+        ]
+        
+        for idx_name, table, columns in index_definitions:
+            sql = f"CREATE INDEX IF NOT EXISTS {idx_name} ON {table} ({columns})"
+            try:
+                db.execute(text(sql))
+                indexes_created.append(idx_name)
+            except Exception as e:
+                print(f"Could not create index {idx_name}: {e}")
+        
+        db.commit()
+        
+        # Run ANALYZE to update query planner statistics
+        db.execute(text("ANALYZE"))
+        db.commit()
+        
+        # Get list of all indexes for reporting
+        result = db.execute(text("SELECT name FROM sqlite_master WHERE type='index' ORDER BY name"))
+        all_indexes = [row[0] for row in result if row[0] and not row[0].startswith('sqlite_')]
+        
+        return {
+            "message": f"Index maintenance complete",
+            "indexes_created_now": indexes_created,
+            "total_indexes": len(all_indexes),
+            "all_indexes": all_indexes,
+            "note": "ANALYZE was run to update query statistics"
+        }
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to create indexes: {str(e)}")
