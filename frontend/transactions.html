@@ -71,7 +71,7 @@
 
         /* Transaction table layout and styling */
         .transactions-wrapper { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
-        .grid-layout { display: grid; grid-template-columns: 25px 70px 190px 200px minmax(200px, 1fr) 100px 120px 120px 50px; gap: 10px; align-items: center; }
+        .grid-layout { display: grid; grid-template-columns: 25px 70px 190px 200px minmax(200px, 1fr) 100px 120px 120px 70px; gap: 10px; align-items: center; }
         .transactions-list:not(.bulk-edit-mode) input[type="checkbox"] { visibility: hidden; }
         .transactions-header:not(.bulk-edit-mode) .t-cell:first-child { visibility: hidden; }
 
@@ -129,7 +129,7 @@
         .transaction-item:hover .balance-primary { opacity: 0; }
         .transaction-item:hover .balance-secondary { opacity: 1; }
 
-        .action-buttons { display: flex; gap: 1px; justify-content: flex-end; }
+        .action-buttons { display: flex; gap: 1px; justify-content: flex-end; margin-left: 10px; }
         .btn-xs { background: none; border: none; cursor: pointer; font-size: 16px; font-weight: 600; padding: 2px; line-height: 1; transition: transform 0.1s, opacity 0.2s; opacity: 0.7; color: var(--text); }
         .btn-xs:hover { opacity: 1; transform: scale(1.3); }
         
@@ -202,18 +202,32 @@
         }
 
         .modal-footer {
-            display: flex; gap: 10px; margin-top: 10px;
+            display: flex; gap: 12px; margin-top: 20px;
         }
-        .modal-footer button {
-            flex: 1; padding: 10px; border-radius: 8px; border: none;
-            font-weight: 600; cursor: pointer;
+        .modal-footer button, .modal-footer-batch button {
+            flex: 1; 
+            padding: 12px 20px; 
+            border-radius: 6px; 
+            border: 1px solid var(--border);
+            font-weight: 500; 
+            font-size: 13px;
+            cursor: pointer;
+            font-family: 'IBM Plex Sans', sans-serif;
         }
-        .btn-save { background: var(--text); color: white; }
-        .btn-save:hover { opacity: 0.9; }
-        .btn-save-new { background: var(--btn-green); color: white; }
-        .btn-save-new:hover { opacity: 0.9; }
-        .btn-cancel { background: transparent; border: 1px solid var(--border) !important; color: var(--muted); }
-        .btn-cancel:hover { background: #fff; color: var(--text); }
+        .btn-save-new {
+            background: var(--card) !important;
+            color: var(--text) !important;
+            border-color: var(--card) !important;
+        }
+        .btn-save {
+            background: var(--btn-primary) !important;
+            color: white !important;
+            border-color: var(--btn-primary) !important;
+        }
+        .btn-cancel { 
+            background: #fff; 
+            color: var(--text); 
+        }
         
         /* Batch mode indicator */
         .batch-indicator {
@@ -234,8 +248,8 @@
         .modal-footer-batch {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            margin-top: 10px;
+            gap: 12px;
+            margin-top: 20px;
         }
         .modal-footer-batch .btn-save-new {
             grid-column: 1 / -1;
@@ -713,7 +727,7 @@
                     <div class="form-group"><label>Note</label><textarea id="note" rows="2"></textarea></div>
                     
                     <div class="modal-footer-batch">
-                        <button type="button" class="btn-save-new" onclick="saveTransactionAndNew()">💾 Save & New</button>
+                        <button type="button" class="btn-save-new" onclick="saveTransactionAndNew()">Save & New</button>
                         <button type="submit" class="btn-save">Save</button>
                         <button type="button" class="btn-cancel" onclick="closeTransactionModal()">Cancel</button>
                     </div>
@@ -747,7 +761,7 @@
                     </div>
                     <div class="form-group"><label>Note</label><textarea id="transferNote" rows="2"></textarea></div>
                     <div class="modal-footer-batch">
-                        <button type="button" class="btn-save-new" onclick="saveTransferAndNew()">💾 Save & New</button>
+                        <button type="button" class="btn-save-new" onclick="saveTransferAndNew()">Save & New</button>
                         <button type="submit" class="btn-save">Save</button>
                         <button type="button" class="btn-cancel" onclick="closeTransferModal()">Cancel</button>
                     </div>
@@ -1397,8 +1411,9 @@
                 <div class="t-cell t-amount balance-cell" style="color: ${balanceAccountColor}">${t.account_balance_after != null ? formatMoneyWithSymbol(t.account_balance_after, accountCurrency) : ''}</div>
                 <div class="t-cell t-amount balance-cell" style="color: ${balanceTotalColor}">${t.total_balance_after != null ? formatMoneyWithSymbol(t.total_balance_after, 'GBP') : ''}</div>
                 <div class="action-buttons">
-                    <button onclick="event.stopPropagation(); editTransaction(${t.id})" class="btn-xs">✎</button>
-                    <button onclick="event.stopPropagation(); deleteTransaction(${t.id})" class="btn-xs">×</button>
+                    <button onclick="event.stopPropagation(); duplicateTransaction(${t.id})" class="btn-xs" title="Duplicate">⧉</button>
+                    <button onclick="event.stopPropagation(); editTransaction(${t.id})" class="btn-xs" title="Edit">✎</button>
+                    <button onclick="event.stopPropagation(); deleteTransaction(${t.id})" class="btn-xs" title="Delete">×</button>
                 </div>
             </div>`;
         }
@@ -1778,6 +1793,36 @@
             if(t.location_id) document.getElementById('location').value = t.location_id;
             if(t.project_id) document.getElementById('project').value = t.project_id;
             const f = document.getElementById('transactionForm'); f.dataset.editingId = id; f.querySelector('button[type="submit"]').textContent = 'Update';
+        }
+
+        async function duplicateTransaction(id) {
+            const t = await (await fetch(`${API_URL}/transactions/${id}`)).json();
+            
+            // Create new transaction with today's date/time
+            const now = new Date();
+            const data = {
+                date: now.toISOString(),
+                amount: t.amount,
+                currency: t.currency,
+                account_id: t.account_id,
+                category_id: t.category_id,
+                payee_id: t.payee_id,
+                location_id: t.location_id,
+                project_id: t.project_id,
+                note: t.note
+            };
+            
+            const res = await fetch(`${API_URL}/transactions`, {
+                method: 'POST',
+                body: JSON.stringify(data),
+                headers: {'Content-Type': 'application/json'}
+            });
+            
+            if (res.ok) {
+                loadRecentTransactions(true);
+            } else {
+                alert('Error duplicating transaction');
+            }
         }
 
         async function editTransfer(outId, inId) {
