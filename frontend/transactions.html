@@ -483,7 +483,7 @@
         <h1>🐬 Delfin · The Transactions</h1>
         <div class="tools">
             <span class="help-icon" onclick="openModal('shortcutsModal')" title="Keyboard shortcuts">ⓘ</span>
-            <span class="badge" id="baseCurrency" title="Base currency">—</span>
+            <span class="badge" id="baseCurrency" title="Base curreancy">—</span>
             <button id="btnRefresh" class="primary" title="Reload all data and recalculate balances">🔄 Refresh</button>
             <button id="btnUpdateRates" class="danger" title="Fetch latest exchange rates">💱 Update rates</button>
             <div class="dropdown" id="navDropdown">
@@ -744,7 +744,7 @@
                         <div class="form-group"><label>Time</label><input type="time" id="time" required></div>
                     </div>
                     <div class="form-row">
-                        <div class="form-group"><label>Amount</label><input type="number" id="amount" step="0.01" required></div>
+                        <div class="form-group"><label>Amount</label><input type="number" id="amount" step="0.01" required onblur="colorAmountInput(this)"></div>
                         <div class="form-group">
                             <label>Payee</label>
                             <input type="text" id="payee" list="payeeList" placeholder="Who?">
@@ -887,6 +887,18 @@
                 if(confirmResolve) confirmResolve(false);
             };
         });
+
+        function colorAmountInput(input) {
+            const value = parseFloat(input.value);
+            input.classList.remove('amount-positive', 'amount-negative');
+            if (!isNaN(value)) {
+                if (value < 0) {
+                    input.classList.add('amount-negative');
+                } else if (value > 0) {
+                    input.classList.add('amount-positive');
+                }
+            }
+        }
 
         function setScrollTarget(transactionId, transferId = null) {
             targetTransactionId = transactionId;
@@ -1932,6 +1944,7 @@
             openTransactionModal();
             const d = new Date(t.date); document.getElementById('date').valueAsDate = d; document.getElementById('time').value = d.toTimeString().slice(0,5);
             document.getElementById('amount').value = t.amount; document.getElementById('account').value = t.account_id; document.getElementById('note').value = t.note||'';
+            colorAmountInput(document.getElementById('amount'));
             if(t.category_id) { 
                 const c = allCategories.find(x=>x.id===t.category_id); 
                 if(c?.parent) { document.getElementById('parentCategory').value = c.parent; loadSubcategories(c.parent); setTimeout(()=>document.getElementById('category').value=t.category_id, 100); }
@@ -2182,6 +2195,10 @@
             const timeStr = now.toTimeString().split(' ')[0].substring(0,5);
             document.getElementById('date').value = dateStr;
             document.getElementById('time').value = timeStr;
+            
+            // Reset amount color
+            const amountInput = document.getElementById('amount');
+            amountInput.classList.remove('amount-positive', 'amount-negative');
             
             // If filtering by account, preselect that account
             if (filtersActive && activeFilters.accountId) {
