@@ -171,6 +171,25 @@ class RecurringExpense(Base):
 
     payee = relationship("Payee")
     category = relationship("Category")
+    amount_history = relationship("RecurringExpenseHistory", back_populates="recurring_expense", order_by="RecurringExpenseHistory.effective_from.desc()")
+
+
+class RecurringExpenseHistory(Base):
+    """Historical record of recurring expense amounts."""
+    __tablename__ = "recurring_expense_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    recurring_expense_id = Column(Integer, ForeignKey("recurring_expenses.id"), nullable=False, index=True)
+    amount = Column(Float, nullable=False)
+    currency = Column(String, default="GBP")
+    effective_from = Column(DateTime, nullable=False, index=True)  # When this amount became effective
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    recurring_expense = relationship("RecurringExpense", back_populates="amount_history")
+
+    __table_args__ = (
+        Index('idx_history_expense_date', 'recurring_expense_id', 'effective_from'),
+    )
 
 
 class PlannedExpense(Base):
@@ -234,6 +253,13 @@ def round_budget_amount(mapper, connection, target):
 @event.listens_for(RecurringExpense, 'before_update')
 def round_recurring_amount(mapper, connection, target):
     """Round recurring expense amount to 2 decimal places."""
+    if target.amount is not None:
+        target.amount = round(target.amount, 2)
+
+
+@event.listens_for(RecurringExpenseHistory, 'before_insert')
+def round_history_amount(mapper, connection, target):
+    """Round history amount to 2 decimal places."""
     if target.amount is not None:
         target.amount = round(target.amount, 2)
 

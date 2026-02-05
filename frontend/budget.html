@@ -68,6 +68,13 @@
 
         .days-info { text-align: center; padding: 10px; background: var(--panel); border-radius: 8px; margin-top: 10px; }
 
+        .income-info { padding: 12px; background: var(--panel); border-radius: 8px; margin-top: 10px; }
+        .income-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; }
+        .income-row .label { color: var(--muted); font-size: 13px; }
+        .income-row .value { font-weight: 700; font-variant-numeric: tabular-nums; }
+        .income-row .value.positive { color: var(--green); }
+        .income-row .value.negative { color: var(--red); }
+
         .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; vertical-align: middle; margin-left: 8px; }
         .badge.future { background: #6366f1; color: white; }
 
@@ -205,6 +212,17 @@
                 <div class="days-info" id="daysInfo">
                     Loading...
                 </div>
+
+                <div class="income-info" id="incomeInfo" style="display: none;">
+                    <div class="income-row">
+                        <span class="label">Income this month:</span>
+                        <span class="value" id="incomeValue">-</span>
+                    </div>
+                    <div class="income-row">
+                        <span class="label">Savings (Income - Spent):</span>
+                        <span class="value" id="savingsValue">-</span>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -228,6 +246,18 @@
                 </div>
             </div>
 
+            <!-- Spending by Category Card -->
+            <div class="card">
+                <div class="head">
+                    <h2 class="title">Spending by Category</h2>
+                </div>
+                <div class="content">
+                    <div id="categoryList"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid-2">
             <!-- Planned Expenses Card (one-time this month) -->
             <div class="card">
                 <div class="head">
@@ -245,30 +275,15 @@
                     </div>
                 </div>
             </div>
-        </div>
 
-        <div class="grid-2">
-            <!-- Spending by Category Card -->
+            <!-- Budget History Card -->
             <div class="card">
                 <div class="head">
-                    <h2 class="title">Spending by Category</h2>
+                    <h2 class="title">Budget History</h2>
                 </div>
                 <div class="content">
-                    <div id="categoryList"></div>
+                    <div id="historyList"></div>
                 </div>
-            </div>
-
-            <!-- Empty or future card -->
-            <div></div>
-        </div>
-
-        <!-- Budget History Card -->
-        <div class="card">
-            <div class="head">
-                <h2 class="title">Budget History</h2>
-            </div>
-            <div class="content">
-                <div id="historyList"></div>
             </div>
         </div>
     </div>
@@ -549,7 +564,7 @@
         }
 
         function renderBudgetProgress(data) {
-            const { budget, spent, committed, remaining, percentage, days_remaining, daily_available } = data;
+            const { budget, spent, committed, remaining, percentage, days_remaining, daily_available, income, savings } = data;
 
             // Budget display
             if (budget.amount > 0) {
@@ -594,6 +609,19 @@
                 q('#daysInfo').innerHTML = `📅 <strong>${days_remaining}</strong> days · <strong>${fmtMoney(daily_available, budget.currency)}</strong>/day`;
             } else {
                 q('#daysInfo').textContent = 'Month completed';
+            }
+
+            // Income and savings info (hide for future months)
+            const incomeInfo = q('#incomeInfo');
+            if (isFutureMonth) {
+                incomeInfo.style.display = 'none';
+            } else {
+                incomeInfo.style.display = 'block';
+                q('#incomeValue').textContent = fmtMoney(income, budget.currency);
+
+                const savingsEl = q('#savingsValue');
+                savingsEl.textContent = fmtMoney(savings, budget.currency);
+                savingsEl.className = 'value ' + (savings >= 0 ? 'positive' : 'negative');
             }
         }
 

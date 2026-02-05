@@ -9,7 +9,7 @@ import shutil
 import os
 from backend.database import get_db, engine
 from backend import models, schemas
-from backend.models import Account, Category, Payee, Location, Project, Transaction, ExchangeRate, Budget, RecurringExpense, PlannedExpense
+from backend.models import Account, Category, Payee, Location, Project, Transaction, ExchangeRate, Budget, RecurringExpense, RecurringExpenseHistory, PlannedExpense
 from backend.schemas import ExchangeRateResponse
 from backend.helpers import (
     recalculate_balances_from_transaction, 
@@ -3339,6 +3339,35 @@ def get_budget_progress(year_month: str, db: Session = Depends(get_db)):
     # Sort categories by amount
     categories = sorted(category_spending.values(), key=lambda x: x["amount"], reverse=True)
 
+    # Get income transactions for the month (positive amounts, excluding transfers)
+    income_filters = [
+        Transaction.date >= datetime.combine(start_date, time.min),
+        Transaction.date <= datetime.combine(end_date, time.max),
+        Transaction.amount > 0  # Only income
+    ]
+    if transfer_ids:
+        income_filters.append(~Transaction.location_id.in_(transfer_ids))
+
+    income_transactions = db.query(Transaction).filter(and_(*income_filters)).all()
+
+    # Add income currencies to rates if needed
+    income_currencies = list(set([t.currency for t in income_transactions if t.currency]))
+    for curr in income_currencies:
+        if curr not in currencies:
+            currencies.append(curr)
+    if income_currencies:
+        historical_rates = get_rates_bulk(db, currencies, start_date, end_date)
+
+    # Calculate total income
+    total_income = 0
+    for trans in income_transactions:
+        trans_date = trans.date.date() if isinstance(trans.date, datetime) else trans.date
+        rates_for_day = historical_rates.get(trans_date, {'GBP': 1.0})
+        trans_rate = rates_for_day.get(trans.currency, 1.0)
+        base_rate = rates_for_day.get(base_currency, 1.0)
+        converted = trans.amount * (base_rate / trans_rate)
+        total_income += converted
+
     # Get recurring expenses
     recurring_list = db.query(RecurringExpense).filter(RecurringExpense.is_active == 1).all()
 
@@ -3366,9 +3395,28 @@ def get_budget_progress(year_month: str, db: Session = Depends(get_db)):
     recurring_with_status = []
     committed = 0
 
+    # Helper function to get historical amount for a recurring expense at a given date
+    def get_historical_amount(rec_id, target_date):
+        """Get the amount that was effective for this recurring expense at the target date."""
+        history = db.query(RecurringExpenseHistory).filter(
+            RecurringExpenseHistory.recurring_expense_id == rec_id,
+            RecurringExpenseHistory.effective_from <= datetime.combine(target_date, time.max)
+        ).order_by(RecurringExpenseHistory.effective_from.desc()).first()
+        return history
+
     for rec in recurring_list:
         # Check if this expense applies to the current month based on frequency
         applies_this_month = expense_applies_to_month(rec, month)
+
+        # Get historical amount for this month (use end_date to find applicable amount)
+        history_record = get_historical_amount(rec.id, end_date)
+        if history_record:
+            effective_amount = history_record.amount
+            effective_currency = history_record.currency
+        else:
+            # No history record, use current amount (for existing data before history was implemented)
+            effective_amount = rec.amount
+            effective_currency = rec.currency
 
         # Check if there's a matching transaction this month
         paid_this_month = False
@@ -3382,19 +3430,19 @@ def get_budget_progress(year_month: str, db: Session = Depends(get_db)):
             if rec.payee_id:
                 rec_filters.append(Transaction.payee_id == rec.payee_id)
 
-            # Check for similar amount (within 20% tolerance)
-            amount_tolerance = rec.amount * 0.2
-            rec_filters.append(Transaction.amount <= -(rec.amount - amount_tolerance))
-            rec_filters.append(Transaction.amount >= -(rec.amount + amount_tolerance))
+            # Check for similar amount (within 20% tolerance) using effective amount
+            amount_tolerance = effective_amount * 0.2
+            rec_filters.append(Transaction.amount <= -(effective_amount - amount_tolerance))
+            rec_filters.append(Transaction.amount >= -(effective_amount + amount_tolerance))
 
             matching_tx = db.query(Transaction).filter(and_(*rec_filters)).first()
             paid_this_month = matching_tx is not None
 
         # Convert recurring amount to base currency using latest rates
         latest_rates = get_latest_rates(db)
-        rec_rate = latest_rates.get(rec.currency, 1.0)
+        rec_rate = latest_rates.get(effective_currency, 1.0)
         base_rate = latest_rates.get(base_currency, 1.0)
-        converted_amount = rec.amount * (base_rate / rec_rate)
+        converted_amount = effective_amount * (base_rate / rec_rate)
 
         # Only add to committed if expense applies this month AND not paid
         if applies_this_month and not paid_this_month:
@@ -3407,9 +3455,10 @@ def get_budget_progress(year_month: str, db: Session = Depends(get_db)):
             "payee_name": rec.payee.name if rec.payee else None,
             "category_id": rec.category_id,
             "category_name": rec.category.name if rec.category else None,
-            "amount": rec.amount,
+            "amount": effective_amount,  # Historical amount for this month
+            "current_amount": rec.amount,  # Current configured amount
             "converted_amount": round(converted_amount, 2),
-            "currency": rec.currency,
+            "currency": effective_currency,
             "day_of_month": rec.day_of_month,
             "frequency": rec.frequency or "monthly",
             "start_month": rec.start_month,
@@ -3459,6 +3508,9 @@ def get_budget_progress(year_month: str, db: Session = Depends(get_db)):
 
     daily_available = remaining / days_remaining if days_remaining > 0 else 0
 
+    # Calculate savings (income - spent)
+    savings = total_income - total_spent
+
     return {
         "budget": {
             "id": budget.id if budget else None,
@@ -3472,6 +3524,8 @@ def get_budget_progress(year_month: str, db: Session = Depends(get_db)):
         "percentage": round((total_spent / budget_amount * 100) if budget_amount > 0 else 0, 1),
         "days_remaining": days_remaining,
         "daily_available": round(daily_available, 2),
+        "income": round(total_income, 2),
+        "savings": round(savings, 2),
         "recurring_expenses": recurring_with_status,
         "planned_expenses": planned_with_status,
         "categories": categories,
@@ -3761,6 +3815,19 @@ def create_recurring_expense(
     db.commit()
     db.refresh(new_recurring)
 
+    # Create initial history record for this amount
+    today = date.today()
+    first_of_month = date(today.year, today.month, 1)
+    history = RecurringExpenseHistory(
+        recurring_expense_id=new_recurring.id,
+        amount=data.amount,
+        currency=data.currency,
+        effective_from=datetime.combine(first_of_month, time.min),
+        created_at=datetime.utcnow()
+    )
+    db.add(history)
+    db.commit()
+
     return {
         "id": new_recurring.id,
         "name": new_recurring.name,
@@ -3787,6 +3854,26 @@ def update_recurring_expense(
     recurring = db.query(RecurringExpense).filter(RecurringExpense.id == recurring_id).first()
     if not recurring:
         raise HTTPException(status_code=404, detail="Recurring expense not found")
+
+    # Check if amount or currency changed - if so, create history record
+    amount_changed = (
+        round(data.amount, 2) != round(recurring.amount, 2) or
+        data.currency != recurring.currency
+    )
+
+    if amount_changed:
+        # Create history record for the new amount starting from today
+        # (the first day of current month, so it applies to this month onwards)
+        today = date.today()
+        first_of_month = date(today.year, today.month, 1)
+        history = RecurringExpenseHistory(
+            recurring_expense_id=recurring_id,
+            amount=data.amount,
+            currency=data.currency,
+            effective_from=datetime.combine(first_of_month, time.min),
+            created_at=datetime.utcnow()
+        )
+        db.add(history)
 
     recurring.name = data.name
     recurring.payee_id = data.payee_id
