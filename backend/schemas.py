@@ -3,7 +3,7 @@ Pydantic schemas for request/response validation.
 """
 from pydantic import BaseModel, field_validator
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
 
 # --- Account schemas ---
@@ -202,6 +202,106 @@ class ExchangeRateResponse(ExchangeRateBase):
     
     class Config:
         from_attributes = True
+
+
+# --- Budget schemas ---
+
+class BudgetBase(BaseModel):
+    year_month: str  # Format: "2025-01"
+    amount: float
+    currency: str = "GBP"
+
+    @field_validator('amount')
+    @classmethod
+    def round_amount(cls, v):
+        return round(v, 2)
+
+
+class BudgetCreate(BudgetBase):
+    pass
+
+
+class BudgetResponse(BudgetBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# --- Recurring expense schemas ---
+
+class RecurringExpenseBase(BaseModel):
+    name: str
+    payee_id: Optional[int] = None
+    category_id: Optional[int] = None
+    amount: float
+    currency: str = "GBP"
+    day_of_month: Optional[int] = None
+    frequency: str = "monthly"  # monthly, quarterly, biannual, annual
+    start_month: Optional[int] = None  # Month when charged (1-12), for non-monthly
+
+    @field_validator('amount')
+    @classmethod
+    def round_amount(cls, v):
+        return round(v, 2)
+
+
+class RecurringExpenseCreate(RecurringExpenseBase):
+    pass
+
+
+class RecurringExpenseResponse(RecurringExpenseBase):
+    id: int
+    is_active: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class RecurringExpenseWithDetails(RecurringExpenseResponse):
+    """Recurring expense with related entity names and payment status."""
+    payee_name: Optional[str] = None
+    category_name: Optional[str] = None
+    paid_this_month: bool = False
+    applies_this_month: bool = True  # Whether this expense applies to current month based on frequency
+
+
+# --- Planned expense schemas ---
+
+class PlannedExpenseBase(BaseModel):
+    year_month: str  # Format: "2025-01"
+    name: str
+    amount: float
+    currency: str = "GBP"
+    category_id: Optional[int] = None
+
+    @field_validator('amount')
+    @classmethod
+    def round_amount(cls, v):
+        return round(v, 2)
+
+
+class PlannedExpenseCreate(PlannedExpenseBase):
+    pass
+
+
+class PlannedExpenseResponse(PlannedExpenseBase):
+    id: int
+    is_paid: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class PlannedExpenseWithDetails(PlannedExpenseResponse):
+    """Planned expense with category name."""
+    category_name: Optional[str] = None
 
 
 # --- Utility schemas ---

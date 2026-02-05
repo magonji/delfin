@@ -9,7 +9,7 @@ import shutil
 import os
 from backend.database import get_db, engine
 from backend import models, schemas
-from backend.models import Account, Category, Payee, Location, Project, Transaction, ExchangeRate
+from backend.models import Account, Category, Payee, Location, Project, Transaction, ExchangeRate, Budget, RecurringExpense, PlannedExpense
 from backend.schemas import ExchangeRateResponse
 from backend.helpers import (
     recalculate_balances_from_transaction, 
@@ -3200,3 +3200,782 @@ def create_database_indexes(db: Session = Depends(get_db)):
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to create indexes: {str(e)}")
+
+
+# ============================================
+# BUDGET ENDPOINTS
+# ============================================
+
+@app.get("/budgets")
+def get_budgets(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db)
+):
+    """Get all budgets, ordered by year_month descending."""
+    budgets = db.query(Budget).order_by(Budget.year_month.desc()).offset(skip).limit(limit).all()
+    return budgets
+
+
+@app.get("/budgets/current")
+def get_current_budget(db: Session = Depends(get_db)):
+    """Get the budget for the current month."""
+    current_year_month = datetime.now().strftime("%Y-%m")
+    budget = db.query(Budget).filter(Budget.year_month == current_year_month).first()
+    if not budget:
+        return None
+    return budget
+
+
+@app.get("/budgets/{year_month}")
+def get_budget(year_month: str, db: Session = Depends(get_db)):
+    """Get budget for a specific month."""
+    budget = db.query(Budget).filter(Budget.year_month == year_month).first()
+    if not budget:
+        raise HTTPException(status_code=404, detail="Budget not found")
+    return budget
+
+
+@app.post("/budgets")
+def create_or_update_budget(
+    budget_data: schemas.BudgetCreate,
+    db: Session = Depends(get_db)
+):
+    """Create or update a budget for a specific month."""
+    existing = db.query(Budget).filter(Budget.year_month == budget_data.year_month).first()
+
+    if existing:
+        existing.amount = budget_data.amount
+        existing.currency = budget_data.currency
+        db.commit()
+        db.refresh(existing)
+        return existing
+    else:
+        new_budget = Budget(
+            year_month=budget_data.year_month,
+            amount=budget_data.amount,
+            currency=budget_data.currency
+        )
+        db.add(new_budget)
+        db.commit()
+        db.refresh(new_budget)
+        return new_budget
+
+
+@app.delete("/budgets/{year_month}")
+def delete_budget(year_month: str, db: Session = Depends(get_db)):
+    """Delete a budget for a specific month."""
+    budget = db.query(Budget).filter(Budget.year_month == year_month).first()
+    if not budget:
+        raise HTTPException(status_code=404, detail="Budget not found")
+
+    db.delete(budget)
+    db.commit()
+    return {"message": "Budget deleted successfully"}
+
+
+@app.get("/budgets/{year_month}/progress")
+def get_budget_progress(year_month: str, db: Session = Depends(get_db)):
+    """
+    Get budget progress with spending breakdown and recurring expenses status.
+    """
+    # Parse year_month
+    try:
+        year, month = map(int, year_month.split('-'))
+        start_date = date(year, month, 1)
+        if month == 12:
+            end_date = date(year + 1, 1, 1) - timedelta(days=1)
+        else:
+            end_date = date(year, month + 1, 1) - timedelta(days=1)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid year_month format. Use YYYY-MM")
+
+    # Get budget (may not exist)
+    budget = db.query(Budget).filter(Budget.year_month == year_month).first()
+
+    # Get transfer location IDs to exclude
+    transfer_ids = [
+        r.id for r in db.query(Location.id)
+        .filter(Location.name.in_(["Transfer In", "Transfer Out"]))
+        .all()
+    ]
+
+    # Get all expense transactions for the month (negative amounts, excluding transfers)
+    filters = [
+        Transaction.date >= datetime.combine(start_date, time.min),
+        Transaction.date <= datetime.combine(end_date, time.max),
+        Transaction.amount < 0  # Only expenses
+    ]
+    if transfer_ids:
+        filters.append(~Transaction.location_id.in_(transfer_ids))
+
+    transactions = db.query(Transaction).filter(and_(*filters)).all()
+
+    # Get historical exchange rates for currency conversion
+    currencies = list(set([t.currency for t in transactions if t.currency]))
+    historical_rates = get_rates_bulk(db, currencies, start_date, end_date)
+    base_currency = budget.currency if budget else "GBP"
+
+    # Calculate total spent and category breakdown
+    total_spent = 0
+    category_spending = {}
+
+    for trans in transactions:
+        trans_date = trans.date.date() if isinstance(trans.date, datetime) else trans.date
+        rates_for_day = historical_rates.get(trans_date, {'GBP': 1.0})
+
+        trans_rate = rates_for_day.get(trans.currency, 1.0)
+        base_rate = rates_for_day.get(base_currency, 1.0)
+        converted = abs(trans.amount) * (base_rate / trans_rate)
+
+        total_spent += converted
+
+        cat_name = trans.category.name if trans.category else "Uncategorised"
+        if cat_name not in category_spending:
+            category_spending[cat_name] = {"name": cat_name, "amount": 0, "count": 0}
+        category_spending[cat_name]["amount"] += converted
+        category_spending[cat_name]["count"] += 1
+
+    # Sort categories by amount
+    categories = sorted(category_spending.values(), key=lambda x: x["amount"], reverse=True)
+
+    # Get recurring expenses
+    recurring_list = db.query(RecurringExpense).filter(RecurringExpense.is_active == 1).all()
+
+    # Helper function to check if a recurring expense applies to a given month
+    def expense_applies_to_month(rec, target_month):
+        freq = rec.frequency or "monthly"
+        if freq == "monthly":
+            return True
+
+        start_m = rec.start_month or target_month  # Default to current month if not set
+
+        if freq == "quarterly":
+            # Applies every 3 months starting from start_month
+            return (target_month - start_m) % 3 == 0
+        elif freq == "biannual":
+            # Applies every 6 months starting from start_month
+            return (target_month - start_m) % 6 == 0
+        elif freq == "annual":
+            # Applies only in start_month
+            return target_month == start_m
+
+        return True  # Default to monthly if unknown frequency
+
+    # Check which recurring expenses have been paid this month
+    recurring_with_status = []
+    committed = 0
+
+    for rec in recurring_list:
+        # Check if this expense applies to the current month based on frequency
+        applies_this_month = expense_applies_to_month(rec, month)
+
+        # Check if there's a matching transaction this month
+        paid_this_month = False
+        if applies_this_month:
+            rec_filters = [
+                Transaction.date >= datetime.combine(start_date, time.min),
+                Transaction.date <= datetime.combine(end_date, time.max),
+            ]
+
+            # Match by payee if available
+            if rec.payee_id:
+                rec_filters.append(Transaction.payee_id == rec.payee_id)
+
+            # Check for similar amount (within 20% tolerance)
+            amount_tolerance = rec.amount * 0.2
+            rec_filters.append(Transaction.amount <= -(rec.amount - amount_tolerance))
+            rec_filters.append(Transaction.amount >= -(rec.amount + amount_tolerance))
+
+            matching_tx = db.query(Transaction).filter(and_(*rec_filters)).first()
+            paid_this_month = matching_tx is not None
+
+        # Convert recurring amount to base currency using latest rates
+        latest_rates = get_latest_rates(db)
+        rec_rate = latest_rates.get(rec.currency, 1.0)
+        base_rate = latest_rates.get(base_currency, 1.0)
+        converted_amount = rec.amount * (base_rate / rec_rate)
+
+        # Only add to committed if expense applies this month AND not paid
+        if applies_this_month and not paid_this_month:
+            committed += converted_amount
+
+        recurring_with_status.append({
+            "id": rec.id,
+            "name": rec.name,
+            "payee_id": rec.payee_id,
+            "payee_name": rec.payee.name if rec.payee else None,
+            "category_id": rec.category_id,
+            "category_name": rec.category.name if rec.category else None,
+            "amount": rec.amount,
+            "converted_amount": round(converted_amount, 2),
+            "currency": rec.currency,
+            "day_of_month": rec.day_of_month,
+            "frequency": rec.frequency or "monthly",
+            "start_month": rec.start_month,
+            "is_active": rec.is_active,
+            "paid_this_month": paid_this_month,
+            "applies_this_month": applies_this_month
+        })
+
+    # Get planned expenses for this month
+    planned_list = db.query(PlannedExpense).filter(PlannedExpense.year_month == year_month).all()
+    planned_with_status = []
+
+    for plan in planned_list:
+        # Convert to base currency
+        latest_rates = get_latest_rates(db)
+        plan_rate = latest_rates.get(plan.currency, 1.0)
+        base_rate = latest_rates.get(base_currency, 1.0)
+        converted_amount = plan.amount * (base_rate / plan_rate)
+
+        # Add to committed if not paid
+        if plan.is_paid == 0:
+            committed += converted_amount
+
+        planned_with_status.append({
+            "id": plan.id,
+            "name": plan.name,
+            "amount": plan.amount,
+            "converted_amount": round(converted_amount, 2),
+            "currency": plan.currency,
+            "category_id": plan.category_id,
+            "category_name": plan.category.name if plan.category else None,
+            "is_paid": plan.is_paid
+        })
+
+    # Calculate remaining and daily available
+    budget_amount = budget.amount if budget else 0
+    remaining = budget_amount - total_spent - committed
+
+    # Calculate days remaining in month
+    today = date.today()
+    if today.year == year and today.month == month:
+        days_remaining = (end_date - today).days + 1
+    elif today < start_date:
+        days_remaining = (end_date - start_date).days + 1
+    else:
+        days_remaining = 0
+
+    daily_available = remaining / days_remaining if days_remaining > 0 else 0
+
+    return {
+        "budget": {
+            "id": budget.id if budget else None,
+            "year_month": year_month,
+            "amount": budget_amount,
+            "currency": base_currency
+        },
+        "spent": round(total_spent, 2),
+        "committed": round(committed, 2),
+        "remaining": round(remaining, 2),
+        "percentage": round((total_spent / budget_amount * 100) if budget_amount > 0 else 0, 1),
+        "days_remaining": days_remaining,
+        "daily_available": round(daily_available, 2),
+        "recurring_expenses": recurring_with_status,
+        "planned_expenses": planned_with_status,
+        "categories": categories,
+        "base_currency": base_currency
+    }
+
+
+# ============================================
+# RECURRING EXPENSES ENDPOINTS
+# ============================================
+
+@app.get("/recurring")
+def get_recurring_expenses(
+    include_inactive: bool = False,
+    db: Session = Depends(get_db)
+):
+    """Get all recurring expenses."""
+    query = db.query(RecurringExpense)
+    if not include_inactive:
+        query = query.filter(RecurringExpense.is_active == 1)
+
+    recurring = query.order_by(RecurringExpense.amount.desc()).all()
+
+    result = []
+    for rec in recurring:
+        result.append({
+            "id": rec.id,
+            "name": rec.name,
+            "payee_id": rec.payee_id,
+            "payee_name": rec.payee.name if rec.payee else None,
+            "category_id": rec.category_id,
+            "category_name": rec.category.name if rec.category else None,
+            "amount": rec.amount,
+            "currency": rec.currency,
+            "day_of_month": rec.day_of_month,
+            "frequency": rec.frequency or "monthly",
+            "start_month": rec.start_month,
+            "is_active": rec.is_active,
+            "created_at": rec.created_at,
+            "updated_at": rec.updated_at
+        })
+
+    return result
+
+
+@app.get("/recurring/detect")
+def detect_recurring_expenses(
+    min_occurrences: int = 3,
+    max_variance: float = 0.3,
+    months_to_look_back: int = 6,
+    db: Session = Depends(get_db)
+):
+    """
+    Detect potential recurring expenses from transaction history.
+    Looks for payees that appear in multiple recent months with consistent amounts.
+    Only considers transactions from the last N months and requires recent activity.
+    """
+    # Calculate date range - only look at recent transactions
+    today = date.today()
+    cutoff_date = today - timedelta(days=months_to_look_back * 31)
+
+    # Recent months for checking if expense is still active (last 2 months)
+    current_month = (today.year, today.month)
+    prev_month = (today.year, today.month - 1) if today.month > 1 else (today.year - 1, 12)
+    recent_months = {current_month, prev_month}
+
+    # Get all existing recurring expense payee IDs to exclude
+    existing_payee_ids = set(
+        r.payee_id for r in db.query(RecurringExpense.payee_id)
+        .filter(RecurringExpense.payee_id != None)
+        .all()
+    )
+
+    # Get transfer location IDs to exclude
+    transfer_ids = [
+        r.id for r in db.query(Location.id)
+        .filter(Location.name.in_(["Transfer In", "Transfer Out"]))
+        .all()
+    ]
+
+    # Get transactions from recent months only
+    filters = [
+        Transaction.payee_id != None,
+        Transaction.amount < 0,  # Only expenses
+        Transaction.date >= datetime.combine(cutoff_date, time.min)
+    ]
+    if transfer_ids:
+        filters.append(~Transaction.location_id.in_(transfer_ids))
+
+    transactions = db.query(Transaction).filter(and_(*filters)).all()
+
+    # Group by payee
+    payee_transactions = {}
+    for tx in transactions:
+        if tx.payee_id not in payee_transactions:
+            payee_transactions[tx.payee_id] = []
+        payee_transactions[tx.payee_id].append(tx)
+
+    candidates = []
+
+    for payee_id, txs in payee_transactions.items():
+        # Skip if already in recurring expenses
+        if payee_id in existing_payee_ids:
+            continue
+
+        # Get unique months and track data
+        months = set()
+        amounts = []
+        days = []
+        categories = {}
+
+        for tx in txs:
+            tx_date = tx.date.date() if isinstance(tx.date, datetime) else tx.date
+            month_tuple = (tx_date.year, tx_date.month)
+            months.add(month_tuple)
+            amounts.append(abs(tx.amount))
+            days.append(tx_date.day)
+
+            cat_id = tx.category_id
+            if cat_id:
+                categories[cat_id] = categories.get(cat_id, 0) + 1
+
+        # Check if appears in enough months
+        if len(months) < min_occurrences:
+            continue
+
+        # IMPORTANT: Check if there's at least one transaction in recent months
+        # This ensures we don't detect old recurring expenses that stopped
+        has_recent_activity = bool(months & recent_months)
+        if not has_recent_activity:
+            continue
+
+        # Check amount consistency (variance)
+        avg_amount = sum(amounts) / len(amounts)
+        max_diff = max(abs(a - avg_amount) for a in amounts)
+        variance = max_diff / avg_amount if avg_amount > 0 else 1
+
+        if variance > max_variance:
+            continue
+
+        # Get most common category
+        most_common_cat_id = max(categories.keys(), key=lambda k: categories[k]) if categories else None
+        most_common_cat = db.query(Category).filter(Category.id == most_common_cat_id).first() if most_common_cat_id else None
+
+        # Get payee info
+        payee = db.query(Payee).filter(Payee.id == payee_id).first()
+
+        # Calculate average day of month
+        avg_day = round(sum(days) / len(days))
+
+        candidates.append({
+            "payee_id": payee_id,
+            "payee_name": payee.name if payee else "Unknown",
+            "suggested_name": payee.name if payee else "Unknown",
+            "average_amount": round(avg_amount, 2),
+            "currency": txs[0].currency if txs else "GBP",
+            "occurrences": len(months),
+            "average_day": avg_day,
+            "category_id": most_common_cat_id,
+            "category_name": most_common_cat.name if most_common_cat else None,
+            "variance_percent": round(variance * 100, 1)
+        })
+
+    # ============================================
+    # PART 2: Detect recurring TRANSFERS (debt payments)
+    # ============================================
+
+    # Get Transfer Out location ID
+    transfer_out_loc = db.query(Location).filter(Location.name == "Transfer Out").first()
+    transfer_in_loc = db.query(Location).filter(Location.name == "Transfer In").first()
+
+    if transfer_out_loc and transfer_in_loc:
+        # Get all Transfer Out transactions from recent months
+        transfer_filters = [
+            Transaction.location_id == transfer_out_loc.id,
+            Transaction.amount < 0,
+            Transaction.date >= datetime.combine(cutoff_date, time.min)
+        ]
+        transfer_outs = db.query(Transaction).filter(and_(*transfer_filters)).all()
+
+        # For each transfer out, find the matching transfer in to get destination account
+        transfers_by_dest = {}  # destination_account_id -> list of (amount, date, from_account_id)
+
+        for tx_out in transfer_outs:
+            tx_date = tx_out.date.date() if isinstance(tx_out.date, datetime) else tx_out.date
+
+            # Find matching Transfer In on the same day with similar amount
+            matching_in = db.query(Transaction).filter(
+                Transaction.location_id == transfer_in_loc.id,
+                Transaction.amount > 0,
+                func.date(Transaction.date) == tx_date,
+                Transaction.amount >= abs(tx_out.amount) * 0.99,
+                Transaction.amount <= abs(tx_out.amount) * 1.01
+            ).first()
+
+            if matching_in:
+                dest_account_id = matching_in.account_id
+                if dest_account_id not in transfers_by_dest:
+                    transfers_by_dest[dest_account_id] = []
+                transfers_by_dest[dest_account_id].append({
+                    "amount": abs(tx_out.amount),
+                    "date": tx_date,
+                    "from_account_id": tx_out.account_id,
+                    "currency": tx_out.currency
+                })
+
+        # Analyze each destination account for recurring patterns
+        for dest_account_id, transfers in transfers_by_dest.items():
+            dest_account = db.query(Account).filter(Account.id == dest_account_id).first()
+            if not dest_account:
+                continue
+
+            # Get unique months
+            months = set()
+            amounts = []
+            days = []
+
+            for t in transfers:
+                month_tuple = (t["date"].year, t["date"].month)
+                months.add(month_tuple)
+                amounts.append(t["amount"])
+                days.append(t["date"].day)
+
+            # Check minimum occurrences
+            if len(months) < min_occurrences:
+                continue
+
+            # Check recent activity
+            has_recent_activity = bool(months & recent_months)
+            if not has_recent_activity:
+                continue
+
+            # Check amount consistency
+            avg_amount = sum(amounts) / len(amounts)
+            max_diff = max(abs(a - avg_amount) for a in amounts)
+            variance = max_diff / avg_amount if avg_amount > 0 else 1
+
+            if variance > max_variance:
+                continue
+
+            # Calculate average day
+            avg_day = round(sum(days) / len(days))
+
+            # Use the most common currency
+            currency = transfers[0]["currency"] if transfers else "GBP"
+
+            candidates.append({
+                "payee_id": None,  # No payee for transfers
+                "payee_name": f"Transfer to {dest_account.name}",
+                "suggested_name": dest_account.name,
+                "average_amount": round(avg_amount, 2),
+                "currency": currency,
+                "occurrences": len(months),
+                "average_day": avg_day,
+                "category_id": None,
+                "category_name": "Transfer / Debt Payment",
+                "variance_percent": round(variance * 100, 1),
+                "is_transfer": True,
+                "destination_account_id": dest_account_id,
+                "destination_account_name": dest_account.name
+            })
+
+    # Sort by occurrences (most frequent first)
+    candidates.sort(key=lambda x: (-x["occurrences"], -x["average_amount"]))
+
+    return candidates
+
+
+@app.post("/recurring")
+def create_recurring_expense(
+    data: schemas.RecurringExpenseCreate,
+    db: Session = Depends(get_db)
+):
+    """Create a new recurring expense."""
+    new_recurring = RecurringExpense(
+        name=data.name,
+        payee_id=data.payee_id,
+        category_id=data.category_id,
+        amount=data.amount,
+        currency=data.currency,
+        day_of_month=data.day_of_month,
+        frequency=data.frequency or "monthly",
+        start_month=data.start_month,
+        is_active=1
+    )
+    db.add(new_recurring)
+    db.commit()
+    db.refresh(new_recurring)
+
+    return {
+        "id": new_recurring.id,
+        "name": new_recurring.name,
+        "payee_id": new_recurring.payee_id,
+        "payee_name": new_recurring.payee.name if new_recurring.payee else None,
+        "category_id": new_recurring.category_id,
+        "category_name": new_recurring.category.name if new_recurring.category else None,
+        "amount": new_recurring.amount,
+        "currency": new_recurring.currency,
+        "day_of_month": new_recurring.day_of_month,
+        "frequency": new_recurring.frequency,
+        "start_month": new_recurring.start_month,
+        "is_active": new_recurring.is_active
+    }
+
+
+@app.put("/recurring/{recurring_id}")
+def update_recurring_expense(
+    recurring_id: int,
+    data: schemas.RecurringExpenseCreate,
+    db: Session = Depends(get_db)
+):
+    """Update a recurring expense."""
+    recurring = db.query(RecurringExpense).filter(RecurringExpense.id == recurring_id).first()
+    if not recurring:
+        raise HTTPException(status_code=404, detail="Recurring expense not found")
+
+    recurring.name = data.name
+    recurring.payee_id = data.payee_id
+    recurring.category_id = data.category_id
+    recurring.amount = data.amount
+    recurring.currency = data.currency
+    recurring.day_of_month = data.day_of_month
+    recurring.frequency = data.frequency or "monthly"
+    recurring.start_month = data.start_month
+
+    db.commit()
+    db.refresh(recurring)
+
+    return {
+        "id": recurring.id,
+        "name": recurring.name,
+        "payee_id": recurring.payee_id,
+        "payee_name": recurring.payee.name if recurring.payee else None,
+        "category_id": recurring.category_id,
+        "category_name": recurring.category.name if recurring.category else None,
+        "amount": recurring.amount,
+        "currency": recurring.currency,
+        "day_of_month": recurring.day_of_month,
+        "frequency": recurring.frequency,
+        "start_month": recurring.start_month,
+        "is_active": recurring.is_active
+    }
+
+
+@app.delete("/recurring/{recurring_id}")
+def delete_recurring_expense(
+    recurring_id: int,
+    db: Session = Depends(get_db)
+):
+    """Delete a recurring expense."""
+    recurring = db.query(RecurringExpense).filter(RecurringExpense.id == recurring_id).first()
+    if not recurring:
+        raise HTTPException(status_code=404, detail="Recurring expense not found")
+
+    db.delete(recurring)
+    db.commit()
+    return {"message": "Recurring expense deleted successfully"}
+
+
+@app.patch("/recurring/{recurring_id}/toggle")
+def toggle_recurring_expense(
+    recurring_id: int,
+    db: Session = Depends(get_db)
+):
+    """Toggle active/inactive status of a recurring expense."""
+    recurring = db.query(RecurringExpense).filter(RecurringExpense.id == recurring_id).first()
+    if not recurring:
+        raise HTTPException(status_code=404, detail="Recurring expense not found")
+
+    recurring.is_active = 0 if recurring.is_active == 1 else 1
+    db.commit()
+    db.refresh(recurring)
+
+    return {
+        "id": recurring.id,
+        "name": recurring.name,
+        "is_active": recurring.is_active
+    }
+
+
+# ============================================
+# PLANNED EXPENSES ENDPOINTS
+# ============================================
+
+@app.get("/planned/{year_month}")
+def get_planned_expenses(
+    year_month: str,
+    db: Session = Depends(get_db)
+):
+    """Get all planned expenses for a specific month."""
+    planned = db.query(PlannedExpense).filter(
+        PlannedExpense.year_month == year_month
+    ).order_by(PlannedExpense.amount.desc()).all()
+
+    result = []
+    for p in planned:
+        result.append({
+            "id": p.id,
+            "year_month": p.year_month,
+            "name": p.name,
+            "amount": p.amount,
+            "currency": p.currency,
+            "category_id": p.category_id,
+            "category_name": p.category.name if p.category else None,
+            "is_paid": p.is_paid,
+            "created_at": p.created_at,
+            "updated_at": p.updated_at
+        })
+
+    return result
+
+
+@app.post("/planned")
+def create_planned_expense(
+    data: schemas.PlannedExpenseCreate,
+    db: Session = Depends(get_db)
+):
+    """Create a new planned expense for a specific month."""
+    new_planned = PlannedExpense(
+        year_month=data.year_month,
+        name=data.name,
+        amount=data.amount,
+        currency=data.currency,
+        category_id=data.category_id,
+        is_paid=0
+    )
+    db.add(new_planned)
+    db.commit()
+    db.refresh(new_planned)
+
+    return {
+        "id": new_planned.id,
+        "year_month": new_planned.year_month,
+        "name": new_planned.name,
+        "amount": new_planned.amount,
+        "currency": new_planned.currency,
+        "category_id": new_planned.category_id,
+        "category_name": new_planned.category.name if new_planned.category else None,
+        "is_paid": new_planned.is_paid
+    }
+
+
+@app.put("/planned/{planned_id}")
+def update_planned_expense(
+    planned_id: int,
+    data: schemas.PlannedExpenseCreate,
+    db: Session = Depends(get_db)
+):
+    """Update a planned expense."""
+    planned = db.query(PlannedExpense).filter(PlannedExpense.id == planned_id).first()
+    if not planned:
+        raise HTTPException(status_code=404, detail="Planned expense not found")
+
+    planned.name = data.name
+    planned.amount = data.amount
+    planned.currency = data.currency
+    planned.category_id = data.category_id
+
+    db.commit()
+    db.refresh(planned)
+
+    return {
+        "id": planned.id,
+        "year_month": planned.year_month,
+        "name": planned.name,
+        "amount": planned.amount,
+        "currency": planned.currency,
+        "category_id": planned.category_id,
+        "category_name": planned.category.name if planned.category else None,
+        "is_paid": planned.is_paid
+    }
+
+
+@app.delete("/planned/{planned_id}")
+def delete_planned_expense(
+    planned_id: int,
+    db: Session = Depends(get_db)
+):
+    """Delete a planned expense."""
+    planned = db.query(PlannedExpense).filter(PlannedExpense.id == planned_id).first()
+    if not planned:
+        raise HTTPException(status_code=404, detail="Planned expense not found")
+
+    db.delete(planned)
+    db.commit()
+    return {"message": "Planned expense deleted successfully"}
+
+
+@app.patch("/planned/{planned_id}/toggle-paid")
+def toggle_planned_expense_paid(
+    planned_id: int,
+    db: Session = Depends(get_db)
+):
+    """Toggle paid/unpaid status of a planned expense."""
+    planned = db.query(PlannedExpense).filter(PlannedExpense.id == planned_id).first()
+    if not planned:
+        raise HTTPException(status_code=404, detail="Planned expense not found")
+
+    planned.is_paid = 0 if planned.is_paid == 1 else 1
+    db.commit()
+    db.refresh(planned)
+
+    return {
+        "id": planned.id,
+        "name": planned.name,
+        "is_paid": planned.is_paid
+    }

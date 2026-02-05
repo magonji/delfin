@@ -134,10 +134,60 @@ class ExchangeRate(Base):
     rate = Column(Float, nullable=False)
     date = Column(DateTime, nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
-    
+
     __table_args__ = (
         Index('idx_exchange_rate_currency_date', 'currency', 'date'),
     )
+
+
+class Budget(Base):
+    """Monthly budget targets."""
+    __tablename__ = "budgets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    year_month = Column(String, unique=True, nullable=False, index=True)  # Format: "2025-01"
+    amount = Column(Float, nullable=False)
+    currency = Column(String, default="GBP")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class RecurringExpense(Base):
+    """Recurring expenses (subscriptions, rent, etc.) with variable frequencies."""
+    __tablename__ = "recurring_expenses"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False, index=True)
+    payee_id = Column(Integer, ForeignKey("payees.id"), nullable=True, index=True)
+    category_id = Column(Integer, ForeignKey("categories.id"), nullable=True, index=True)
+    amount = Column(Float, nullable=False)
+    currency = Column(String, default="GBP")
+    day_of_month = Column(Integer, nullable=True)  # Approximate day (1-31)
+    frequency = Column(String, default="monthly")  # monthly, quarterly, biannual, annual
+    start_month = Column(Integer, nullable=True)  # Month when it's charged (1-12), for non-monthly
+    is_active = Column(Integer, default=1, index=True)  # 1=active, 0=inactive
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    payee = relationship("Payee")
+    category = relationship("Category")
+
+
+class PlannedExpense(Base):
+    """One-time planned expenses for a specific month."""
+    __tablename__ = "planned_expenses"
+
+    id = Column(Integer, primary_key=True, index=True)
+    year_month = Column(String, nullable=False, index=True)  # Format: "2025-01"
+    name = Column(String, nullable=False)
+    amount = Column(Float, nullable=False)
+    currency = Column(String, default="GBP")
+    category_id = Column(Integer, ForeignKey("categories.id"), nullable=True, index=True)
+    is_paid = Column(Integer, default=0, index=True)  # 0=pending, 1=paid
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    category = relationship("Category")
 
 
 # --- Event listeners to round monetary amounts before saving ---
@@ -170,3 +220,27 @@ def round_exchange_rate(mapper, connection, target):
     """Round exchange rates to 6 decimal places."""
     if target.rate is not None:
         target.rate = round(target.rate, 6)
+
+
+@event.listens_for(Budget, 'before_insert')
+@event.listens_for(Budget, 'before_update')
+def round_budget_amount(mapper, connection, target):
+    """Round budget amount to 2 decimal places."""
+    if target.amount is not None:
+        target.amount = round(target.amount, 2)
+
+
+@event.listens_for(RecurringExpense, 'before_insert')
+@event.listens_for(RecurringExpense, 'before_update')
+def round_recurring_amount(mapper, connection, target):
+    """Round recurring expense amount to 2 decimal places."""
+    if target.amount is not None:
+        target.amount = round(target.amount, 2)
+
+
+@event.listens_for(PlannedExpense, 'before_insert')
+@event.listens_for(PlannedExpense, 'before_update')
+def round_planned_amount(mapper, connection, target):
+    """Round planned expense amount to 2 decimal places."""
+    if target.amount is not None:
+        target.amount = round(target.amount, 2)
