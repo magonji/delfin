@@ -413,7 +413,6 @@
     <div id="payeesModal" class="modal">
         <div class="modal-content">
             <div class="modal-header"><h3>Manage Payees</h3><button class="close-btn" onclick="closeModal('payeesModal')">&times;</button></div>
-            <div style="padding: 10px 25px;"><button onclick="updateAllPayeeStatistics(event)" style="width: 100%;">📊 Update All Payee Statistics</button></div>
             <div class="search-box"><input type="text" id="payeeSearch" placeholder="Search payees..." onkeyup="filterPayees()"></div>
             <div class="item-list" id="payeesList"></div>
         </div>
@@ -1989,92 +1988,6 @@
                 
             } catch (error) {
                 console.error('Error auto-filling from payee statistics:', error);
-            }
-        }
-
-        // Recalculate statistics for all payees
-        async function updateAllPayeeStatistics(event) {
-            console.log('updateAllPayeeStatistics called');
-            
-            const confirmed = await customConfirm(
-                'This will recalculate the most common category, location, and project for all payees based on their transaction history. Continue?',
-                'Recalculate Payee Statistics',
-                'Recalculate'
-            );
-            if (!confirmed) return;
-            
-            console.log('User confirmed, proceeding...');
-            
-            const statusDiv = document.createElement('div');
-            statusDiv.style.cssText = 'background: #e3f2fd; color: #1976d2; padding: 15px; border-radius: 8px; margin: 15px 0;';
-            statusDiv.innerHTML = '⏳ Updating payee statistics...';
-            
-            // Find the modal content using the event (works even if modal selector fails)
-            let modalContent = null;
-            if (event && event.target) {
-                modalContent = event.target.closest('.modal-content');
-                console.log('Found modal via event.target.closest');
-            }
-            
-            // Fallback to querySelector
-            if (!modalContent) {
-                modalContent = document.querySelector('#payeesModal .modal-content');
-                console.log('Found modal via querySelector');
-            }
-            
-            if (!modalContent) {
-                console.error('Modal content not found!');
-                alert('Error: Modal not found. Please report this bug.');
-                return;
-            }
-            
-            console.log('Modal found, inserting status div');
-            
-            // Insert after modal header
-            const modalHeader = modalContent.querySelector('.modal-header');
-            if (modalHeader && modalHeader.nextSibling) {
-                modalContent.insertBefore(statusDiv, modalHeader.nextSibling);
-            } else {
-                modalContent.insertBefore(statusDiv, modalContent.firstChild);
-            }
-            
-            try {
-                console.log('Calling API endpoint:', `${API_URL}/payees/recalculate-all-stats`);
-                
-                const response = await fetch(`${API_URL}/payees/recalculate-all-stats`, {
-                    method: 'POST'
-                });
-                
-                console.log('API response status:', response.status);
-                
-                if (!response.ok) {
-                    throw new Error('Failed to update statistics');
-                }
-                
-                const result = await response.json();
-                console.log('API result:', result);
-                
-                statusDiv.style.background = '#d1f2eb';
-                statusDiv.style.color = '#0f5132';
-                statusDiv.innerHTML = `✅ Statistics updated successfully!<br><small>Updated ${result.updated} of ${result.total_payees} payees</small>`;
-                
-                showSuccess(`Updated statistics for ${result.updated} payees`);
-                
-                // Refresh payees list by reloading from API
-                const payeesResponse = await fetch(`${API_URL}/payees`);
-                allPayees = await payeesResponse.json();
-                console.log('Reloaded payees:', allPayees.length);
-                
-                setTimeout(() => {
-                    statusDiv.remove();
-                }, 3000);
-                
-            } catch (error) {
-                console.error('Error updating payee statistics:', error);
-                statusDiv.style.background = '#f8d7da';
-                statusDiv.style.color = '#842029';
-                statusDiv.innerHTML = '❌ Failed to update statistics. Please try again.';
-                showError('Failed to update statistics: ' + error.message);
             }
         }
 

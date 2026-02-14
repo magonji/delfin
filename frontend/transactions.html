@@ -1085,18 +1085,21 @@
                 const balanceResponse = await fetch(`${API_URL}/admin/initialise-balances`, {
                     method: 'POST'
                 });
-                
+
                 if (!balanceResponse.ok) {
                     throw new Error('Failed to recalculate balances');
                 }
-                
+
+                btnRefresh.textContent = '⏳ Updating payee statistics...';
+                await fetch(`${API_URL}/payees/recalculate-all-stats`, { method: 'POST' });
+
                 btnRefresh.textContent = '⏳ Refreshing display...';
-                await loadRecentTransactions(true); 
-                
+                await loadRecentTransactions(true);
+
                 btnRefresh.textContent = originalText;
                 btnRefresh.disabled = false;
-                
-                alert(`Success! Recalculated all balances.`);
+
+                alert(`Success! Recalculated all balances and payee statistics.`);
             } catch (error) {
                 console.error('Error during refresh:', error);
                 alert('Error refreshing data: ' + error.message);
