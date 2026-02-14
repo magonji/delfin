@@ -93,13 +93,24 @@
 
         .recurring-summary { display: flex; justify-content: space-between; padding: 10px; background: var(--panel); border-radius: 8px; margin-top: 10px; font-size: 13px; }
 
-        /* Category spending */
-        .category-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--panel); }
-        .category-item:last-child { border-bottom: none; }
-        .category-item .name { flex: 1; font-weight: 500; }
-        .category-item .bar-container { width: 100px; height: 8px; background: var(--panel); border-radius: 4px; overflow: hidden; }
-        .category-item .bar { height: 100%; background: var(--red); border-radius: 4px; }
-        .category-item .amount { min-width: 80px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+        /* Other expenses */
+        .week-group { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; overflow: hidden; }
+        .week-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; cursor: pointer; user-select: none; background: var(--panel); }
+        .week-header:hover { opacity: 0.85; }
+        .week-header .week-label { font-weight: 600; font-size: 13px; }
+        .week-header .week-total { font-weight: 700; font-variant-numeric: tabular-nums; font-size: 13px; }
+        .week-header .chevron { font-size: 12px; color: var(--muted); transition: transform 0.2s; margin-right: 6px; }
+        .week-group.collapsed .chevron { transform: rotate(-90deg); }
+        .week-group.collapsed .week-body { display: none; }
+        .week-body { padding: 4px 12px; }
+        .expense-item { display: flex; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--panel); gap: 10px; }
+        .expense-item:last-child { border-bottom: none; }
+        .expense-item .date { font-size: 12px; color: var(--muted); min-width: 42px; }
+        .expense-item .info { flex: 1; min-width: 0; }
+        .expense-item .name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .expense-item .category { font-size: 12px; color: var(--muted); }
+        .expense-item .amount { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .other-summary { display: flex; justify-content: space-between; padding: 10px; background: var(--panel); border-radius: 8px; margin-top: 10px; font-size: 13px; }
 
         /* History */
         .history-item { display: flex; align-items: center; justify-content: space-between; padding: 10px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; }
@@ -149,6 +160,14 @@
         .empty-state { text-align: center; padding: 30px; color: var(--muted); }
 
         .muted { color: var(--muted); }
+
+        /* Help icon & info modal */
+        .help-icon { color: var(--muted); font-size: 16px; cursor: pointer; }
+        .help-icon:hover { color: var(--text); }
+        .info-section { margin-bottom: 16px; }
+        .info-section strong { display: block; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+        .info-row { padding: 5px 0; font-size: 13px; line-height: 1.5; }
+        .info-row .symbol { display: inline-block; width: 22px; text-align: center; margin-right: 4px; }
         .footer { opacity: 0.7; font-size: 12px; text-align: center; margin: 24px 10px; padding-bottom: 10px; font-family: 'Playfair Display', serif; }
     </style>
 </head>
@@ -156,6 +175,7 @@
     <header>
         <h1>🐬 Delfin · The Budget</h1>
         <div class="tools">
+            <span class="help-icon" onclick="openModal('infoModal')" title="How this page works">ⓘ</span>
             <div class="dropdown" id="navDropdown">
                 <button class="btn" id="navBtn" onclick="toggleNav()">📂 Menu ▾</button>
                 <div class="menu" id="navMenu">
@@ -236,23 +256,27 @@
                     </div>
                 </div>
                 <div class="content">
-                    <div id="recurringList"></div>
-                    <div class="recurring-summary" id="recurringSummary" style="display: none;">
+                    <div class="recurring-summary" id="recurringSummary" style="display: none; margin-bottom: 10px;">
                         <span>Total: <strong id="recurringTotal">-</strong></span>
                         <span>Paid: <strong id="recurringPaid">-</strong></span>
                         <span>Pending: <strong id="recurringPending">-</strong></span>
                     </div>
+                    <div id="recurringList"></div>
                     <button class="btn btn-secondary" style="width: 100%; margin-top: 10px;" onclick="openDetectModal()">🔍 Detect from history</button>
                 </div>
             </div>
 
-            <!-- Spending by Category Card -->
+            <!-- Other Expenses Card -->
             <div class="card">
                 <div class="head">
-                    <h2 class="title">Spending by Category</h2>
+                    <h2 class="title">Other Expenses</h2>
                 </div>
                 <div class="content">
-                    <div id="categoryList"></div>
+                    <div id="otherSummary" class="other-summary" style="display:none; margin-bottom: 10px;">
+                        <span><strong id="otherCount">0</strong> expenses</span>
+                        <span>Total: <strong id="otherTotal">-</strong></span>
+                    </div>
+                    <div id="otherExpensesList"></div>
                 </div>
             </div>
         </div>
@@ -289,6 +313,47 @@
     </div>
 
     <div class="footer">Delfin · Budget Tracker</div>
+
+    <!-- Info Modal -->
+    <div id="infoModal" class="modal">
+        <div class="modal-content" style="max-width: 460px;">
+            <div class="modal-header">
+                <h3>How the Budget works</h3>
+                <button class="modal-close" onclick="closeModal('infoModal')">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 20px 25px;">
+                <div class="info-section">
+                    <strong>Overview</strong>
+                    <div class="info-row">Set a monthly budget and track your spending against it. The progress bar shows how much of your budget you've used.</div>
+                </div>
+                <div class="info-section">
+                    <strong>Key figures</strong>
+                    <div class="info-row"><b>Spent</b> — Total from actual transactions this month (excluding transfers).</div>
+                    <div class="info-row"><b>Committed</b> — Recurring and planned expenses still pending payment.</div>
+                    <div class="info-row"><b>Available</b> — Budget minus spent minus committed.</div>
+                </div>
+                <div class="info-section">
+                    <strong>Recurring expenses</strong>
+                    <div class="info-row">Recurring expenses are automatically detected as paid when a matching transaction is found (same payee, similar amount).</div>
+                    <div class="info-row" style="margin-top: 6px;">
+                        <span class="symbol">✓</span> Paid — matching transaction found<br>
+                        <span class="symbol">○</span> Pending — not yet paid, counts as committed<br>
+                        <span class="symbol">✕</span> Skipped — manually marked as "won't pay this month"<br>
+                        <span class="symbol">—</span> N/A — doesn't apply this month (quarterly, annual, etc.)
+                    </div>
+                    <div class="info-row" style="margin-top: 6px;">Click <b>○</b> to skip an expense this month (removes it from committed). Click <b>✕</b> to undo.</div>
+                </div>
+                <div class="info-section">
+                    <strong>Planned expenses</strong>
+                    <div class="info-row">One-time expenses expected this month. Click the status icon to toggle between paid and pending.</div>
+                </div>
+                <div class="info-section">
+                    <strong>Other expenses</strong>
+                    <div class="info-row">All transactions this month that didn't match a recurring expense, grouped by week.</div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Budget Edit Modal -->
     <div id="budgetModal" class="modal">
@@ -546,7 +611,7 @@
                 renderBudgetProgress(data);
                 renderRecurringList(data.recurring_expenses);
                 renderPlannedList(data.planned_expenses);
-                renderCategoryList(data.categories);
+                renderOtherExpenses(data.other_expenses);
             } catch (e) {
                 console.error('Error loading progress:', e);
                 // Show empty state
@@ -559,7 +624,7 @@
                 q('#daysInfo').textContent = 'Set a budget to track your spending';
                 q('#recurringList').innerHTML = '<div class="empty-state">No recurring expenses</div>';
                 q('#plannedList').innerHTML = '<div class="empty-state">No planned expenses</div>';
-                q('#categoryList').innerHTML = '<div class="empty-state">No spending data</div>';
+                q('#otherExpensesList').innerHTML = '<div class="empty-state">No spending data</div>';
             }
         }
 
@@ -650,9 +715,15 @@
                 const catText = r.category_name || 'No category';
                 const subtitle = freqLabel ? `${catText} · ${freqLabel}` : catText;
 
+                // ✓ = paid (auto-detected), ○ = pending, ✕ = skipped by user, — = not applicable
+                const statusIcon = r.paid_this_month ? '✓' : r.skipped_this_month ? '✕' : r.applies_this_month ? '○' : '—';
+                const itemClass = r.paid_this_month ? 'paid' : r.skipped_this_month ? 'not-applicable' : !r.applies_this_month ? 'not-applicable' : '';
+                // Toggle skip: only on pending (○) and skipped (✕), not on paid (✓) or n/a (—)
+                const canToggle = r.applies_this_month && !r.paid_this_month;
+                const clickAttr = canToggle ? `onclick="event.stopPropagation(); toggleRecurringSkip(${r.id})" style="cursor:pointer"` : '';
                 return `
-                    <div class="recurring-item ${r.paid_this_month ? 'paid' : ''}${!r.applies_this_month ? ' not-applicable' : ''}" onclick="editRecurring(${r.id})">
-                        <span class="status">${r.paid_this_month ? '✓' : (r.applies_this_month ? '○' : '—')}</span>
+                    <div class="recurring-item ${itemClass}" onclick="editRecurring(${r.id})">
+                        <span class="status" ${clickAttr}>${statusIcon}</span>
                         <div class="info">
                             <div class="name">${r.name}</div>
                             <div class="category">${subtitle}</div>
@@ -667,6 +738,15 @@
             q('#recurringTotal').textContent = fmtMoney(totalAmount, state.baseCurrency);
             q('#recurringPaid').textContent = fmtMoney(paidAmount, state.baseCurrency);
             q('#recurringPending').textContent = fmtMoney(totalAmount - paidAmount, state.baseCurrency);
+        }
+
+        async function toggleRecurringSkip(id) {
+            try {
+                await api(`/recurring/${id}/toggle-paid/${state.currentMonth}`, { method: 'PATCH' });
+                await loadBudgetProgress();
+            } catch (e) {
+                console.error('Error toggling recurring skip:', e);
+            }
         }
 
         function renderPlannedList(planned) {
@@ -708,30 +788,83 @@
             q('#plannedPending').textContent = fmtMoney(totalAmount - paidAmount, state.baseCurrency);
         }
 
-        function renderCategoryList(categories) {
-            const list = q('#categoryList');
+        function renderOtherExpenses(expenses) {
+            const list = q('#otherExpensesList');
 
-            if (!categories || categories.length === 0) {
-                list.innerHTML = '<div class="empty-state">No spending data for this month</div>';
+            if (!expenses || expenses.length === 0) {
+                list.innerHTML = '<div class="empty-state">No other expenses this month</div>';
+                q('#otherSummary').style.display = 'none';
                 return;
             }
 
-            const maxAmount = Math.max(...categories.map(c => c.amount));
-            const total = categories.reduce((sum, c) => sum + c.amount, 0);
+            const fmtDate = d => {
+                const dt = new Date(d + 'T00:00:00');
+                return dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+            };
 
-            list.innerHTML = categories.slice(0, 10).map(c => {
-                const pct = (c.amount / maxAmount * 100).toFixed(0);
-                const totalPct = (c.amount / total * 100).toFixed(1);
+            // Group expenses by ISO week
+            const weeks = {};
+            let total = 0;
+            for (const e of expenses) {
+                const dt = new Date(e.date + 'T00:00:00');
+                // Monday-based week: get the Monday of this week
+                const day = dt.getDay();
+                const monday = new Date(dt);
+                monday.setDate(dt.getDate() - ((day + 6) % 7));
+                const key = monday.toISOString().slice(0, 10);
+                if (!weeks[key]) weeks[key] = { monday, expenses: [], total: 0 };
+                const amount = e.converted_amount || e.amount;
+                weeks[key].expenses.push(e);
+                weeks[key].total += amount;
+                total += amount;
+            }
+
+            // Sort weeks descending (most recent first)
+            const sortedWeeks = Object.values(weeks).sort((a, b) => b.monday - a.monday);
+
+            // Determine which week is "current" (contains today)
+            const today = new Date();
+            const todayDay = today.getDay();
+            const currentMonday = new Date(today);
+            currentMonday.setDate(today.getDate() - ((todayDay + 6) % 7));
+            const currentWeekKey = currentMonday.toISOString().slice(0, 10);
+
+            list.innerHTML = sortedWeeks.map((week, i) => {
+                const weekKey = week.monday.toISOString().slice(0, 10);
+                const sunday = new Date(week.monday);
+                sunday.setDate(week.monday.getDate() + 6);
+                const label = `${fmtDate(weekKey)} – ${fmtDate(sunday.toISOString().slice(0, 10))}`;
+                const isCurrentWeek = weekKey === currentWeekKey;
+                const collapsed = !isCurrentWeek && i > 0 ? 'collapsed' : '';
+
+                const items = week.expenses.map(e => {
+                    const amount = e.converted_amount || e.amount;
+                    const elLabel = e.payee_name || e.note || 'Unknown';
+                    const subtitle = e.category_name || '';
+                    return `
+                        <div class="expense-item">
+                            <span class="date">${fmtDate(e.date)}</span>
+                            <div class="info">
+                                <div class="name">${elLabel}</div>
+                                ${subtitle ? `<div class="category">${subtitle}</div>` : ''}
+                            </div>
+                            <span class="amount">${fmtMoney(amount, state.baseCurrency)}</span>
+                        </div>`;
+                }).join('');
+
                 return `
-                    <div class="category-item">
-                        <span class="name">${c.name}</span>
-                        <div class="bar-container">
-                            <div class="bar" style="width: ${pct}%"></div>
+                    <div class="week-group ${collapsed}">
+                        <div class="week-header" onclick="this.parentElement.classList.toggle('collapsed')">
+                            <span><span class="chevron">▼</span><span class="week-label">${label}</span></span>
+                            <span class="week-total">${fmtMoney(week.total, state.baseCurrency)}</span>
                         </div>
-                        <span class="amount">${fmtMoney(c.amount, state.baseCurrency)} <span class="muted">(${totalPct}%)</span></span>
-                    </div>
-                `;
+                        <div class="week-body">${items}</div>
+                    </div>`;
             }).join('');
+
+            q('#otherSummary').style.display = 'flex';
+            q('#otherCount').textContent = expenses.length;
+            q('#otherTotal').textContent = fmtMoney(total, state.baseCurrency);
         }
 
         async function loadBudgetHistory() {
@@ -757,7 +890,7 @@
                 list.innerHTML = historyItems.map(h => {
                     const [y, mo] = h.year_month.split('-');
                     const label = new Date(y, mo - 1).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
-                    const pct = Math.min(h.percentage, 150);
+                    const barPct = Math.min(h.percentage, 100);
                     const barColor = h.percentage > 100 ? 'var(--red)' : h.percentage > 80 ? 'var(--yellow)' : 'var(--green)';
 
                     return `
@@ -767,7 +900,7 @@
                                 <div class="budget">${fmtMoney(h.amount, h.currency)}</div>
                             </div>
                             <div class="bar-container">
-                                <div class="bar" style="width: ${pct / 1.5}%; background: ${barColor}"></div>
+                                <div class="bar" style="width: ${barPct}%; background: ${barColor}"></div>
                             </div>
                             <span class="percent ${h.percentage > 100 ? 'over' : ''}">${Math.round(h.percentage)}%</span>
                         </div>

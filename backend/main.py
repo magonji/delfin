@@ -9,7 +9,7 @@ import shutil
 import os
 from backend.database import get_db, engine
 from backend import models, schemas
-from backend.models import Account, Category, Payee, Location, Project, Transaction, ExchangeRate, Budget, RecurringExpense, RecurringExpenseHistory, PlannedExpense
+from backend.models import Account, Category, Payee, Location, Project, Transaction, ExchangeRate, Budget, RecurringExpense, RecurringExpenseHistory, RecurringExpensePayment, PlannedExpense
 from backend.schemas import ExchangeRateResponse
 from backend.helpers import (
     recalculate_balances_from_transaction, 
@@ -3316,9 +3316,8 @@ def get_budget_progress(year_month: str, db: Session = Depends(get_db)):
     historical_rates = get_rates_bulk(db, currencies, start_date, end_date)
     base_currency = budget.currency if budget else "GBP"
 
-    # Calculate total spent and category breakdown
+    # Calculate total spent
     total_spent = 0
-    category_spending = {}
 
     for trans in transactions:
         trans_date = trans.date.date() if isinstance(trans.date, datetime) else trans.date
@@ -3329,15 +3328,6 @@ def get_budget_progress(year_month: str, db: Session = Depends(get_db)):
         converted = abs(trans.amount) * (base_rate / trans_rate)
 
         total_spent += converted
-
-        cat_name = trans.category.name if trans.category else "Uncategorised"
-        if cat_name not in category_spending:
-            category_spending[cat_name] = {"name": cat_name, "amount": 0, "count": 0}
-        category_spending[cat_name]["amount"] += converted
-        category_spending[cat_name]["count"] += 1
-
-    # Sort categories by amount
-    categories = sorted(category_spending.values(), key=lambda x: x["amount"], reverse=True)
 
     # Get income transactions for the month (positive amounts, excluding transfers)
     income_filters = [
@@ -3394,6 +3384,14 @@ def get_budget_progress(year_month: str, db: Session = Depends(get_db)):
     # Check which recurring expenses have been paid this month
     recurring_with_status = []
     committed = 0
+    matched_tx_ids = set()
+
+    # Load manually skipped recurring expenses for this month ("won't pay this month")
+    skipped_ids = set(
+        r.recurring_expense_id for r in db.query(RecurringExpensePayment.recurring_expense_id)
+        .filter(RecurringExpensePayment.year_month == year_month)
+        .all()
+    )
 
     # Helper function to get historical amount for a recurring expense at a given date
     def get_historical_amount(rec_id, target_date):
@@ -3405,48 +3403,55 @@ def get_budget_progress(year_month: str, db: Session = Depends(get_db)):
         return history
 
     for rec in recurring_list:
-        # Check if this expense applies to the current month based on frequency
         applies_this_month = expense_applies_to_month(rec, month)
 
-        # Get historical amount for this month (use end_date to find applicable amount)
+        # Get historical amount for this month
         history_record = get_historical_amount(rec.id, end_date)
         if history_record:
             effective_amount = history_record.amount
             effective_currency = history_record.currency
         else:
-            # No history record, use current amount (for existing data before history was implemented)
             effective_amount = rec.amount
             effective_currency = rec.currency
 
-        # Check if there's a matching transaction this month
+        skipped = rec.id in skipped_ids
         paid_this_month = False
-        if applies_this_month:
+        matching_tx = None
+
+        # Auto-detect payment from transactions (only if applicable and not skipped)
+        if applies_this_month and not skipped:
             rec_filters = [
                 Transaction.date >= datetime.combine(start_date, time.min),
                 Transaction.date <= datetime.combine(end_date, time.max),
             ]
-
-            # Match by payee if available
             if rec.payee_id:
                 rec_filters.append(Transaction.payee_id == rec.payee_id)
-
-            # Check for similar amount (within 20% tolerance) using effective amount
             amount_tolerance = effective_amount * 0.2
             rec_filters.append(Transaction.amount <= -(effective_amount - amount_tolerance))
             rec_filters.append(Transaction.amount >= -(effective_amount + amount_tolerance))
 
             matching_tx = db.query(Transaction).filter(and_(*rec_filters)).first()
-            paid_this_month = matching_tx is not None
+            if matching_tx:
+                paid_this_month = True
+                matched_tx_ids.add(matching_tx.id)
 
-        # Convert recurring amount to base currency using latest rates
+        # Convert recurring amount to base currency
         latest_rates = get_latest_rates(db)
         rec_rate = latest_rates.get(effective_currency, 1.0)
         base_rate = latest_rates.get(base_currency, 1.0)
         converted_amount = effective_amount * (base_rate / rec_rate)
 
-        # Only add to committed if expense applies this month AND not paid
-        if applies_this_month and not paid_this_month:
+        # Committed = applies this month, not paid, not skipped
+        if applies_this_month and not paid_this_month and not skipped:
             committed += converted_amount
+
+        # If paid via transfer, add to spent (transfers are excluded from general spent calc)
+        if paid_this_month and matching_tx and transfer_ids and matching_tx.location_id in transfer_ids:
+            tx_date = matching_tx.date.date() if isinstance(matching_tx.date, datetime) else matching_tx.date
+            rates_for_day = historical_rates.get(tx_date, {'GBP': 1.0})
+            tx_rate = rates_for_day.get(matching_tx.currency, 1.0)
+            base_r = rates_for_day.get(base_currency, 1.0)
+            total_spent += abs(matching_tx.amount) * (base_r / tx_rate)
 
         recurring_with_status.append({
             "id": rec.id,
@@ -3455,8 +3460,8 @@ def get_budget_progress(year_month: str, db: Session = Depends(get_db)):
             "payee_name": rec.payee.name if rec.payee else None,
             "category_id": rec.category_id,
             "category_name": rec.category.name if rec.category else None,
-            "amount": effective_amount,  # Historical amount for this month
-            "current_amount": rec.amount,  # Current configured amount
+            "amount": effective_amount,
+            "current_amount": rec.amount,
             "converted_amount": round(converted_amount, 2),
             "currency": effective_currency,
             "day_of_month": rec.day_of_month,
@@ -3464,8 +3469,31 @@ def get_budget_progress(year_month: str, db: Session = Depends(get_db)):
             "start_month": rec.start_month,
             "is_active": rec.is_active,
             "paid_this_month": paid_this_month,
+            "skipped_this_month": skipped,
             "applies_this_month": applies_this_month
         })
+
+    # Build list of other expenses (transactions not matched to recurring expenses)
+    other_expenses = []
+    for trans in transactions:
+        if trans.id in matched_tx_ids:
+            continue
+        trans_date = trans.date.date() if isinstance(trans.date, datetime) else trans.date
+        rates_for_day = historical_rates.get(trans_date, {'GBP': 1.0})
+        trans_rate = rates_for_day.get(trans.currency, 1.0)
+        base_r = rates_for_day.get(base_currency, 1.0)
+        converted = abs(trans.amount) * (base_r / trans_rate)
+        other_expenses.append({
+            "id": trans.id,
+            "date": trans_date.isoformat(),
+            "payee_name": trans.payee.name if trans.payee else None,
+            "note": trans.note,
+            "category_name": trans.category.name if trans.category else None,
+            "amount": abs(trans.amount),
+            "converted_amount": round(converted, 2),
+            "currency": trans.currency,
+        })
+    other_expenses.sort(key=lambda x: x["date"], reverse=True)
 
     # Get planned expenses for this month
     planned_list = db.query(PlannedExpense).filter(PlannedExpense.year_month == year_month).all()
@@ -3528,7 +3556,7 @@ def get_budget_progress(year_month: str, db: Session = Depends(get_db)):
         "savings": round(savings, 2),
         "recurring_expenses": recurring_with_status,
         "planned_expenses": planned_with_status,
-        "categories": categories,
+        "other_expenses": other_expenses,
         "base_currency": base_currency
     }
 
@@ -3937,6 +3965,35 @@ def toggle_recurring_expense(
         "name": recurring.name,
         "is_active": recurring.is_active
     }
+
+
+@app.patch("/recurring/{recurring_id}/toggle-paid/{year_month}")
+def toggle_recurring_paid(
+    recurring_id: int,
+    year_month: str,
+    db: Session = Depends(get_db)
+):
+    """Toggle skip status for a recurring expense in a given month (won't pay this month)."""
+    recurring = db.query(RecurringExpense).filter(RecurringExpense.id == recurring_id).first()
+    if not recurring:
+        raise HTTPException(status_code=404, detail="Recurring expense not found")
+
+    existing = db.query(RecurringExpensePayment).filter(
+        RecurringExpensePayment.recurring_expense_id == recurring_id,
+        RecurringExpensePayment.year_month == year_month
+    ).first()
+
+    if existing:
+        db.delete(existing)
+        db.commit()
+        return {"skipped": False}
+    else:
+        db.add(RecurringExpensePayment(
+            recurring_expense_id=recurring_id,
+            year_month=year_month
+        ))
+        db.commit()
+        return {"skipped": True}
 
 
 # ============================================

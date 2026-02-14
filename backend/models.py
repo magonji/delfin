@@ -192,6 +192,22 @@ class RecurringExpenseHistory(Base):
     )
 
 
+class RecurringExpensePayment(Base):
+    """Manual payment overrides for recurring expenses per month."""
+    __tablename__ = "recurring_expense_payments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    recurring_expense_id = Column(Integer, ForeignKey("recurring_expenses.id"), nullable=False)
+    year_month = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    recurring_expense = relationship("RecurringExpense")
+
+    __table_args__ = (
+        Index('idx_rec_payment_lookup', 'recurring_expense_id', 'year_month', unique=True),
+    )
+
+
 class PlannedExpense(Base):
     """One-time planned expenses for a specific month."""
     __tablename__ = "planned_expenses"
