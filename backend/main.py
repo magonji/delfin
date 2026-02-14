@@ -331,6 +331,82 @@ def recalculate_all_payees_stats(db: Session = Depends(get_db)):
     }
 
 
+@app.get("/payees/duplicates")
+def detect_duplicate_payees(db: Session = Depends(get_db)):
+    """Detect payees with identical or very similar names."""
+    from difflib import SequenceMatcher
+
+    payees = db.query(Payee).order_by(Payee.name).all()
+    tx_counts = {}
+    for pid, cnt in db.query(Transaction.payee_id, func.count()).filter(
+        Transaction.payee_id.isnot(None)
+    ).group_by(Transaction.payee_id).all():
+        tx_counts[pid] = cnt
+
+    def normalize(name):
+        return name.strip().lower()
+
+    groups = []
+    seen = set()
+    for i, a in enumerate(payees):
+        if a.id in seen:
+            continue
+        norm_a = normalize(a.name)
+        matches = []
+        for b in payees[i + 1:]:
+            if b.id in seen:
+                continue
+            norm_b = normalize(b.name)
+            ratio = SequenceMatcher(None, norm_a, norm_b).ratio()
+            if ratio >= 0.82:
+                matches.append(b)
+                seen.add(b.id)
+        if matches:
+            seen.add(a.id)
+            group = [a] + matches
+            # Sort by transaction count descending so the most-used payee is first
+            group.sort(key=lambda p: tx_counts.get(p.id, 0), reverse=True)
+            groups.append([{
+                "id": p.id,
+                "name": p.name,
+                "transaction_count": tx_counts.get(p.id, 0)
+            } for p in group])
+
+    return {"groups": groups}
+
+
+@app.post("/payees/{payee_id}/merge/{duplicate_id}")
+def merge_payees(payee_id: int, duplicate_id: int, db: Session = Depends(get_db)):
+    """Merge duplicate payee into the kept payee. Reassigns all transactions and recurring expenses, then deletes the duplicate."""
+    keep = db.query(Payee).filter(Payee.id == payee_id).first()
+    if not keep:
+        raise HTTPException(status_code=404, detail="Payee to keep not found")
+    duplicate = db.query(Payee).filter(Payee.id == duplicate_id).first()
+    if not duplicate:
+        raise HTTPException(status_code=404, detail="Duplicate payee not found")
+
+    # Reassign transactions
+    tx_updated = db.query(Transaction).filter(
+        Transaction.payee_id == duplicate_id
+    ).update({Transaction.payee_id: payee_id})
+
+    # Reassign recurring expenses
+    rec_updated = db.query(RecurringExpense).filter(
+        RecurringExpense.payee_id == duplicate_id
+    ).update({RecurringExpense.payee_id: payee_id})
+
+    # Delete the duplicate
+    db.delete(duplicate)
+    db.commit()
+
+    return {
+        "kept": {"id": keep.id, "name": keep.name},
+        "deleted": {"id": duplicate_id, "name": duplicate.name},
+        "transactions_reassigned": tx_updated,
+        "recurring_reassigned": rec_updated
+    }
+
+
 # ============================================
 # LOCATIONS ENDPOINTS
 # ============================================

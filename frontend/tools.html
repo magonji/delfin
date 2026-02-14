@@ -413,6 +413,7 @@
     <div id="payeesModal" class="modal">
         <div class="modal-content">
             <div class="modal-header"><h3>Manage Payees</h3><button class="close-btn" onclick="closeModal('payeesModal')">&times;</button></div>
+            <div style="padding: 10px 25px;"><button onclick="detectDuplicatePayees()" style="width: 100%;">🔍 Detect Duplicate Payees</button></div>
             <div class="search-box"><input type="text" id="payeeSearch" placeholder="Search payees..." onkeyup="filterPayees()"></div>
             <div class="item-list" id="payeesList"></div>
         </div>
@@ -960,7 +961,7 @@
         }
         
         function displayLocations(filtered = null) {
-            const locations = filtered || allLocations;
+            const locations = (filtered || allLocations).filter(l => l.name !== 'Transfer In' && l.name !== 'Transfer Out');
             const list = document.getElementById('locationsList');
             
             list.innerHTML = locations.map(loc => `
@@ -1988,6 +1989,48 @@
                 
             } catch (error) {
                 console.error('Error auto-filling from payee statistics:', error);
+            }
+        }
+
+        async function detectDuplicatePayees() {
+            try {
+                const res = await fetch(`${API_URL}/payees/duplicates`);
+                if (!res.ok) throw new Error('Failed to detect duplicates');
+                const data = await res.json();
+
+                if (!data.groups || data.groups.length === 0) {
+                    await customConfirm('No duplicate payees found.', 'Duplicate Detection', 'OK');
+                    return;
+                }
+
+                for (const group of data.groups) {
+                    // The first payee in the group has the most transactions (keep it)
+                    const keep = group[0];
+                    const duplicates = group.slice(1);
+
+                    for (const dup of duplicates) {
+                        const confirmed = await customConfirm(
+                            `<b>"${dup.name}"</b> (${dup.transaction_count} transactions) looks like a duplicate of <b>"${keep.name}"</b> (${keep.transaction_count} transactions).\n\nMerge into <b>"${keep.name}"</b>? All transactions will be reassigned.`,
+                            'Merge Duplicate Payee',
+                            'Merge'
+                        );
+                        if (!confirmed) continue;
+
+                        const mergeRes = await fetch(`${API_URL}/payees/${keep.id}/merge/${dup.id}`, { method: 'POST' });
+                        if (!mergeRes.ok) throw new Error('Failed to merge');
+                        const result = await mergeRes.json();
+                        keep.transaction_count += result.transactions_reassigned;
+                        showSuccess(`Merged "${dup.name}" into "${keep.name}" (${result.transactions_reassigned} transactions reassigned)`);
+                    }
+                }
+
+                // Refresh payees list
+                const payeesRes = await fetch(`${API_URL}/payees`);
+                allPayees = await payeesRes.json();
+                displayPayees();
+            } catch (error) {
+                console.error('Error detecting duplicates:', error);
+                showError('Error detecting duplicates: ' + error.message);
             }
         }
 
