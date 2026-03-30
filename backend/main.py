@@ -1782,11 +1782,48 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
     ).scalar()
     total_categories = db.query(sql_func.count(Category.id)).scalar()
 
+    # Calculate balance without loans (exclude loan accounts, keep credit cards)
+    # Loan detection: first transaction is negative AND fewer than 3 unique payees
+    CREDIT_CARD_PAYEE_THRESHOLD = 3
+    transfer_locations = db.query(Location.id).filter(
+        Location.name.in_(["Transfer In", "Transfer Out"])
+    ).all()
+    transfer_location_ids = set(loc.id for loc in transfer_locations)
+
+    loan_account_ids = set()
+    all_accounts = db.query(Account).all()
+    for account in all_accounts:
+        first_tx = db.query(Transaction).filter(
+            Transaction.account_id == account.id
+        ).order_by(Transaction.date, Transaction.id).first()
+        if not first_tx or first_tx.amount >= 0:
+            continue
+        # It's a debt account — check if loan or credit card
+        non_transfer_payees = db.query(Transaction.payee_id).filter(
+            Transaction.account_id == account.id,
+            Transaction.payee_id != None,
+            ~Transaction.location_id.in_(transfer_location_ids) if transfer_location_ids else True
+        ).distinct().all()
+        unique_payees = set(p[0] for p in non_transfer_payees)
+        if len(unique_payees) < CREDIT_CARD_PAYEE_THRESHOLD:
+            loan_account_ids.add(account.id)
+
+    # Total balance excluding loan accounts
+    if loan_account_ids:
+        balance_no_loans = db.query(
+            sql_func.sum(conversion_expression)
+        ).filter(
+            ~Transaction.account_id.in_(loan_account_ids)
+        ).scalar() or 0
+    else:
+        balance_no_loans = total_balance_converted
+
     return {
         "total_transactions": total_transactions,
         "total_accounts": total_accounts,
         "total_categories": total_categories,
         "total_balance": round(total_balance_converted, 2),
+        "balance_without_loans": round(balance_no_loans, 2),
         "base_currency": base_currency,
         "rates_available": len(rates_dict) > 0
     }

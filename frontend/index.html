@@ -201,9 +201,9 @@
 
     <section class="kpis" id="kpis">
         <div class="kpi"><h3>Total balance</h3><div class="value" id="kpiTotalBalance">—</div></div>
+        <div class="kpi"><h3>Without loans</h3><div class="value" id="kpiBalanceNoLoans">—</div></div>
         <div class="kpi"><h3>Transactions</h3><div class="value" id="kpiTxCount">—</div></div>
-        <div class="kpi"><h3>Active accounts</h3><div class="value" id="kpiAccounts">—</div></div>
-        <div class="kpi"><h3>Categories</h3><div class="value" id="kpiCategories">—</div></div>
+        <div class="kpi"><h3>Budget available</h3><div class="value" id="kpiBudgetAvail">—</div></div>
     </section>
 
     <section class="container">
@@ -413,9 +413,16 @@ async function loadSummary() {
     };
 
     setKPI('#kpiTotalBalance', sum.total_balance, true);
+    setKPI('#kpiBalanceNoLoans', sum.balance_without_loans, true);
     setKPI('#kpiTxCount', sum.total_transactions);
-    setKPI('#kpiAccounts', sum.total_accounts);
-    setKPI('#kpiCategories', sum.total_categories);
+
+    // Load current month budget available
+    const now = new Date();
+    const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    try {
+        const bp = cacheGet('cache_budget_progress') || await api(`/budgets/${ym}/progress`).then(d => { cacheSet('cache_budget_progress', d); return d; });
+        setKPI('#kpiBudgetAvail', bp.remaining, true);
+    } catch { q('#kpiBudgetAvail').textContent = '—'; }
 }
 
 async function loadAccounts() {
