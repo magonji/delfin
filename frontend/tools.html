@@ -46,6 +46,7 @@
             border-radius: 8px; padding: 6px 10px; font-size: 12px; cursor: pointer;
             display: flex; align-items: center; gap: 8px; font-family: 'IBM Plex Sans', sans-serif;
         }
+        #navBtn { font-size: 20px; padding: 6px 12px; line-height: 1; }
         .dropdown.open .menu { display: block; }
         .dropdown .menu {
             position: absolute; top: 120%; right: 0; min-width: 200px;
@@ -57,6 +58,7 @@
             background: transparent; border: none; cursor: pointer; font-family: 'IBM Plex Sans', sans-serif; color: var(--text);
         }
         .navItem:hover { background: var(--bg); }
+        .navItem.active { background: var(--card); color: var(--text); pointer-events: none; }
 
         .container { margin: 20px auto; max-width: 1600px; padding: 0 20px; }
         .card { background: var(--bg); padding: 25px; border: 1px solid var(--border); border-radius: 10px; }
@@ -356,16 +358,20 @@
 </head>
 <body>
     <header>
-        <h1>🐬 Delfin · The Tools</h1>
+        <h1>Delfin</h1>
         <div class="tools">
             <div class="dropdown" id="navDropdown">
-                <button class="btn" id="navBtn" onclick="toggleNav()">📂 Menu ▾</button>
+                <button class="btn" id="navBtn" onclick="toggleNav()">&#9776;</button>
                 <div class="menu" id="navMenu">
                     <div class="list" style="padding: 6px;">
-                        <button class="navItem" onclick="location.href='index.html'">📊 Dashboard</button>
-                        <button class="navItem" onclick="location.href='transactions.html'">🧾 Transactions</button>
-                        <button class="navItem" onclick="location.href='budget.html'">📋 Budget</button>
-                        <button class="navItem" onclick="location.href='loans.html'">💰 Loans</button>
+                        <button class="navItem" onclick="location.href='index.html'">Dashboard</button>
+                        <button class="navItem" onclick="location.href='transactions.html'">Transactions</button>
+                        <button class="navItem" onclick="location.href='budget.html'">Budget</button>
+                        <button class="navItem" onclick="location.href='loans.html'">Loans</button>
+                        <button class="navItem active">Tools</button>
+                        <hr style="border: none; border-top: 1px solid var(--border); margin: 6px 0;">
+                        <button class="navItem" onclick="location.reload()">Refresh</button>
+                        <button class="navItem" onclick="fetch((localStorage.getItem('delfin_api') || (location.pathname.startsWith('/app') ? location.origin : 'http://localhost:8000')).replace(/\/$/, '') + '/exchange-rates/update', {method:'POST'}).then(()=>location.reload()).catch(e=>alert(e))">Update rates</button>
                     </div>
                 </div>
             </div>

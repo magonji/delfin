@@ -86,6 +86,7 @@
         /* Dropdown menus */
         .dropdown { position: relative; }
         .dropdown .btn { display: flex; align-items: center; gap: 8px; }
+        #navBtn { font-size: 20px; padding: 6px 12px; line-height: 1; }
         .dropdown .btn .count { background: var(--bg); border: 1px solid var(--border); border-radius: 999px; padding: 1px 6px; font-size: 11px; }
         .dropdown .menu { position: absolute; top: calc(100% + 6px); right: 0; min-width: 280px; max-height: 280px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.35); display: none; padding: 8px; z-index: 20; }
         .dropdown.open .menu { display: block; }
@@ -110,6 +111,7 @@
             font-family: 'IBM Plex Sans', sans-serif; color: var(--text);
         }
         #navDropdown .navItem:hover { background: var(--panel); }
+        #navDropdown .navItem.active { background: var(--card); color: var(--text); pointer-events: none; }
 
         /* Category accordion */
         .cat-group { margin-bottom: 4px; }
@@ -177,19 +179,20 @@
 </head>
 <body>
     <header>
-        <h1>🐬 Delfin · The Dashboard</h1>
+        <h1>Delfin</h1>
         <div class="tools">
-            <span class="badge" id="baseCurrency">—</span>
-            <button id="btnRefresh" class="primary">🔄 Refresh</button>
-            <button id="btnUpdateRates" class="danger">💱 Update rates</button>
             <div class="dropdown" id="navDropdown">
-                <button class="btn" id="navBtn" onclick="toggleNav()">📂 Menu ▾</button>
+                <button class="btn" id="navBtn" onclick="toggleNav()">&#9776;</button>
                 <div class="menu" id="navMenu">
                     <div class="list" style="padding: 6px;">
-                        <button class="navItem" onclick="location.href='transactions.html'">📑 Transactions</button>
-                        <button class="navItem" onclick="location.href='budget.html'">📋 Budget</button>
-                        <button class="navItem" onclick="location.href='loans.html'">💰 Loans</button>
-                        <button class="navItem" onclick="location.href='tools.html'">🛠️ Tools</button>
+                        <button class="navItem active">Dashboard</button>
+                        <button class="navItem" onclick="location.href='transactions.html'">Transactions</button>
+                        <button class="navItem" onclick="location.href='budget.html'">Budget</button>
+                        <button class="navItem" onclick="location.href='loans.html'">Loans</button>
+                        <button class="navItem" onclick="location.href='tools.html'">Tools</button>
+                        <hr style="border: none; border-top: 1px solid var(--border); margin: 6px 0;">
+                        <button class="navItem" id="btnRefresh">Refresh</button>
+                        <button class="navItem" id="btnUpdateRates">Update rates</button>
                     </div>
                 </div>
             </div>

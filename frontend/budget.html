@@ -131,10 +131,12 @@
         /* Dropdown */
         .dropdown { position: relative; }
         .dropdown .btn { display: flex; align-items: center; gap: 8px; }
+        #navBtn { font-size: 20px; padding: 6px 12px; line-height: 1; }
         .dropdown .menu { position: absolute; top: calc(100% + 6px); right: 0; min-width: 180px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.35); display: none; padding: 8px; z-index: 20; }
         .dropdown.open .menu { display: block; }
         #navDropdown .navItem { width: 100%; text-align: left; padding: 8px 12px; background: transparent; cursor: pointer; border: none !important; border-radius: 6px; transition: background 0.2s; font-size: 14px; font-weight: 600; font-family: 'IBM Plex Sans', sans-serif; color: var(--text); }
         #navDropdown .navItem:hover { background: var(--panel); }
+        #navDropdown .navItem.active { background: var(--card); color: var(--text); pointer-events: none; }
 
         /* Modal */
         .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(45, 45, 45, 0.4); backdrop-filter: blur(2px); align-items: center; justify-content: center; }
@@ -205,17 +207,21 @@
 </head>
 <body>
     <header>
-        <h1>🐬 Delfin · The Budget</h1>
+        <h1>Delfin</h1>
         <div class="tools">
             <span class="help-icon" onclick="openModal('infoModal')" title="How this page works">ⓘ</span>
             <div class="dropdown" id="navDropdown">
-                <button class="btn" id="navBtn" onclick="toggleNav()">📂 Menu ▾</button>
+                <button class="btn" id="navBtn" onclick="toggleNav()">&#9776;</button>
                 <div class="menu" id="navMenu">
                     <div class="list" style="padding: 6px;">
-                        <button class="navItem" onclick="location.href='index.html'">📊 Dashboard</button>
-                        <button class="navItem" onclick="location.href='transactions.html'">📑 Transactions</button>
-                        <button class="navItem" onclick="location.href='loans.html'">💰 Loans</button>
-                        <button class="navItem" onclick="location.href='tools.html'">🛠️ Tools</button>
+                        <button class="navItem" onclick="location.href='index.html'">Dashboard</button>
+                        <button class="navItem" onclick="location.href='transactions.html'">Transactions</button>
+                        <button class="navItem active">Budget</button>
+                        <button class="navItem" onclick="location.href='loans.html'">Loans</button>
+                        <button class="navItem" onclick="location.href='tools.html'">Tools</button>
+                        <hr style="border: none; border-top: 1px solid var(--border); margin: 6px 0;">
+                        <button class="navItem" id="btnRefresh" onclick="location.reload()">Refresh</button>
+                        <button class="navItem" id="btnUpdateRates" onclick="fetch((localStorage.getItem('delfin_api') || (location.pathname.startsWith('/app') ? location.origin : 'http://localhost:8000')).replace(/\/$/, '') + '/exchange-rates/update', {method:'POST'}).then(()=>location.reload()).catch(e=>alert(e))">Update rates</button>
                     </div>
                 </div>
             </div>

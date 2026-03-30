@@ -51,6 +51,7 @@
 
         .dropdown { position: relative; }
         .dropdown .btn { display: flex; align-items: center; gap: 8px; }
+        #navBtn { font-size: 20px; padding: 6px 12px; line-height: 1; }
         .dropdown .menu {
             position: absolute; top: 120%; right: 0; min-width: 200px;
             background: #fff; border: 1px solid var(--border); border-radius: 10px;
@@ -72,9 +73,10 @@
             font-family: 'IBM Plex Sans', sans-serif; color: var(--text);
         }
         
-        .dropdown .menu .navItem:hover { 
-            background: var(--bg); 
+        .dropdown .menu .navItem:hover {
+            background: var(--bg);
         }
+        .dropdown .menu .navItem.active { background: var(--card); color: var(--text); pointer-events: none; }
 
         /* Utility classes and badges */
         .badge { padding: 2px 8px; border-radius: 99px; font-size: 11px; background: var(--card); border: 1px solid var(--border); }
@@ -177,19 +179,21 @@
 <body>
 
     <header>
-        <h1>🐬 Delfin · The Loans</h1>
+        <h1>Delfin</h1>
         <div class="tools">
-            <span class="badge" id="baseCurrencySum">—</span>
-            <button onclick="refreshCache()" class="primary">🔄 Refresh</button>
-            <button id="btnUpdateRates" class="danger">💱 Update rates</button>
-            
             <div class="dropdown" id="navDropdown">
-                <button class="btn" id="navBtn" onclick="toggleNav()">📂 Menu ▾</button>
+                <button class="btn" id="navBtn" onclick="toggleNav()">&#9776;</button>
                 <div class="menu" id="navMenu">
-                    <button class="navItem" onclick="location.href='index.html'">📊 Dashboard</button>
-                    <button class="navItem" onclick="location.href='transactions.html'">📑 Transactions</button>
-                    <button class="navItem" onclick="location.href='budget.html'">📋 Budget</button>
-                    <button class="navItem" onclick="location.href='tools.html'">🛠️ Tools</button>
+                    <div class="list" style="padding: 6px;">
+                        <button class="navItem" onclick="location.href='index.html'">Dashboard</button>
+                        <button class="navItem" onclick="location.href='transactions.html'">Transactions</button>
+                        <button class="navItem" onclick="location.href='budget.html'">Budget</button>
+                        <button class="navItem active">Loans</button>
+                        <button class="navItem" onclick="location.href='tools.html'">Tools</button>
+                        <hr style="border: none; border-top: 1px solid var(--border); margin: 6px 0;">
+                        <button class="navItem" id="btnRefresh">Refresh</button>
+                        <button class="navItem" id="btnUpdateRates">Update rates</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -658,6 +662,9 @@
         showSuccess('Cache cleared. Reloading...');
         await loadData();
     }
+
+    // Refresh button handler
+    q('#btnRefresh').addEventListener('click', () => refreshCache());
 
     // Update exchange rates button handler
     q('#btnUpdateRates').addEventListener('click', async () => {

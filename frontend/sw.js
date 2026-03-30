@@ -1,4 +1,4 @@
-const CACHE_NAME = 'delfin-v4';
+const CACHE_NAME = 'delfin-v5';
 const STATIC_ASSETS = [
   '/app/index.html',
   '/app/transactions.html',
