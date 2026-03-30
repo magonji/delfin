@@ -1,3 +1,6 @@
+import sys, os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
 from backend.database import engine, Base, SessionLocal
 from backend.models import Account, Category, Payee, Location, Project, Transaction, ExchangeRate
 from backend.balance_calculator import initialise_all_balances

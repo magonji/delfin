@@ -5,6 +5,9 @@ This script identifies and merges duplicate categories (same name and parent)
 by reassigning all transactions to a single category and removing duplicates.
 """
 
+import sys, os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
 from backend.database import SessionLocal
 from backend.models import Category, Transaction
 from sqlalchemy import func

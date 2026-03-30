@@ -8,7 +8,9 @@ This script will:
 3. Calculate most common associations for all payees
 """
 
-import sys
+import sys, os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
 from backend.database import SessionLocal
 from backend.models import Transaction, Payee
 from backend.balance_calculator import initialise_all_balances

@@ -1,3 +1,6 @@
+import sys, os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
 import requests
 from datetime import datetime
 from sqlalchemy.orm import Session
