@@ -2,9 +2,15 @@
 <html lang="en-GB">
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Delfin · The Budget</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Delfin" />
+    <meta name="theme-color" content="#e8927c" />
     <link rel="icon" href="favicon.ico">
+    <link rel="apple-touch-icon" href="icons/icon-180.png" />
+    <link rel="manifest" href="manifest.json" />
+    <title>Delfin · Budget</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -16,9 +22,10 @@
             --page-gutter: clamp(10px, 4vw, 20px);
         }
 
-        * { box-sizing: border-box; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         html { height: 100%; scrollbar-gutter: stable both-edges; }
-        body { height: 100%; margin: 0; background: var(--bg); color: var(--text); font-family: 'IBM Plex Mono', monospace; }
+        body { height: 100%; margin: 0; background: var(--bg); color: var(--text); font-family: 'IBM Plex Mono', monospace;
+               padding-top: env(safe-area-inset-top); padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); padding-bottom: env(safe-area-inset-bottom); }
 
         /* Header */
         header { display: flex; align-items: center; justify-content: space-between; padding: 18px 20px; backdrop-filter: blur(8px); background: #FEE5D7; border-bottom: 1px solid #D4B5A0; z-index: 10; }
@@ -172,9 +179,10 @@
 
         /* ── Responsive: Mobile ── */
         @media (max-width: 600px) {
-            header { flex-direction: column; gap: 10px; padding: 12px 15px; }
+            header { flex-direction: column; gap: 10px; padding: 12px 15px; position: sticky; top: 0; }
             h1 { font-size: 22px; }
             .tools { justify-content: center; }
+            button, select, input { min-height: 44px; font-size: 14px; }
             .container { padding: 12px; }
             .card .head { flex-direction: column; align-items: flex-start; gap: 8px; padding: 10px 12px; }
             .card .head .tools { width: 100%; }
@@ -1229,5 +1237,6 @@
         // Init on load
         document.addEventListener('DOMContentLoaded', init);
     </script>
+<script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');</script>
 </body>
 </html>

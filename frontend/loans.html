@@ -2,9 +2,15 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Delfin · The Loans and Credit Cards</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Delfin" />
+    <meta name="theme-color" content="#e8927c" />
     <link rel="icon" href="favicon.ico">
+    <link rel="apple-touch-icon" href="icons/icon-180.png" />
+    <link rel="manifest" href="manifest.json" />
+    <title>Delfin · Loans and Credit Cards</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -18,9 +24,10 @@
             --green: #0e9530; --red: #d52811; --yellow: #f5b700;
         }
 
-        * { box-sizing: border-box; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         html { scrollbar-gutter: stable both-edges; }
-        body { margin: 0; background: var(--bg); color: var(--text); font-family: 'IBM Plex Mono', monospace; min-height: 100vh; }
+        body { margin: 0; background: var(--bg); color: var(--text); font-family: 'IBM Plex Mono', monospace; min-height: 100vh;
+               padding-top: env(safe-area-inset-top); padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); padding-bottom: env(safe-area-inset-bottom); }
 
         /* Header styling */
         header {
@@ -144,9 +151,10 @@
 
         /* ── Responsive: Mobile ── */
         @media (max-width: 600px) {
-            header { flex-direction: column; gap: 10px; padding: 12px 15px; }
+            header { flex-direction: column; gap: 10px; padding: 12px 15px; position: sticky; top: 0; }
             h1 { font-size: 22px; }
             .tools { justify-content: center; }
+            button, select, input { min-height: 44px; font-size: 14px; }
             .kpis { margin: 12px; gap: 8px; }
             .kpi { padding: 10px; }
             .kpi .value { font-size: 18px; }
@@ -792,5 +800,6 @@
         return NaN;
     }
 </script>
+<script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');</script>
 </body>
 </html>
