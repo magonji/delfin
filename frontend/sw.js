@@ -1,11 +1,14 @@
-const CACHE_NAME = 'delfin-v10';
+const CACHE_NAME = 'delfin-v12';
 const STATIC_ASSETS = [
   '/app/index.html',
   '/app/transactions.html',
   '/app/loans.html',
   '/app/budget.html',
   '/app/tools.html',
-  '/app/manifest.json'
+  '/app/manifest.json',
+  '/app/icons/icon-180.png',
+  '/app/icons/icon-192.png',
+  '/app/icons/icon-512.png'
 ];
 
 // Install: cache static assets
@@ -17,7 +20,7 @@ self.addEventListener('install', event => {
   );
 });
 
-// Activate: clean old caches
+// Activate: clean old caches and take control immediately
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys =>
@@ -26,23 +29,41 @@ self.addEventListener('activate', event => {
   );
 });
 
-// Fetch: network-first for API, cache-first for static assets
+// Fetch handler
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // API calls: always go to network
-  if (!url.pathname.startsWith('/app/')) {
+  // API calls: always go to network, never cache
+  if (!url.pathname.startsWith('/app/') && !url.hostname.includes('fonts.googleapis.com') && !url.hostname.includes('fonts.gstatic.com')) {
     return;
   }
 
-  // Static assets: try network first, fall back to cache
+  // Google Fonts: cache-first (they're versioned/immutable)
+  if (url.hostname.includes('fonts.googleapis.com') || url.hostname.includes('fonts.gstatic.com')) {
+    event.respondWith(
+      caches.match(event.request).then(cached => {
+        if (cached) return cached;
+        return fetch(event.request).then(response => {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+          return response;
+        });
+      })
+    );
+    return;
+  }
+
+  // Static assets: stale-while-revalidate
+  // Serve from cache instantly, then update cache in background
   event.respondWith(
-    fetch(event.request)
-      .then(response => {
+    caches.match(event.request).then(cached => {
+      const fetchPromise = fetch(event.request).then(response => {
         const clone = response.clone();
         caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
         return response;
-      })
-      .catch(() => caches.match(event.request))
+      }).catch(() => cached);
+
+      return cached || fetchPromise;
+    })
   );
 });

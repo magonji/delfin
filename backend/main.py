@@ -1,8 +1,9 @@
-from fastapi import FastAPI, Depends, HTTPException, Query
+from fastapi import FastAPI, Depends, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime, date, timedelta, time
@@ -29,6 +30,17 @@ app = FastAPI(
     version="1.0.0"
 )
 
+class CacheControlMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        if request.url.path.startswith("/app/"):
+            if request.url.path.endswith((".png", ".ico", ".svg")):
+                response.headers["Cache-Control"] = "public, max-age=86400"
+            else:
+                response.headers["Cache-Control"] = "public, max-age=0, must-revalidate"
+        return response
+
+app.add_middleware(CacheControlMiddleware)
 app.add_middleware(GZipMiddleware, minimum_size=500)
 app.add_middleware(
     CORSMiddleware,
