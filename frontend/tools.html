@@ -32,26 +32,30 @@
 
         html { min-height: 100%; scrollbar-gutter: stable both-edges; }
         body { min-height: 100%; margin: 0; background: var(--bg); color: var(--text); font-family: 'IBM Plex Mono', monospace;
-               padding-top: env(safe-area-inset-top); padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); padding-bottom: env(safe-area-inset-bottom); }
+               padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); padding-bottom: env(safe-area-inset-bottom); }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
-        header { display: flex; align-items: center; justify-content: space-between; padding: 18px 20px; position: sticky; top: 0; backdrop-filter: blur(8px); background: var(--panel); border-bottom: 1px solid var(--border); z-index: 50; }
+        header { display: flex; align-items: center; justify-content: space-between; padding: 18px 20px; padding-top: calc(18px + env(safe-area-inset-top)); position: sticky; top: 0; backdrop-filter: blur(8px); background: #FAE6D9; border-bottom: 1px solid var(--border); z-index: 50; }
         h1 { font-size: 30px; margin: 0; letter-spacing: 0.2px; font-family: 'Playfair Display', serif; }
 
         /* Navigation dropdown menu */
         .tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
         .dropdown { position: relative; }
-        .dropdown .btn {
-            background: var(--bg); color: var(--text); border: 1px solid var(--border);
-            border-radius: 8px; padding: 6px 10px; font-size: 12px; cursor: pointer;
-            display: flex; align-items: center; gap: 8px; font-family: 'IBM Plex Sans', sans-serif;
-        }
+        .dropdown .btn { display: flex; align-items: center; gap: 8px; }
         #navBtn { font-size: 22px; padding: 4px 8px; line-height: 1; background: transparent; border: none; cursor: pointer; color: var(--text); }
+        .dropdown .menu {
+            position: absolute; top: calc(100% + 6px); right: 0; min-width: 180px;
+            background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.35); display: none; padding: 8px; z-index: 100;
+        }
         .dropdown.open .menu { display: block; }
-        .dropdown .menu { position: absolute; top: calc(100% + 6px); right: 0; min-width: 180px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.35); display: none; padding: 8px; z-index: 100; }
-        .navItem { width: 100%; text-align: left; padding: 8px 12px; background: transparent; cursor: pointer; border: none !important; border-radius: 6px; transition: background 0.2s; font-size: 14px; font-weight: 600; font-family: 'IBM Plex Sans', sans-serif; color: var(--text); }
-        .navItem:hover { background: var(--panel); }
-        .navItem.active { background: var(--card); color: var(--text); pointer-events: none; }
+        #navDropdown .navItem {
+            width: 100%; text-align: left; padding: 8px 12px; background: transparent;
+            cursor: pointer; border: none !important; border-radius: 6px; transition: background 0.2s;
+            font-size: 14px; font-weight: 600; font-family: 'IBM Plex Sans', sans-serif; color: var(--text);
+        }
+        #navDropdown .navItem:hover { background: var(--panel); }
+        #navDropdown .navItem.active { background: var(--card); color: var(--text); pointer-events: none; }
 
         .container { margin: 20px auto; max-width: 1600px; padding: 0 20px; }
         .card { background: var(--bg); padding: 25px; border: 1px solid var(--border); border-radius: 10px; }
@@ -322,9 +326,8 @@
 
         /* ── Responsive: Mobile ── */
         @media (max-width: 600px) {
-            header { flex-direction: column; gap: 10px; padding: 12px 15px; position: sticky; top: 0; }
-            h1 { font-size: 22px; }
-            .tools { justify-content: center; }
+            header { flex-wrap: nowrap; padding: 12px 15px; padding-top: calc(12px + env(safe-area-inset-top)); position: sticky; top: 0; }
+            h1 { font-size: 22px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
             button, select, input { min-height: 44px; font-size: 14px; }
             .container { padding: 0 12px; margin: 12px auto; }
             .card { padding: 15px; }

@@ -36,10 +36,10 @@
 
         html { min-height: 100%; scrollbar-gutter: stable both-edges; }
         body { min-height: 100%; margin: 0; background: var(--bg); color: var(--text); font-family: 'IBM Plex Mono', monospace;
-               padding-top: env(safe-area-inset-top); padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); padding-bottom: env(safe-area-inset-bottom); }
+               padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); padding-bottom: env(safe-area-inset-bottom); }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
-        header { display: flex; align-items: center; justify-content: space-between; padding: 18px 20px; position: sticky; top: 0; backdrop-filter: blur(8px); background: #FEE5D7; border-bottom: 1px solid #D4B5A0; z-index: 50; }
+        header { display: flex; align-items: center; justify-content: space-between; padding: 18px 20px; padding-top: calc(18px + env(safe-area-inset-top)); position: sticky; top: 0; backdrop-filter: blur(8px); background: #FAE6D9; border-bottom: 1px solid #D4B5A0; z-index: 50; }
         h1 { font-size: 30px; margin: 0; letter-spacing: 0.2px; font-family: 'Playfair Display', serif; }
     
         /* Header toolbar controls and buttons */
@@ -499,9 +499,8 @@
 
         /* ── Responsive: Mobile ── */
         @media (max-width: 600px) {
-            header { flex-direction: column; gap: 10px; padding: 12px 15px; position: sticky; top: 0; }
-            h1 { font-size: 20px; }
-            .tools { justify-content: center; }
+            header { flex-wrap: nowrap; padding: 12px 15px; padding-top: calc(12px + env(safe-area-inset-top)); position: sticky; top: 0; }
+            h1 { font-size: 20px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
             button, select, input { min-height: 44px; font-size: 14px; }
             .container { margin: 10px auto; }
             .card { margin: 8px; padding: 8px; }
