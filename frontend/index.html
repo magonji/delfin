@@ -404,7 +404,7 @@ function rangeFor(key) {
 async function loadSummary() {
     let sum = cacheGet('cache_summary') || await api('/dashboard/summary').then(d => { cacheSet('cache_summary', d); return d; });
     state.baseCurrency = sum.base_currency || 'GBP';
-    q('#baseCurrency').textContent = state.baseCurrency;
+    // baseCurrency badge removed from header
     
     const setKPI = (id, val, isMoney = false) => {
         const el = q(id);

@@ -356,7 +356,6 @@
         globalCurrency = data.base_currency || 'GBP';
         globalSymbol = CURRENCY_SYMBOLS[globalCurrency] || globalCurrency + ' ';
         
-        q('#baseCurrencySum').textContent = globalCurrency;
         q('#activeCreditCards').textContent = data.active_credit_cards;
         q('#activeLoans').textContent = data.active_loans;
         q('#totalOwed').textContent = `${globalSymbol}${formatNum(data.total_owed)}`;
