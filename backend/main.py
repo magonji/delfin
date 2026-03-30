@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime, date, timedelta, time
@@ -4199,3 +4200,13 @@ def toggle_planned_expense_paid(
         "name": planned.name,
         "is_paid": planned.is_paid
     }
+
+# ============================================
+# SERVE FRONTEND (must be last)
+# ============================================
+
+@app.get("/", include_in_schema=False)
+def root():
+    return RedirectResponse(url="/app/index.html")
+
+app.mount("/app", StaticFiles(directory="frontend"), name="frontend")

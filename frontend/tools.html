@@ -317,6 +317,33 @@
             from { transform: translateX(0); opacity: 1; }
             to { transform: translateX(100%); opacity: 0; }
         }
+
+        /* ── Responsive: Mobile ── */
+        @media (max-width: 600px) {
+            header { flex-direction: column; gap: 10px; padding: 12px 15px; }
+            h1 { font-size: 22px; }
+            .tools { justify-content: center; }
+            .container { padding: 0 12px; margin: 12px auto; }
+            .card { padding: 15px; }
+            .tools-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
+            .tool-card { padding: 18px 12px; }
+            .tool-icon { font-size: 30px; margin-bottom: 8px; }
+            .tool-title { font-size: 16px; }
+            .tool-description { font-size: 12px; }
+            .modal-content { width: 95%; max-width: none; }
+            .modal-header { padding: 12px 15px; }
+            .modal-header h3 { font-size: 16px; }
+            .item-list { padding: 12px; }
+            .item-row { padding: 10px; }
+            .form-group { padding: 0 15px; }
+            .search-box { padding: 12px 15px 0; }
+            .import-table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+            .import-table { min-width: 600px; }
+            #toast-container { top: 10px; right: 10px; left: 10px; }
+            .toast { min-width: unset; }
+            .dropdown .menu { right: -10px; min-width: 180px; }
+            .footer { margin: 60px 0 30px; }
+        }
     </style>
 </head>
 <body>
@@ -603,7 +630,7 @@
         function toggleNav() { document.querySelector('#navDropdown').classList.toggle('open'); }
         document.addEventListener('click', (e) => { if (document.querySelector('#navDropdown') && !document.querySelector('#navDropdown').contains(e.target)) document.querySelector('#navDropdown').classList.remove('open'); });
 
-        const API_URL = 'http://localhost:8000';
+        const API_URL = (localStorage.getItem('delfin_api') || (location.pathname.startsWith('/app') ? location.origin : 'http://localhost:8000')).replace(/\/$/, '');
         
         // Custom dialog system (replaces confirm/prompt which may be blocked)
         let customDialogResolve = null;

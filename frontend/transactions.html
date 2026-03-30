@@ -476,6 +476,137 @@
         #navDropdown .navItem:hover { background: var(--bg); }
 
         .footer { opacity: 0.7; font-size: 12px; text-align: center; margin: 104px 0px; padding-bottom: 10px; font-family: 'Playfair Display', serif; }
+
+        /* ── Responsive: Tablet ── */
+        @media (max-width: 1100px) {
+            .grid-layout { grid-template-columns: 25px 65px 140px 160px minmax(120px, 1fr) 90px 100px 100px 60px; gap: 6px; }
+        }
+
+        /* ── Responsive: Small tablet ── */
+        @media (max-width: 900px) {
+            .grid-layout { grid-template-columns: 25px 65px 130px 1fr 80px 60px; gap: 6px; }
+            /* Hide note, account balance, total balance columns */
+            .grid-layout > :nth-child(5),
+            .grid-layout > :nth-child(7),
+            .grid-layout > :nth-child(8) { display: none; }
+            .transactions-header > :nth-child(5),
+            .transactions-header > :nth-child(7),
+            .transactions-header > :nth-child(8) { display: none; }
+            #filters { gap: 6px; }
+            #filters select { min-width: 100px; }
+        }
+
+        /* ── Responsive: Mobile ── */
+        @media (max-width: 600px) {
+            header { flex-direction: column; gap: 10px; padding: 12px 15px; }
+            h1 { font-size: 20px; }
+            .tools { justify-content: center; }
+            .container { margin: 10px auto; }
+            .card { margin: 8px; padding: 8px; }
+
+            /* Filters become vertical */
+            #filters { flex-direction: column; padding: 8px; gap: 6px; }
+            #filters input, #filters select { width: 100%; min-width: unset; max-width: unset; font-size: 14px; }
+            #filters input[type="date"] { width: 100%; }
+            .filter-actions { margin-left: 0; width: 100%; justify-content: stretch; }
+            .filter-actions button { flex: 1; }
+            .bulk-controls { border-left: none; padding-left: 0; margin-left: 0; border-top: 1px solid var(--border); padding-top: 8px; width: 100%; justify-content: center; }
+
+            /* Hide table header on mobile */
+            .transactions-header { display: none; }
+
+            /* Convert grid rows to card layout */
+            .transaction-item.grid-layout {
+                display: flex !important;
+                flex-wrap: wrap;
+                gap: 4px 8px;
+                padding: 10px 12px;
+                position: relative;
+            }
+
+            /* Hide checkbox, balances, and note on mobile cards */
+            .transaction-item .checkbox-column { position: absolute; top: 10px; left: 12px; }
+            .transactions-list:not(.bulk-edit-mode) .transaction-item .checkbox-column { display: none; }
+            .bulk-edit-mode .transaction-item { padding-left: 36px; }
+
+            /* First row: date + payee/account + amount */
+            .transaction-item > :nth-child(2) { /* date */
+                font-weight: 600;
+                font-size: 12px;
+                color: var(--muted);
+            }
+            .transaction-item > :nth-child(3) { /* account */
+                flex: 1;
+                text-align: left;
+                font-size: 13px;
+            }
+            .transaction-item > :nth-child(4) { /* payee */
+                width: 100%;
+                order: 10;
+                text-align: left;
+                font-size: 12px;
+                color: var(--muted);
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            .transaction-item > :nth-child(5) { /* note - hide */
+                display: none;
+            }
+            .transaction-item > :nth-child(6) { /* amount */
+                font-weight: 700;
+                font-size: 14px;
+                margin-left: auto;
+            }
+            .transaction-item > :nth-child(7),
+            .transaction-item > :nth-child(8) { /* balances - hide */
+                display: none;
+            }
+            .transaction-item > :nth-child(9) { /* actions */
+                order: 11;
+                width: 100%;
+                justify-content: flex-start;
+                margin-left: 0;
+                padding-top: 4px;
+            }
+
+            /* Disable hover effects on mobile (touch) */
+            .transaction-item:hover .date-display { opacity: 1; }
+            .transaction-item:hover .time-display { opacity: 0; }
+            .transaction-item:hover .account-display { opacity: 1; }
+            .transaction-item:hover .category-hover-display { opacity: 0; }
+            .transaction-item:hover .category-display { opacity: 1; }
+            .transaction-item:hover .location-display { opacity: 0; }
+            .transaction-item:hover .note-display { opacity: 1; }
+            .transaction-item:hover .rate-display { opacity: 0; }
+            .transaction-item:hover .amount-primary { opacity: 1; }
+            .transaction-item:hover .amount-secondary { opacity: 0; }
+            .transaction-item:hover .balance-primary { opacity: 1; }
+            .transaction-item:hover .balance-secondary { opacity: 0; }
+
+            /* Transaction list height */
+            .transactions-list { max-height: calc(100vh - 250px); }
+
+            /* FAB buttons */
+            .fab-container { bottom: 20px; right: 15px; gap: 10px; }
+            .fab-button { width: 50px; height: 50px; font-size: 24px; }
+
+            /* Bulk edit bar */
+            .bulk-edit-header { flex-wrap: wrap; padding: 10px 15px; }
+            .bulk-edit-header h3 { font-size: 14px; }
+            .bulk-edit-content { padding: 10px 15px; }
+            .bulk-form-grid { grid-template-columns: 1fr; }
+
+            /* Modal */
+            .modal-content { width: 95%; }
+            .modal-body { padding: 15px; }
+            .form-row { grid-template-columns: 1fr; }
+
+            /* Dropdown */
+            .dropdown .menu { right: -10px; min-width: 200px; }
+
+            .footer { margin: 60px 0; }
+        }
     </style>
 </head>
 <body>
@@ -850,7 +981,7 @@
     <div class="footer">© Royal Bank of González. 2025</div>
 
     <script>
-        const API_URL = 'http://localhost:8000';
+        const API_URL = (localStorage.getItem('delfin_api') || (location.pathname.startsWith('/app') ? location.origin : 'http://localhost:8000')).replace(/\/$/, '');
         // --- Configuration and global state ---
         let allCategories = [], allPayees = [], allAccounts = [], allAccountsIncludingClosed = [], allLocations = [], regularTransactions = [], transferTransactions = [];
         let accountsMap = new Map();

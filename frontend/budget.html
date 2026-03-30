@@ -169,6 +169,30 @@
         .info-row { padding: 5px 0; font-size: 13px; line-height: 1.5; }
         .info-row .symbol { display: inline-block; width: 22px; text-align: center; margin-right: 4px; }
         .footer { opacity: 0.7; font-size: 12px; text-align: center; margin: 24px 10px; padding-bottom: 10px; font-family: 'Playfair Display', serif; }
+
+        /* ── Responsive: Mobile ── */
+        @media (max-width: 600px) {
+            header { flex-direction: column; gap: 10px; padding: 12px 15px; }
+            h1 { font-size: 22px; }
+            .tools { justify-content: center; }
+            .container { padding: 12px; }
+            .card .head { flex-direction: column; align-items: flex-start; gap: 8px; padding: 10px 12px; }
+            .card .head .tools { width: 100%; }
+            .card .title { font-size: 14px; }
+            .card .content { padding: 10px 12px; }
+            .budget-amount { font-size: 24px; }
+            .stats-row { gap: 10px; }
+            .stat { min-width: 80px; }
+            .stat-value { font-size: 18px; }
+            .stat-label { font-size: 11px; }
+            .recurring-item { padding: 8px; gap: 6px; }
+            .recurring-item .amount { font-size: 13px; }
+            .recurring-summary, .other-summary { flex-wrap: wrap; gap: 4px; font-size: 12px; }
+            .history-item { flex-wrap: wrap; gap: 6px; padding: 8px; }
+            .history-item .bar-container { max-width: 100%; flex-basis: 100%; order: 10; }
+            .modal-content { width: 95%; }
+            .dropdown .menu { right: -10px; }
+        }
     </style>
 </head>
 <body>
@@ -494,7 +518,7 @@
     </div>
 
     <script>
-        const API_BASE = (localStorage.getItem('delfin_api') || 'http://localhost:8000').replace(/\/$/, '');
+        const API_BASE = (localStorage.getItem('delfin_api') || (location.pathname.startsWith('/app') ? location.origin : 'http://localhost:8000')).replace(/\/$/, '');
 
         let state = {
             currentMonth: new Date().toISOString().slice(0, 7),

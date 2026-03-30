@@ -137,6 +137,33 @@
         @media (max-width: 900px) {
             .list.list--2col, .two-col-cards { grid-template-columns: 1fr; }
             .cat-monthly .chart-box { width: 260px; height: 260px; }
+            .kpis { grid-template-columns: repeat(2, 1fr); }
+            .grid-4 { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (max-width: 600px) {
+            header { flex-direction: column; gap: 10px; padding: 12px 15px; }
+            h1 { font-size: 22px; }
+            .tools { justify-content: center; }
+            .kpis { grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 12px; }
+            .kpi { padding: 10px; }
+            .kpi h3 { font-size: 11px; letter-spacing: 1px; }
+            .kpi .value { font-size: 18px; }
+            .container { gap: 10px; margin: 0 12px 20px; }
+            .two-col-cards { padding-inline: 12px; gap: 10px; }
+            .grid-4 { grid-template-columns: 1fr 1fr; gap: 8px; }
+            .card .head { flex-direction: column; align-items: flex-start; gap: 8px; padding: 10px 12px; }
+            .card .head .tools { width: 100%; flex-wrap: wrap; }
+            .card .head .tools select, .card .head .tools button { font-size: 11px; padding: 5px 8px; }
+            .card .content { padding: 10px 12px; }
+            .card .title { font-size: 14px; }
+            .cat-monthly .chart-box { width: 100%; max-width: 280px; height: 280px; }
+            .list .row { padding: 8px; }
+            .row .right { min-width: 100px; }
+            .row .amt { font-size: 16px; }
+            .badge_spe { width: 50px; height: 22px; font-size: 12px; margin-right: 8px; }
+            .dropdown .menu { min-width: 240px; right: -10px; }
+            .title_te { font-size: 14px; padding-top: 20px; }
+            .footer { margin: 16px 10px; }
         }
     </style>
 </head>
@@ -301,7 +328,7 @@
 
 <script>
 // Configuration
-const API_BASE = (localStorage.getItem('delfin_api') || 'http://localhost:8000').replace(/\/$/, '');
+const API_BASE = (localStorage.getItem('delfin_api') || (location.pathname.startsWith('/app') ? location.origin : 'http://localhost:8000')).replace(/\/$/, '');
 const EPS = 0.005;
 const PALETTE = [
     '#F5B700', '#386481', '#D52811', '#1B9F9A', '#525252', '#00689D',

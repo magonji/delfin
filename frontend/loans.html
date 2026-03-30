@@ -141,6 +141,29 @@
         .type-transfer { color: var(--muted); }
 
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        /* ── Responsive: Mobile ── */
+        @media (max-width: 600px) {
+            header { flex-direction: column; gap: 10px; padding: 12px 15px; }
+            h1 { font-size: 22px; }
+            .tools { justify-content: center; }
+            .kpis { margin: 12px; gap: 8px; }
+            .kpi { padding: 10px; }
+            .kpi .value { font-size: 18px; }
+            .card-container { margin: 0 12px 20px; gap: 12px; }
+            .col { min-width: unset; }
+            .card .head { padding: 10px 12px; flex-wrap: wrap; gap: 6px; }
+            .card .title { font-size: 14px; }
+            .card .content { padding: 12px; }
+            .loan-card { padding: 14px; }
+            .loan-title { font-size: 16px; }
+            .loan-stats { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+            .loan-stat-value { font-size: 13px; }
+            .transaction-item { grid-template-columns: 60px 1fr auto; gap: 6px; }
+            .message-box { margin: 12px; }
+            .dropdown .menu { right: -10px; min-width: 180px; }
+            .footer { margin-top: 60px; }
+        }
     </style>
 </head>
 <body>
@@ -223,7 +246,7 @@
     // CONFIGURATION & CONSTANTS
     // =============================================================================
     
-    const API_BASE = (localStorage.getItem('delfin_api') || 'http://localhost:8000').replace(/\/$/, '');
+    const API_BASE = (localStorage.getItem('delfin_api') || (location.pathname.startsWith('/app') ? location.origin : 'http://localhost:8000')).replace(/\/$/, '');
     const q = (sel) => document.querySelector(sel);
     
     // Cache duration: 14 days in milliseconds
