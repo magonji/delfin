@@ -4,7 +4,7 @@
 
 set -e
 
-DELFIN_DIR="$(cd "$(dirname "$0")" && pwd)"
+DELFIN_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 DELFIN_USER="$(whoami)"
 DELFIN_PORT="${1:-8000}"
 
