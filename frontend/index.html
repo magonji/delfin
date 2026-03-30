@@ -86,7 +86,7 @@
         /* Dropdown menus */
         .dropdown { position: relative; }
         .dropdown .btn { display: flex; align-items: center; gap: 8px; }
-        #navBtn { font-size: 20px; padding: 6px 12px; line-height: 1; }
+        #navBtn { font-size: 22px; padding: 4px 8px; line-height: 1; background: transparent; border: none; cursor: pointer; color: var(--text); }
         .dropdown .btn .count { background: var(--bg); border: 1px solid var(--border); border-radius: 999px; padding: 1px 6px; font-size: 11px; }
         .dropdown .menu { position: absolute; top: calc(100% + 6px); right: 0; min-width: 280px; max-height: 280px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.35); display: none; padding: 8px; z-index: 20; }
         .dropdown.open .menu { display: block; }
@@ -179,7 +179,7 @@
 </head>
 <body>
     <header>
-        <h1>Delfin</h1>
+        <h1>🐬 Delfin · Dashboard</h1>
         <div class="tools">
             <div class="dropdown" id="navDropdown">
                 <button class="btn" id="navBtn" onclick="toggleNav()">&#9776;</button>

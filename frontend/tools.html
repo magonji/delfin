@@ -46,18 +46,11 @@
             border-radius: 8px; padding: 6px 10px; font-size: 12px; cursor: pointer;
             display: flex; align-items: center; gap: 8px; font-family: 'IBM Plex Sans', sans-serif;
         }
-        #navBtn { font-size: 20px; padding: 6px 12px; line-height: 1; }
+        #navBtn { font-size: 22px; padding: 4px 8px; line-height: 1; background: transparent; border: none; cursor: pointer; color: var(--text); }
         .dropdown.open .menu { display: block; }
-        .dropdown .menu {
-            position: absolute; top: 120%; right: 0; min-width: 200px;
-            background: #fff; border: 1px solid var(--border); border-radius: 10px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1); display: none; padding: 8px; z-index: 20;
-        }
-        .navItem { 
-            width: 100%; text-align: left; padding: 8px 12px; border-radius: 6px; 
-            background: transparent; border: none; cursor: pointer; font-family: 'IBM Plex Sans', sans-serif; color: var(--text);
-        }
-        .navItem:hover { background: var(--bg); }
+        .dropdown .menu { position: absolute; top: calc(100% + 6px); right: 0; min-width: 180px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.35); display: none; padding: 8px; z-index: 100; }
+        .navItem { width: 100%; text-align: left; padding: 8px 12px; background: transparent; cursor: pointer; border: none !important; border-radius: 6px; transition: background 0.2s; font-size: 14px; font-weight: 600; font-family: 'IBM Plex Sans', sans-serif; color: var(--text); }
+        .navItem:hover { background: var(--panel); }
         .navItem.active { background: var(--card); color: var(--text); pointer-events: none; }
 
         .container { margin: 20px auto; max-width: 1600px; padding: 0 20px; }
@@ -358,7 +351,7 @@
 </head>
 <body>
     <header>
-        <h1>Delfin</h1>
+        <h1>🐬 Delfin · Tools</h1>
         <div class="tools">
             <div class="dropdown" id="navDropdown">
                 <button class="btn" id="navBtn" onclick="toggleNav()">&#9776;</button>
