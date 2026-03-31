@@ -18,8 +18,7 @@ from backend.helpers import (
     recalculate_balances_from_transaction,
     initialise_all_balances,
     get_rates_bulk,
-    get_latest_rates,
-    get_rate_for_date
+    get_latest_rates
 )
 
 # Create tables if they don't exist
@@ -1744,12 +1743,7 @@ def _as_datetime_ceil(d):
 
 @app.get("/dashboard/summary")
 def get_dashboard_summary(db: Session = Depends(get_db)):
-    """
-    Get summary statistics for the dashboard with currency conversion.
-    Uses HISTORICAL exchange rates — each transaction is converted at its
-    own date's rate (same method as net worth graph).
-    """
-    # Find most common currency
+    """Get summary counts for the dashboard. Balance KPIs are driven by the networth endpoint."""
     currency_counts = db.query(
         Transaction.currency,
         sql_func.count(Transaction.id).label('count')
@@ -1757,77 +1751,18 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
 
     base_currency = currency_counts[0][0] if currency_counts else "GBP"
 
-    # Count queries
     total_transactions = db.query(sql_func.count(Transaction.id)).scalar()
     total_accounts = db.query(sql_func.count(Account.id)).filter(
         Account.is_active == 1
     ).scalar()
     total_categories = db.query(sql_func.count(Category.id)).scalar()
 
-    # Loan detection: first transaction is negative AND fewer than 3 unique payees
-    CREDIT_CARD_PAYEE_THRESHOLD = 3
-    transfer_locations = db.query(Location.id).filter(
-        Location.name.in_(["Transfer In", "Transfer Out"])
-    ).all()
-    transfer_location_ids = set(loc.id for loc in transfer_locations)
-
-    loan_account_ids = set()
-    all_accounts = db.query(Account).filter(Account.is_active == 1).all()
-    for account in all_accounts:
-        first_tx = db.query(Transaction).filter(
-            Transaction.account_id == account.id
-        ).order_by(Transaction.date, Transaction.id).first()
-        if not first_tx or first_tx.amount >= 0:
-            continue
-        non_transfer_payees = db.query(Transaction.payee_id).filter(
-            Transaction.account_id == account.id,
-            Transaction.payee_id != None,
-            ~Transaction.location_id.in_(transfer_location_ids) if transfer_location_ids else True
-        ).distinct().all()
-        unique_payees = set(p[0] for p in non_transfer_payees)
-        if len(unique_payees) < CREDIT_CARD_PAYEE_THRESHOLD:
-            loan_account_ids.add(account.id)
-
-    # Compute balances using HISTORICAL rates per transaction
-    # (same method as net worth graph: each transaction converted at its own date's rate)
-    all_transactions = db.query(Transaction).order_by(Transaction.date).all()
-
-    currencies = list(set(t.currency for t in all_transactions if t.currency))
-    if all_transactions:
-        min_date = _to_date(all_transactions[0].date)
-        max_date = _to_date(all_transactions[-1].date)
-        historical_rates = get_rates_bulk(db, currencies, min_date, max_date)
-    else:
-        historical_rates = {}
-
-    account_balances = {}
-    for trans in all_transactions:
-        trans_date = _to_date(trans.date)
-        rates_for_day = historical_rates.get(trans_date, {'GBP': 1.0})
-        trans_rate = rates_for_day.get(trans.currency, 1.0)
-        base_rate = rates_for_day.get(base_currency, 1.0)
-        converted_amount = trans.amount * (base_rate / trans_rate)
-
-        if trans.account_id not in account_balances:
-            account_balances[trans.account_id] = 0.0
-        account_balances[trans.account_id] += converted_amount
-
-    total_balance_converted = sum(account_balances.values())
-    balance_no_loans = sum(
-        bal for acc_id, bal in account_balances.items()
-        if acc_id not in loan_account_ids
-    )
-
-    rates_dict = get_latest_rates(db)
-
     return {
         "total_transactions": total_transactions,
         "total_accounts": total_accounts,
         "total_categories": total_categories,
-        "total_balance": round(total_balance_converted, 2),
-        "balance_without_loans": round(balance_no_loans, 2),
         "base_currency": base_currency,
-        "rates_available": len(rates_dict) > 0
+        "rates_available": len(get_latest_rates(db)) > 0
     }
 
 # ============================================

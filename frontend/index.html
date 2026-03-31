@@ -403,17 +403,16 @@ function rangeFor(key) {
 async function loadSummary() {
     let sum = cacheGet('cache_summary') || await api('/dashboard/summary').then(d => { cacheSet('cache_summary', d); return d; });
     state.baseCurrency = sum.base_currency || 'GBP';
-    // baseCurrency badge removed from header
-    
+
     const setKPI = (id, val, isMoney = false) => {
         const el = q(id);
         el.textContent = isMoney ? fmtMoney(Math.abs(val), state.baseCurrency) : val.toLocaleString('en-GB');
         if (isMoney) el.style.color = val > 0 ? 'var(--green)' : val < 0 ? 'var(--red)' : 'var(--text)';
     };
 
-    setKPI('#kpiTotalBalance', sum.total_balance, true);
-    setKPI('#kpiBalanceNoLoans', sum.balance_without_loans ?? sum.total_balance, true);
     setKPI('#kpiTxCount', sum.total_transactions);
+
+    // Balance KPIs are set from networth endpoint (see loadBalanceKpis)
 
     // Load current month budget available
     const now = new Date();
@@ -422,6 +421,30 @@ async function loadSummary() {
         const bp = cacheGet('cache_budget_progress') || await api(`/budgets/${ym}/progress`).then(d => { cacheSet('cache_budget_progress', d); return d; });
         setKPI('#kpiBudgetAvail', bp.remaining, true);
     } catch { q('#kpiBudgetAvail').textContent = '—'; }
+}
+
+async function loadBalanceKpis() {
+    // Use the networth endpoint (all-time, daily) so KPIs match the graph calculation exactly
+    const setMoney = (id, val) => {
+        const el = q(id);
+        el.textContent = fmtMoney(Math.abs(val || 0), state.baseCurrency);
+        el.style.color = (val || 0) > 0 ? 'var(--green)' : (val || 0) < 0 ? 'var(--red)' : 'var(--text)';
+    };
+
+    // Total balance (no exclusions)
+    const total = cacheGet('cache_nw_kpi_total') || await api('/dashboard/networth/daily').then(d => { cacheSet('cache_nw_kpi_total', d); return d; });
+    setMoney('#kpiTotalBalance', total.summary?.current_balance ?? 0);
+
+    // Without loans
+    const res = cacheGet('cache_loan_ids') || await api('/loans/account-ids').then(d => { cacheSet('cache_loan_ids', d); return d; });
+    const loanIds = res.loan_account_ids || [];
+    if (loanIds.length) {
+        const excluded = loanIds.join(',');
+        const noLoans = cacheGet('cache_nw_kpi_noloans') || await api(`/dashboard/networth/daily?excluded_accounts=${excluded}`).then(d => { cacheSet('cache_nw_kpi_noloans', d); return d; });
+        setMoney('#kpiBalanceNoLoans', noLoans.summary?.current_balance ?? 0);
+    } else {
+        setMoney('#kpiBalanceNoLoans', total.summary?.current_balance ?? 0);
+    }
 }
 
 async function loadAccounts() {
@@ -853,7 +876,8 @@ async function init() {
         await Promise.all([
             loadAccounts(),
             loadNetworth(),
-            loadAvailableMonths() 
+            loadAvailableMonths(),
+            loadBalanceKpis()
         ]);
 
         await loadYearlyTrendAll();
