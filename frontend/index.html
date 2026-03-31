@@ -524,7 +524,22 @@ async function loadNetworth() {
         options: {
             maintainAspectRatio: false,
             plugins: { legend: { display: false } },
-            scales: { x: { grid: { color: 'transparent' }, ticks: { maxTicksLimit: 6 } }, y: { grid: { color: '#D4B5A0' }, ticks: { callback: v => Math.abs(v) >= 1000 ? (v/1000).toFixed(0) + 'k' : v } } }
+            scales: {
+                x: {
+                    grid: { color: 'transparent' },
+                    ticks: {
+                        maxTicksLimit: 10,
+                        callback: function(val, i) {
+                            const label = this.getLabelForValue(val);
+                            const d = new Date(label);
+                            const prev = i > 0 ? new Date(this.getLabelForValue(i - 1)) : null;
+                            if (!prev || d.getFullYear() !== prev.getFullYear()) return d.getFullYear();
+                            return '';
+                        }
+                    }
+                },
+                y: { grid: { color: '#D4B5A0' }, ticks: { callback: v => Math.abs(v) >= 1000 ? (v/1000).toFixed(0) + 'k' : v } }
+            }
         }
     }, '_nwChart');
 
