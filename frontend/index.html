@@ -384,8 +384,9 @@ function cacheClearAll() {
 const state = { baseCurrency: 'GBP', months: [], categories: [], accounts: [], excludedAccountIds: new Set(), selectedCategoryIds: new Set() };
 
 // Chart rendering
-function renderChart(canvasId, config, globalVarName) {
+function renderChart(canvasId, config, globalVarName, plugins) {
     if (window[globalVarName]) window[globalVarName].destroy();
+    if (plugins) config.plugins = plugins;
     window[globalVarName] = new Chart(q(canvasId), config);
 }
 
@@ -523,34 +524,7 @@ async function loadNetworth() {
         },
         options: {
             maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false },
-                nwTicks: {
-                    afterDraw(chart) {
-                        const axis = chart.scales.x;
-                        const ctx = chart.ctx;
-                        const labels = chart.data.labels;
-                        const y = axis.bottom;
-                        let lastMonth = null, lastYear = null;
-                        ctx.save();
-                        ctx.strokeStyle = ctx.fillStyle = '#666';
-                        ctx.lineWidth = 1;
-                        for (let i = 0; i < labels.length; i++) {
-                            const d = new Date(labels[i]);
-                            const mo = d.getMonth(), yr = d.getFullYear();
-                            const x = axis.getPixelForValue(i);
-                            if (yr !== lastYear) {
-                                ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + 6); ctx.stroke();
-                                lastYear = yr; lastMonth = mo;
-                            } else if (mo !== lastMonth) {
-                                ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + 3); ctx.stroke();
-                                lastMonth = mo;
-                            }
-                        }
-                        ctx.restore();
-                    }
-                }
-            },
+            plugins: { legend: { display: false } },
             scales: {
                 x: {
                     grid: { color: 'transparent', tickLength: 0 },
@@ -575,7 +549,32 @@ async function loadNetworth() {
                 y: { grid: { color: '#D4B5A0' }, ticks: { callback: v => Math.abs(v) >= 1000 ? (v/1000).toFixed(0) + 'k' : v } }
             }
         }
-    }, '_nwChart');
+    }, '_nwChart', [{
+        id: 'nwTicks',
+        afterDraw(chart) {
+            const axis = chart.scales.x;
+            const ctx = chart.ctx;
+            const labels = chart.data.labels;
+            const y = axis.bottom;
+            let lastMonth = null, lastYear = null;
+            ctx.save();
+            ctx.strokeStyle = '#666';
+            ctx.lineWidth = 1;
+            for (let i = 0; i < labels.length; i++) {
+                const d = new Date(labels[i]);
+                const mo = d.getMonth(), yr = d.getFullYear();
+                const x = axis.getPixelForValue(i);
+                if (yr !== lastYear) {
+                    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + 6); ctx.stroke();
+                    lastYear = yr; lastMonth = mo;
+                } else if (mo !== lastMonth) {
+                    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + 3); ctx.stroke();
+                    lastMonth = mo;
+                }
+            }
+            ctx.restore();
+        }
+    }]);
 
     const s = data.summary || {};
     const updateKpi = (id, val) => {
