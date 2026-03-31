@@ -528,13 +528,14 @@ async function loadNetworth() {
                 x: {
                     grid: { color: 'transparent' },
                     ticks: {
-                        maxTicksLimit: 10,
+                        autoSkip: false,
+                        maxRotation: 0,
                         callback: function(val, i) {
-                            const label = this.getLabelForValue(val);
-                            const d = new Date(label);
-                            const prev = i > 0 ? new Date(this.getLabelForValue(i - 1)) : null;
+                            const labels = this.chart.data.labels;
+                            const d = new Date(labels[i]);
+                            const prev = i > 0 ? new Date(labels[i - 1]) : null;
                             if (!prev || d.getFullYear() !== prev.getFullYear()) return d.getFullYear();
-                            return '';
+                            return null;
                         }
                     }
                 },
