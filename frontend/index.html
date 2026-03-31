@@ -384,9 +384,8 @@ function cacheClearAll() {
 const state = { baseCurrency: 'GBP', months: [], categories: [], accounts: [], excludedAccountIds: new Set(), selectedCategoryIds: new Set() };
 
 // Chart rendering
-function renderChart(canvasId, config, globalVarName, plugins) {
+function renderChart(canvasId, config, globalVarName) {
     if (window[globalVarName]) window[globalVarName].destroy();
-    if (plugins) config.plugins = plugins;
     window[globalVarName] = new Chart(q(canvasId), config);
 }
 
@@ -516,19 +515,10 @@ async function loadNetworth() {
         cacheSet(cacheKey, data);
     }
 
-    const nwLabels = data.data_points.map(p => p.date);
-    const _nwYears = new Set(), _nwMonths = new Set();
-    let _ly = null, _lm = null;
-    for (let i = 0; i < nwLabels.length; i++) {
-        const d = new Date(nwLabels[i]), mo = d.getMonth(), yr = d.getFullYear();
-        if (yr !== _ly) { _nwYears.add(i); _ly = yr; _lm = mo; }
-        else if (mo !== _lm) { _nwMonths.add(i); _lm = mo; }
-    }
-
     renderChart('#networthChart', {
         type: 'line',
         data: {
-            labels: nwLabels,
+            labels: data.data_points.map(p => p.date),
             datasets: [{ label: `Net worth`, data: data.data_points.map(p => p.balance), borderColor: '#0e9530', backgroundColor: 'rgba(14, 159, 48, .15)', fill: true, tension: 0.5 }]
         },
         options: {
@@ -536,47 +526,25 @@ async function loadNetworth() {
             plugins: { legend: { display: false } },
             scales: {
                 x: {
-                    grid: { color: 'transparent', drawTicks: false },
+                    grid: { color: 'transparent' },
                     border: { display: true },
-                    afterBuildTicks: function(axis) {
-                        const ticks = [];
-                        _nwYears.forEach(i => ticks.push({ value: i }));
-                        _nwMonths.forEach(i => ticks.push({ value: i }));
-                        ticks.sort((a, b) => a.value - b.value);
-                        axis.ticks = ticks;
-                    },
                     ticks: {
+                        autoSkip: false,
                         maxRotation: 0,
-                        callback: function(val) {
-                            if (_nwYears.has(val)) return new Date(this.chart.data.labels[val]).getFullYear();
-                            return '';
+                        callback: function(val, i) {
+                            const labels = this.chart.data.labels;
+                            const d = new Date(labels[i]);
+                            const prev = i > 0 ? new Date(labels[i - 1]) : null;
+                            if (!prev || d.getFullYear() !== prev.getFullYear()) return d.getFullYear();
+                            if (!prev || d.getMonth() !== prev.getMonth()) return '';
+                            return null;
                         }
                     }
                 },
                 y: { grid: { color: '#D4B5A0' }, ticks: { callback: v => Math.abs(v) >= 1000 ? (v/1000).toFixed(0) + 'k' : v } }
             }
         }
-    }, '_nwChart', [{
-        id: 'nwTicks',
-        afterDraw(chart) {
-            const axis = chart.scales.x;
-            const ctx = chart.ctx;
-            const y0 = axis.top;
-            const y1 = axis.bottom;
-            ctx.save();
-            ctx.strokeStyle = '#999';
-            ctx.lineWidth = 1;
-            for (const idx of _nwYears) {
-                const x = Math.round(axis.getPixelForValue(idx)) + 0.5;
-                ctx.beginPath(); ctx.moveTo(x, y1); ctx.lineTo(x, y1 + 7); ctx.stroke();
-            }
-            for (const idx of _nwMonths) {
-                const x = Math.round(axis.getPixelForValue(idx)) + 0.5;
-                ctx.beginPath(); ctx.moveTo(x, y1); ctx.lineTo(x, y1 + 3); ctx.stroke();
-            }
-            ctx.restore();
-        }
-    }]);
+    }, '_nwChart');
 
     const s = data.summary || {};
     const updateKpi = (id, val) => {
