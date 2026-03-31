@@ -36,7 +36,7 @@
         .tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
         .tools select, .tools input, .tools button, .dropdown .btn {
             background: var(--bg); color: var(--text); border: 1px solid var(--border);
-            border-radius: 8px; padding: 6px 10px; font-size: 12px; cursor: pointer;
+            border-radius: 8px; padding: 6px 10px; font-size: 12px; cursor: pointer; box-sizing: border-box; height: 32px;
         }
         .tools button { cursor: pointer; }
         .tools .primary { background: var(--panel); border-color: var(--border); }
@@ -141,6 +141,11 @@
         .footer { opacity: 0.7; font-size: 12px; text-align: center; margin: 24px 10px; padding-bottom: 10px; font-family: 'Playfair Display', serif; }
         .nw-chart-wrap { position: relative; height: 250px; }
 
+        /* Floating Action Buttons */
+        .fab-container { position: fixed; bottom: 30px; right: 30px; display: flex; flex-direction: row; gap: 12px; z-index: 900; }
+        .fab-button { width: 60px; height: 60px; border-radius: 50%; background: #6B4D3E; color: white; border: none; font-size: 28px; font-weight: 700; cursor: pointer; box-shadow: 0 5px 15px rgba(0,0,0,0.2); transition: transform 0.2s; display: flex; align-items: center; justify-content: center; font-family: 'IBM Plex Sans', sans-serif; }
+        .fab-button:hover { transform: scale(1.05); background: #5C3F32; }
+
         @media (max-width: 1200px) {
             .container { grid-template-columns: 1fr; }
             .cat-monthly .chart-box { width: 300px; height: 300px; }
@@ -176,6 +181,8 @@
             .dropdown .menu { min-width: 0; right: -10px; }
             #excludeMenu { position: fixed; top: auto; right: 8px; left: 8px; max-height: 60vh; }
             #excludeMenu .list { max-height: calc(60vh - 100px); }
+            .fab-container { bottom: 20px; right: 15px; gap: 10px; }
+            .fab-button { width: 50px; height: 50px; font-size: 24px; }
             .title_te { font-size: 14px; padding-top: 20px; }
             .footer { margin: 16px 10px; }
         }
@@ -938,6 +945,10 @@ async function init() {
 
 document.addEventListener('DOMContentLoaded', init);
 </script>
+<div class="fab-container">
+    <button class="fab-button" onclick="location.href='transactions.html#new-transfer'" title="New Transfer">⇄</button>
+    <button class="fab-button" onclick="location.href='transactions.html#new-transaction'" title="New Transaction">+</button>
+</div>
 <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');</script>
 </body>
 </html>

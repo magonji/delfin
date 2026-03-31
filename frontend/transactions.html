@@ -65,6 +65,7 @@
         #filters input[type="text"] { min-width: 150px; flex-grow: 2; }
         #filters input[type="date"] { width: auto; }
         .filter-actions { display: flex; gap: 5px; margin-left: auto; }
+        #filterToggle { display: none; }
         
         /* Bulk edit mode controls */
         .bulk-controls { display: flex; align-items: center; gap: 5px; padding-left: 10px; border-left: 1px solid var(--border); margin-left: 5px; }
@@ -502,26 +503,28 @@
             header { flex-wrap: nowrap; padding: 12px 15px; padding-top: calc(12px + env(safe-area-inset-top)); position: sticky; top: 0; }
             h1 { font-size: 20px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
             button, select, input { min-height: 44px; font-size: 14px; }
-            .container { margin: 10px auto; }
-            .card { margin: 8px; padding: 8px; }
+            .container { margin: 10px auto; max-width: 100%; overflow: hidden; }
+            .card { margin: 8px; padding: 8px; overflow: hidden; }
 
-            /* Filters become vertical */
-            #filters { flex-direction: column; padding: 8px; gap: 6px; }
-            #filters input, #filters select { width: 100%; min-width: unset; max-width: unset; font-size: 14px; }
+            /* Filter toggle */
+            #filterToggle { display: block; padding: 10px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; text-align: center; font-size: 14px; font-weight: 600; cursor: pointer; margin-bottom: 8px; }
+            #filters { flex-direction: column; padding: 0; gap: 0; max-height: 0; overflow: hidden; border: none; background: none; transition: max-height 0.3s ease, padding 0.3s ease; }
+            #filters.open { max-height: 500px; padding: 8px; gap: 6px; border: 1px solid var(--border); background: var(--panel); }
+            #filters input, #filters select { width: 100%; min-width: 0; max-width: 100%; font-size: 14px; margin-top: 6px; }
             #filters input[type="date"] { width: 100%; }
-            .filter-actions { margin-left: 0; width: 100%; justify-content: stretch; }
+            .filter-actions { margin-left: 0; width: 100%; justify-content: stretch; margin-top: 6px; }
             .filter-actions button { flex: 1; }
             .bulk-controls { border-left: none; padding-left: 0; margin-left: 0; border-top: 1px solid var(--border); padding-top: 8px; width: 100%; justify-content: center; }
 
             /* Hide table header on mobile */
             .transactions-header { display: none; }
 
-            /* Convert grid rows to card layout */
+            /* Convert grid rows to compact card layout */
             .transaction-item.grid-layout {
                 display: flex !important;
                 flex-wrap: wrap;
-                gap: 4px 8px;
-                padding: 10px 12px;
+                gap: 2px 8px;
+                padding: 8px 12px;
                 position: relative;
             }
 
@@ -530,46 +533,39 @@
             .transactions-list:not(.bulk-edit-mode) .transaction-item .checkbox-column { display: none; }
             .bulk-edit-mode .transaction-item { padding-left: 36px; }
 
-            /* First row: date + payee/account + amount */
+            /* Row 1: date + payee + amount */
             .transaction-item > :nth-child(2) { /* date */
-                font-weight: 600;
                 font-size: 12px;
                 color: var(--muted);
+                flex-shrink: 0;
             }
             .transaction-item > :nth-child(3) { /* account */
-                flex: 1;
-                text-align: left;
-                font-size: 13px;
-            }
-            .transaction-item > :nth-child(4) { /* payee */
-                width: 100%;
                 order: 10;
-                text-align: left;
-                font-size: 12px;
+                width: 100%;
+                font-size: 11px;
                 color: var(--muted);
                 white-space: nowrap;
                 overflow: hidden;
                 text-overflow: ellipsis;
             }
-            .transaction-item > :nth-child(5) { /* note - hide */
-                display: none;
+            .transaction-item > :nth-child(4) { /* payee */
+                flex: 1;
+                text-align: left;
+                font-size: 13px;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
             }
+            .transaction-item > :nth-child(5) { display: none; } /* note */
             .transaction-item > :nth-child(6) { /* amount */
                 font-weight: 700;
-                font-size: 14px;
+                font-size: 13px;
+                flex-shrink: 0;
                 margin-left: auto;
             }
             .transaction-item > :nth-child(7),
-            .transaction-item > :nth-child(8) { /* balances - hide */
-                display: none;
-            }
-            .transaction-item > :nth-child(9) { /* actions */
-                order: 11;
-                width: 100%;
-                justify-content: flex-start;
-                margin-left: 0;
-                padding-top: 4px;
-            }
+            .transaction-item > :nth-child(8) { display: none; } /* balances */
+            .transaction-item > :nth-child(9) { display: none; } /* actions */
 
             /* Disable hover effects on mobile (touch) */
             .transaction-item:hover .date-display { opacity: 1; }
@@ -642,6 +638,7 @@
         
         <div class="card">
                         
+            <div id="filterToggle" onclick="document.getElementById('filters').classList.toggle('open')">Filters ▾</div>
             <div id="filters">
                 <input type="text" id="filterSearch" placeholder="Search note or payee..." title="Search in notes and payee names">
 
@@ -1313,6 +1310,10 @@
             document.getElementById('transferDate').valueAsDate = now; document.getElementById('transferTime').value = now.toTimeString().slice(0, 5);
             
             setupEventListeners();
+
+            // Open modal if navigated with hash
+            if (location.hash === '#new-transaction') { openTransactionModal(); history.replaceState(null, '', location.pathname); }
+            if (location.hash === '#new-transfer') { openTransferModal(); history.replaceState(null, '', location.pathname); }
         });
         
         // Helper to fetch transaction data without processing (for parallel loading)

@@ -138,6 +138,11 @@
 
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
+        /* Floating Action Buttons */
+        .fab-container { position: fixed; bottom: 30px; right: 30px; display: flex; flex-direction: row; gap: 12px; z-index: 900; }
+        .fab-button { width: 60px; height: 60px; border-radius: 50%; background: #6B4D3E; color: white; border: none; font-size: 28px; font-weight: 700; cursor: pointer; box-shadow: 0 5px 15px rgba(0,0,0,0.2); transition: transform 0.2s; display: flex; align-items: center; justify-content: center; font-family: 'IBM Plex Sans', sans-serif; }
+        .fab-button:hover { transform: scale(1.05); background: #5C3F32; }
+
         /* ── Responsive: Mobile ── */
         @media (max-width: 600px) {
             header { flex-wrap: nowrap; padding: 12px 15px; padding-top: calc(12px + env(safe-area-inset-top)); position: sticky; top: 0; }
@@ -158,6 +163,8 @@
             .transaction-item { grid-template-columns: 60px 1fr auto; gap: 6px; }
             .message-box { margin: 12px; }
             .dropdown .menu { right: -10px; min-width: 180px; }
+            .fab-container { bottom: 20px; right: 15px; gap: 10px; }
+            .fab-button { width: 50px; height: 50px; font-size: 24px; }
             .footer { margin-top: 60px; }
         }
     </style>
@@ -815,6 +822,10 @@
         return NaN;
     }
 </script>
+<div class="fab-container">
+    <button class="fab-button" onclick="location.href='transactions.html#new-transfer'" title="New Transfer">⇄</button>
+    <button class="fab-button" onclick="location.href='transactions.html#new-transaction'" title="New Transaction">+</button>
+</div>
 <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');</script>
 </body>
 </html>
