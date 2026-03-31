@@ -173,7 +173,9 @@
             .row .right { min-width: 100px; }
             .row .amt { font-size: 16px; }
             .badge_spe { width: 50px; height: 22px; font-size: 12px; margin-right: 8px; }
-            .dropdown .menu { min-width: 240px; right: -10px; }
+            .dropdown .menu { min-width: 0; right: -10px; }
+            #excludeMenu { position: fixed; top: auto; right: 8px; left: 8px; max-height: 60vh; }
+            #excludeMenu .list { max-height: calc(60vh - 100px); }
             .title_te { font-size: 14px; padding-top: 20px; }
             .footer { margin: 16px 10px; }
         }
