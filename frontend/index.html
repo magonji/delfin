@@ -216,7 +216,7 @@
                     <select id="nwPeriod"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly" selected>Monthly</option></select>
                     <select id="nwRange"><option value="all">All time</option><option value="last60">5 years</option><option value="last24">2 years</option><option value="last12">Last year</option><option value="last6">Last 6 months</option><option value="last3">Last 3 months</option><option value="last1">Last month</option></select>
                     <div class="dropdown" id="excludeDropdown">
-                        <button class="btn" id="excludeBtn" onclick="toggleExclude()">Exclude accounts <span class="count" id="excludeCount">0</span> ▾</button>
+                        <button class="btn" id="excludeBtn" onclick="toggleExclude()">Exclude <span class="count" id="excludeCount" style="display:none">0</span>▾</button>
                         <div class="menu" id="excludeMenu">
                             <div class="search"><input type="text" id="excludeSearch" placeholder="Search accounts..."></div>
                             <div class="actions"><button id="excludeSelectAll">Select all</button><button id="excludeLoansBtn">Loans</button><button id="excludeClear">Clear</button></div>
@@ -465,6 +465,13 @@ async function loadAccounts() {
     });
 }
 
+function updateExcludeCount() {
+    const n = state.excludedAccountIds.size;
+    const el = q('#excludeCount');
+    el.textContent = n;
+    el.style.display = n > 0 ? 'inline' : 'none';
+}
+
 function renderExcludeList() {
     const list = q('#excludeList');
     list.innerHTML = '';
@@ -476,12 +483,12 @@ function renderExcludeList() {
         label.querySelector('input').onchange = (e) => {
             const val = parseInt(e.target.value);
             e.target.checked ? state.excludedAccountIds.add(val) : state.excludedAccountIds.delete(val);
-            q('#excludeCount').textContent = state.excludedAccountIds.size;
+            updateExcludeCount();
             loadNetworth();
         };
         list.appendChild(label);
     });
-    q('#excludeCount').textContent = state.excludedAccountIds.size;
+    updateExcludeCount();
 }
 
 async function toggleLoanExclusion() {
@@ -495,7 +502,7 @@ async function toggleLoanExclusion() {
     } else {
         state.loanAccountIds.forEach(id => state.excludedAccountIds.add(id));
     }
-    q('#excludeCount').textContent = state.excludedAccountIds.size;
+    updateExcludeCount();
     renderExcludeList();
 }
 
@@ -898,8 +905,8 @@ q('#txType').onchange = () => loadTopList('/dashboard/top-individual-expenses', 
 q('#txRange').onchange = () => loadTopList('/dashboard/top-individual-expenses', 'topTx', true);
 q('#excludeSearch').oninput = renderExcludeList;
 q('#categoriesSearch').oninput = renderCategoriesList;
-q('#excludeSelectAll').onclick = () => { state.accounts.forEach(a => state.excludedAccountIds.add(a.id)); q('#excludeCount').textContent = state.excludedAccountIds.size; renderExcludeList(); loadNetworth(); };
-q('#excludeClear').onclick = () => { state.excludedAccountIds.clear(); q('#excludeCount').textContent = 0; renderExcludeList(); loadNetworth(); };
+q('#excludeSelectAll').onclick = () => { state.accounts.forEach(a => state.excludedAccountIds.add(a.id)); updateExcludeCount(); renderExcludeList(); loadNetworth(); };
+q('#excludeClear').onclick = () => { state.excludedAccountIds.clear(); updateExcludeCount(); renderExcludeList(); loadNetworth(); };
 q('#categoriesSelectAll').onclick = () => { state.categories.forEach(c => state.selectedCategoryIds.add(c.id)); renderCategoriesList(); loadCategoriesSeries(); };
 q('#categoriesClear').onclick = () => { state.selectedCategoryIds.clear(); renderCategoriesList(); loadCategoriesSeries(); };
 
