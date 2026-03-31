@@ -516,10 +516,19 @@ async function loadNetworth() {
         cacheSet(cacheKey, data);
     }
 
+    const nwLabels = data.data_points.map(p => p.date);
+    const _nwYears = new Set(), _nwMonths = new Set();
+    let _ly = null, _lm = null;
+    for (let i = 0; i < nwLabels.length; i++) {
+        const d = new Date(nwLabels[i]), mo = d.getMonth(), yr = d.getFullYear();
+        if (yr !== _ly) { _nwYears.add(i); _ly = yr; _lm = mo; }
+        else if (mo !== _lm) { _nwMonths.add(i); _lm = mo; }
+    }
+
     renderChart('#networthChart', {
         type: 'line',
         data: {
-            labels: data.data_points.map(p => p.date),
+            labels: nwLabels,
             datasets: [{ label: `Net worth`, data: data.data_points.map(p => p.balance), borderColor: '#0e9530', backgroundColor: 'rgba(14, 159, 48, .15)', fill: true, tension: 0.5 }]
         },
         options: {
@@ -527,22 +536,20 @@ async function loadNetworth() {
             plugins: { legend: { display: false } },
             scales: {
                 x: {
-                    grid: { color: 'transparent', tickLength: 0 },
+                    grid: { color: 'transparent', drawTicks: false },
                     border: { display: true },
                     afterBuildTicks: function(axis) {
-                        const labels = axis.chart.data.labels;
-                        const yearTicks = [];
-                        let lastYear = null;
-                        for (let i = 0; i < labels.length; i++) {
-                            const y = new Date(labels[i]).getFullYear();
-                            if (y !== lastYear) { yearTicks.push({ value: i }); lastYear = y; }
-                        }
-                        axis.ticks = yearTicks;
+                        const ticks = [];
+                        _nwYears.forEach(i => ticks.push({ value: i }));
+                        _nwMonths.forEach(i => ticks.push({ value: i }));
+                        ticks.sort((a, b) => a.value - b.value);
+                        axis.ticks = ticks;
                     },
                     ticks: {
                         maxRotation: 0,
                         callback: function(val) {
-                            return new Date(this.chart.data.labels[val]).getFullYear();
+                            if (_nwYears.has(val)) return new Date(this.chart.data.labels[val]).getFullYear();
+                            return '';
                         }
                     }
                 },
@@ -554,23 +561,18 @@ async function loadNetworth() {
         afterDraw(chart) {
             const axis = chart.scales.x;
             const ctx = chart.ctx;
-            const labels = chart.data.labels;
-            const y = axis.bottom;
-            let lastMonth = null, lastYear = null;
+            const y0 = axis.top;
+            const y1 = axis.bottom;
             ctx.save();
-            ctx.strokeStyle = '#666';
+            ctx.strokeStyle = '#999';
             ctx.lineWidth = 1;
-            for (let i = 0; i < labels.length; i++) {
-                const d = new Date(labels[i]);
-                const mo = d.getMonth(), yr = d.getFullYear();
-                const x = axis.getPixelForValue(i);
-                if (yr !== lastYear) {
-                    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + 6); ctx.stroke();
-                    lastYear = yr; lastMonth = mo;
-                } else if (mo !== lastMonth) {
-                    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + 3); ctx.stroke();
-                    lastMonth = mo;
-                }
+            for (const idx of _nwYears) {
+                const x = Math.round(axis.getPixelForValue(idx)) + 0.5;
+                ctx.beginPath(); ctx.moveTo(x, y1); ctx.lineTo(x, y1 + 7); ctx.stroke();
+            }
+            for (const idx of _nwMonths) {
+                const x = Math.round(axis.getPixelForValue(idx)) + 0.5;
+                ctx.beginPath(); ctx.moveTo(x, y1); ctx.lineTo(x, y1 + 3); ctx.stroke();
             }
             ctx.restore();
         }
