@@ -212,7 +212,7 @@
                 <h2 class="title">Net Worth Evolution</h2>
                 <div class="tools">
                     <select id="nwPeriod"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly" selected>Monthly</option></select>
-                    <select id="nwRange"><option value="all">All time</option><option value="last12">Last year</option><option value="last6">Last 6 months</option><option value="last3">Last 3 months</option><option value="last1">Last month</option></select>
+                    <select id="nwRange"><option value="all">All time</option><option value="last60">5 years</option><option value="last24">2 years</option><option value="last12">Last year</option><option value="last6">Last 6 months</option><option value="last3">Last 3 months</option><option value="last1">Last month</option></select>
                     <div class="dropdown" id="excludeDropdown">
                         <button class="btn" id="excludeBtn" onclick="toggleExclude()">Exclude accounts <span class="count" id="excludeCount">0</span> ▾</button>
                         <div class="menu" id="excludeMenu">
@@ -394,10 +394,8 @@ function rangeFor(key) {
     let from = null;
     if (key !== 'all') {
         from = new Date(today);
-        if (key === 'last12') from.setMonth(from.getMonth() - 12);
-        else if (key === 'last6') from.setMonth(from.getMonth() - 6);
-        else if (key === 'last3') from.setMonth(from.getMonth() - 3);
-        else if (key === 'last1') from.setMonth(from.getMonth() - 1);
+        const months = parseInt(key.replace('last', ''));
+        from.setMonth(from.getMonth() - months);
     }
     return { from: from?.toISOString().slice(0, 10), to: key !== 'all' ? today.toISOString().slice(0, 10) : null };
 }
@@ -461,19 +459,23 @@ function renderExcludeList() {
     q('#excludeCount').textContent = state.excludedAccountIds.size;
 }
 
+async function syncLoanExclusion() {
+    if (!state.loanAccountIds) {
+        const res = cacheGet('cache_loan_ids') || await api('/loans/account-ids').then(d => { cacheSet('cache_loan_ids', d, 86400); return d; });
+        state.loanAccountIds = res.loan_account_ids || [];
+    }
+    if (q('#nwExcludeLoans').checked) {
+        state.loanAccountIds.forEach(id => state.excludedAccountIds.add(id));
+    } else {
+        state.loanAccountIds.forEach(id => state.excludedAccountIds.delete(id));
+    }
+    renderExcludeList();
+}
+
 async function loadNetworth() {
     const period = q('#nwPeriod').value;
     const { from, to } = rangeFor(q('#nwRange').value);
-    // Merge manually excluded accounts with loan accounts if checkbox is on
-    const allExcluded = new Set(state.excludedAccountIds);
-    if (q('#nwExcludeLoans').checked) {
-        if (!state.loanAccountIds) {
-            const res = cacheGet('cache_loan_ids') || await api('/loans/account-ids').then(d => { cacheSet('cache_loan_ids', d, 86400); return d; });
-            state.loanAccountIds = res.loan_account_ids || [];
-        }
-        state.loanAccountIds.forEach(id => allExcluded.add(id));
-    }
-    const excluded = Array.from(allExcluded).join(',');
+    const excluded = Array.from(state.excludedAccountIds).join(',');
     const cacheKey = `cache_nw_${period}_${from}_${to}_${excluded}`;
     
     let data = cacheGet(cacheKey);
@@ -824,7 +826,7 @@ q('#btnUpdateRates').onclick = async () => { try { await fetch(`${API_BASE}/exch
 // Event bindings
 q('#nwPeriod').onchange = loadNetworth;
 q('#nwRange').onchange = loadNetworth;
-q('#nwExcludeLoans').onchange = loadNetworth;
+q('#nwExcludeLoans').onchange = async () => { await syncLoanExclusion(); loadNetworth(); };
 q('#btnPrevMonth').onclick = () => { const s=q('#selectMonth'); if(s.selectedIndex<s.options.length-1) { s.selectedIndex++; s.dispatchEvent(new Event('change')); }};
 q('#btnNextMonth').onclick = () => { const s=q('#selectMonth'); if(s.selectedIndex>0) { s.selectedIndex--; s.dispatchEvent(new Event('change')); }};
 q('#selectMonth').onchange = (e) => loadMonthlyBreakdown(e.target.value);
