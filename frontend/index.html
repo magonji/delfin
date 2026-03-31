@@ -217,11 +217,10 @@
                         <button class="btn" id="excludeBtn" onclick="toggleExclude()">Exclude accounts <span class="count" id="excludeCount">0</span> ▾</button>
                         <div class="menu" id="excludeMenu">
                             <div class="search"><input type="text" id="excludeSearch" placeholder="Search accounts..."></div>
-                            <div class="actions"><button id="excludeSelectAll">Select all</button><button id="excludeClear">Clear</button></div>
+                            <div class="actions"><button id="excludeSelectAll">Select all</button><button id="excludeLoansBtn">Loans</button><button id="excludeClear">Clear</button></div>
                             <div class="list" id="excludeList"></div>
                         </div>
                     </div>
-                    <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;white-space:nowrap;"><input type="checkbox" id="nwExcludeLoans"> Exclude loans</label>
                     <button id="applyNetworth" class="primary" style="display:none;">Apply</button>
                 </div>
             </div>
@@ -448,7 +447,7 @@ async function loadBalanceKpis() {
 }
 
 async function loadAccounts() {
-    let data = cacheGet('cache_accounts') || await api('/accounts/with-balances').then(d => { cacheSet('cache_accounts', d); return d; });
+    let data = cacheGet('cache_accounts') || await api('/accounts/with-balances?include_closed=true').then(d => { cacheSet('cache_accounts', d); return d; });
     state.accounts = data.sort((a, b) => (b.current_balance || 0) - (a.current_balance || 0));
     renderExcludeList();
 
@@ -470,7 +469,8 @@ function renderExcludeList() {
     const term = q('#excludeSearch').value.toLowerCase();
     state.accounts.filter(a => !term || a.name.toLowerCase().includes(term)).forEach(a => {
         const label = document.createElement('label');
-        label.innerHTML = `<input type="checkbox" value="${a.id}" ${state.excludedAccountIds.has(a.id) ? 'checked' : ''}><span>${a.name}</span><span class="muted" style="margin-left:auto">${a.currency}</span>`;
+        const closed = a.is_active === false || a.is_active === 0;
+        label.innerHTML = `<input type="checkbox" value="${a.id}" ${state.excludedAccountIds.has(a.id) ? 'checked' : ''}><span${closed ? ' style="opacity:.5"' : ''}>${a.name}${closed ? ' (closed)' : ''}</span><span class="muted" style="margin-left:auto">${a.currency}</span>`;
         label.querySelector('input').onchange = (e) => {
             const val = parseInt(e.target.value);
             e.target.checked ? state.excludedAccountIds.add(val) : state.excludedAccountIds.delete(val);
@@ -482,16 +482,18 @@ function renderExcludeList() {
     q('#excludeCount').textContent = state.excludedAccountIds.size;
 }
 
-async function syncLoanExclusion() {
+async function toggleLoanExclusion() {
     if (!state.loanAccountIds) {
         const res = cacheGet('cache_loan_ids') || await api('/loans/account-ids').then(d => { cacheSet('cache_loan_ids', d, 86400); return d; });
         state.loanAccountIds = res.loan_account_ids || [];
     }
-    if (q('#nwExcludeLoans').checked) {
-        state.loanAccountIds.forEach(id => state.excludedAccountIds.add(id));
-    } else {
+    const allExcluded = state.loanAccountIds.every(id => state.excludedAccountIds.has(id));
+    if (allExcluded) {
         state.loanAccountIds.forEach(id => state.excludedAccountIds.delete(id));
+    } else {
+        state.loanAccountIds.forEach(id => state.excludedAccountIds.add(id));
     }
+    q('#excludeCount').textContent = state.excludedAccountIds.size;
     renderExcludeList();
 }
 
@@ -843,13 +845,36 @@ document.addEventListener('click', (e) => {
     });
 });
 
-q('#btnRefresh').onclick = async () => { cacheClearAll(); init(); };
-q('#btnUpdateRates').onclick = async () => { try { await fetch(`${API_BASE}/exchange-rates/update`, { method: 'POST' }); init(); alert('Rates updated'); } catch(e) { alert(e); }};
+q('#btnRefresh').onclick = async () => {
+    const btn = q('#btnRefresh');
+    const orig = btn.textContent;
+    btn.disabled = true;
+    try {
+        cacheClearAll();
+        btn.textContent = '⏳ Recalculating balances...';
+        await fetch(`${API_BASE}/admin/initialise-balances`, { method: 'POST' });
+        btn.textContent = '⏳ Updating payee statistics...';
+        await fetch(`${API_BASE}/payees/recalculate-all-stats`, { method: 'POST' });
+        btn.textContent = '⏳ Refreshing display...';
+        await init();
+        btn.textContent = orig;
+    } catch (e) { alert('Error: ' + e.message); btn.textContent = orig; }
+    btn.disabled = false;
+    toggleDropdown('#navDropdown', false);
+};
+q('#btnUpdateRates').onclick = async () => { try { await fetch(`${API_BASE}/exchange-rates/update`, { method: 'POST' }); cacheClearAll(); await init(); alert('Rates updated'); } catch(e) { alert(e); } toggleDropdown('#navDropdown', false); };
+
+// Close nav menu when clicking a navigation item
+q('#navMenu').addEventListener('click', (e) => {
+    if (e.target.matches('.navItem') && e.target !== q('#btnRefresh') && e.target !== q('#btnUpdateRates')) {
+        toggleDropdown('#navDropdown', false);
+    }
+});
 
 // Event bindings
 q('#nwPeriod').onchange = loadNetworth;
 q('#nwRange').onchange = loadNetworth;
-q('#nwExcludeLoans').onchange = async () => { await syncLoanExclusion(); loadNetworth(); };
+q('#excludeLoansBtn').onclick = async () => { await toggleLoanExclusion(); loadNetworth(); };
 q('#btnPrevMonth').onclick = () => { const s=q('#selectMonth'); if(s.selectedIndex<s.options.length-1) { s.selectedIndex++; s.dispatchEvent(new Event('change')); }};
 q('#btnNextMonth').onclick = () => { const s=q('#selectMonth'); if(s.selectedIndex>0) { s.selectedIndex--; s.dispatchEvent(new Event('change')); }};
 q('#selectMonth').onchange = (e) => loadMonthlyBreakdown(e.target.value);
@@ -863,8 +888,8 @@ q('#txType').onchange = () => loadTopList('/dashboard/top-individual-expenses', 
 q('#txRange').onchange = () => loadTopList('/dashboard/top-individual-expenses', 'topTx', true);
 q('#excludeSearch').oninput = renderExcludeList;
 q('#categoriesSearch').oninput = renderCategoriesList;
-q('#excludeSelectAll').onclick = () => { state.accounts.forEach(a => state.excludedAccountIds.add(a.id)); renderExcludeList(); loadNetworth(); };
-q('#excludeClear').onclick = () => { state.excludedAccountIds.clear(); renderExcludeList(); loadNetworth(); };
+q('#excludeSelectAll').onclick = () => { state.accounts.forEach(a => state.excludedAccountIds.add(a.id)); q('#excludeCount').textContent = state.excludedAccountIds.size; renderExcludeList(); loadNetworth(); };
+q('#excludeClear').onclick = () => { state.excludedAccountIds.clear(); q('#excludeCount').textContent = 0; renderExcludeList(); loadNetworth(); };
 q('#categoriesSelectAll').onclick = () => { state.categories.forEach(c => state.selectedCategoryIds.add(c.id)); renderCategoriesList(); loadCategoriesSeries(); };
 q('#categoriesClear').onclick = () => { state.selectedCategoryIds.clear(); renderCategoriesList(); loadCategoriesSeries(); };
 

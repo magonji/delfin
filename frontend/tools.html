@@ -366,8 +366,8 @@
                         <button class="navItem" onclick="location.href='loans.html'">Loans</button>
                         <button class="navItem active">Tools</button>
                         <hr style="border: none; border-top: 1px solid var(--border); margin: 6px 0;">
-                        <button class="navItem" onclick="location.reload()">Refresh</button>
-                        <button class="navItem" onclick="fetch((localStorage.getItem('delfin_api') || (location.pathname.startsWith('/app') ? location.origin : 'http://localhost:8000')).replace(/\/$/, '') + '/exchange-rates/update', {method:'POST'}).then(()=>location.reload()).catch(e=>alert(e))">Update rates</button>
+                        <button class="navItem" id="btnRefresh">Refresh</button>
+                        <button class="navItem" id="btnUpdateRates">Update rates</button>
                     </div>
                 </div>
             </div>
@@ -637,10 +637,40 @@
 
     <script>
         // Navigation dropdown logic
-        function toggleNav() { document.querySelector('#navDropdown').classList.toggle('open'); }
-        document.addEventListener('click', (e) => { if (document.querySelector('#navDropdown') && !document.querySelector('#navDropdown').contains(e.target)) document.querySelector('#navDropdown').classList.remove('open'); });
+        const q = s => document.querySelector(s);
+        function toggleNav() { q('#navDropdown').classList.toggle('open'); }
+        document.addEventListener('click', (e) => { if (q('#navDropdown') && !q('#navDropdown').contains(e.target)) q('#navDropdown').classList.remove('open'); });
 
         const API_URL = (localStorage.getItem('delfin_api') || (location.pathname.startsWith('/app') ? location.origin : 'http://localhost:8000')).replace(/\/$/, '');
+
+        function cacheClearAll() {
+            Object.keys(localStorage).filter(k => k.startsWith('cache_')).forEach(k => localStorage.removeItem(k));
+        }
+
+        q('#btnRefresh').onclick = async () => {
+            const btn = q('#btnRefresh');
+            const orig = btn.textContent;
+            btn.disabled = true;
+            try {
+                cacheClearAll();
+                btn.textContent = '⏳ Recalculating balances...';
+                await fetch(`${API_URL}/admin/initialise-balances`, { method: 'POST' });
+                btn.textContent = '⏳ Updating payee statistics...';
+                await fetch(`${API_URL}/payees/recalculate-all-stats`, { method: 'POST' });
+                btn.textContent = orig;
+                location.reload();
+            } catch (e) { alert('Error: ' + e.message); btn.textContent = orig; btn.disabled = false; }
+        };
+        q('#btnUpdateRates').onclick = async () => {
+            try { cacheClearAll(); await fetch(`${API_URL}/exchange-rates/update`, { method: 'POST' }); location.reload(); } catch(e) { alert(e); }
+        };
+
+        // Close nav menu when clicking a navigation item
+        q('#navMenu').addEventListener('click', (e) => {
+            if (e.target.matches('.navItem') && e.target.id !== 'btnRefresh' && e.target.id !== 'btnUpdateRates') {
+                q('#navDropdown').classList.remove('open');
+            }
+        });
         
         // Custom dialog system (replaces confirm/prompt which may be blocked)
         let customDialogResolve = null;

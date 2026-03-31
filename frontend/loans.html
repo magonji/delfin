@@ -255,6 +255,7 @@
     
     // Currency symbol mapping
     const CURRENCY_SYMBOLS = { 'GBP': '£', 'EUR': '€', 'USD': '$', 'JPY': '¥' };
+    const sym = (currency) => CURRENCY_SYMBOLS[currency] || currency + ' ';
 
     // Global state for currency display
     let globalCurrency = 'GBP';
@@ -457,14 +458,15 @@
         const barClass = isCompleted ? 'completed' : (isCard ? 'credit-card' : 'loan');
         
         // Format balance display with appropriate colour
+        const s = sym(debt.account.currency);
         let balanceDisplay;
         if (isCard) {
             const bal = debt.current_balance;
             const color = bal > 0 ? 'var(--green)' : (bal < 0 ? 'var(--red)' : '#666');
             const sign = bal < 0 ? '-' : (bal > 0 ? '+' : '');
-            balanceDisplay = `<span style="color:${color}">${sign}${globalSymbol}${formatNum(bal)}</span>`;
+            balanceDisplay = `<span style="color:${color}">${sign}${s}${formatNum(bal)}</span>`;
         } else {
-            balanceDisplay = `<span style="color:${isCompleted ? 'var(--green)' : 'var(--red)'}">${globalSymbol}${formatNum(debt.current_owed)}</span>`;
+            balanceDisplay = `<span style="color:${isCompleted ? 'var(--green)' : 'var(--red)'}">${s}${formatNum(debt.current_owed)}</span>`;
         }
 
         // Generate the HTML card
@@ -493,15 +495,15 @@
                 <div class="loan-stats">
                     <div>
                         <div class="loan-stat-label">${isCard ? 'Charges' : 'Borrowed'}</div>
-                        <div class="loan-stat-value">${globalSymbol}${formatNum(debt.borrowed)}</div>
+                        <div class="loan-stat-value">${s}${formatNum(debt.borrowed)}</div>
                     </div>
                     <div>
                         <div class="loan-stat-label">Repaid</div>
-                        <div class="loan-stat-value" style="color: var(--green)">${globalSymbol}${formatNum(debt.repaid)}</div>
+                        <div class="loan-stat-value" style="color: var(--green)">${s}${formatNum(debt.repaid)}</div>
                     </div>
                     <div>
                         <div class="loan-stat-label">Interest</div>
-                        <div class="loan-stat-value" style="color: var(--yellow)">${globalSymbol}${formatNum(debt.interest)}</div>
+                        <div class="loan-stat-value" style="color: var(--yellow)">${s}${formatNum(debt.interest)}</div>
                     </div>
                     <div>
                         <div class="loan-stat-label">${isCard ? 'Balance' : 'Remaining'}</div>
@@ -510,7 +512,7 @@
                 </div>
                 
                 <div class="loan-transactions" id="transactions-${debt.account.id}">
-                    ${renderTransactions(debt.transactions)}
+                    ${renderTransactions(debt.transactions, debt.account.currency)}
                 </div>
             </div>
         `;
@@ -521,7 +523,7 @@
      * @param {array} transactions - Array of transaction objects
      * @returns {string} - HTML string for transaction list
      */
-    function renderTransactions(transactions) {
+    function renderTransactions(transactions, currency) {
         if (!transactions || transactions.length === 0) {
             return '<div style="text-align:center;color:#999;font-size:12px;padding:10px">No transactions</div>';
         }
@@ -570,7 +572,7 @@
                         <div class="transaction-note">${t.payee_name || t.category_name || t.note || ''}</div>
                     </div>
                     <div class="transaction-amount ${amountClass}">
-                        ${globalSymbol}${formatNum(Math.abs(t.amount))}
+                        ${sym(currency)}${formatNum(Math.abs(t.amount))}
                     </div>
                 </div>
             `;
@@ -639,13 +641,26 @@
     // =============================================================================
 
     /**
-     * Clears the local cache and reloads all data from the API
+     * Full refresh: recalculate balances, payee stats, clear cache, reload
      */
     async function refreshCache() {
-        localStorage.removeItem('loans_summary');
-        localStorage.removeItem('loans_details');
-        showSuccess('Cache cleared. Reloading...');
-        await loadData();
+        const btn = q('#btnRefresh');
+        const orig = btn.textContent;
+        btn.disabled = true;
+        try {
+            Object.keys(localStorage).filter(k => k.startsWith('cache_')).forEach(k => localStorage.removeItem(k));
+            localStorage.removeItem('loans_summary');
+            localStorage.removeItem('loans_details');
+            btn.textContent = '⏳ Recalculating balances...';
+            await fetch(`${API_BASE}/admin/initialise-balances`, { method: 'POST' });
+            btn.textContent = '⏳ Updating payee statistics...';
+            await fetch(`${API_BASE}/payees/recalculate-all-stats`, { method: 'POST' });
+            btn.textContent = '⏳ Refreshing display...';
+            await loadData();
+            btn.textContent = orig;
+        } catch (e) { alert('Error: ' + e.message); btn.textContent = orig; }
+        btn.disabled = false;
+        q('#navDropdown').classList.remove('open');
     }
 
     // Refresh button handler
@@ -658,6 +673,14 @@
             showSuccess('Exchange rates updated');
             refreshCache();
         } catch (e) { showError('Failed to update rates'); }
+        q('#navDropdown').classList.remove('open');
+    });
+
+    // Close nav menu when clicking a navigation item
+    q('#navMenu').addEventListener('click', (e) => {
+        if (e.target.matches('.navItem') && e.target.id !== 'btnRefresh' && e.target.id !== 'btnUpdateRates') {
+            q('#navDropdown').classList.remove('open');
+        }
     });
 
     // Close dropdown when clicking outside

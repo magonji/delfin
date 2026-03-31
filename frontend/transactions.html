@@ -1236,22 +1236,32 @@
             } catch (error) {
                 console.error('Error during refresh:', error);
                 alert('Error refreshing data: ' + error.message);
-                
+
                 const btnRefresh = document.querySelector('#btnRefresh');
                 btnRefresh.textContent = '🔄 Refresh';
                 btnRefresh.disabled = false;
             }
+            toggleDropdown('#navDropdown', false);
         };
 
         document.querySelector('#btnUpdateRates').onclick = async () => {
-            try { 
-                await fetch(`${API_URL}/exchange-rates/update`, { method: 'POST' }); 
-                await loadRecentTransactions(true); 
-                alert('Rates updated'); 
-            } catch(e) { 
-                alert('Error updating rates: ' + e.message); 
+            try {
+                cacheClearAll();
+                await fetch(`${API_URL}/exchange-rates/update`, { method: 'POST' });
+                await loadRecentTransactions(true);
+                alert('Rates updated');
+            } catch(e) {
+                alert('Error updating rates: ' + e.message);
             }
+            toggleDropdown('#navDropdown', false);
         };
+
+        // Close nav menu when clicking a navigation item
+        document.querySelector('#navMenu').addEventListener('click', (e) => {
+            if (e.target.matches('.navItem') && e.target.id !== 'btnRefresh' && e.target.id !== 'btnUpdateRates') {
+                toggleDropdown('#navDropdown', false);
+            }
+        });
 
         // Base currency (used for formatting)
         

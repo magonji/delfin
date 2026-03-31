@@ -2985,7 +2985,7 @@ def get_loans_details(
             "close_date": close_date.isoformat() if close_date and hasattr(close_date, 'isoformat') else None,
             "lender_name": lender_name,
             "unique_payees": len(unique_payees),
-            "transactions": tx_list
+            "transactions": tx_list[::-1]
         }
         
         # Categorize by type and status
