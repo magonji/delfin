@@ -139,6 +139,7 @@
         .legend { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
         .legend .dot { width: 10px; height: 10px; border-radius: 50%; }
         .footer { opacity: 0.7; font-size: 12px; text-align: center; margin: 24px 10px; padding-bottom: 10px; font-family: 'Playfair Display', serif; }
+        .nw-chart-wrap { position: relative; height: 250px; }
 
         @media (max-width: 1200px) {
             .container { grid-template-columns: 1fr; }
@@ -161,6 +162,7 @@
             .container { gap: 10px; margin: 0 12px 20px; }
             .two-col-cards { padding-inline: 12px; gap: 10px; }
             .grid-4 { grid-template-columns: 1fr 1fr; gap: 8px; }
+            .nw-chart-wrap { height: 220px; }
             .card .head { flex-direction: column; align-items: flex-start; gap: 8px; padding: 10px 12px; }
             .card .head .tools { width: 100%; flex-wrap: wrap; }
             .card .head .tools select, .card .head .tools button { font-size: 11px; padding: 5px 8px; }
@@ -225,7 +227,7 @@
                 </div>
             </div>
             <div class="content">
-                <canvas id="networthChart" height="125"></canvas>
+                <div class="nw-chart-wrap"><canvas id="networthChart"></canvas></div>
                 <div class="grid-4" style="margin-top: 12px;">
                     <div class="kpi"><h3>Initial</h3><div class="value" id="nwInitial">—</div></div>
                     <div class="kpi"><h3>Current</h3><div class="value" id="nwCurrent">—</div></div>
@@ -453,7 +455,7 @@ async function loadAccounts() {
 
     const list = q('#accountsList');
     list.innerHTML = '';
-    state.accounts.forEach(a => {
+    state.accounts.filter(a => a.is_active !== false && a.is_active !== 0).forEach(a => {
         const amt = a.current_balance ?? a.initial_balance ?? 0;
         const row = document.createElement('div');
         row.className = 'row';
@@ -520,6 +522,7 @@ async function loadNetworth() {
             datasets: [{ label: `Net worth`, data: data.data_points.map(p => p.balance), borderColor: '#0e9530', backgroundColor: 'rgba(14, 159, 48, .15)', fill: true, tension: 0.5 }]
         },
         options: {
+            maintainAspectRatio: false,
             plugins: { legend: { display: false } },
             scales: { x: { grid: { color: 'transparent' }, ticks: { maxTicksLimit: 6 } }, y: { grid: { color: '#D4B5A0' } } }
         }
