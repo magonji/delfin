@@ -15,10 +15,11 @@ from backend import models, schemas
 from backend.models import Account, Category, Payee, Location, Project, Transaction, ExchangeRate, Budget, RecurringExpense, RecurringExpenseHistory, RecurringExpensePayment, PlannedExpense
 from backend.schemas import ExchangeRateResponse
 from backend.helpers import (
-    recalculate_balances_from_transaction, 
+    recalculate_balances_from_transaction,
     initialise_all_balances,
-    get_rates_bulk, 
-    get_latest_rates
+    get_rates_bulk,
+    get_latest_rates,
+    get_rate_for_date
 )
 
 # Create tables if they don't exist
@@ -1745,11 +1746,9 @@ def _as_datetime_ceil(d):
 def get_dashboard_summary(db: Session = Depends(get_db)):
     """
     Get summary statistics for the dashboard with currency conversion.
-    Uses LATEST exchange rates (this is correct for current total balance).
+    Uses HISTORICAL exchange rates — each account's balance is converted
+    using the rate from its last transaction date.
     """
-    # Get latest exchange rates
-    rates_dict = get_latest_rates(db)
-
     # Find most common currency
     currency_counts = db.query(
         Transaction.currency,
@@ -1757,23 +1756,6 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
     ).group_by(Transaction.currency).order_by(sql_func.count(Transaction.id).desc()).all()
 
     base_currency = currency_counts[0][0] if currency_counts else "GBP"
-    base_rate = rates_dict.get(base_currency, 1.0)
-
-    # Currency conversion expression
-    conversion_cases = []
-    for currency, rate in rates_dict.items():
-        conversion_factor = base_rate / rate
-        conversion_cases.append(
-            (Transaction.currency == currency, Transaction.amount * conversion_factor)
-        )
-    conversion_expression = case(
-        *conversion_cases,
-        else_=Transaction.amount
-    )
-
-    total_balance_converted = db.query(
-        sql_func.sum(conversion_expression)
-    ).scalar() or 0
 
     # Count queries
     total_transactions = db.query(sql_func.count(Transaction.id)).scalar()
@@ -1782,7 +1764,6 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
     ).scalar()
     total_categories = db.query(sql_func.count(Category.id)).scalar()
 
-    # Calculate balance without loans (exclude loan accounts, keep credit cards)
     # Loan detection: first transaction is negative AND fewer than 3 unique payees
     CREDIT_CARD_PAYEE_THRESHOLD = 3
     transfer_locations = db.query(Location.id).filter(
@@ -1791,14 +1772,13 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
     transfer_location_ids = set(loc.id for loc in transfer_locations)
 
     loan_account_ids = set()
-    all_accounts = db.query(Account).all()
+    all_accounts = db.query(Account).filter(Account.is_active == 1).all()
     for account in all_accounts:
         first_tx = db.query(Transaction).filter(
             Transaction.account_id == account.id
         ).order_by(Transaction.date, Transaction.id).first()
         if not first_tx or first_tx.amount >= 0:
             continue
-        # It's a debt account — check if loan or credit card
         non_transfer_payees = db.query(Transaction.payee_id).filter(
             Transaction.account_id == account.id,
             Transaction.payee_id != None,
@@ -1808,15 +1788,33 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
         if len(unique_payees) < CREDIT_CARD_PAYEE_THRESHOLD:
             loan_account_ids.add(account.id)
 
-    # Total balance excluding loan accounts
-    if loan_account_ids:
-        balance_no_loans = db.query(
-            sql_func.sum(conversion_expression)
-        ).filter(
-            ~Transaction.account_id.in_(loan_account_ids)
-        ).scalar() or 0
-    else:
-        balance_no_loans = total_balance_converted
+    # Compute balances using HISTORICAL rates per account
+    total_balance_converted = 0.0
+    balance_no_loans = 0.0
+    for acc in all_accounts:
+        last_tx = db.query(Transaction).filter(
+            Transaction.account_id == acc.id
+        ).order_by(Transaction.date.desc(), Transaction.id.desc()).first()
+        if last_tx and last_tx.account_balance_after is not None:
+            bal = last_tx.account_balance_after
+            tx_date = _to_date(last_tx.date)
+        else:
+            bal = acc.initial_balance or 0
+            tx_date = None
+
+        # Convert using historical rate from last transaction date
+        if acc.currency == base_currency or tx_date is None:
+            converted = bal
+        else:
+            acc_rate = get_rate_for_date(db, acc.currency, tx_date) or 1.0
+            base_rate = get_rate_for_date(db, base_currency, tx_date) or 1.0
+            converted = bal * (base_rate / acc_rate)
+
+        total_balance_converted += converted
+        if acc.id not in loan_account_ids:
+            balance_no_loans += converted
+
+    rates_dict = get_latest_rates(db)
 
     return {
         "total_transactions": total_transactions,
