@@ -527,15 +527,20 @@ async function loadNetworth() {
             scales: {
                 x: {
                     grid: { color: 'transparent' },
+                    afterBuildTicks: function(axis) {
+                        const labels = axis.chart.data.labels;
+                        const yearTicks = [];
+                        let lastYear = null;
+                        for (let i = 0; i < labels.length; i++) {
+                            const y = new Date(labels[i]).getFullYear();
+                            if (y !== lastYear) { yearTicks.push({ value: i }); lastYear = y; }
+                        }
+                        axis.ticks = yearTicks;
+                    },
                     ticks: {
-                        autoSkip: false,
                         maxRotation: 0,
-                        callback: function(val, i) {
-                            const labels = this.chart.data.labels;
-                            const d = new Date(labels[i]);
-                            const prev = i > 0 ? new Date(labels[i - 1]) : null;
-                            if (!prev || d.getFullYear() !== prev.getFullYear()) return d.getFullYear();
-                            return null;
+                        callback: function(val) {
+                            return new Date(this.chart.data.labels[val]).getFullYear();
                         }
                     }
                 },
