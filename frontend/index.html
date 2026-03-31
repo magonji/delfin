@@ -221,6 +221,7 @@
                             <div class="list" id="excludeList"></div>
                         </div>
                     </div>
+                    <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;white-space:nowrap;"><input type="checkbox" id="nwExcludeLoans"> Exclude loans</label>
                     <button id="applyNetworth" class="primary" style="display:none;">Apply</button>
                 </div>
             </div>
@@ -463,7 +464,16 @@ function renderExcludeList() {
 async function loadNetworth() {
     const period = q('#nwPeriod').value;
     const { from, to } = rangeFor(q('#nwRange').value);
-    const excluded = Array.from(state.excludedAccountIds).join(',');
+    // Merge manually excluded accounts with loan accounts if checkbox is on
+    const allExcluded = new Set(state.excludedAccountIds);
+    if (q('#nwExcludeLoans').checked) {
+        if (!state.loanAccountIds) {
+            const res = cacheGet('cache_loan_ids') || await api('/loans/account-ids').then(d => { cacheSet('cache_loan_ids', d, 86400); return d; });
+            state.loanAccountIds = res.loan_account_ids || [];
+        }
+        state.loanAccountIds.forEach(id => allExcluded.add(id));
+    }
+    const excluded = Array.from(allExcluded).join(',');
     const cacheKey = `cache_nw_${period}_${from}_${to}_${excluded}`;
     
     let data = cacheGet(cacheKey);
@@ -814,6 +824,7 @@ q('#btnUpdateRates').onclick = async () => { try { await fetch(`${API_BASE}/exch
 // Event bindings
 q('#nwPeriod').onchange = loadNetworth;
 q('#nwRange').onchange = loadNetworth;
+q('#nwExcludeLoans').onchange = loadNetworth;
 q('#btnPrevMonth').onclick = () => { const s=q('#selectMonth'); if(s.selectedIndex<s.options.length-1) { s.selectedIndex++; s.dispatchEvent(new Event('change')); }};
 q('#btnNextMonth').onclick = () => { const s=q('#selectMonth'); if(s.selectedIndex>0) { s.selectedIndex--; s.dispatchEvent(new Event('change')); }};
 q('#selectMonth').onchange = (e) => loadMonthlyBreakdown(e.target.value);

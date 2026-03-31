@@ -2697,6 +2697,34 @@ def get_top_individual_expenses(
 # LOANS & CREDIT CARDS ENDPOINTS 
 # ============================================
 
+@app.get("/loans/account-ids")
+def get_loan_account_ids(db: Session = Depends(get_db)):
+    """Return the IDs of accounts detected as loans (not credit cards)."""
+    CREDIT_CARD_PAYEE_THRESHOLD = 3
+    transfer_locations = db.query(Location.id).filter(
+        Location.name.in_(["Transfer In", "Transfer Out"])
+    ).all()
+    transfer_location_ids = set(loc.id for loc in transfer_locations)
+
+    loan_ids = []
+    for account in db.query(Account).all():
+        first_tx = db.query(Transaction).filter(
+            Transaction.account_id == account.id
+        ).order_by(Transaction.date, Transaction.id).first()
+        if not first_tx or first_tx.amount >= 0:
+            continue
+        payee_query = db.query(Transaction.payee_id).filter(
+            Transaction.account_id == account.id,
+            Transaction.payee_id != None,
+        )
+        if transfer_location_ids:
+            payee_query = payee_query.filter(~Transaction.location_id.in_(transfer_location_ids))
+        unique_payees = set(p[0] for p in payee_query.distinct().all())
+        if len(unique_payees) < CREDIT_CARD_PAYEE_THRESHOLD:
+            loan_ids.append(account.id)
+    return {"loan_account_ids": loan_ids}
+
+
 @app.get("/loans/summary")
 def get_loans_summary(db: Session = Depends(get_db)):
     """

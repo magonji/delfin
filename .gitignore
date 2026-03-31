@@ -1,5 +1,7 @@
  # Database files - NEVER upload to GitHub
 data/*.db
+data/*.db-wal
+data/*.db-shm
 data/*.sqlite
 data/*.sqlite3
 
