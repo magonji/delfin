@@ -220,7 +220,6 @@
                     <div class="dropdown" id="excludeDropdown">
                         <button class="btn" id="excludeBtn" onclick="toggleExclude()">Exclude <span class="count" id="excludeCount" style="display:none">0</span>▾</button>
                         <div class="menu" id="excludeMenu">
-                            <div class="search"><input type="text" id="excludeSearch" placeholder="Search accounts..."></div>
                             <div class="actions"><button id="excludeSelectAll">Select all</button><button id="excludeLoansBtn">Loans</button><button id="excludeClear">Clear</button></div>
                             <div class="list" id="excludeList"></div>
                         </div>
@@ -477,8 +476,7 @@ function updateExcludeCount() {
 function renderExcludeList() {
     const list = q('#excludeList');
     list.innerHTML = '';
-    const term = q('#excludeSearch').value.toLowerCase();
-    state.accounts.filter(a => !term || a.name.toLowerCase().includes(term)).forEach(a => {
+    [...state.accounts].sort((a, b) => a.name.localeCompare(b.name)).forEach(a => {
         const label = document.createElement('label');
         const closed = a.is_active === false || a.is_active === 0;
         label.innerHTML = `<input type="checkbox" value="${a.id}" ${state.excludedAccountIds.has(a.id) ? 'checked' : ''}><span${closed ? ' style="opacity:.5"' : ''}>${a.name}${closed ? ' (closed)' : ''}</span><span class="muted" style="margin-left:auto">${a.currency}</span>`;
@@ -855,7 +853,7 @@ const setupDropdown = (btnId, dropId, searchId) => {
 };
 
 setupDropdown('#navBtn', '#navDropdown');
-setupDropdown('#excludeBtn', '#excludeDropdown', '#excludeSearch');
+setupDropdown('#excludeBtn', '#excludeDropdown');
 setupDropdown('#categoriesBtn', '#categoriesDropdown', '#categoriesSearch');
 
 document.addEventListener('click', (e) => {
@@ -905,7 +903,6 @@ q('#payeeType').onchange = () => loadTopList('/dashboard/top-payees', 'topPayees
 q('#payeeRange').onchange = () => loadTopList('/dashboard/top-payees', 'topPayees');
 q('#txType').onchange = () => loadTopList('/dashboard/top-individual-expenses', 'topTx', true);
 q('#txRange').onchange = () => loadTopList('/dashboard/top-individual-expenses', 'topTx', true);
-q('#excludeSearch').oninput = renderExcludeList;
 q('#categoriesSearch').oninput = renderCategoriesList;
 q('#excludeSelectAll').onclick = () => { state.accounts.forEach(a => state.excludedAccountIds.add(a.id)); updateExcludeCount(); renderExcludeList(); loadNetworth(); };
 q('#excludeClear').onclick = () => { state.excludedAccountIds.clear(); updateExcludeCount(); renderExcludeList(); loadNetworth(); };
