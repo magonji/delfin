@@ -531,12 +531,20 @@ async function loadNetworth() {
                     ticks: {
                         autoSkip: false,
                         maxRotation: 0,
+                        font: function(ctx) {
+                            const labels = ctx.chart.data.labels;
+                            if (!labels || !labels[ctx.index]) return {};
+                            const d = new Date(labels[ctx.index]);
+                            const prev = ctx.index > 0 ? new Date(labels[ctx.index - 1]) : null;
+                            const isYear = !prev || d.getFullYear() !== prev.getFullYear();
+                            return { size: isYear ? 11 : 9, weight: isYear ? 'bold' : 'normal' };
+                        },
                         callback: function(val, i) {
                             const labels = this.chart.data.labels;
                             const d = new Date(labels[i]);
                             const prev = i > 0 ? new Date(labels[i - 1]) : null;
                             if (!prev || d.getFullYear() !== prev.getFullYear()) return d.getFullYear();
-                            if (!prev || d.getMonth() !== prev.getMonth()) return '';
+                            if (!prev || d.getMonth() !== prev.getMonth()) return d.toLocaleString('en', { month: 'narrow' });
                             return null;
                         }
                     }
