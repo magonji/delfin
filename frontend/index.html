@@ -529,7 +529,8 @@ async function loadNetworth() {
                     grid: { color: 'transparent' },
                     border: { display: true },
                     ticks: {
-                        autoSkip: false,
+                        autoSkip: true,
+                        autoSkipPadding: 4,
                         maxRotation: 0,
                         font: function(ctx) {
                             const labels = ctx.chart.data.labels;
