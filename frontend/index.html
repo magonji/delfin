@@ -524,7 +524,7 @@ async function loadNetworth() {
         options: {
             maintainAspectRatio: false,
             plugins: { legend: { display: false } },
-            scales: { x: { grid: { color: 'transparent' }, ticks: { maxTicksLimit: 6 } }, y: { grid: { color: '#D4B5A0' } } }
+            scales: { x: { grid: { color: 'transparent' }, ticks: { maxTicksLimit: 6 } }, y: { grid: { color: '#D4B5A0' }, ticks: { callback: v => Math.abs(v) >= 1000 ? (v/1000).toFixed(0) + 'k' : v } } }
         }
     }, '_nwChart');
 
