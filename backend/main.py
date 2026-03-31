@@ -1746,8 +1746,8 @@ def _as_datetime_ceil(d):
 def get_dashboard_summary(db: Session = Depends(get_db)):
     """
     Get summary statistics for the dashboard with currency conversion.
-    Uses HISTORICAL exchange rates — each account's balance is converted
-    using the rate from its last transaction date.
+    Uses HISTORICAL exchange rates — each transaction is converted at its
+    own date's rate (same method as net worth graph).
     """
     # Find most common currency
     currency_counts = db.query(
@@ -1788,31 +1788,35 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
         if len(unique_payees) < CREDIT_CARD_PAYEE_THRESHOLD:
             loan_account_ids.add(account.id)
 
-    # Compute balances using HISTORICAL rates per account
-    total_balance_converted = 0.0
-    balance_no_loans = 0.0
-    for acc in all_accounts:
-        last_tx = db.query(Transaction).filter(
-            Transaction.account_id == acc.id
-        ).order_by(Transaction.date.desc(), Transaction.id.desc()).first()
-        if last_tx and last_tx.account_balance_after is not None:
-            bal = last_tx.account_balance_after
-            tx_date = _to_date(last_tx.date)
-        else:
-            bal = acc.initial_balance or 0
-            tx_date = None
+    # Compute balances using HISTORICAL rates per transaction
+    # (same method as net worth graph: each transaction converted at its own date's rate)
+    all_transactions = db.query(Transaction).order_by(Transaction.date).all()
 
-        # Convert using historical rate from last transaction date
-        if acc.currency == base_currency or tx_date is None:
-            converted = bal
-        else:
-            acc_rate = get_rate_for_date(db, acc.currency, tx_date) or 1.0
-            base_rate = get_rate_for_date(db, base_currency, tx_date) or 1.0
-            converted = bal * (base_rate / acc_rate)
+    currencies = list(set(t.currency for t in all_transactions if t.currency))
+    if all_transactions:
+        min_date = _to_date(all_transactions[0].date)
+        max_date = _to_date(all_transactions[-1].date)
+        historical_rates = get_rates_bulk(db, currencies, min_date, max_date)
+    else:
+        historical_rates = {}
 
-        total_balance_converted += converted
-        if acc.id not in loan_account_ids:
-            balance_no_loans += converted
+    account_balances = {}
+    for trans in all_transactions:
+        trans_date = _to_date(trans.date)
+        rates_for_day = historical_rates.get(trans_date, {'GBP': 1.0})
+        trans_rate = rates_for_day.get(trans.currency, 1.0)
+        base_rate = rates_for_day.get(base_currency, 1.0)
+        converted_amount = trans.amount * (base_rate / trans_rate)
+
+        if trans.account_id not in account_balances:
+            account_balances[trans.account_id] = 0.0
+        account_balances[trans.account_id] += converted_amount
+
+    total_balance_converted = sum(account_balances.values())
+    balance_no_loans = sum(
+        bal for acc_id, bal in account_balances.items()
+        if acc_id not in loan_account_ids
+    )
 
     rates_dict = get_latest_rates(db)
 
