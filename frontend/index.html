@@ -515,10 +515,38 @@ async function loadNetworth() {
         cacheSet(cacheKey, data);
     }
 
+    // Pre-compute which indices are year/month boundaries
+    const nwLabels = data.data_points.map(p => p.date);
+    const nwYears = new Set(), nwAllMonths = [];
+    let _ly = null, _lm = null;
+    for (let i = 0; i < nwLabels.length; i++) {
+        const d = new Date(nwLabels[i]), mo = d.getMonth(), yr = d.getFullYear();
+        if (yr !== _ly) { nwYears.add(i); _ly = yr; _lm = mo; }
+        else if (mo !== _lm) { nwAllMonths.push(i); _lm = mo; }
+    }
+
+    // Decide how many months to show based on chart width vs total boundaries
+    const chartWidth = q('#networthChart').parentElement.clientWidth || 400;
+    const totalBoundaries = nwYears.size + nwAllMonths.length;
+    const pxPerLabel = chartWidth / (totalBoundaries || 1);
+    // If labels would be <14px apart, thin out months: show every 2nd, 3rd, 6th, or none
+    let monthStep = 1;
+    if (pxPerLabel < 8) monthStep = 0;        // hide all months
+    else if (pxPerLabel < 12) monthStep = 6;   // show every 6th month
+    else if (pxPerLabel < 16) monthStep = 3;   // show every 3rd
+    else if (pxPerLabel < 22) monthStep = 2;   // show every 2nd
+
+    const nwVisibleMonths = new Set();
+    if (monthStep > 0) {
+        for (let j = 0; j < nwAllMonths.length; j++) {
+            if (j % monthStep === 0) nwVisibleMonths.add(nwAllMonths[j]);
+        }
+    }
+
     renderChart('#networthChart', {
         type: 'line',
         data: {
-            labels: data.data_points.map(p => p.date),
+            labels: nwLabels,
             datasets: [{ label: `Net worth`, data: data.data_points.map(p => p.balance), borderColor: '#0e9530', backgroundColor: 'rgba(14, 159, 48, .15)', fill: true, tension: 0.5 }]
         },
         options: {
@@ -529,23 +557,21 @@ async function loadNetworth() {
                     grid: { color: 'transparent' },
                     border: { display: true },
                     ticks: {
-                        autoSkip: true,
-                        autoSkipPadding: 4,
+                        autoSkip: false,
                         maxRotation: 0,
                         font: function(ctx) {
-                            const labels = ctx.chart.data.labels;
-                            if (!labels || !labels[ctx.index]) return {};
-                            const d = new Date(labels[ctx.index]);
-                            const prev = ctx.index > 0 ? new Date(labels[ctx.index - 1]) : null;
-                            const isYear = !prev || d.getFullYear() !== prev.getFullYear();
-                            return { size: isYear ? 11 : 9, weight: isYear ? 'bold' : 'normal' };
+                            const m = ctx.chart._nwMeta;
+                            if (!m) return {};
+                            return m.years.has(ctx.index) ? { size: 11, weight: 'bold' } : { size: 9 };
                         },
                         callback: function(val, i) {
                             const labels = this.chart.data.labels;
                             const d = new Date(labels[i]);
                             const prev = i > 0 ? new Date(labels[i - 1]) : null;
-                            if (!prev || d.getFullYear() !== prev.getFullYear()) return d.getFullYear();
-                            if (!prev || d.getMonth() !== prev.getMonth()) return d.toLocaleString('en', { month: 'narrow' });
+                            const m = this.chart._nwMeta;
+                            if (!m) return null;
+                            if (m.years.has(i)) return d.getFullYear();
+                            if (m.visibleMonths.has(i)) return d.toLocaleString('en', { month: 'narrow' });
                             return null;
                         }
                     }
@@ -554,6 +580,8 @@ async function loadNetworth() {
             }
         }
     }, '_nwChart');
+    window._nwChart._nwMeta = { years: nwYears, visibleMonths: nwVisibleMonths };
+    window._nwChart.update();
 
     const s = data.summary || {};
     const updateKpi = (id, val) => {
