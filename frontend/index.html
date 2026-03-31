@@ -413,7 +413,7 @@ async function loadSummary() {
     };
 
     setKPI('#kpiTotalBalance', sum.total_balance, true);
-    setKPI('#kpiBalanceNoLoans', sum.balance_without_loans, true);
+    setKPI('#kpiBalanceNoLoans', sum.balance_without_loans ?? sum.total_balance, true);
     setKPI('#kpiTxCount', sum.total_transactions);
 
     // Load current month budget available
