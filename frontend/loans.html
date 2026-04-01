@@ -42,7 +42,9 @@
         .tools select, .tools input, .tools button, .dropdown .btn {
             background: var(--bg); color: var(--text); border: 1px solid var(--border);
             border-radius: 8px; padding: 6px 10px; font-size: 12px; cursor: pointer;
+            -webkit-appearance: none; appearance: none;
         }
+        .tools select { background: var(--bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%232D2D2D'/%3E%3C/svg%3E") no-repeat right 8px center; padding-right: 24px; }
         .tools button { cursor: pointer; }
         .tools .primary { background: var(--panel); border-color: var(--border); }
         .tools .danger { background: var(--panel); border-color: var(--border); }
