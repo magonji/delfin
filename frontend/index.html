@@ -920,7 +920,6 @@ q('#categoriesClear').onclick = () => { state.selectedCategoryIds.clear(); rende
 
 // Initialisation
 async function init() {
-    if (localStorage.getItem('dirty_data')) { cacheClearAll(); localStorage.removeItem('dirty_data'); }
     try {
         await loadSummary();
 
@@ -947,7 +946,6 @@ async function init() {
 }
 
 document.addEventListener('DOMContentLoaded', init);
-window.addEventListener('pageshow', (e) => { if (e.persisted && localStorage.getItem('dirty_data')) init(); });
 </script>
 <div class="fab-container">
     <button class="fab-button" onclick="location.href='transactions.html#new-transfer'" title="New Transfer">⇄</button>

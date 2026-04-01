@@ -321,7 +321,6 @@
      * Loads loan data from cache or API and renders the dashboard
      */
     async function loadData() {
-        if (localStorage.getItem('dirty_data')) { localStorage.removeItem('loans_summary'); localStorage.removeItem('loans_details'); localStorage.removeItem('dirty_data'); }
         try {
             // Load summary data (KPIs)
             let summary = getCache('loans_summary');
@@ -700,7 +699,6 @@
     
     // Load data when DOM is ready
     document.addEventListener('DOMContentLoaded', loadData);
-    window.addEventListener('pageshow', (e) => { if (e.persisted && localStorage.getItem('dirty_data')) loadData(); });
 
     // =============================================================================
     // XIRR CALCULATION (Extended Internal Rate of Return)

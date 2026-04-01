@@ -1548,7 +1548,13 @@
         async function loadRecentTransactions(reset = false) {
             if (isLoadingTransactions || (!hasMoreTransactions && !reset)) return;
             isLoadingTransactions = true;
-            if (reset) { transactionsSkip = 0; hasMoreTransactions = true; regularTransactions = []; transferTransactions = []; localStorage.setItem('dirty_data', '1'); }
+            if (reset) {
+                transactionsSkip = 0; hasMoreTransactions = true; regularTransactions = []; transferTransactions = [];
+                // Invalidate dashboard & loans caches so other pages show fresh data
+                Object.keys(localStorage).filter(k => k.startsWith('cache_')).forEach(k => localStorage.removeItem(k));
+                localStorage.removeItem('loans_summary');
+                localStorage.removeItem('loans_details');
+            }
             
             try {
                 const params = new URLSearchParams({ skip: transactionsSkip, limit: LIMIT });
