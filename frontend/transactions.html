@@ -1548,7 +1548,7 @@
         async function loadRecentTransactions(reset = false) {
             if (isLoadingTransactions || (!hasMoreTransactions && !reset)) return;
             isLoadingTransactions = true;
-            if (reset) { transactionsSkip = 0; hasMoreTransactions = true; regularTransactions = []; transferTransactions = []; }
+            if (reset) { transactionsSkip = 0; hasMoreTransactions = true; regularTransactions = []; transferTransactions = []; localStorage.setItem('dirty_data', '1'); }
             
             try {
                 const params = new URLSearchParams({ skip: transactionsSkip, limit: LIMIT });
