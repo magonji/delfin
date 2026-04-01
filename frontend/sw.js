@@ -1,4 +1,4 @@
-const CACHE_NAME = 'delfin-v32';
+const CACHE_NAME = 'delfin-v34';
 const STATIC_ASSETS = [
   '/app/index.html',
   '/app/transactions.html',
@@ -53,8 +53,19 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Static assets: stale-while-revalidate
-  // Serve from cache instantly, then update cache in background
+  // HTML pages: network-first (always get latest when online, cache fallback for offline)
+  if (url.pathname.endsWith('.html')) {
+    event.respondWith(
+      fetch(event.request).then(response => {
+        const clone = response.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+        return response;
+      }).catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // Other static assets (icons, manifest): stale-while-revalidate
   event.respondWith(
     caches.match(event.request).then(cached => {
       const fetchPromise = fetch(event.request).then(response => {

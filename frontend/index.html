@@ -520,7 +520,7 @@ async function loadNetworth() {
     const { from, to } = rangeFor(q('#nwRange').value);
     const excluded = Array.from(state.excludedAccountIds).join(',');
     const cacheKey = `cache_nw_${period}_${from}_${to}_${excluded}`;
-    
+
     let data = cacheGet(cacheKey);
     if (!data) {
         const ps = new URLSearchParams();
@@ -920,6 +920,7 @@ q('#categoriesClear').onclick = () => { state.selectedCategoryIds.clear(); rende
 
 // Initialisation
 async function init() {
+    if (localStorage.getItem('dirty_data')) { cacheClearAll(); localStorage.removeItem('dirty_data'); }
     try {
         await loadSummary();
 

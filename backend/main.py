@@ -1907,7 +1907,7 @@ def get_networth_evolution(
             if point['date'] is None:
                 continue
             month_key = point['date'].strftime('%Y-%m')
-            if month_key not in monthly_data or point['date'] > monthly_data[month_key]['date']:
+            if month_key not in monthly_data or point['date'] >= monthly_data[month_key]['date']:
                 monthly_data[month_key] = point
         aggregated_data = sorted(monthly_data.values(), key=lambda x: x['date'])
     elif period == "weekly":
@@ -1917,17 +1917,16 @@ def get_networth_evolution(
                 continue
             week_start = point['date'] - timedelta(days=point['date'].weekday())
             week_key = week_start.strftime('%Y-%m-%d')
-            if week_key not in weekly_data or point['date'] > weekly_data[week_key]['date']:
+            if week_key not in weekly_data or point['date'] >= weekly_data[week_key]['date']:
                 weekly_data[week_key] = point
         aggregated_data = sorted(weekly_data.values(), key=lambda x: x['date'])
-    else:  # daily
+    else:  # daily — keep last point per day (highest cumulative balance accuracy)
         daily_data = {}
         for point in all_balance_points:
             if point['date'] is None:
                 continue
             day_key = point['date'].strftime('%Y-%m-%d')
-            if day_key not in daily_data:
-                daily_data[day_key] = point
+            daily_data[day_key] = point
         aggregated_data = sorted(daily_data.values(), key=lambda x: x['date'])
 
     # Summary statistics

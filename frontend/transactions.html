@@ -1546,12 +1546,7 @@
 
         // --- Transactions ---
         async function loadRecentTransactions(reset = false) {
-            // Invalidate other pages' caches immediately, before any guard
-            if (reset) {
-                Object.keys(localStorage).filter(k => k.startsWith('cache_')).forEach(k => localStorage.removeItem(k));
-                localStorage.removeItem('loans_summary');
-                localStorage.removeItem('loans_details');
-            }
+            if (reset) localStorage.setItem('dirty_data', '1');
             if (isLoadingTransactions || (!hasMoreTransactions && !reset)) return;
             isLoadingTransactions = true;
             if (reset) { transactionsSkip = 0; hasMoreTransactions = true; regularTransactions = []; transferTransactions = []; }
