@@ -1880,17 +1880,31 @@ def get_networth_evolution(
             'balance': round(total_baseline, 2)
         })
 
+    # Pre-load initial balances and currencies for accounts that have transactions
+    account_initial = {}
+    if not date_from:
+        account_ids_in_range = set(t.account_id for t in transactions)
+        for acc in db.query(Account).filter(Account.id.in_(account_ids_in_range)).all():
+            if acc.initial_balance:
+                account_initial[acc.id] = (float(acc.initial_balance), acc.currency)
+
     # Process transactions with HISTORICAL rates
     for trans in transactions:
         trans_date = _to_date(trans.date)
         rates_for_day = historical_rates.get(trans_date, {'GBP': 1.0})
-        
+
         trans_rate = rates_for_day.get(trans.currency, 1.0)
         base_rate = rates_for_day.get(base_currency, 1.0)
         converted_amount = trans.amount * (base_rate / trans_rate)
 
         if trans.account_id not in account_balances:
-            account_balances[trans.account_id] = 0.0
+            # Include initial_balance on first appearance (all-time mode only)
+            init_bal = 0.0
+            if trans.account_id in account_initial:
+                init_native, init_currency = account_initial[trans.account_id]
+                init_rate = rates_for_day.get(init_currency, 1.0)
+                init_bal = init_native * (base_rate / init_rate)
+            account_balances[trans.account_id] = init_bal
         account_balances[trans.account_id] += converted_amount
 
         total_balance = sum(account_balances.values())
