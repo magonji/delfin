@@ -591,6 +591,29 @@
             .transaction-item:hover .balance-primary { opacity: 1; }
             .transaction-item:hover .balance-secondary { opacity: 0; }
 
+            /* Mobile expand detail panel */
+            .mobile-detail {
+                display: none;
+                width: 100%;
+                order: 99;
+                padding: 8px 0 4px;
+                border-top: 1px dashed var(--border);
+                margin-top: 4px;
+                font-size: 12px;
+                color: var(--text);
+                line-height: 1.6;
+            }
+            .transaction-item.expanded .mobile-detail { display: block; }
+            .mobile-detail-grid {
+                display: grid;
+                grid-template-columns: auto 1fr;
+                gap: 2px 10px;
+            }
+            .mobile-detail-grid .md-label { color: var(--muted); font-size: 11px; white-space: nowrap; }
+            .mobile-detail-grid .md-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+            .mobile-detail-actions { display: flex; gap: 12px; margin-top: 8px; padding-top: 6px; border-top: 1px dashed var(--border); justify-content: flex-end; }
+            .mobile-detail-actions button { background: none; border: 1px solid var(--border); border-radius: 6px; padding: 4px 12px; font-size: 13px; cursor: pointer; min-height: 32px; color: var(--text); }
+
             /* Transaction list height */
             .transactions-list { max-height: calc(100vh - 250px); }
 
@@ -1698,8 +1721,18 @@
             const balanceAccountColor = t.account_balance_after >= 0 ? 'var(--green)' : 'var(--red)';
             const balanceTotalColor = t.total_balance_after >= 0 ? 'var(--green)' : 'var(--red)';
             
+            // Build mobile detail rows
+            const mobileDetails = [];
+            if (t.category_name) mobileDetails.push(['Category', t.category_name]);
+            if (t.location_name) mobileDetails.push(['Location', t.location_name]);
+            if (t.note) mobileDetails.push(['Note', t.note]);
+            if (t.account_balance_after != null) mobileDetails.push(['Acc. balance', `<span style="color:${balanceAccountColor}">${formatMoneyWithSymbol(t.account_balance_after, accountCurrency)}</span>`]);
+            if (t.total_balance_after != null) mobileDetails.push(['Total balance', `<span style="color:${balanceTotalColor}">${formatMoneyWithSymbol(t.total_balance_after, 'GBP')}</span>`]);
+
+            const detailHtml = mobileDetails.map(([l, v]) => `<span class="md-label">${l}</span><span class="md-value">${v}</span>`).join('');
+
             return `
-            <div class="transaction-item grid-layout ${isSel ? 'selected' : ''}" data-transaction-id="${t.id}" onclick="${bulkEditMode ? `toggleTransactionSelection(${t.id})` : ''}">
+            <div class="transaction-item grid-layout ${isSel ? 'selected' : ''}" data-transaction-id="${t.id}" onclick="${bulkEditMode ? `toggleTransactionSelection(${t.id})` : 'toggleMobileDetail(this)'}">
                 <div class="checkbox-column"><input type="checkbox" ${isSel ? 'checked' : ''} onclick="event.stopPropagation(); toggleTransactionSelection(${t.id})"></div>
                 <div class="t-cell t-center date-cell">
                     <span class="date-display">${dateStr}</span>
@@ -1721,6 +1754,14 @@
                     <button onclick="event.stopPropagation(); duplicateTransaction(${t.id})" class="btn-xs" title="Duplicate">⧉</button>
                     <button onclick="event.stopPropagation(); editTransaction(${t.id})" class="btn-xs" title="Edit">✎</button>
                     <button onclick="event.stopPropagation(); deleteTransaction(${t.id})" class="btn-xs" title="Delete">×</button>
+                </div>
+                <div class="mobile-detail">
+                    <div class="mobile-detail-grid">${detailHtml}</div>
+                    <div class="mobile-detail-actions">
+                        <button onclick="event.stopPropagation(); duplicateTransaction(${t.id})">Duplicate</button>
+                        <button onclick="event.stopPropagation(); editTransaction(${t.id})">Edit</button>
+                        <button onclick="event.stopPropagation(); deleteTransaction(${t.id})" style="color:var(--red);border-color:var(--red)">Delete</button>
+                    </div>
                 </div>
             </div>`;
         }
@@ -1748,8 +1789,18 @@
             const tid = `${t.transfer_out_id}_${t.transfer_in_id}`;
             const isSel = selectedTransfers.includes(tid);
 
+            // Build mobile detail rows for transfers
+            const trDetails = [];
+            if (t.note) trDetails.push(['Note', t.note]);
+            if (diffCurr) trDetails.push(['Rate', `1 ${t.from_currency} = ${(t.to_amount / t.from_amount).toFixed(4)} ${t.to_currency}`]);
+            if (diffCurr) trDetails.push(['Received', `<span style="color:#059669">+${formatMoneyWithSymbol(t.to_amount, t.to_currency)}</span>`]);
+            trDetails.push(['From balance', `<span style="color:${fromBalanceColor}">${formatMoneyWithSymbol(t.from_balance, t.from_currency)}</span>`]);
+            trDetails.push(['To balance', `<span style="color:${toBalanceColor}">${formatMoneyWithSymbol(t.to_balance, t.to_currency)}</span>`]);
+
+            const trDetailHtml = trDetails.map(([l, v]) => `<span class="md-label">${l}</span><span class="md-value">${v}</span>`).join('');
+
             return `
-            <div class="transaction-item grid-layout ${isSel ? 'selected' : ''}" style="background:#eaf7f3" data-transfer-id="${tid}" onclick="${bulkEditMode ? `toggleTransferSelection('${tid}')` : ''}">
+            <div class="transaction-item grid-layout ${isSel ? 'selected' : ''}" style="background:#eaf7f3" data-transfer-id="${tid}" onclick="${bulkEditMode ? `toggleTransferSelection('${tid}')` : 'toggleMobileDetail(this)'}">
                 <div class="checkbox-column"><input type="checkbox" ${isSel ? 'checked' : ''} onclick="event.stopPropagation(); toggleTransferSelection('${tid}')"></div>
                 <div class="t-cell t-center date-cell">
                     <span class="date-display">${dateStr}</span>
@@ -1768,7 +1819,20 @@
                     <button onclick="event.stopPropagation(); editTransfer(${t.transfer_out_id}, ${t.transfer_in_id})" class="btn-xs">✎</button>
                     <button onclick="event.stopPropagation(); deleteTransfer(${t.transfer_out_id}, ${t.transfer_in_id})" class="btn-xs">×</button>
                 </div>
+                <div class="mobile-detail">
+                    <div class="mobile-detail-grid">${trDetailHtml}</div>
+                    <div class="mobile-detail-actions">
+                        <button onclick="event.stopPropagation(); editTransfer(${t.transfer_out_id}, ${t.transfer_in_id})">Edit</button>
+                        <button onclick="event.stopPropagation(); deleteTransfer(${t.transfer_out_id}, ${t.transfer_in_id})" style="color:var(--red);border-color:var(--red)">Delete</button>
+                    </div>
+                </div>
             </div>`;
+        }
+
+        // --- Mobile tap-to-expand detail ---
+        function toggleMobileDetail(el) {
+            if (window.innerWidth > 600) return;
+            el.classList.toggle('expanded');
         }
 
         // --- Business logic handlers (filters, CRUD operations, bulk actions) ---
