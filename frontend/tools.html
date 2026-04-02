@@ -137,7 +137,9 @@
         input, select, textarea {
             width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px;
             background: #fff; font-family: 'IBM Plex Sans', sans-serif; font-size: 14px;
+            -webkit-appearance: none; appearance: none;
         }
+        select { background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%232D2D2D'/%3E%3C/svg%3E") no-repeat right 10px center; padding-right: 28px; }
         .search-box { padding: 20px 25px 0 25px; margin-bottom: 10px; }
         
         /* Button styles with updated theme colours */
@@ -145,6 +147,7 @@
             padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border);
             font-weight: 600; cursor: pointer; font-family: 'IBM Plex Sans', sans-serif;
             transition: all 0.2s; background: var(--btn-primary); color: white;
+            -webkit-appearance: none; appearance: none;
         }
         button:hover { background: var(--btn-hover); transform: translateY(-1px); }
         
@@ -354,7 +357,7 @@
             .toast { min-width: unset; }
             .dropdown .menu { right: -10px; min-width: 180px; }
             .fab-container { bottom: 20px; right: 15px; gap: 10px; }
-            .fab-button { width: 50px; height: 50px; font-size: 24px; }
+            .fab-button { width: 60px; height: 60px; font-size: 28px; }
             .footer { margin: 60px 0 30px; }
         }
     </style>
