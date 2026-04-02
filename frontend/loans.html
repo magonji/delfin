@@ -411,9 +411,17 @@
         const isCard = type === 'card' || type === 'credit-card';
         const isCompleted = debt.is_completed;
         
-        // Calculate repayment progress as percentage
-        const totalLiability = debt.borrowed + debt.interest;
-        let progress = totalLiability > 0 ? (debt.repaid / totalLiability) * 100 : 0;
+        // Calculate progress percentage
+        let progress;
+        if (isCard) {
+            // Credit cards: ratio of current debt to max historical debt
+            const currentDebt = Math.max(0, -(debt.current_balance || 0));
+            progress = debt.max_debt > 0 ? (currentDebt / debt.max_debt) * 100 : 0;
+        } else {
+            // Loans: repayment progress
+            const totalLiability = debt.borrowed + debt.interest;
+            progress = totalLiability > 0 ? (debt.repaid / totalLiability) * 100 : 0;
+        }
 
         // -------------------------------------------------------------------------
         // ESTIMATED INTEREST RATE CALCULATION (loans only)

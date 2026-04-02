@@ -2956,12 +2956,17 @@ def get_loans_details(
         
         # Keep track of negative transfer amounts for loans (initial disbursements)
         negative_transfers = []
-        
+        max_debt = 0  # Track maximum amount owed (most negative balance)
+
         tx_list = []
         for tx in transactions:
             # Work in original currency
             amount = tx.amount
             balance += amount
+
+            # Track peak debt (most negative balance)
+            if balance < -max_debt:
+                max_debt = abs(balance)
             
             # Check if loan is paid off (only for loans, not credit cards)
             if not is_credit_card and balance >= -0.5 and close_date is None:
@@ -3037,6 +3042,7 @@ def get_loans_details(
             "interest": round(interest, 2),
             "current_owed": round(current_owed, 2),
             "current_balance": current_balance,
+            "max_debt": round(max_debt, 2),
             "is_completed": is_completed,
             "open_date": open_date.isoformat() if hasattr(open_date, 'isoformat') else str(open_date),
             "close_date": close_date.isoformat() if close_date and hasattr(close_date, 'isoformat') else None,
