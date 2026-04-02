@@ -3066,54 +3066,59 @@ def initialise_balances(db: Session = Depends(get_db)):
             # Update account's current balance
             account.current_balance = running_balance
         
-        # PHASE 2: Calculate total_balance_after for all transactions globally
-        print("--- CALCULATING TOTAL BALANCE AFTER ---")
-        
-        # Get exchange rates (to convert to base currency GBP)
-        # ExchangeRate model: currency (foreign), rate (how many units of foreign = 1 GBP)
+        # PHASE 2: Calculate total_balance_after using HISTORICAL exchange rates
+        print("--- CALCULATING TOTAL BALANCE AFTER (historical rates) ---")
+
         BASE_CURRENCY = 'GBP'
-        exchange_rates = db.query(models.ExchangeRate).order_by(
-            models.ExchangeRate.date.desc()
-        ).all()
-        
-        # Build rate lookup - get most recent rate for each currency
-        rate_to_base = {BASE_CURRENCY: 1.0}
-        seen_currencies = set()
-        for r in exchange_rates:
-            if r.currency not in seen_currencies:
-                # rate is "1 GBP = X foreign", so to convert foreign to GBP: divide by rate
-                rate_to_base[r.currency] = 1.0 / float(r.rate)
-                seen_currencies.add(r.currency)
-        
+
         # Get ALL transactions ordered globally by date and ID
         all_transactions = db.query(models.Transaction).order_by(
-            models.Transaction.date.asc(), 
+            models.Transaction.date.asc(),
             models.Transaction.id.asc()
         ).all()
-        
-        # Reset running balances to initial values
-        for account in accounts:
-            account_running_balances[account.id] = float(account.initial_balance) if account.initial_balance is not None else 0.0
-        
-        # Process transactions in global order
-        for t in all_transactions:
-            if t is None:
-                continue
-            
-            # Update this account's running balance
-            amount = float(t.amount) if t.amount is not None else 0.0
-            account_running_balances[t.account_id] += amount
-            
-            # Calculate total balance across all accounts in base currency
-            total_balance = 0.0
-            for acc_id, balance in account_running_balances.items():
-                acc = accounts_map.get(acc_id)
-                if acc:
-                    currency = acc.currency or BASE_CURRENCY
-                    rate = rate_to_base.get(currency, 1.0)
-                    total_balance += balance * rate
-            
-            t.total_balance_after = round(total_balance, 2)
+
+        if all_transactions:
+            # Get all currencies used by accounts
+            all_currencies = list(set(acc.currency for acc in accounts if acc.currency and acc.currency != BASE_CURRENCY))
+
+            # Load historical rates for the full date range
+            min_date = _to_date(all_transactions[0].date)
+            max_date = _to_date(all_transactions[-1].date)
+            historical_rates = get_rates_bulk(db, all_currencies, min_date, max_date) if all_currencies else {}
+
+            # Track converted balances per account (same logic as networth endpoint)
+            account_converted_balances = {}
+
+            # Initialise with initial_balance converted at first transaction's rate
+            account_initial_added = set()
+
+            # Process transactions in global order
+            for t in all_transactions:
+                if t is None:
+                    continue
+
+                trans_date = _to_date(t.date)
+                rates_for_day = historical_rates.get(trans_date, {BASE_CURRENCY: 1.0})
+                base_rate = rates_for_day.get(BASE_CURRENCY, 1.0)
+
+                # On first appearance of account, add initial_balance converted at this date's rate
+                if t.account_id not in account_converted_balances:
+                    acc = accounts_map.get(t.account_id)
+                    init_bal = 0.0
+                    if acc and acc.initial_balance:
+                        acc_rate = rates_for_day.get(acc.currency or BASE_CURRENCY, 1.0)
+                        init_bal = float(acc.initial_balance) * (base_rate / acc_rate)
+                    account_converted_balances[t.account_id] = init_bal
+
+                # Convert this transaction's amount with historical rate
+                amount = float(t.amount) if t.amount is not None else 0.0
+                acc = accounts_map.get(t.account_id)
+                currency = acc.currency if acc else BASE_CURRENCY
+                trans_rate = rates_for_day.get(currency, 1.0)
+                converted_amount = amount * (base_rate / trans_rate)
+
+                account_converted_balances[t.account_id] += converted_amount
+                t.total_balance_after = round(sum(account_converted_balances.values()), 2)
         
         # Commit all changes
         db.commit()
