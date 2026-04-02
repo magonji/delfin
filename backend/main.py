@@ -30,8 +30,52 @@ app = FastAPI(
     version="1.0.0"
 )
 
+import threading
+import logging
+
+logger = logging.getLogger("delfin")
+
+_rates_last_checked: Optional[date] = None
+_rates_lock = threading.Lock()
+
+def _check_and_update_rates():
+    """Update exchange rates if last stored rate is from a previous day. Thread-safe, runs at most once per day."""
+    global _rates_last_checked
+    today = date.today()
+    if _rates_last_checked == today:
+        return
+    with _rates_lock:
+        if _rates_last_checked == today:
+            return
+        try:
+            from backend.update_exchange_rates import update_exchange_rates, get_last_exchange_rate_date
+            from backend.database import SessionLocal
+            db = SessionLocal()
+            try:
+                last_date = get_last_exchange_rate_date(db)
+                if not last_date or last_date < today:
+                    logger.info(f"Auto-updating exchange rates (last: {last_date})...")
+                    update_exchange_rates()
+                    logger.info("Exchange rates updated successfully.")
+                else:
+                    logger.info("Exchange rates are up to date.")
+            finally:
+                db.close()
+            _rates_last_checked = today
+        except Exception as e:
+            logger.warning(f"Auto-update rates failed (non-fatal): {e}")
+            _rates_last_checked = today
+
+@app.on_event("startup")
+def auto_update_exchange_rates():
+    """Auto-update exchange rates on startup."""
+    _check_and_update_rates()
+
 class CacheControlMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
+        # Trigger daily rate check when any HTML page is loaded
+        if request.url.path.endswith(".html") or request.url.path == "/":
+            threading.Thread(target=_check_and_update_rates, daemon=True).start()
         response = await call_next(request)
         if request.url.path.startswith("/app/"):
             if request.url.path.endswith((".png", ".ico", ".svg")):

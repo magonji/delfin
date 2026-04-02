@@ -205,7 +205,6 @@
                         <button class="navItem" onclick="location.href='tools.html'">Tools</button>
                         <hr style="border: none; border-top: 1px solid var(--border); margin: 6px 0;">
                         <button class="navItem" id="btnRefresh">Refresh</button>
-                        <button class="navItem" id="btnUpdateRates">Update rates</button>
                     </div>
                 </div>
             </div>
@@ -888,11 +887,9 @@ q('#btnRefresh').onclick = async () => {
     btn.disabled = false;
     toggleDropdown('#navDropdown', false);
 };
-q('#btnUpdateRates').onclick = async () => { try { await fetch(`${API_BASE}/exchange-rates/update`, { method: 'POST' }); cacheClearAll(); await init(); alert('Rates updated'); } catch(e) { alert(e); } toggleDropdown('#navDropdown', false); };
-
 // Close nav menu when clicking a navigation item
 q('#navMenu').addEventListener('click', (e) => {
-    if (e.target.matches('.navItem') && e.target !== q('#btnRefresh') && e.target !== q('#btnUpdateRates')) {
+    if (e.target.matches('.navItem') && e.target !== q('#btnRefresh')) {
         toggleDropdown('#navDropdown', false);
     }
 });

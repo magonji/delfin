@@ -377,7 +377,6 @@
                         <button class="navItem active">Tools</button>
                         <hr style="border: none; border-top: 1px solid var(--border); margin: 6px 0;">
                         <button class="navItem" id="btnRefresh">Refresh</button>
-                        <button class="navItem" id="btnUpdateRates">Update rates</button>
                     </div>
                 </div>
             </div>
@@ -671,13 +670,9 @@
                 location.reload();
             } catch (e) { alert('Error: ' + e.message); btn.textContent = orig; btn.disabled = false; }
         };
-        q('#btnUpdateRates').onclick = async () => {
-            try { cacheClearAll(); await fetch(`${API_URL}/exchange-rates/update`, { method: 'POST' }); location.reload(); } catch(e) { alert(e); }
-        };
-
         // Close nav menu when clicking a navigation item
         q('#navMenu').addEventListener('click', (e) => {
-            if (e.target.matches('.navItem') && e.target.id !== 'btnRefresh' && e.target.id !== 'btnUpdateRates') {
+            if (e.target.matches('.navItem') && e.target.id !== 'btnRefresh') {
                 q('#navDropdown').classList.remove('open');
             }
         });
