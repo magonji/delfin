@@ -35,7 +35,8 @@
         }
 
         html { min-height: 100%; scrollbar-gutter: stable both-edges; background: #FAE6D9; }
-        body { min-height: 100%; margin: 0; background: var(--bg); color: var(--text); font-family: 'IBM Plex Mono', monospace;
+        body { min-height: 100vh; margin: 0; background: var(--bg); color: var(--text); font-family: 'IBM Plex Mono', monospace;
+               display: flex; flex-direction: column;
                padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); padding-bottom: env(safe-area-inset-bottom); }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
@@ -488,7 +489,7 @@
         #navDropdown .navItem:hover { background: var(--panel); }
         #navDropdown .navItem.active { background: var(--card); color: var(--text); pointer-events: none; }
 
-        .footer { opacity: 0.7; font-size: 12px; text-align: center; margin: 104px 0px; padding-bottom: 10px; font-family: 'Playfair Display', serif; }
+        .footer { opacity: 0.7; font-size: 12px; text-align: center; margin-top: auto; padding: 104px 0 10px; font-family: 'Playfair Display', serif; }
 
         /* ── Responsive: Tablet ── */
         @media (max-width: 1100px) {
@@ -636,7 +637,7 @@
             /* Dropdown */
             .dropdown .menu { right: -10px; min-width: 200px; }
 
-            .footer { margin: 60px 0; }
+            .footer { padding-top: 60px; }
         }
     </style>
 </head>
@@ -1498,7 +1499,7 @@
                 allAccountsIncludingClosed = await (await fetch(`${API_URL}/accounts?include_closed=true`)).json();
                 accountsMap.clear();
                 allAccountsIncludingClosed.forEach(a => accountsMap.set(a.id, a));
-                allAccounts = allAccountsIncludingClosed.filter(a => a.is_active); 
+                allAccounts = allAccountsIncludingClosed.filter(a => a.is_active).sort((a, b) => a.name.localeCompare(b.name));
                 populateAllAccountDropdowns(); 
             } catch (e) { console.error(e); }
         }
@@ -1795,8 +1796,8 @@
             if (t.note) trDetails.push(['Note', t.note]);
             if (diffCurr) trDetails.push(['Rate', `1 ${t.from_currency} = ${(t.to_amount / t.from_amount).toFixed(4)} ${t.to_currency}`]);
             if (diffCurr) trDetails.push(['Received', `<span style="color:#059669">+${formatMoneyWithSymbol(t.to_amount, t.to_currency)}</span>`]);
-            trDetails.push(['From balance', `<span style="color:${fromBalanceColor}">${formatMoneyWithSymbol(t.from_balance, t.from_currency)}</span>`]);
-            trDetails.push(['To balance', `<span style="color:${toBalanceColor}">${formatMoneyWithSymbol(t.to_balance, t.to_currency)}</span>`]);
+            trDetails.push([`Bal. ${t.from_account_name}`, `<span style="color:${fromBalanceColor}">${formatMoneyWithSymbol(t.from_balance, t.from_currency)}</span>`]);
+            trDetails.push([`Bal. ${t.to_account_name}`, `<span style="color:${toBalanceColor}">${formatMoneyWithSymbol(t.to_balance, t.to_currency)}</span>`]);
 
             const trDetailHtml = trDetails.map(([l, v]) => `<span class="md-label">${l}</span><span class="md-value">${v}</span>`).join('');
 

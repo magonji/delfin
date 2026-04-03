@@ -31,7 +31,8 @@
         }
 
         html { min-height: 100%; scrollbar-gutter: stable both-edges; background: #FAE6D9; }
-        body { min-height: 100%; margin: 0; background: var(--bg); color: var(--text); font-family: 'IBM Plex Mono', monospace;
+        body { min-height: 100vh; margin: 0; background: var(--bg); color: var(--text); font-family: 'IBM Plex Mono', monospace;
+               display: flex; flex-direction: column;
                padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); padding-bottom: env(safe-area-inset-bottom); }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
@@ -164,7 +165,7 @@
             from { transform: translate(-50%, -45%); opacity: 0; } 
             to { transform: translate(-50%, -50%); opacity: 1; } 
         }
-        .footer { opacity: 0.7; font-size: 12px; text-align: center; margin: 100px 0 40px 0; font-family: 'Playfair Display', serif; }
+        .footer { opacity: 0.7; font-size: 12px; text-align: center; margin-top: auto; padding: 100px 0 40px; font-family: 'Playfair Display', serif; }
 
         #transactionsTable th { padding: 10px; background: var(--panel); border: 1px solid var(--border); }
         #transactionsTable td { padding: 8px; border: 1px solid var(--border); background: #fff; }
@@ -358,7 +359,7 @@
             .dropdown .menu { right: -10px; min-width: 180px; }
             .fab-container { bottom: 20px; right: 15px; gap: 10px; }
             .fab-button { width: 60px; height: 60px; font-size: 28px; }
-            .footer { margin: 60px 0 30px; }
+            .footer { padding-top: 60px; }
         }
     </style>
 </head>
@@ -560,6 +561,8 @@
                 <div class="form-group"><label>From Date</label><input type="date" id="exportStartDate"></div>
                 <div class="form-group"><label>To Date</label><input type="date" id="exportEndDate"></div>
                 <div class="form-group"><label>Account</label><select id="exportAccount"></select></div>
+                <div class="form-group"><label>Category</label><select id="exportParentCategory" onchange="loadExportSubcategories()"><option value="">All categories</option></select></div>
+                <div class="form-group"><label>Subcategory</label><select id="exportCategory" disabled><option value="">All subcategories</option></select></div>
                 <div class="form-group"><label>Format</label><select id="exportFormat"><option value="standard">Standard</option><option value="detailed">Detailed</option></select></div>
                 <div style="padding: 0 25px;"><button onclick="exportToCSV()" style="width: 100%;">Download CSV</button></div>
             </div>
@@ -1408,8 +1411,8 @@
             try {
                 // Load accounts for import selection
                 const accountsResponse = await fetch(`${API_URL}/accounts`);
-                allAccountsForImport = await accountsResponse.json();
-                
+                allAccountsForImport = (await accountsResponse.json()).sort((a, b) => a.name.localeCompare(b.name));
+
                 const importAccountSelect = document.getElementById('importAccount');
                 importAccountSelect.innerHTML = '<option value="">Select account...</option>';
                 allAccountsForImport.forEach(account => {
@@ -2977,7 +2980,7 @@
                 
                 const exportAccountSelect = document.getElementById('exportAccount');
                 exportAccountSelect.innerHTML = '<option value="">All accounts</option>';
-                accounts.forEach(account => {
+                accounts.sort((a, b) => a.name.localeCompare(b.name)).forEach(account => {
                     const option = document.createElement('option');
                     option.value = account.id;
                     option.textContent = account.name;

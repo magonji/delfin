@@ -24,7 +24,8 @@
 
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         html { min-height: 100%; scrollbar-gutter: stable both-edges; background: #FAE6D9; }
-        body { min-height: 100%; margin: 0; background: var(--bg); color: var(--text); font-family: 'IBM Plex Mono', monospace;
+        body { min-height: 100vh; margin: 0; background: var(--bg); color: var(--text); font-family: 'IBM Plex Mono', monospace;
+               display: flex; flex-direction: column;
                padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); padding-bottom: env(safe-area-inset-bottom); }
 
         /* Header */
@@ -188,7 +189,7 @@
         .info-section strong { display: block; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
         .info-row { padding: 5px 0; font-size: 13px; line-height: 1.5; }
         .info-row .symbol { display: inline-block; width: 22px; text-align: center; margin-right: 4px; }
-        .footer { opacity: 0.7; font-size: 12px; text-align: center; margin: 24px 10px; padding-bottom: 10px; font-family: 'Playfair Display', serif; }
+        .footer { opacity: 0.7; font-size: 12px; text-align: center; margin-top: auto; padding: 24px 10px 10px; font-family: 'Playfair Display', serif; }
 
         /* Floating Action Buttons */
         .fab-container { position: fixed; bottom: 30px; right: 30px; display: flex; flex-direction: row; gap: 12px; z-index: 900; }

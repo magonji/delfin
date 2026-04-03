@@ -27,6 +27,7 @@
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         html { scrollbar-gutter: stable both-edges; background: #FAE6D9; }
         body { margin: 0; background: var(--bg); color: var(--text); font-family: 'IBM Plex Mono', monospace; min-height: 100vh;
+               display: flex; flex-direction: column;
                padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); padding-bottom: env(safe-area-inset-bottom); }
 
         /* Header styling */
@@ -76,7 +77,7 @@
         }
         .amount-positive { color: var(--green); }
         .amount-negative { color: var(--red); }
-        .footer { opacity: 0.7; font-size: 12px; text-align: center; margin-top: 104px; padding-bottom: 10px; font-family: 'Playfair Display', serif; }
+        .footer { opacity: 0.7; font-size: 12px; text-align: center; margin-top: auto; padding: 104px 0 10px; font-family: 'Playfair Display', serif; }
         
         /* Success and error message boxes */
         .message-box { padding: 15px; border-radius: 8px; margin: 20px; display: none; color: white; text-align: center; }
@@ -167,7 +168,7 @@
             .dropdown .menu { right: -10px; min-width: 180px; }
             .fab-container { bottom: 20px; right: 15px; gap: 10px; }
             .fab-button { width: 60px; height: 60px; font-size: 28px; }
-            .footer { margin-top: 60px; }
+            .footer { padding-top: 60px; }
         }
     </style>
 </head>
