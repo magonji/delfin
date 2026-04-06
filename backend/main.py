@@ -1447,35 +1447,50 @@ def update_transactions_batch(
 
 def recalculate_balances_for_accounts(db: Session, account_ids: List[int]):
     """
-    Recalculate balances only for specific accounts.
-    Much faster than recalculating all accounts when only a few are affected.
+    Recalculate balances for specific accounts and total portfolio balance.
     """
+    from backend.helpers import get_latest_rates, get_base_currency, convert_to_base_currency
+
+    # Step 1: Recalculate account balances for affected accounts
     for account_id in account_ids:
         account = db.query(models.Account).filter(
             models.Account.id == account_id
         ).first()
-        
+
         if not account:
             continue
-        
-        # Get all transactions for this account ordered by date and id
+
         transactions = db.query(models.Transaction).filter(
             models.Transaction.account_id == account_id
         ).order_by(
-            models.Transaction.date.asc(), 
+            models.Transaction.date.asc(),
             models.Transaction.id.asc()
         ).all()
-        
-        # Calculate running balance
+
         running_balance = float(account.initial_balance) if account.initial_balance else 0.0
-        
+
         for tx in transactions:
             if tx.amount is not None:
                 running_balance += float(tx.amount)
             tx.account_balance_after = round(running_balance, 2)
-        
-        # Update account's current balance
+
         account.current_balance = round(running_balance, 2)
+
+    # Step 2: Recalculate total portfolio balance across all accounts
+    rates = get_latest_rates(db)
+    base_currency = get_base_currency(db)
+
+    all_transactions = db.query(models.Transaction).order_by(
+        models.Transaction.date.asc(), models.Transaction.id.asc()
+    ).all()
+
+    total_balance = 0.0
+    for tx in all_transactions:
+        converted = convert_to_base_currency(
+            float(tx.amount or 0.0), tx.currency, base_currency, rates
+        )
+        total_balance += converted
+        tx.total_balance_after = round(total_balance, 2)
 
 
 class RecalculateBalancesRequest(BaseModel):
