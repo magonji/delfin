@@ -1,659 +1,202 @@
-# 🐬 Delfin
+# Delfin
 
-A personal finance management app built with Python, FastAPI, and vanilla JavaScript. Easily import your Financisto data and track, analyse, and manage your finances through a sleek, modern web interface. Right from your computer!
+A personal finance PWA built with Python, FastAPI, and vanilla JavaScript. Import your Financisto data and track, analyse, and manage your finances through a modern web interface that works on desktop and mobile.
 
-## 📋 Features
+## Features
 
-### Dashboard
+### Dashboard (`index.html`)
 
-- 📊 **Visual Statistics**: View total transactions, accounts, categories, and balance at a glance
-- 💱 **Multi-Currency Support**: All amounts automatically converted to your most common currency
-- 📈 **Monthly Expenses by Category**: Interactive doughnut chart with month selector showing your top 20 spending categories
-- 🔝 **Top 10 Expenses**: Table showing the largest individual expenses for the selected month
-- 💳 **Balance by Account**: Detailed table displaying balances in original and converted currencies
-- 📉 **Monthly Trend**: Line chart comparing income vs expenses over the last 12 months
-- 🏪 **Top Payees**: Horizontal bar chart of your most frequent merchants
+- **KPI cards**: Total balance, monthly income/expenses, savings rate — all converted to base currency (GBP) using historical exchange rates
+- **Net Worth Evolution**: Interactive chart with configurable interval (daily/weekly/monthly) and time range (1 month to all time). Accounts can be excluded individually
+- **Monthly Category Spend**: Doughnut chart with month navigation. View by top expenses, category, or subcategory
+- **Balance by Account**: All accounts with balances in original and converted currencies
+- **Monthly Trend**: Income vs expenses bar chart by year
+- **Yearly Trend**: Annual income vs expenses comparison
+- **Category Spending Trend**: Line chart tracking spending by category over time
+- **Top Payees**: Ranked by total spending with configurable time range
+- **Transaction Volume**: Monthly transaction count trend
 
-### Transaction Management
+### Transactions (`transactions.html`)
 
-- ➕ **Quick Entry**: Fast transaction input with autocomplete for payees
-- 🔄 **Transfer Transactions**: Create transfers between accounts with currency conversion support
-- 🏷️ **Hierarchical Categories**: Parent-child category selection
-- 📍 **Location & Project Tracking**: Organise transactions by location and project
-- 🔍 **Advanced Filters**: Filter by date range, account, category, or search text
-- ✏️ **Edit & Delete**: Modify or remove transactions directly from the interface
-- ✏️ **Bulk Edit**: Select multiple transactions or transfers to edit them all at once
-- 📊 **Transaction List**: View all your transactions with running balances per account and total balance
+- **Quick entry**: Fast transaction input with payee autocomplete and automatic category/location suggestion
+- **Save & New**: Batch entry mode — saves and immediately opens a new form, deferring balance recalculation until the final save
+- **Transfers**: Create transfers between accounts with multi-currency support and automatic exchange rate display
+- **Hierarchical categories**: Parent > subcategory selection with inline creation
+- **Advanced filters**: Date range, account, category, text search. Collapsible on mobile
+- **Bulk edit**: Select multiple transactions or transfers to change account, category, payee, or delete in batch
+- **Infinite scroll**: Transactions load progressively as you scroll
+- **Running balances**: Per-account and total portfolio balance shown on each row
+- **Mobile detail panel**: Tap a transaction on mobile to expand hidden info (category, location, note, balances) and action buttons
+- **Optimistic saves**: Modal closes instantly; balance recalculation and list refresh happen in the background
 
-### Loans & Credit Cards
+### Budget (`budget.html`)
 
-- 💳 **Automatic Detection**: Distinguishes credit cards (3+ unique payees) from traditional loans
-- 📋 **Loan Tracking**: Monitor borrowed amount, repaid amount, interest, and remaining balance
-- 💰 **Credit Card Management**: Separate tracking of charges, fees/interest, and payments
-- 📊 **Smart Categorisation**: Interest and fees identified by category ("Intereses y comisiones")
-- ✅ **Completion Tracking**: Loans show paid-off status with green indicators
-- 📈 **Progress Bars**: Visual representation of repayment progress
+- **Monthly budget**: Set a target and track spending against it with a progress bar
+- **Recurring expenses**: Track fixed monthly costs (subscriptions, rent, etc.) with payment status
+- **Planned expenses**: One-off upcoming expenses with target dates
+- **Weekly breakdown**: Expenses grouped by week with expandable detail
+- **Income tracking**: Monthly income summary with category breakdown
+- **Budget history**: Month-by-month history of budget vs actual spending
 
-### Tools & Management
+### Loans & Credit Cards (`loans.html`)
 
-- 📁 **Category Management**: Edit parent categories and subcategories
-- 💳 **Account Management**: Edit account names and currencies
-- 👤 **Payee Management**: Edit and merge payee names with smart suggestions
-- 📍 **Location Management**: Organise transaction locations
-- 📋 **Project Management**: Track projects across transactions
-- 📥 **Bank Statement Import**: Import transactions from CSV bank statements (Bank of Scotland, PayPal)
-- 📤 **Export to CSV**: Export your transactions with flexible filters
-- 💾 **Database Backup**: Download timestamped backups of your complete database
+- **Automatic detection**: Distinguishes credit cards (3+ unique payees) from traditional loans
+- **Loan tracking**: Borrowed amount, repaid, interest, remaining balance, and estimated APR via XIRR calculation
+- **Credit card progress bars**: Show ratio of current debt to historical maximum debt
+- **Smart categorisation**: Interest and fees identified by category keywords
+- **Lender detection**: Automatically identifies the lender from transaction payees
+- **Transaction history**: Expandable per-account transaction list
 
-### Currency Management
+### Tools (`tools.html`)
 
-- 💱 **Automatic Currency Conversion**: All amounts displayed in your most common currency
-- 🌍 **Live Exchange Rates**: Fetches current rates from exchangerate-api.com
-- 📅 **Historical Rates**: Stores exchange rate history for accurate conversions
-- 🔄 **Manual Updates**: Update exchange rates on demand
-- 💰 **30+ Currencies Supported**: Including GBP, EUR, USD, JPY, and many more
+- **Entity management**: Edit and merge categories, accounts, payees, locations, and projects
+- **CSV import**: Import bank statements (Bank of Scotland, PayPal, or custom format) with column mapping, duplicate detection, and inline entity creation
+- **CSV export**: Export transactions with date, account, and category filters in standard or detailed format
+- **Database backup**: Download timestamped `.db` backup files
+- **Refresh**: Recalculate all balances, payee statistics, and exchange rates
 
-## 🛠️ Technology Stack
+### Cross-cutting
+
+- **PWA**: Installable on iOS/Android/desktop with service worker (network-first for HTML, stale-while-revalidate for assets)
+- **Multi-currency**: 30+ currencies with historical ECB exchange rates. All conversions use the rate from the transaction date
+- **Auto rate updates**: Exchange rates update automatically on server startup and daily thereafter (no manual button needed)
+- **Cache with dirty flag**: Dashboard and loans cache data locally (14-day TTL). When transactions change, a `dirty_data` flag triggers cache invalidation on next page load
+- **Safari compatibility**: `-webkit-appearance: none` on all form controls, custom SVG dropdown arrows, no input zoom on iOS
+- **Responsive design**: Optimised layouts for desktop, tablet, and mobile. Sticky footer on all pages
+- **FAB buttons**: Floating action buttons on every page for quick access to new transaction/transfer (navigates to transactions page with modal auto-open)
+
+## Tech Stack
 
 ### Backend
 
-- **FastAPI**: Modern Python web framework for building APIs
-- **SQLAlchemy**: SQL toolkit and ORM
-- **SQLite**: Lightweight database
-- **Pandas**: Data manipulation and CSV import
-- **Requests**: HTTP library for fetching exchange rates
-- **Uvicorn**: ASGI server
+- **FastAPI** with Uvicorn (ASGI)
+- **SQLAlchemy** ORM with SQLite
+- **Pandas** for CSV import parsing
+- **ECB XML feed** for historical exchange rates (GBP base)
 
 ### Frontend
 
-- **Vanilla JavaScript**: No frameworks, just pure JS
-- **Chart.js**: Beautiful, responsive charts
-- **HTML5 & CSS3**: Modern, gradient-based design
+- **Vanilla JavaScript** — no frameworks
+- **Chart.js v4** for all charts
+- **HTML5 + CSS3** with CSS custom properties
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 delfin/
 ├── backend/
-│   ├── __init__.py
-│   ├── main.py                    # FastAPI application with all endpoints
-│   ├── models.py                  # Database models (SQLAlchemy)
-│   ├── schemas.py                 # Pydantic schemas for API validation
-│   ├── database.py                # Database configuration
-│   └── balance_calculator.py      # Balance calculation utilities
+│   ├── main.py                    # FastAPI app — all endpoints
+│   ├── models.py                  # SQLAlchemy models
+│   ├── schemas.py                 # Pydantic request/response schemas
+│   ├── database.py                # DB engine and session config
+│   ├── helpers.py                 # Balance recalculation, rate helpers
+│   └── update_exchange_rates.py   # ECB rate fetcher
 ├── frontend/
-│   ├── index.html                 # Dashboard page
-│   ├── transactions.html          # Transaction management page
-│   ├── loans.html                 # Loans & credit cards page
-│   ├── tools.html                 # Management tools page
-│   └── navbar.js                  # Navigation component
+│   ├── index.html                 # Dashboard
+│   ├── transactions.html          # Transaction management
+│   ├── budget.html                # Budget tracker
+│   ├── loans.html                 # Loans & credit cards
+│   ├── tools.html                 # Management tools
+│   ├── sw.js                      # Service worker
+│   ├── manifest.json              # PWA manifest
+│   └── icons/                     # App icons (180, 192, 512)
+├── scripts/
+│   ├── import_financisto_csv.py   # Interactive CSV importer
+│   ├── initialise_database.py     # First-time setup (rates + balances)
+│   ├── update_database.py         # Schema migration helper
+│   ├── update_exchange_rates.py   # Standalone rate updater
+│   └── clean_duplicate_categories.py
 ├── data/
-│   └── finance.db                 # SQLite database (created automatically, gitignored)
-├── create_tables.py               # Database table creation script
-├── import_financisto_csv.py       # CSV import utility with interactive prompts
-├── initialise_database.py         # Initial setup script (balances, rates, stats)
-├── update_database.py             # Database schema updater
-├── update_exchange_rates.py       # Exchange rate updater script
-├── clean_duplicate_categories.py  # Category deduplication utility
-├── .gitignore
+│   └── finance.db                 # SQLite database (gitignored)
+├── requirements.txt
 └── README.md
 ```
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
-- Python 3.11 or higher
-- pip (Python package manager)
-- Internet connection (for fetching exchange rates)
+- Python 3.9+
+- pip
 
-### Installation for New Users
-
-If you're starting fresh with a Financisto CSV export:
-
-#### 1. **Clone the repository**
+### New Installation
 
 ```bash
+# Clone and install
 git clone https://github.com/magonji/delfin.git
 cd delfin
-```
+pip install -r requirements.txt
 
-#### 2. **Install dependencies**
+# Import your Financisto CSV export
+python scripts/import_financisto_csv.py
 
-```bash
-pip install fastapi uvicorn sqlalchemy python-multipart pandas questionary requests
-```
+# Initialise balances and exchange rates
+python scripts/initialise_database.py
 
-#### 3. **Create the database tables**
-
-```bash
-python create_tables.py
-```
-
-This creates an empty SQLite database with all necessary tables.
-
-#### 4. **Import your Financisto data**
-
-```bash
-python import_financisto_csv.py
-```
-
-The script will:
-- Ask you to select the folder containing your CSV file
-- Show you a list of CSV files in that folder
-- Ask for confirmation before importing
-- Display progress as it imports your transactions
-
-Example output:
-```
-Where is your CSV file located? /Users/yourname/Downloads
-Which CSV file would you like to import?
-❯ financisto_export_2024.csv
-
-Import 'financisto_export_2024.csv'?
-This will add transactions to the database.
-Yes
-
-Reading CSV file: /Users/yourname/Downloads/financisto_export_2024.csv
-Found 1523 transactions to import
-Imported 100 transactions...
-Imported 200 transactions...
-...
-
-✅ Import complete!
-   Imported: 1523
-   Skipped: 0
-```
-
-#### 5. **Initialise calculated data**
-
-```bash
-python initialise_database.py
-```
-
-This comprehensive script will:
-- Fetch and store the latest exchange rates
-- Calculate running balances for all transactions
-- Compute most common category/location/project for each payee
-
-This step is **essential** for the dashboard and features to work properly.
-
-#### 6. **Start the server**
-
-```bash
+# Start the server
 uvicorn backend.main:app --reload
 ```
 
-The API server will start at `http://localhost:8000`
+Open `http://localhost:8000/app/index.html` in your browser.
 
-#### 7. **Open the frontend**
-
-Open `frontend/index.html` in your web browser to start using Delfin!
-
-Alternatively, visit `http://localhost:8000/docs` for the interactive API documentation.
-
----
-
-### Installation for Existing Installations
-
-If you're updating from an older version of Delfin:
-
-#### 1. **Update dependencies**
+### Updating an Existing Installation
 
 ```bash
-pip install --upgrade fastapi uvicorn sqlalchemy python-multipart pandas questionary requests
-```
-
-#### 2. **Update database schema**
-
-```bash
-python update_database.py
-```
-
-This will:
-- Create any new tables or columns
-- Initialise balance calculations if needed
-- Recalculate payee statistics
-
-#### 3. **Update exchange rates**
-
-```bash
-python update_exchange_rates.py
-```
-
-#### 4. **Clean duplicates (optional)**
-
-If you notice duplicate categories:
-
-```bash
-python clean_duplicate_categories.py
-```
-
----
-
-## 📊 Usage
-
-### Dashboard
-
-Navigate to `index.html` to view:
-
-- Summary statistics with currency conversion
-- Monthly expenses by category (with month selector)
-- Top 10 individual expenses for the selected month
-- Balance by account in both original and converted currencies
-- Monthly income vs expenses trend
-- Top merchants ranked by spending
-
-### Managing Transactions
-
-Navigate to `transactions.html` to:
-
-- Add new transactions with the quick-entry form
-- Create transfers between accounts (with different currencies)
-- Filter existing transactions by multiple criteria
-- Edit or delete transactions individually
-- Bulk edit multiple transactions or transfers at once
-- View complete transaction history with running balances
-
-### Loans & Credit Cards
-
-Navigate to `loans.html` to:
-
-- View all your loans and credit cards automatically detected
-- See detailed breakdown of charges, payments, and interest/fees
-- Track repayment progress with visual indicators
-- Expand to see complete transaction history for each loan/card
-- Monitor active vs paid-off loans separately
-
-### Tools & Management
-
-Navigate to `tools.html` to:
-
-- Manage categories, accounts, payees, locations, and projects
-- Import transactions from bank statement CSVs
-- Export your data to CSV format
-- Create database backups
-- Update exchange rates manually
-
----
-
-## 🔌 API Endpoints
-
-The FastAPI backend provides a RESTful API. Here are the main endpoints:
-
-### Accounts
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/accounts` | GET | List all accounts (with `include_closed` parameter) |
-| `/accounts/with-balances` | GET | Get accounts with current balances |
-| `/accounts` | POST | Create new account |
-
-### Categories
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/categories` | GET | List all categories |
-| `/categories` | POST | Create new category |
-
-### Payees
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/payees` | GET | List all payees with their most common associations |
-| `/payees` | POST | Create new payee |
-| `/payees/{id}/recalculate-stats` | POST | Recalculate statistics for specific payee |
-| `/payees/recalculate-all-stats` | POST | Recalculate statistics for all payees |
-
-### Locations & Projects
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/locations` | GET | List all locations |
-| `/locations` | POST | Create new location |
-| `/projects` | GET | List all projects |
-| `/projects` | POST | Create new project |
-
-### Transactions
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/transactions` | GET | List transactions with filters |
-| `/transactions` | POST | Create new transaction |
-| `/transactions/{id}` | GET | Get specific transaction |
-| `/transactions/{id}` | PUT | Update transaction |
-| `/transactions/{id}` | DELETE | Delete transaction |
-| `/transactions/transfer` | POST | Create transfer between accounts |
-| `/transactions/transfers` | GET | List all transfers grouped |
-
-### Exchange Rates
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/exchange-rates/latest` | GET | Get most recent exchange rates |
-| `/exchange-rates/update` | POST | Manually trigger rate update |
-| `/exchange-rates` | GET | Get historical exchange rates |
-
-### Dashboard & Admin
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/dashboard/summary` | GET | Get dashboard statistics with currency conversion |
-| `/admin/initialise-balances` | POST | Initialise balance calculations for all transactions |
-| `/admin/recalculate-account-balances` | POST | Recalculate account balances |
-| `/admin/backup-database` | POST | Create and download database backup |
-
-Full API documentation available at: `http://localhost:8000/docs`
-
----
-
-## 💱 Supported Currencies
-
-The system supports 30+ currencies with automatic symbol detection:
-
-- **Major**: GBP (£), EUR (€), USD ($), JPY (¥), CHF (Fr)
-- **Americas**: CAD, BRL, MXN, ARS, CLP, COP, PEN
-- **Asia-Pacific**: CNY, INR, AUD, NZD, SGD, HKD, KRW, THB, MYR
-- **Europe**: SEK, NOK, DKK, PLN, RUB, TRY
-- **Africa**: ZAR
-
-Exchange rates are fetched from [exchangerate-api.com](https://www.exchangerate-api.com/) which provides free access without requiring an API key.
-
----
-
-## 📊 Database Schema
-
-### Main Tables
-
-- **accounts**: Bank accounts, cash, credit cards
-  - Includes: `currency`, `initial_balance`, `current_balance`, `is_active`
-  
-- **categories**: Hierarchical expense/income categories
-  - Includes: `name`, `parent`, `type`
-  
-- **payees**: Merchants and payment recipients
-  - Includes: `name`, cached most common `category_id`, `location_id`, `project_id`
-  
-- **locations**: Geographic locations
-  
-- **projects**: Project groupings for transactions
-  
-- **transactions**: Individual financial transactions
-  - Includes: `date`, `amount`, `currency`, `note`
-  - Foreign keys to: `account`, `category`, `payee`, `location`, `project`
-  - Cached fields: `account_balance_after`, `total_balance_after`
-  
-- **exchange_rates**: Historical exchange rate data
-  - Includes: `currency`, `rate`, `date`
-
-### Balance Tracking
-
-Delfin uses cached balance calculations for optimal performance:
-
-- **`account_balance_after`**: Balance of the specific account after each transaction
-- **`total_balance_after`**: Total balance across all accounts (in base currency) after each transaction
-
-These balances are:
-- Automatically calculated when transactions are created
-- Automatically recalculated when transactions are edited or deleted
-- Displayed in the transaction list for easy tracking
-
-### Payee Statistics
-
-To speed up transaction entry, payees store their most commonly used associations:
-
-- **`most_common_category_id`**: The category most frequently used with this payee
-- **`most_common_location_id`**: The location most frequently used with this payee
-- **`most_common_project_id`**: The project most frequently used with this payee
-
-These are automatically suggested when creating new transactions.
-
-### Performance Optimisations
-
-The database uses several composite indices for fast queries:
-- `(account_id, date)` for account-specific transaction lists
-- `(currency, date)` for currency-filtered queries
-- `(date, amount)` for expense analysis
-- `(category_id, date)` for category-based reports
-- `(payee_id, date)` for payee analysis
-
----
-
-## 🔧 Development
-
-### Running in Development Mode
-
-```bash
+pip install -r requirements.txt
+python scripts/update_database.py
 uvicorn backend.main:app --reload
 ```
 
-The `--reload` flag enables auto-reload on code changes.
+Exchange rates now update automatically on startup — no manual step needed.
 
-### Adding New Features
+## API Overview
 
-1. **Backend changes**: Edit files in `backend/`
-   - Add models in `models.py`
-   - Add schemas in `schemas.py`
-   - Add endpoints in `main.py`
+Full interactive docs at `http://localhost:8000/docs`.
 
-2. **Frontend changes**: Edit HTML files in `frontend/`
-   - Dashboard: `index.html`
-   - Transactions: `transactions.html`
-   - Loans: `loans.html`
-   - Tools: `tools.html`
+| Area | Key Endpoints |
+|------|--------------|
+| **Accounts** | `GET /accounts`, `GET /accounts/with-balances`, `POST /accounts` |
+| **Transactions** | `GET /transactions`, `POST /transactions`, `PUT /transactions/{id}`, `DELETE /transactions/{id}` |
+| **Transfers** | `GET /transactions/transfers`, `POST /transactions/transfers` |
+| **Categories** | `GET /categories`, `POST /categories`, `PUT /categories/{id}` |
+| **Payees** | `GET /payees`, `POST /payees`, `POST /payees/recalculate-all-stats` |
+| **Budget** | `GET /budget`, `POST /budget`, `GET /recurring-expenses`, `GET /planned-expenses` |
+| **Loans** | `GET /loans/summary`, `GET /loans/details` |
+| **Dashboard** | `GET /dashboard/summary`, `GET /networth-evolution`, `GET /balance-kpis` |
+| **Exchange Rates** | `GET /exchange-rates/latest`, `GET /exchange-rates`, `POST /exchange-rates/update` |
+| **Admin** | `POST /admin/initialise-balances`, `POST /admin/recalculate-balances-for-accounts`, `POST /admin/backup-database` |
 
-3. **Database changes**: 
-   - Update `backend/models.py`
-   - Run `python update_database.py` to create new tables/columns
-   - Create a migration script if needed for existing data
+## Database
 
-### Testing Exchange Rate Updates
+### Tables
 
-```bash
-# Test the exchange rate fetching
-python update_exchange_rates.py
+- **accounts**: Bank accounts, wallets, credit cards. Tracks `currency`, `initial_balance`, `current_balance`, `is_active`
+- **categories**: Hierarchical (parent + name). Types: expense, income
+- **payees**: Merchants. Caches most common category/location/project for autocomplete
+- **transactions**: Core table. Links to account, category, payee, location, project. Caches `account_balance_after` and `total_balance_after`
+- **exchange_rates**: Historical daily rates (GBP base) from ECB
+- **budgets**: Monthly spending targets
+- **recurring_expenses**: Fixed monthly costs with payment tracking
+- **planned_expenses**: One-off future expenses
 
-# Check what rates are stored
-sqlite3 data/finance.db "SELECT * FROM exchange_rates ORDER BY date DESC LIMIT 10;"
-```
+### Balance Calculation
 
----
+Balances are cached on each transaction for display performance:
+- `account_balance_after` — running balance for the transaction's account
+- `total_balance_after` — portfolio-wide running balance (all accounts, converted to GBP using historical rates)
 
-## 🛠 Troubleshooting
+Recalculation is triggered automatically on create/edit/delete, but deferred to background for UI responsiveness.
 
-### CORS Errors
+## Security Notes
 
-If you see CORS errors in the browser console, ensure the CORS middleware is properly configured in `backend/main.py`. The default configuration allows all origins for development.
+- `data/finance.db` is gitignored — never commit your financial data
+- No authentication by default — add it before exposing to a network
+- Database backups contain all financial data — store securely
 
-### Database Issues
+## Licence
 
-If you encounter database errors:
-
-1. **Back up your database first!**
-   ```bash
-   # Mac/Linux
-   cp data/finance.db data/finance_backup_$(date +%Y%m%d_%H%M%S).db
-   
-   # Windows
-   copy data\finance.db data\finance_backup_%date:~-4,4%%date:~-10,2%%date:~-7,2%.db
-   ```
-
-2. **If database is corrupted:**
-   ```bash
-   # Mac/Linux
-   rm data/finance.db
-   
-   # Windows
-   del data\finance.db
-   
-   # Recreate and reimport
-   python create_tables.py
-   python import_financisto_csv.py
-   python initialise_database.py
-   ```
-
-### Balance Calculation Issues
-
-If balances seem incorrect:
-
-**Option 1**: Use the API endpoint
-```bash
-curl -X POST http://localhost:8000/admin/initialise-balances
-```
-
-**Option 2**: Run the initialisation script
-```bash
-python initialise_database.py
-```
-
-### Exchange Rate Issues
-
-**Problem**: "No exchange rates found" or conversion errors
-
-**Solution**:
-```bash
-# Update exchange rates
-python update_exchange_rates.py
-
-# Verify rates were stored
-sqlite3 data/finance.db "SELECT COUNT(*) FROM exchange_rates;"
-```
-
-**Problem**: API request fails
-
-**Solution**: 
-- Check your internet connection
-- The free API has rate limits; wait a few minutes and try again
-- If persistent, check [exchangerate-api.com status](https://www.exchangerate-api.com/)
-
-### Duplicate Categories
-
-If you see repeated categories in dropdowns:
-
-```bash
-python clean_duplicate_categories.py
-```
-
-This script will:
-- Find all duplicate categories (same name + parent)
-- Merge them by reassigning transactions to one category
-- Delete the duplicates
-
-### Import Errors
-
-If CSV import fails:
-
-- Ensure the CSV format matches Financisto export format
-- Check for encoding issues (should be UTF-8)
-- Verify all required columns are present
-- Check the console output for specific error messages
-
-### Payee Autocomplete Not Working
-
-If payee suggestions aren't showing common associations:
-
-```bash
-# Recalculate statistics for all payees
-curl -X POST http://localhost:8000/payees/recalculate-all-stats
-```
+Personal use. Fork and modify freely.
 
 ---
 
-## 🔒 Security Notes
-
-- The database file (`finance.db`) is gitignored to protect your financial data
-- **Never commit the `data/` folder to version control**
-- When deploying to production, add proper authentication
-- Use environment variables for sensitive configuration
-- Exchange rate API calls don't require authentication but are rate-limited
-- Database backups include all sensitive financial data - store them securely
-
----
-
-## 🚀 Future Enhancements
-
-Potential features for future development:
-
-- [ ] Budget tracking and alerts
-- [ ] Recurring transaction templates
-- [ ] Export reports to PDF/Excel
-- [ ] Cloud deployment (Railway/Render)
-- [ ] Desktop app (Electron)
-- [ ] User authentication
-- [ ] Automated Google Drive backup
-- [x] Multi-currency support with conversion ✅
-- [x] Live exchange rate updates ✅
-- [x] Cached balance calculations ✅
-- [x] Bulk transaction editing ✅
-- [x] Loan and credit card tracking ✅
-- [x] Database backup functionality ✅
-- [ ] Custom exchange rate entry (for historical accuracy)
-- [ ] Investment portfolio tracking
-- [ ] Bill reminders and notifications
-
----
-
-## 📝 Changelog
-
-### Version 3.1 (Current)
-- ✨ Added `initialise_database.py` for streamlined first-time setup
-- ✨ Improved `update_database.py` with automatic balance initialisation
-- ✨ Added `clean_duplicate_categories.py` utility
-- ✨ Payee statistics now include most common category/location/project
-- 📚 Simplified README with clearer installation instructions
-- 🔧 Better error handling in import scripts
-
-### Version 3.0
-- ✨ Added cached balance calculations for improved performance
-- ✨ Implemented bulk editing for transactions and transfers
-- ✨ New Loans & Credit Cards page with automatic detection
-- ✨ Smart categorisation of charges vs fees/interest
-- ✨ Database backup functionality with timestamps
-- 🐬 Rebranded from "Financisto Manager" to "Delfin"
-- 🎨 Enhanced UI with better transaction displays
-- 📊 Running balance shown for each transaction
-- 🔧 Multiple bug fixes and performance improvements
-
-### Version 2.0
-- ✨ Added multi-currency support with automatic conversion
-- ✨ Integrated live exchange rate fetching from exchangerate-api.com
-- ✨ New ExchangeRate model for historical rate storage
-- 🎨 Redesigned "Balance by Account" as a detailed table
-- 🎨 Monthly category expenses with interactive month selector
-- 📊 Added "Top 10 Expenses" table for selected month
-- 🔄 Support for transfers between different currency accounts
-- 💱 All dashboard statistics now display in base currency
-- 🌍 Support for 30+ currencies with proper symbols
-
-### Version 1.0
-- 🎉 Initial release
-- ✅ Basic transaction management
-- ✅ Dashboard with charts
-- ✅ CSV import from Financisto
-- ✅ SQLite database backend
-
----
-
-## 📄 Licence
-
-This project is for personal use. Feel free to fork and modify for your own needs.
-
----
-
-## 🙏 Acknowledgements
-
-- **Financisto**: Original Android app for personal finance
-- **FastAPI**: For the excellent web framework
-- **Chart.js**: For beautiful charts
-- **SQLAlchemy**: For powerful ORM capabilities
-- **exchangerate-api.com**: For providing free exchange rate data
-
----
-
-## 📧 Contact
-
-For questions or suggestions, open an issue on GitHub.
-
----
-
-**Built with ❤️ by a dolphin for personal finance management** 🐬
+**Built with love by a dolphin for personal finance management**

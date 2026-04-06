@@ -1873,13 +1873,13 @@
         async function saveTransaction(saveAndNew = false) {
             const form = document.getElementById('transactionForm');
             const isEdit = form.dataset.editingId;
-            
+
             // Validate required fields
             if (!document.getElementById('amount').value || !document.getElementById('account').value) {
                 alert('Please fill in Amount and Account');
                 return false;
             }
-            
+
             const payeeName = document.getElementById('payee').value.trim();
             let payeeId = null;
             if (payeeName) {
@@ -1887,7 +1887,7 @@
                 if(exist) payeeId = exist.id;
                 else payeeId = (await (await fetch(`${API_URL}/payees`, { method:'POST', body:JSON.stringify({name:payeeName}), headers:{'Content-Type':'application/json'} })).json()).id;
             }
-            
+
             const accountId = parseInt(document.getElementById('account').value);
             const data = {
                 date: `${document.getElementById('date').value}T${document.getElementById('time').value}:00`,
@@ -1900,41 +1900,60 @@
                 project_id: document.getElementById('project').value ? parseInt(document.getElementById('project').value) : null,
                 note: document.getElementById('note').value
             };
-            
+
             // Track affected account for later recalculation
             batchAffectedAccounts.add(accountId);
-            
-            // If saveAndNew, skip balance recalculation
-            const skipRecalc = saveAndNew && !isEdit;
-            const url = `${API_URL}/transactions${isEdit ? '/'+isEdit : ''}${skipRecalc ? '?skip_recalculation=true' : ''}`;
-            
-            const res = await fetch(url, { 
-                method: isEdit ? 'PUT' : 'POST', 
-                body: JSON.stringify(data), 
-                headers: {'Content-Type': 'application/json'} 
+
+            // Always skip recalculation on save — recalculate in background after
+            const url = `${API_URL}/transactions${isEdit ? '/'+isEdit : ''}?skip_recalculation=true`;
+
+            const res = await fetch(url, {
+                method: isEdit ? 'PUT' : 'POST',
+                body: JSON.stringify(data),
+                headers: {'Content-Type': 'application/json'}
             });
-            
+
             if (!res.ok) {
                 alert('Error saving transaction');
                 return false;
             }
-            
-            // Reload payees list in case a new one was created
-            loadPayees();
-            
+
+            const savedTx = await res.json();
+
             if (saveAndNew && !isEdit) {
                 // Increment batch counter and update UI
                 transactionBatchCount++;
                 updateTransactionBatchIndicator();
                 resetTransactionFormForNew();
+                loadPayees(); // background
                 return true;
             } else {
-                // Final save: recalculate balances if we have pending batch items
-                if (transactionBatchCount > 0) {
-                    await recalculateAffectedBalances();
-                }
+                // Close modal immediately — user perceives instant save
                 closeTransactionModal();
-                loadRecentTransactions(true);
+
+                // Optimistic UI: insert transaction into list without full reload
+                if (!isEdit) {
+                    const account = accountsMap.get(accountId);
+                    const optimisticTx = {
+                        ...savedTx,
+                        account_name: account ? account.name : '',
+                        category_name: allCategories.find(c => c.id === data.category_id)?.name || null,
+                        payee_name: payeeName || null,
+                        location_name: allLocations.find(l => l.id === data.location_id)?.name || null,
+                        project_name: null
+                    };
+                    regularTransactions.unshift(optimisticTx);
+                    displayCombinedTransactions();
+                }
+
+                // Background: recalculate + refresh
+                (async () => {
+                    try {
+                        await recalculateAffectedBalances();
+                        await loadRecentTransactions(true);
+                        loadPayees();
+                    } catch(e) { console.error(e); }
+                })();
                 return true;
             }
         }
@@ -1984,21 +2003,21 @@
         async function saveTransfer(saveAndNew = false) {
             const form = document.getElementById('transferForm');
             const isEdit = form.dataset.editingOutId;
-            
+
             // Validate required fields
             if (!document.getElementById('fromAmount').value || !document.getElementById('fromAccount').value || !document.getElementById('toAccount').value) {
                 alert('Please fill in all required fields');
                 return false;
             }
-            
-            if(isEdit) { 
-                await fetch(`${API_URL}/transactions/${form.dataset.editingOutId}`, {method:'DELETE'}); 
-                await fetch(`${API_URL}/transactions/${form.dataset.editingInId}`, {method:'DELETE'}); 
+
+            if(isEdit) {
+                await fetch(`${API_URL}/transactions/${form.dataset.editingOutId}`, {method:'DELETE'});
+                await fetch(`${API_URL}/transactions/${form.dataset.editingInId}`, {method:'DELETE'});
             }
-            
+
             const fromAccountId = parseInt(document.getElementById('fromAccount').value);
             const toAccountId = parseInt(document.getElementById('toAccount').value);
-            
+
             const data = {
                 date: `${document.getElementById('transferDate').value}T${document.getElementById('transferTime').value}:00`,
                 from_account_id: fromAccountId,
@@ -2007,26 +2026,27 @@
                 to_amount: document.getElementById('toAmount').value ? parseMoneyAmount(document.getElementById('toAmount').value) : null,
                 note: document.getElementById('transferNote').value
             };
-            
+
             // Track affected accounts
             batchAffectedAccounts.add(fromAccountId);
             batchAffectedAccounts.add(toAccountId);
-            
-            // If saveAndNew, skip balance recalculation
-            const skipRecalc = saveAndNew && !isEdit;
-            const url = `${API_URL}/transactions/transfers${skipRecalc ? '?skip_recalculation=true' : ''}`;
-            
-            const res = await fetch(url, { 
-                method: 'POST', 
-                body: JSON.stringify(data), 
-                headers: {'Content-Type': 'application/json'} 
+
+            // Always skip recalculation — do it in background
+            const url = `${API_URL}/transactions/transfers?skip_recalculation=true`;
+
+            const res = await fetch(url, {
+                method: 'POST',
+                body: JSON.stringify(data),
+                headers: {'Content-Type': 'application/json'}
             });
-            
+
             if (!res.ok) {
                 alert('Error saving transfer');
                 return false;
             }
-            
+
+            const savedTransfer = await res.json();
+
             if (saveAndNew && !isEdit) {
                 // Increment batch counter and update UI
                 transferBatchCount++;
@@ -2034,12 +2054,37 @@
                 resetTransferFormForNew();
                 return true;
             } else {
-                // Final save: recalculate balances if we have pending batch items
-                if (transferBatchCount > 0) {
-                    await recalculateAffectedBalances();
-                }
+                // Close modal immediately
                 closeTransferModal();
-                loadRecentTransactions(true);
+
+                // Optimistic UI: insert transfer into list
+                if (!isEdit) {
+                    const fromAcc = accountsMap.get(fromAccountId);
+                    const toAcc = accountsMap.get(toAccountId);
+                    transferTransactions.unshift({
+                        transfer_out_id: savedTransfer.transfer_out?.id,
+                        transfer_in_id: savedTransfer.transfer_in?.id,
+                        date: data.date,
+                        from_account_name: fromAcc ? fromAcc.name : '',
+                        from_amount: Math.abs(data.from_amount),
+                        from_currency: fromAcc ? fromAcc.currency : '',
+                        to_account_name: toAcc ? toAcc.name : '',
+                        to_amount: data.to_amount || data.from_amount,
+                        to_currency: toAcc ? toAcc.currency : '',
+                        note: data.note,
+                        from_balance: null,
+                        to_balance: null
+                    });
+                    displayCombinedTransactions();
+                }
+
+                // Background: recalculate + refresh
+                (async () => {
+                    try {
+                        await recalculateAffectedBalances();
+                        await loadRecentTransactions(true);
+                    } catch(e) { console.error(e); }
+                })();
                 return true;
             }
         }
@@ -2075,13 +2120,14 @@
             }
         }
         
-        // Recalculate balances for all affected accounts
+        // Recalculate balances for all affected accounts (runs in background)
         async function recalculateAffectedBalances() {
             if (batchAffectedAccounts.size === 0) return;
-            
+
+            const accountIds = Array.from(batchAffectedAccounts);
+            batchAffectedAccounts.clear();
+
             try {
-                // Call the backend to recalculate balances for affected accounts
-                const accountIds = Array.from(batchAffectedAccounts);
                 await fetch(`${API_URL}/admin/recalculate-balances-for-accounts`, {
                     method: 'POST',
                     body: JSON.stringify({ account_ids: accountIds }),
@@ -2090,9 +2136,6 @@
             } catch (error) {
                 console.error('Error recalculating balances:', error);
             }
-            
-            // Reset batch state
-            batchAffectedAccounts.clear();
         }
         
         // Reset batch state when modal is closed
