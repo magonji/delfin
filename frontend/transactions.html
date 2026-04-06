@@ -1020,6 +1020,7 @@
         let accountsMap = new Map();
         let transactionsSkip = 0; const LIMIT = 100;
         let isLoadingTransactions = false, hasMoreTransactions = true;
+        let pendingTransferOuts = [], pendingTransferIns = []; // Cross-page transfer matching
         let bulkEditMode = false, selectedTransactions = [], selectedTransfers = [], currentBulkType = null;
         let activeFilters = { startDate: null, endDate: null, accountId: null, categoryId: null, searchText: null };
         let filtersActive = false;
@@ -1568,7 +1569,7 @@
             if (reset) localStorage.setItem('dirty_data', '1');
             if (isLoadingTransactions || (!hasMoreTransactions && !reset)) return;
             isLoadingTransactions = true;
-            if (reset) { transactionsSkip = 0; hasMoreTransactions = true; regularTransactions = []; transferTransactions = []; }
+            if (reset) { transactionsSkip = 0; hasMoreTransactions = true; regularTransactions = []; transferTransactions = []; pendingTransferOuts = []; pendingTransferIns = []; }
             
             try {
                 const params = new URLSearchParams({ skip: transactionsSkip, limit: LIMIT });
@@ -1583,7 +1584,8 @@
                 const data = await (await fetch(`${API_URL}/transactions?${params.toString()}`)).json();
                 if (data.length < LIMIT) hasMoreTransactions = false;
 
-                const newReg = [], transfersOut = [], transfersIn = [];
+                const newReg = [], transfersOut = [...pendingTransferOuts], transfersIn = [...pendingTransferIns];
+                pendingTransferOuts = []; pendingTransferIns = [];
                 data.forEach(t => {
                     if (t.location_name === 'Transfer Out') transfersOut.push(t);
                     else if (t.location_name === 'Transfer In') transfersIn.push(t);
@@ -1592,7 +1594,7 @@
 
                 const paired = new Set();
                 const pendingTransfers = [];
-                
+
                 // O(n) optimization: index transfersIn by date for fast lookup
                 const transfersInByDate = new Map();
                 transfersIn.forEach(t => {
@@ -1602,7 +1604,7 @@
                     }
                     transfersInByDate.get(key).push(t);
                 });
-                
+
                 transfersOut.forEach(out => {
                     // O(1) lookup by date instead of O(n) find
                     const candidates = transfersInByDate.get(out.date) || [];
@@ -1618,15 +1620,18 @@
                     } else if (filtersActive && activeFilters.accountId) {
                         pendingTransfers.push({type: 'out', data: out});
                     } else {
-                        newReg.push(out);
+                        // Save for cross-page matching if more pages remain
+                        if (hasMoreTransactions) pendingTransferOuts.push(out);
+                        else newReg.push(out);
                     }
                 });
-                transfersIn.forEach(i => { 
+                transfersIn.forEach(i => {
                     if (!paired.has(i.id)) {
                         if (filtersActive && activeFilters.accountId) {
                             pendingTransfers.push({type: 'in', data: i});
                         } else {
-                            newReg.push(i);
+                            if (hasMoreTransactions) pendingTransferIns.push(i);
+                            else newReg.push(i);
                         }
                     }
                 });
@@ -1689,6 +1694,11 @@
                     }
                 }
                 
+                // If no more pages, flush any remaining unmatched transfers as regular transactions
+                if (!hasMoreTransactions) {
+                    newReg.push(...pendingTransferOuts, ...pendingTransferIns);
+                    pendingTransferOuts = []; pendingTransferIns = [];
+                }
                 regularTransactions.push(...newReg);
                 transactionsSkip += LIMIT;
                 displayCombinedTransactions();
