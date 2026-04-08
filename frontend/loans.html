@@ -527,6 +527,10 @@
                         <div class="loan-stat-label">${isCard ? 'Balance' : 'Remaining'}</div>
                         <div class="loan-stat-value">${balanceDisplay}</div>
                     </div>
+                    ${isCard && debt.max_debt > 0 ? `<div>
+                        <div class="loan-stat-label">Max Debt</div>
+                        <div class="loan-stat-value">${s}${formatNum(debt.max_debt)}</div>
+                    </div>` : ''}
                 </div>
                 
                 <div class="loan-transactions" id="transactions-${debt.account.id}">
