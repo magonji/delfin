@@ -477,9 +477,17 @@ def get_locations(
     db: Session = Depends(get_db)
 ):
     """
-    Retrieve all locations.
+    Retrieve all locations ordered by usage count (most used first).
     """
-    locations = db.query(models.Location).offset(skip).limit(limit).all()
+    locations = (
+        db.query(models.Location)
+        .outerjoin(models.Transaction, models.Transaction.location_id == models.Location.id)
+        .group_by(models.Location.id)
+        .order_by(func.count(models.Transaction.id).desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
     return locations
 
 

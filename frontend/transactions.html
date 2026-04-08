@@ -2445,12 +2445,38 @@
                 console.error('Error auto-filling from payee:', error);
             }
         }
-        function openModal(id) { document.getElementById(id).classList.add('active'); }
-        function closeModal(id) { 
+        function openModal(id) {
             const modal = document.getElementById(id);
-            modal.classList.remove('active'); 
+            modal.classList.add('active');
+            // Trap focus inside the modal
+            trapFocus(modal);
+        }
+        function closeModal(id) {
+            const modal = document.getElementById(id);
+            modal.classList.remove('active');
             const form = modal.querySelector('form');
             if (form) form.reset();
+            releaseFocus(modal);
+        }
+        function trapFocus(modal) {
+            // Set inert on all siblings so Tab cannot leave the modal
+            const parent = modal.parentElement;
+            if (!parent) return;
+            for (const child of parent.children) {
+                if (child !== modal && !child.classList.contains('modal')) {
+                    child.setAttribute('inert', '');
+                    child.dataset.inertByModal = modal.id;
+                }
+            }
+        }
+        function releaseFocus(modal) {
+            // Only release if no other modal is still active
+            const anyActive = document.querySelector('.modal.active');
+            if (anyActive) return;
+            document.querySelectorAll('[data-inert-by-modal]').forEach(el => {
+                el.removeAttribute('inert');
+                delete el.dataset.inertByModal;
+            });
         }
         function openTransactionModal() { 
             openModal('transactionModal'); 

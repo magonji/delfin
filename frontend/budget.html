@@ -609,8 +609,28 @@
         });
 
         // Modals
-        function openModal(id) { document.getElementById(id).classList.add('active'); }
-        function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+        function openModal(id) {
+            const modal = document.getElementById(id);
+            modal.classList.add('active');
+            const parent = modal.parentElement;
+            if (parent) {
+                for (const child of parent.children) {
+                    if (child !== modal && !child.classList.contains('modal')) {
+                        child.setAttribute('inert', '');
+                        child.dataset.inertByModal = id;
+                    }
+                }
+            }
+        }
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('active');
+            if (!document.querySelector('.modal.active')) {
+                document.querySelectorAll('[data-inert-by-modal]').forEach(el => {
+                    el.removeAttribute('inert');
+                    delete el.dataset.inertByModal;
+                });
+            }
+        }
 
         // Initialize
         async function init() {
