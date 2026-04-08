@@ -185,51 +185,79 @@ def recalculate_balances_from_transaction(
 ) -> None:
     """
     Recalculate balances starting from a specific transaction.
+    Only recalculates from that point forward, not from the beginning.
     Updates account_balance_after and total_balance_after for affected transactions.
     """
     db.flush()
-    
+
     rates = get_latest_rates(db)
     base_currency = get_base_currency(db)
-    
+
     trigger_transaction = db.query(Transaction).filter(Transaction.id == transaction_id).first()
     if not trigger_transaction:
         return
-    
+
+    trigger_date = trigger_transaction.date
+
     if affected_account_ids is None:
         affected_account_ids = [trigger_transaction.account_id]
-    
-    # Step 1: Recalculate account balances
+
+    # Step 1: Recalculate account balances only from trigger point forward
     for account_id in affected_account_ids:
         account = db.query(Account).filter(Account.id == account_id).first()
         if not account:
             continue
-            
-        transactions = db.query(Transaction).filter(
-            Transaction.account_id == account_id
+
+        # Get the balance just before the trigger date for this account
+        prev_transaction = db.query(Transaction).filter(
+            Transaction.account_id == account_id,
+            (Transaction.date < trigger_date) |
+            ((Transaction.date == trigger_date) & (Transaction.id < trigger_transaction.id))
+        ).order_by(Transaction.date.desc(), Transaction.id.desc()).first()
+
+        if prev_transaction and prev_transaction.account_balance_after is not None:
+            running_balance = float(prev_transaction.account_balance_after)
+        else:
+            running_balance = float(account.initial_balance or 0.0)
+
+        # Only fetch transactions from the trigger point forward
+        transactions_from = db.query(Transaction).filter(
+            Transaction.account_id == account_id,
+            (Transaction.date > trigger_date) |
+            ((Transaction.date == trigger_date) & (Transaction.id >= trigger_transaction.id))
         ).order_by(Transaction.date.asc(), Transaction.id.asc()).all()
-        
-        running_balance = float(account.initial_balance or 0.0)
-        
-        for t in transactions:
+
+        for t in transactions_from:
             running_balance += float(t.amount or 0.0)
             t.account_balance_after = round(running_balance, 2)
-            
+
         account.current_balance = round(running_balance, 2)
 
-    # Step 2: Recalculate total balances
-    all_transactions = db.query(Transaction).order_by(
-        Transaction.date.asc(), Transaction.id.asc()
-    ).all()
-    
-    total_balance = 0.0
-    for t in all_transactions:
+    # Step 2: Recalculate total balances only from trigger point forward
+    # Get total_balance just before the trigger transaction
+    prev_total_tx = db.query(Transaction).filter(
+        (Transaction.date < trigger_date) |
+        ((Transaction.date == trigger_date) & (Transaction.id < trigger_transaction.id))
+    ).order_by(Transaction.date.desc(), Transaction.id.desc()).first()
+
+    if prev_total_tx and prev_total_tx.total_balance_after is not None:
+        total_balance = float(prev_total_tx.total_balance_after)
+    else:
+        total_balance = 0.0
+
+    # Only iterate transactions from the trigger point forward
+    transactions_from = db.query(Transaction).filter(
+        (Transaction.date > trigger_date) |
+        ((Transaction.date == trigger_date) & (Transaction.id >= trigger_transaction.id))
+    ).order_by(Transaction.date.asc(), Transaction.id.asc()).all()
+
+    for t in transactions_from:
         converted = convert_to_base_currency(
             float(t.amount or 0.0), t.currency, base_currency, rates
         )
         total_balance += converted
         t.total_balance_after = round(total_balance, 2)
-        
+
     db.flush()
 
 

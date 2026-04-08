@@ -1271,7 +1271,6 @@ def delete_transaction(
 
     if next_transaction:
         recalculate_balances_from_transaction(db, next_transaction.id, [affected_account_id])
-        db.commit()  # Commit después de recalcular
     else:
         # If no transactions remain for this account, reset current_balance
         account = db.query(models.Account).filter(
@@ -1279,7 +1278,9 @@ def delete_transaction(
         ).first()
         if account:
             account.current_balance = account.initial_balance
-            db.commit()
+        # Still need to recalculate total_balance_after for all other transactions
+        recalculate_balances_for_accounts(db, [])
+    db.commit()
 
     return {"message": "Transaction deleted successfully"}
 
