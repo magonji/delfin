@@ -1143,7 +1143,8 @@
                 const data = await (await fetch(`${API_URL}/transactions?${params.toString()}`)).json();
                 if (data.length < LIMIT) hasMoreTransactions = false;
 
-                const newReg = [], transfersOut = [], transfersIn = [];
+                const newReg = [], transfersOut = [...pendingTransferOuts], transfersIn = [...pendingTransferIns];
+                pendingTransferOuts = []; pendingTransferIns = [];
                 data.forEach(t => {
                     if (t.location_name === 'Transfer Out') transfersOut.push(t);
                     else if (t.location_name === 'Transfer In') transfersIn.push(t);
@@ -1151,7 +1152,7 @@
                 });
 
                 const paired = new Set();
-                
+
                 // O(n) optimization: index transfersIn by date for fast lookup
                 const transfersInByDate = new Map();
                 transfersIn.forEach(t => {
@@ -1161,7 +1162,7 @@
                     }
                     transfersInByDate.get(key).push(t);
                 });
-                
+
                 transfersOut.forEach(out => {
                     // O(1) lookup by date instead of O(n) find
                     const candidates = transfersInByDate.get(out.date) || [];
@@ -1175,10 +1176,20 @@
                             note: out.note || match.note, from_balance: out.account_balance_after, to_balance: match.account_balance_after
                         });
                     } else {
-                        newReg.push(out);
+                        if (hasMoreTransactions) pendingTransferOuts.push(out);
+                        else newReg.push(out);
                     }
                 });
-                transfersIn.forEach(i => { if (!paired.has(i.id)) newReg.push(i); });
+                transfersIn.forEach(i => {
+                    if (!paired.has(i.id)) {
+                        if (hasMoreTransactions) pendingTransferIns.push(i);
+                        else newReg.push(i);
+                    }
+                });
+                if (!hasMoreTransactions) {
+                    newReg.push(...pendingTransferOuts, ...pendingTransferIns);
+                    pendingTransferOuts = []; pendingTransferIns = [];
+                }
                 
                 regularTransactions.push(...newReg);
                 transactionsSkip += LIMIT;
@@ -1645,10 +1656,24 @@
                         if (!dateGroups.has(dateKey)) dateGroups.set(dateKey, []);
                         dateGroups.get(dateKey).push(p);
                     });
-                    
-                    const datePromises = Array.from(dateGroups.keys()).map(async dateKey => {
-                        const searchParams = new URLSearchParams({ start_date: dateKey, end_date: dateKey });
-                        return { dateKey, data: await (await fetch(`${API_URL}/transactions?${searchParams.toString()}`)).json() };
+
+                    // Find Transfer In/Out location IDs to filter the fetch
+                    const transferInLoc = allLocations.find(l => l.name === 'Transfer In');
+                    const transferOutLoc = allLocations.find(l => l.name === 'Transfer Out');
+
+                    const datePromises = Array.from(dateGroups.entries()).map(async ([dateKey, pending]) => {
+                        // Determine which location to search for (the opposite side)
+                        const needsIn = pending.some(p => p.type === 'out');
+                        const needsOut = pending.some(p => p.type === 'in');
+                        const fetches = [];
+                        if (needsIn && transferInLoc) {
+                            fetches.push(fetch(`${API_URL}/transactions?start_date=${dateKey}&end_date=${dateKey}&location_id=${transferInLoc.id}&limit=1000`).then(r => r.json()));
+                        }
+                        if (needsOut && transferOutLoc) {
+                            fetches.push(fetch(`${API_URL}/transactions?start_date=${dateKey}&end_date=${dateKey}&location_id=${transferOutLoc.id}&limit=1000`).then(r => r.json()));
+                        }
+                        const results = await Promise.all(fetches);
+                        return { dateKey, data: results.flat() };
                     });
                     
                     const dateResults = await Promise.all(datePromises);
