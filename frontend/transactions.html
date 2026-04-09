@@ -1032,6 +1032,7 @@
         let transactionBatchCount = 0;
         let transferBatchCount = 0;
         let batchAffectedAccounts = new Set();  // Track accounts that need balance recalculation
+        let batchEarliestDate = null;  // Track earliest date in batch for incremental recalculation
         
         // Custom confirm dialog (replaces browser confirm which may be blocked)
         let confirmResolve = null;
@@ -1901,11 +1902,14 @@
                 note: document.getElementById('note').value
             };
 
-            // Track affected account for later recalculation
+            // Track affected account and earliest date for later recalculation (batch mode)
             batchAffectedAccounts.add(accountId);
+            const txDate = data.date;
+            if (!batchEarliestDate || txDate < batchEarliestDate) batchEarliestDate = txDate;
 
-            // Always skip recalculation on save — recalculate in background after
-            const url = `${API_URL}/transactions${isEdit ? '/'+isEdit : ''}?skip_recalculation=true`;
+            // Skip recalculation only in batch mode (Save & New); otherwise let backend recalculate incrementally
+            const skipRecalc = saveAndNew && !isEdit;
+            const url = `${API_URL}/transactions${isEdit ? '/'+isEdit : ''}?skip_recalculation=${skipRecalc}`;
 
             const res = await fetch(url, {
                 method: isEdit ? 'PUT' : 'POST',
@@ -1946,10 +1950,9 @@
                     displayCombinedTransactions();
                 }
 
-                // Background: recalculate + refresh
+                // Background: refresh display (balances already recalculated by backend)
                 (async () => {
                     try {
-                        await recalculateAffectedBalances();
                         await loadRecentTransactions(true);
                         loadPayees();
                     } catch(e) { console.error(e); }
@@ -2027,12 +2030,15 @@
                 note: document.getElementById('transferNote').value
             };
 
-            // Track affected accounts
+            // Track affected accounts and earliest date for later recalculation (batch mode)
             batchAffectedAccounts.add(fromAccountId);
             batchAffectedAccounts.add(toAccountId);
+            const txDate = data.date;
+            if (!batchEarliestDate || txDate < batchEarliestDate) batchEarliestDate = txDate;
 
-            // Always skip recalculation — do it in background
-            const url = `${API_URL}/transactions/transfers?skip_recalculation=true`;
+            // Skip recalculation only in batch mode (Save & New); otherwise let backend recalculate incrementally
+            const skipRecalc = saveAndNew && !isEdit;
+            const url = `${API_URL}/transactions/transfers?skip_recalculation=${skipRecalc}`;
 
             const res = await fetch(url, {
                 method: 'POST',
@@ -2078,10 +2084,9 @@
                     displayCombinedTransactions();
                 }
 
-                // Background: recalculate + refresh
+                // Background: refresh display (balances already recalculated by backend)
                 (async () => {
                     try {
-                        await recalculateAffectedBalances();
                         await loadRecentTransactions(true);
                     } catch(e) { console.error(e); }
                 })();
@@ -2125,12 +2130,16 @@
             if (batchAffectedAccounts.size === 0) return;
 
             const accountIds = Array.from(batchAffectedAccounts);
+            const since = batchEarliestDate;
             batchAffectedAccounts.clear();
+            batchEarliestDate = null;
 
             try {
+                const body = { account_ids: accountIds };
+                if (since) body.since = since;
                 await fetch(`${API_URL}/admin/recalculate-balances-for-accounts`, {
                     method: 'POST',
-                    body: JSON.stringify({ account_ids: accountIds }),
+                    body: JSON.stringify(body),
                     headers: { 'Content-Type': 'application/json' }
                 });
             } catch (error) {
@@ -2141,11 +2150,13 @@
         // Reset batch state when modal is closed
         function resetTransactionBatchState() {
             transactionBatchCount = 0;
+            batchEarliestDate = null;
             updateTransactionBatchIndicator();
         }
         
         function resetTransferBatchState() {
             transferBatchCount = 0;
+            batchEarliestDate = null;
             updateTransferBatchIndicator();
         }
 

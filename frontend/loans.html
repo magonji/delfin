@@ -557,7 +557,11 @@
             
             if (t.amount > 0) {
                 // Positive amount = money going into the account (payment)
-                if (isInterest) {
+                if (isTransfer) {
+                    type = 'Transfer In';
+                    typeClass = 'type-transfer';
+                    amountClass = 'amount-positive';
+                } else if (isInterest) {
                     type = 'Interest Payment';
                     typeClass = 'type-interest';
                     amountClass = 'amount-negative';
@@ -568,13 +572,13 @@
                 }
             } else {
                 // Negative amount = money going out (charge/borrow)
-                if (isInterest) {
-                    type = 'Interest';
-                    typeClass = 'type-interest';
-                    amountClass = 'amount-negative';
-                } else if (isTransfer) {
+                if (isTransfer) {
                     type = 'Transfer Out';
                     typeClass = 'type-transfer';
+                    amountClass = 'amount-negative';
+                } else if (isInterest) {
+                    type = 'Interest';
+                    typeClass = 'type-interest';
                     amountClass = 'amount-negative';
                 } else {
                     type = 'Charge';

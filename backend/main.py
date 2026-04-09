@@ -1505,6 +1505,7 @@ def recalculate_balances_for_accounts(db: Session, account_ids: List[int]):
 class RecalculateBalancesRequest(BaseModel):
     """Schema for recalculate balances request."""
     account_ids: List[int]
+    since: Optional[str] = None  # ISO datetime — recalculate only from this date forward
 
 
 @app.post("/admin/recalculate-balances-for-accounts")
@@ -1514,19 +1515,24 @@ def recalculate_balances_for_accounts_endpoint(
 ):
     """
     Recalculate balances for specific accounts.
-    Useful after batch entry of transactions/transfers.
-    
-    Args:
-        request: Object containing list of account IDs to recalculate
-    
-    Returns:
-        Summary of recalculated accounts
+    If `since` is provided, only recalculates from that date forward (incremental).
     """
     if not request.account_ids:
         return {"message": "No accounts to recalculate", "accounts_processed": 0}
-    
+
     try:
-        recalculate_balances_for_accounts(db, request.account_ids)
+        if request.since:
+            # Incremental: find the earliest transaction at or after `since` and use optimised path
+            since_dt = datetime.fromisoformat(request.since)
+            trigger = db.query(models.Transaction).filter(
+                models.Transaction.account_id.in_(request.account_ids),
+                models.Transaction.date >= since_dt
+            ).order_by(models.Transaction.date.asc(), models.Transaction.id.asc()).first()
+            if trigger:
+                recalculate_balances_from_transaction(db, trigger.id, request.account_ids)
+            # If no transactions found from that date, nothing to recalculate
+        else:
+            recalculate_balances_for_accounts(db, request.account_ids)
         db.commit()
         
         return {
