@@ -945,16 +945,20 @@ def get_transfers(
     for trans_out in transfers_out:
         if trans_out.id in processed_ids:
             continue
-        
+
         date_key = str(trans_out.date)
         candidates = transfers_in_by_date.get(date_key, [])
-        
-        # Find matching transfer_in (same date, different account, not yet processed)
-        matching = None
-        for trans_in in candidates:
-            if trans_in.id not in processed_ids and trans_in.account_id != trans_out.account_id:
-                matching = trans_in
-                break
+
+        # Find matching transfer_in (same date, different account, not yet processed).
+        # Prefer one with matching amount to disambiguate multiple transfers on the same date.
+        available = [
+            t for t in candidates
+            if t.id not in processed_ids and t.account_id != trans_out.account_id
+        ]
+        matching = next(
+            (t for t in available if abs(trans_out.amount) == t.amount),
+            None
+        ) or (available[0] if available else None)
         
         if matching:
             grouped_transfers.append({

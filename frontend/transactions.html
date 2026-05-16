@@ -1166,7 +1166,8 @@
                 transfersOut.forEach(out => {
                     // O(1) lookup by date instead of O(n) find
                     const candidates = transfersInByDate.get(out.date) || [];
-                    const match = candidates.find(i => i.account_id !== out.account_id && !paired.has(i.id));
+                    const available = candidates.filter(i => i.account_id !== out.account_id && !paired.has(i.id));
+                    const match = available.find(i => Math.abs(out.amount) === i.amount) || available[0];
                     if (match) {
                         paired.add(out.id); paired.add(match.id);
                         transferTransactions.push({
@@ -1382,7 +1383,8 @@
             
             transfersOut.forEach(out => {
                 const candidates = transfersInByDate.get(out.date) || [];
-                const match = candidates.find(i => i.account_id !== out.account_id && !paired.has(i.id));
+                const available = candidates.filter(i => i.account_id !== out.account_id && !paired.has(i.id));
+                const match = available.find(i => Math.abs(out.amount) === i.amount) || available[0];
                 if (match) {
                     paired.add(out.id); paired.add(match.id);
                     transferTransactions.push({
@@ -1620,7 +1622,9 @@
                 transfersOut.forEach(out => {
                     // O(1) lookup by date instead of O(n) find
                     const candidates = transfersInByDate.get(out.date) || [];
-                    const match = candidates.find(i => i.account_id !== out.account_id && !paired.has(i.id));
+                    const available = candidates.filter(i => i.account_id !== out.account_id && !paired.has(i.id));
+                    // Prefer matching by amount (disambiguates multiple transfers on same date)
+                    const match = available.find(i => Math.abs(out.amount) === i.amount) || available[0];
                     if (match) {
                         paired.add(out.id); paired.add(match.id);
                         transferTransactions.push({
@@ -1678,19 +1682,23 @@
                     
                     const dateResults = await Promise.all(datePromises);
                     const relatedDataByDate = new Map(dateResults.map(r => [r.dateKey, r.data]));
-                    
+                    const usedPartners = new Set();
+
                     for (const pending of pendingTransfers) {
                         const dateKey = pending.data.date.split('T')[0];
                         const relatedData = relatedDataByDate.get(dateKey) || [];
-                        
+
                         let partner = null;
                         if (pending.type === 'out') {
-                            partner = relatedData.find(t => 
-                                t.location_name === 'Transfer In' && 
-                                t.date === pending.data.date && 
-                                t.account_id !== pending.data.account_id
+                            const available = relatedData.filter(t =>
+                                t.location_name === 'Transfer In' &&
+                                t.date === pending.data.date &&
+                                t.account_id !== pending.data.account_id &&
+                                !usedPartners.has(t.id)
                             );
+                            partner = available.find(t => Math.abs(pending.data.amount) === t.amount) || available[0];
                             if (partner) {
+                                usedPartners.add(partner.id);
                                 transferTransactions.push({
                                     transfer_out_id: pending.data.id, transfer_in_id: partner.id, date: pending.data.date,
                                     from_account_name: pending.data.account_name, from_amount: Math.abs(pending.data.amount), from_currency: pending.data.currency,
@@ -1701,12 +1709,15 @@
                                 newReg.push(pending.data);
                             }
                         } else {
-                            partner = relatedData.find(t => 
-                                t.location_name === 'Transfer Out' && 
-                                t.date === pending.data.date && 
-                                t.account_id !== pending.data.account_id
+                            const available = relatedData.filter(t =>
+                                t.location_name === 'Transfer Out' &&
+                                t.date === pending.data.date &&
+                                t.account_id !== pending.data.account_id &&
+                                !usedPartners.has(t.id)
                             );
+                            partner = available.find(t => Math.abs(t.amount) === pending.data.amount) || available[0];
                             if (partner) {
+                                usedPartners.add(partner.id);
                                 transferTransactions.push({
                                     transfer_out_id: partner.id, transfer_in_id: pending.data.id, date: pending.data.date,
                                     from_account_name: partner.account_name, from_amount: Math.abs(partner.amount), from_currency: partner.currency,
