@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, Query, Request, Response
+from fastapi import FastAPI, Depends, HTTPException, Query, Request, Response, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
@@ -3304,6 +3304,202 @@ def backup_database():
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create backup: {str(e)}")
+
+
+# ============================================
+# FINANCISTO IMPORT / EXPORT (integrated tools)
+# ============================================
+
+def _create_safety_backup() -> Optional[str]:
+    """Copy the live database to a timestamped file before a destructive op."""
+    source_db = "./data/finance.db"
+    if not os.path.exists(source_db):
+        return None
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    backup_filename = f"finance_pre_import_{timestamp}.db"
+    shutil.copy2(source_db, f"./data/{backup_filename}")
+    return backup_filename
+
+
+@app.post("/tools/financisto/import")
+async def financisto_import(
+    file: UploadFile = File(...),
+    mode: str = Form("analyze"),
+    db: Session = Depends(get_db),
+):
+    """
+    Import a Financisto database into Delfin.
+
+    Formats: native ``.backup`` (gzipped) or Financisto CSV export — auto-detected.
+
+    Modes:
+        * ``analyze`` — dry run. Parses and maps the file WITHOUT writing
+          anything, returning a preview summary and a compatibility report so
+          the user can review data-loss before committing.
+        * ``merge``   — add the imported data to the existing database
+          (duplicates skipped).
+        * ``replace`` — wipe the importable tables and restore from the file.
+
+    For ``merge``/``replace`` a safety backup of the current database is taken
+    first and its filename returned.
+    """
+    from backend.integrations import financisto
+
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Empty file")
+
+    filename = file.filename or ""
+
+    if mode == "analyze":
+        try:
+            return financisto.analyze_import(raw, filename)
+        except Exception as e:
+            raise HTTPException(status_code=422, detail=f"Could not parse file: {str(e)}")
+
+    if mode not in ("merge", "replace"):
+        raise HTTPException(status_code=400, detail="mode must be analyze, merge or replace")
+
+    safety_backup = _create_safety_backup()
+    try:
+        result = financisto.run_import(db, raw, filename, mode)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Import failed: {str(e)}. Your data is unchanged"
+                   + (f" (safety backup: {safety_backup})" if safety_backup else "") + ".",
+        )
+
+    result["safety_backup"] = safety_backup
+    return result
+
+
+@app.get("/tools/financisto/export")
+def financisto_export(
+    format: str = Query("backup", pattern="^(backup|csv)$"),
+    db: Session = Depends(get_db),
+):
+    """
+    Export the whole Delfin database in Financisto format.
+
+    ``format=backup`` produces a native gzipped ``.backup`` that Financisto can
+    restore directly; ``format=csv`` produces the Financisto CSV layout.
+    """
+    from backend.integrations import financisto
+
+    try:
+        data, filename, media_type = financisto.export_database(db, format)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+
+    return Response(
+        content=data,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.get("/tools/financisto/export/notes")
+def financisto_export_notes():
+    """List what a Financisto export cannot carry (for UI transparency)."""
+    from backend.integrations import financisto
+    return {"notes": financisto.export_notes()}
+
+
+# ============================================
+# CATEGORY DEDUPLICATION (integrated maintenance tool)
+# ============================================
+
+def _find_duplicate_categories(db: Session):
+    """
+    Group categories by (name, parent) and return those with more than one row.
+    Each group: {"name", "parent", "ids" (sorted), "keep_id" (lowest), "count"}.
+    """
+    rows = db.query(
+        models.Category.name,
+        models.Category.parent,
+        sql_func.group_concat(models.Category.id).label("ids"),
+    ).group_by(
+        models.Category.name, models.Category.parent
+    ).having(sql_func.count(models.Category.id) > 1).all()
+
+    groups = []
+    for name, parent, ids_str in rows:
+        ids = sorted(int(x) for x in ids_str.split(","))
+        groups.append({
+            "name": name,
+            "parent": parent,
+            "ids": ids,
+            "keep_id": ids[0],
+            "count": len(ids),
+        })
+    return groups
+
+
+@app.get("/tools/categories/duplicates")
+def get_duplicate_categories(db: Session = Depends(get_db)):
+    """Detect categories that share the same name and parent."""
+    groups = _find_duplicate_categories(db)
+    return {
+        "groups": groups,
+        "total_groups": len(groups),
+        "total_duplicates": sum(g["count"] - 1 for g in groups),
+    }
+
+
+@app.post("/tools/categories/merge-duplicates")
+def merge_duplicate_categories(db: Session = Depends(get_db)):
+    """
+    Merge every set of duplicate categories (same name + parent): keep the
+    lowest id, repoint all references to it, then delete the extras.
+
+    References updated: transactions, recurring expenses, planned expenses and
+    cached payee statistics — so no dangling category_id is left behind.
+    """
+    groups = _find_duplicate_categories(db)
+    if not groups:
+        return {"groups_merged": 0, "categories_deleted": 0, "transactions_reassigned": 0}
+
+    try:
+        categories_deleted = 0
+        transactions_reassigned = 0
+
+        for g in groups:
+            keep_id = g["keep_id"]
+            dup_ids = [i for i in g["ids"] if i != keep_id]
+            if not dup_ids:
+                continue
+
+            transactions_reassigned += db.query(models.Transaction).filter(
+                models.Transaction.category_id.in_(dup_ids)
+            ).update({models.Transaction.category_id: keep_id}, synchronize_session=False)
+
+            db.query(models.RecurringExpense).filter(
+                models.RecurringExpense.category_id.in_(dup_ids)
+            ).update({models.RecurringExpense.category_id: keep_id}, synchronize_session=False)
+
+            db.query(models.PlannedExpense).filter(
+                models.PlannedExpense.category_id.in_(dup_ids)
+            ).update({models.PlannedExpense.category_id: keep_id}, synchronize_session=False)
+
+            db.query(models.Payee).filter(
+                models.Payee.most_common_category_id.in_(dup_ids)
+            ).update({models.Payee.most_common_category_id: keep_id}, synchronize_session=False)
+
+            categories_deleted += db.query(models.Category).filter(
+                models.Category.id.in_(dup_ids)
+            ).delete(synchronize_session=False)
+
+        db.commit()
+        return {
+            "groups_merged": len(groups),
+            "categories_deleted": categories_deleted,
+            "transactions_reassigned": transactions_reassigned,
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Deduplication failed: {str(e)}")
 
 
 @app.delete("/admin/clean-corrupt-transactions")

@@ -49,9 +49,11 @@ A personal finance PWA built with Python, FastAPI, and vanilla JavaScript. Impor
 
 ### Tools (`tools.html`)
 
-- **Entity management**: Edit and merge categories, accounts, payees, locations, and projects
+- **Entity management**: Edit and merge categories, accounts, payees, locations, and projects. Includes one-click **detect & merge duplicate categories** (reassigns all references)
 - **CSV import**: Import bank statements (Bank of Scotland, PayPal, or custom format) with column mapping, duplicate detection, and inline entity creation
 - **CSV export**: Export transactions with date, account, and category filters in standard or detailed format
+- **Import Financisto**: Import a Financisto database — native `.backup` (gzipped) or CSV export — directly inside the app. Auto-detects the format, shows a pre-import **compatibility report** (so any data that can't be mapped is listed, never dropped silently), supports **merge** or **replace**, and always takes a safety backup first
+- **Export Financisto**: Export your entire database as a native `.backup` (restorable in Financisto) or Financisto CSV
 - **Database backup**: Download timestamped `.db` backup files
 - **Refresh**: Recalculate all balances, payee statistics, and exchange rates
 
@@ -71,7 +73,7 @@ A personal finance PWA built with Python, FastAPI, and vanilla JavaScript. Impor
 
 - **FastAPI** with Uvicorn (ASGI)
 - **SQLAlchemy** ORM with SQLite
-- **Pandas** for CSV import parsing
+- **Standard library only** for Financisto import/export (`gzip`, `csv`) — no extra parsing dependencies
 - **ECB XML feed** for historical exchange rates (GBP base)
 
 ### Frontend
@@ -90,27 +92,41 @@ delfin/
 │   ├── schemas.py                 # Pydantic request/response schemas
 │   ├── database.py                # DB engine and session config
 │   ├── helpers.py                 # Balance recalculation, rate helpers
-│   └── update_exchange_rates.py   # ECB rate fetcher
+│   ├── update_exchange_rates.py   # ECB rate fetcher
+│   └── integrations/              # Self-contained import/export modules
+│       ├── report.py              # Compatibility report (transparent data-loss tracking)
+│       └── financisto/            # Financisto .backup + CSV import/export
+│           ├── backup_format.py   # .backup (de)serialisation (gzip + $ENTITY blocks)
+│           ├── model.py           # Structural converters (nested-set ↔ parent, units, dates)
+│           ├── importer.py        # Financisto → Delfin (.backup + CSV)
+│           └── exporter.py        # Delfin → Financisto (.backup + CSV)
 ├── frontend/
 │   ├── index.html                 # Dashboard
 │   ├── transactions.html          # Transaction management
 │   ├── budget.html                # Budget tracker
 │   ├── loans.html                 # Loans & credit cards
-│   ├── tools.html                 # Management tools
+│   ├── tools.html                 # Management tools (incl. Financisto import/export)
 │   ├── sw.js                      # Service worker
 │   ├── manifest.json              # PWA manifest
 │   └── icons/                     # App icons (180, 192, 512)
 ├── scripts/
-│   ├── import_financisto_csv.py   # Interactive CSV importer
-│   ├── initialise_database.py     # First-time setup (rates + balances)
-│   ├── update_database.py         # Schema migration helper
-│   ├── update_exchange_rates.py   # Standalone rate updater
-│   └── clean_duplicate_categories.py
+│   └── setup-pi.sh                # Raspberry Pi systemd service setup
 ├── data/
 │   └── finance.db                 # SQLite database (gitignored)
 ├── requirements.txt
 └── README.md
 ```
+
+> **Self-contained by design.** Importing and exporting Financisto data is built
+> into the app (Tools page) — there are no helper scripts to run. The previous
+> external importer (`scripts/import_financisto_csv.py`), the now-redundant
+> `initialise_database.py` / `update_database.py` / `update_exchange_rates.py`,
+> and the `clean_duplicate_categories.py` maintenance script have all been
+> removed; their functionality lives in the app (rates update automatically on
+> startup, balances recalculate after every import, payee statistics refresh
+> from the Tools page, and duplicate categories are merged from Tools →
+> Categories). Only `setup-pi.sh` remains, since it just installs and runs the
+> app itself.
 
 ## Getting Started
 
@@ -127,27 +143,26 @@ git clone https://github.com/magonji/delfin.git
 cd delfin
 pip install -r requirements.txt
 
-# Import your Financisto CSV export
-python scripts/import_financisto_csv.py
-
-# Initialise balances and exchange rates
-python scripts/initialise_database.py
-
 # Start the server
 uvicorn backend.main:app --reload
 ```
 
-Open `http://localhost:8000/app/index.html` in your browser.
+Open `http://localhost:8000/app/index.html` in your browser, then go to
+**Tools → Import Financisto** and select your Financisto `.backup` (or CSV
+export). Delfin parses it in-app, shows a compatibility report, and imports it —
+no scripts to run. Exchange rates fetch automatically on startup and balances
+are recalculated as part of the import.
 
 ### Updating an Existing Installation
 
 ```bash
+git pull
 pip install -r requirements.txt
-python scripts/update_database.py
 uvicorn backend.main:app --reload
 ```
 
-Exchange rates now update automatically on startup — no manual step needed.
+Tables are created/extended automatically by the SQLAlchemy models on startup,
+and exchange rates update automatically — no manual migration step needed.
 
 ## API Overview
 
@@ -164,6 +179,7 @@ Full interactive docs at `http://localhost:8000/docs`.
 | **Loans** | `GET /loans/summary`, `GET /loans/details` |
 | **Dashboard** | `GET /dashboard/summary`, `GET /networth-evolution`, `GET /balance-kpis` |
 | **Exchange Rates** | `GET /exchange-rates/latest`, `GET /exchange-rates`, `POST /exchange-rates/update` |
+| **Financisto** | `POST /tools/financisto/import` (mode=analyze\|merge\|replace), `GET /tools/financisto/export?format=backup\|csv` |
 | **Admin** | `POST /admin/initialise-balances`, `POST /admin/recalculate-balances-for-accounts`, `POST /admin/backup-database` |
 
 ## Database

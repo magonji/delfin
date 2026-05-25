@@ -16,6 +16,9 @@ venv/
 env/
 ENV/
 
+# iconos
+*.afdesign
+
 # IDE files
 .vscode/
 .idea/

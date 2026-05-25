@@ -437,6 +437,18 @@
                     <div class="tool-title">Backup</div>
                     <div class="tool-description">Download a timestamped database backup.</div>
                 </div>
+
+                <div class="tool-card" onclick="openTool('financistoImport')">
+                    <div class="tool-icon">🐬</div>
+                    <div class="tool-title">Import Financisto</div>
+                    <div class="tool-description">Import a Financisto database (.backup or CSV).</div>
+                </div>
+
+                <div class="tool-card" onclick="openTool('financistoExport')">
+                    <div class="tool-icon">📦</div>
+                    <div class="tool-title">Export Financisto</div>
+                    <div class="tool-description">Export all your data in Financisto format.</div>
+                </div>
             </div>
         </div>
     </div>
@@ -444,6 +456,7 @@
     <div id="categoriesModal" class="modal">
         <div class="modal-content">
             <div class="modal-header"><h3>Manage Categories</h3><button class="close-btn" onclick="closeModal('categoriesModal')">&times;</button></div>
+            <div style="padding: 10px 25px;"><button onclick="detectDuplicateCategories()" style="width: 100%;">🔍 Detect &amp; Merge Duplicate Categories</button></div>
             <div class="search-box"><input type="text" id="categorySearch" placeholder="Search categories..." onkeyup="filterCategories()"></div>
             <div class="item-list" id="categoriesList"></div>
         </div>
@@ -575,6 +588,70 @@
             <div style="padding: 25px; text-align: center;">
                 <div id="backupStatus" style="padding: 15px; border-radius: 8px; margin-bottom: 15px; display: none;"></div>
                 <button onclick="downloadDatabaseBackup()" style="width: 100%;">Download Backup (.db)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Financisto import -->
+    <div id="financistoImportModal" class="modal">
+        <div class="modal-content" style="max-width: 640px;">
+            <div class="modal-header"><h3>🐬 Import Financisto</h3><button class="close-btn" onclick="closeModal('financistoImportModal')">&times;</button></div>
+            <div style="padding: 20px 25px;">
+                <p style="color: var(--muted); font-size: 14px; margin-top: 0;">
+                    Select a Financisto database backup (<code>.backup</code>) or a Financisto CSV export.
+                    Delfin reads it directly — no external scripts needed.
+                </p>
+                <div class="form-group" style="padding: 0;">
+                    <label>Financisto file</label>
+                    <input type="file" id="fzImportFile" accept=".backup,.csv,application/x-gzip,text/csv" onchange="fzAnalyze()">
+                </div>
+
+                <div id="fzAnalyzeStatus" style="display:none; padding: 12px; border-radius: 8px; margin: 12px 0; background:#e3f2fd; color:#1976d2;"></div>
+
+                <div id="fzReport" style="display:none;">
+                    <div id="fzSummary" style="display:flex; flex-wrap:wrap; gap:8px; margin: 8px 0 14px;"></div>
+                    <div id="fzFindings"></div>
+
+                    <div style="margin-top:18px; padding-top:16px; border-top:1px solid var(--border);">
+                        <label style="display:block; font-weight:600; margin-bottom:8px;">How should this be applied?</label>
+                        <label style="display:flex; gap:8px; align-items:flex-start; margin-bottom:10px; cursor:pointer;">
+                            <input type="radio" name="fzMode" value="merge" checked style="margin-top:3px;">
+                            <span><strong>Merge</strong> — add to your current data. Existing transactions are kept; exact duplicates are skipped.</span>
+                        </label>
+                        <label style="display:flex; gap:8px; align-items:flex-start; cursor:pointer;">
+                            <input type="radio" name="fzMode" value="replace" style="margin-top:3px;">
+                            <span><strong>Replace</strong> — wipe accounts, categories, payees, locations, projects and transactions, then restore from this file.</span>
+                        </label>
+                        <p style="color: var(--muted); font-size:13px; margin:12px 0 0;">
+                            🛡️ A safety backup of your current database is created automatically before importing.
+                        </p>
+                        <div style="display:flex; gap:10px; margin-top:16px;">
+                            <button id="fzImportBtn" onclick="fzImport()" style="flex:1; height:44px;">Import</button>
+                            <button onclick="closeModal('financistoImportModal')" class="secondary" style="height:44px;">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Financisto export -->
+    <div id="financistoExportModal" class="modal">
+        <div class="modal-content" style="max-width: 560px;">
+            <div class="modal-header"><h3>📦 Export Financisto</h3><button class="close-btn" onclick="closeModal('financistoExportModal')">&times;</button></div>
+            <div style="padding: 20px 25px;">
+                <p style="color: var(--muted); font-size: 14px; margin-top: 0;">
+                    Export your entire Delfin database in a format Financisto can read.
+                </p>
+                <div class="form-group" style="padding:0;">
+                    <label>Format</label>
+                    <select id="fzExportFormat">
+                        <option value="backup">Native backup (.backup) — full, restorable in Financisto</option>
+                        <option value="csv">CSV export — transactions only</option>
+                    </select>
+                </div>
+                <div id="fzExportNotes" style="background:#fff8e1; border:1px solid #ffe082; color:#8a6d00; border-radius:8px; padding:12px; font-size:13px; margin:14px 0;"></div>
+                <button onclick="fzExport()" style="width:100%; height:44px;">Download</button>
             </div>
         </div>
     </div>
@@ -787,6 +864,14 @@
                 case 'backup':
                     document.getElementById('backupModal').style.display = 'block';
                     document.getElementById('backupStatus').style.display = 'none';
+                    break;
+                case 'financistoImport':
+                    fzResetImport();
+                    document.getElementById('financistoImportModal').style.display = 'block';
+                    break;
+                case 'financistoExport':
+                    await fzLoadExportNotes();
+                    document.getElementById('financistoExportModal').style.display = 'block';
                     break;
             }
         }
@@ -2109,6 +2194,45 @@
             }
         }
 
+        async function detectDuplicateCategories() {
+            try {
+                const res = await fetch(`${API_URL}/tools/categories/duplicates`);
+                if (!res.ok) throw new Error('Failed to detect duplicates');
+                const data = await res.json();
+
+                if (!data.total_groups) {
+                    await customConfirm('No duplicate categories found. Your category list is clean.', 'Duplicate Detection', 'OK');
+                    return;
+                }
+
+                const preview = data.groups.slice(0, 12).map(g =>
+                    `• <b>${g.name}</b>${g.parent ? ` <span style="opacity:0.7;">(under ${g.parent})</span>` : ''} — ${g.count} copies`
+                ).join('\n');
+                const more = data.total_groups > 12 ? `\n…and ${data.total_groups - 12} more` : '';
+
+                const confirmed = await customConfirm(
+                    `Found <b>${data.total_groups}</b> set(s) of duplicate categories (${data.total_duplicates} extra to remove).\n\n${preview}${more}\n\nMerge each set into its oldest category and reassign all transactions? This cannot be undone.`,
+                    'Merge Duplicate Categories',
+                    'Merge'
+                );
+                if (!confirmed) return;
+
+                const mergeRes = await fetch(`${API_URL}/tools/categories/merge-duplicates`, { method: 'POST' });
+                if (!mergeRes.ok) throw new Error('Failed to merge');
+                const result = await mergeRes.json();
+
+                localStorage.setItem('dirty_data', '1');
+                showSuccess(`Merged ${result.groups_merged} set(s): removed ${result.categories_deleted} duplicate categories, reassigned ${result.transactions_reassigned} transactions.`);
+
+                // Refresh categories list
+                await loadCategories();
+                displayCategories();
+            } catch (error) {
+                console.error('Error detecting duplicate categories:', error);
+                showError('Error detecting duplicate categories: ' + error.message);
+            }
+        }
+
         // Apply payee suggestion to other transactions with same description
         function applySuggestionToSimilar(sourceIndex) {
             const sourceDescription = parsedTransactions[sourceIndex].description;
@@ -3210,6 +3334,192 @@
                 statusDiv.style.color = '#842029';
                 statusDiv.innerHTML = '❌ Failed to create backup. Please try again.';
                 showError('Failed to create backup: ' + error.message);
+            }
+        }
+
+        // ===================================================================
+        // FINANCISTO IMPORT / EXPORT
+        // ===================================================================
+        function fzResetImport() {
+            document.getElementById('fzImportFile').value = '';
+            document.getElementById('fzReport').style.display = 'none';
+            document.getElementById('fzAnalyzeStatus').style.display = 'none';
+            const merge = document.querySelector('input[name="fzMode"][value="merge"]');
+            if (merge) merge.checked = true;
+        }
+
+        const FZ_SEVERITY = {
+            error:   { icon: '⛔', bg: '#f8d7da', color: '#842029', label: 'Error' },
+            skipped: { icon: '🚫', bg: '#fff3cd', color: '#7a5b00', label: 'Skipped' },
+            partial: { icon: '⚠️', bg: '#fff8e1', color: '#8a6d00', label: 'Partial' },
+            info:    { icon: 'ℹ️', bg: '#e3f2fd', color: '#1565c0', label: 'Info' },
+        };
+
+        async function fzAnalyze() {
+            const fileInput = document.getElementById('fzImportFile');
+            const status = document.getElementById('fzAnalyzeStatus');
+            const report = document.getElementById('fzReport');
+            if (!fileInput.files.length) return;
+
+            report.style.display = 'none';
+            status.style.display = 'block';
+            status.style.background = '#e3f2fd';
+            status.style.color = '#1976d2';
+            status.innerHTML = '⏳ Analysing file…';
+
+            try {
+                const fd = new FormData();
+                fd.append('file', fileInput.files[0]);
+                fd.append('mode', 'analyze');
+                const res = await fetch(`${API_URL}/tools/financisto/import`, { method: 'POST', body: fd });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.detail || `HTTP ${res.status}`);
+                }
+                const data = await res.json();
+                status.style.display = 'none';
+                fzRenderReport(data);
+                report.style.display = 'block';
+            } catch (e) {
+                status.style.background = '#f8d7da';
+                status.style.color = '#842029';
+                status.innerHTML = '❌ ' + e.message;
+            }
+        }
+
+        function fzRenderReport(data) {
+            const fmtLabel = data.format === 'backup' ? 'Native .backup' : 'CSV export';
+            const s = data.summary || {};
+            const chips = [
+                ['Format', fmtLabel],
+                ['Transactions', s.transactions],
+                ['Transfers', s.transfers],
+                ['Accounts', s.accounts],
+                ['Categories', s.categories],
+                ['Payees', s.payees],
+                ['Locations', s.locations],
+                ['Projects', s.projects],
+            ];
+            document.getElementById('fzSummary').innerHTML = chips.map(([k, v]) =>
+                `<span style="background:#f0f2f5; border-radius:6px; padding:6px 10px; font-size:13px;">
+                    <strong>${v ?? 0}</strong> <span style="color:var(--muted);">${k}</span>
+                 </span>`).join('');
+
+            const findings = (data.report && data.report.findings) || [];
+            const hasLoss = data.report && data.report.has_data_loss;
+            const empty = !s.transactions && !s.accounts && !s.categories;
+            const importBtn = document.getElementById('fzImportBtn');
+            if (importBtn) importBtn.disabled = empty;
+
+            let html = '';
+            if (empty) {
+                document.getElementById('fzFindings').innerHTML =
+                    `<div style="background:#f8d7da; color:#842029; border-radius:8px; padding:12px; font-size:14px;">
+                        ⛔ No Financisto data found in this file. Is it the right file? Expected a Financisto
+                        <code>.backup</code> or CSV export.</div>`;
+                return;
+            }
+            if (findings.length === 0) {
+                html = `<div style="background:#d1f2eb; color:#0f5132; border-radius:8px; padding:12px; font-size:14px;">
+                    ✅ Everything maps cleanly — no data loss detected.</div>`;
+            } else {
+                if (hasLoss) {
+                    html += `<div style="font-size:13px; color:var(--muted); margin-bottom:8px;">
+                        Delfin will import everything it can and report below exactly what differs or cannot be converted. Nothing is discarded silently.</div>`;
+                }
+                html += findings.map(f => {
+                    const sev = FZ_SEVERITY[f.severity] || FZ_SEVERITY.info;
+                    const count = f.count > 1 ? ` <span style="opacity:0.7;">×${f.count}</span>` : '';
+                    const detail = f.detail ? `<div style="font-size:12.5px; opacity:0.85; margin-top:3px;">${f.detail}</div>` : '';
+                    return `<div style="background:${sev.bg}; color:${sev.color}; border-radius:8px; padding:10px 12px; margin-bottom:8px;">
+                        <div style="font-weight:600; font-size:13.5px;">${sev.icon} ${f.title}${count}</div>${detail}
+                    </div>`;
+                }).join('');
+            }
+            document.getElementById('fzFindings').innerHTML = html;
+        }
+
+        async function fzImport() {
+            const fileInput = document.getElementById('fzImportFile');
+            if (!fileInput.files.length) { showError('Please choose a file first.'); return; }
+            const mode = document.querySelector('input[name="fzMode"]:checked').value;
+
+            if (mode === 'replace') {
+                if (!confirm('REPLACE will permanently delete your current accounts, categories, payees, locations, projects and transactions, then restore from the file. A safety backup is created first.\n\nContinue?')) {
+                    return;
+                }
+            }
+
+            const btn = document.getElementById('fzImportBtn');
+            const original = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = '⏳ Importing…';
+
+            try {
+                const fd = new FormData();
+                fd.append('file', fileInput.files[0]);
+                fd.append('mode', mode);
+                const res = await fetch(`${API_URL}/tools/financisto/import`, { method: 'POST', body: fd });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.detail || `HTTP ${res.status}`);
+                }
+                const data = await res.json();
+                const r = data.result || {};
+                localStorage.setItem('dirty_data', '1');
+                let msg = `Imported ${r.transactions_imported} transactions`;
+                if (r.duplicates_skipped) msg += ` (${r.duplicates_skipped} duplicates skipped)`;
+                if (data.safety_backup) msg += `. Safety backup: ${data.safety_backup}`;
+                showSuccess(msg);
+                closeModal('financistoImportModal');
+            } catch (e) {
+                showError('Import failed: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = original;
+            }
+        }
+
+        async function fzLoadExportNotes() {
+            const box = document.getElementById('fzExportNotes');
+            box.innerHTML = '⏳ Loading…';
+            try {
+                const res = await fetch(`${API_URL}/tools/financisto/export/notes`);
+                const data = await res.json();
+                const notes = (data.notes || []);
+                box.innerHTML = `<strong>What is not included:</strong><ul style="margin:6px 0 0; padding-left:18px;">`
+                    + notes.map(n => `<li style="margin-bottom:4px;">${n}</li>`).join('') + '</ul>';
+            } catch (e) {
+                box.innerHTML = '⚠️ Could not load export details.';
+            }
+        }
+
+        async function fzExport() {
+            const format = document.getElementById('fzExportFormat').value;
+            try {
+                const res = await fetch(`${API_URL}/tools/financisto/export?format=${format}`);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+                // Derive filename from the Content-Disposition header when present.
+                let filename = `delfin_financisto.${format === 'csv' ? 'csv' : 'backup'}`;
+                const cd = res.headers.get('content-disposition');
+                if (cd) {
+                    const m = cd.match(/filename="?([^"]+)"?/);
+                    if (m) filename = m[1];
+                }
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+                showSuccess(`Exported: ${filename}`);
+                closeModal('financistoExportModal');
+            } catch (e) {
+                showError('Export failed: ' + e.message);
             }
         }
     </script>
