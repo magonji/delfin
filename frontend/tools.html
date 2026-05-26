@@ -141,6 +141,16 @@
             -webkit-appearance: none; appearance: none;
         }
         select { background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%232D2D2D'/%3E%3C/svg%3E") no-repeat right 10px center; padding-right: 28px; }
+        /* Radios/checkboxes must keep their native look — the reset above would
+           otherwise render them as empty full-width boxes. */
+        input[type="radio"], input[type="checkbox"] {
+            width: auto; min-height: 0; padding: 0; margin: 0; border: 0; border-radius: 0;
+            appearance: auto; -webkit-appearance: auto; flex: 0 0 auto;
+        }
+        /* Indeterminate progress bar for long operations (e.g. Financisto import) */
+        .progress-track { height: 8px; background: var(--border); border-radius: 999px; overflow: hidden; margin: 10px 0; }
+        .progress-track .bar { height: 100%; width: 40%; border-radius: 999px; background: var(--btn-primary); animation: indeterminate 1.2s ease-in-out infinite; }
+        @keyframes indeterminate { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
         .search-box { padding: 20px 25px 0 25px; margin-bottom: 10px; }
         
         /* Button styles with updated theme colours */
@@ -670,9 +680,13 @@
                         <p style="color: var(--muted); font-size:13px; margin:12px 0 0;">
                             🛡️ A safety backup of your current database is created automatically before importing.
                         </p>
+                        <div id="fzImportProgress" style="display:none; margin-top:14px;">
+                            <div class="progress-track"><div class="bar"></div></div>
+                            <div id="fzImportProgressMsg" style="font-size:13px; color: var(--muted);">⏳ Importing… please don't close this window.</div>
+                        </div>
                         <div style="display:flex; gap:10px; margin-top:16px;">
                             <button id="fzImportBtn" onclick="fzImport()" style="flex:1; height:44px;">Import</button>
-                            <button onclick="closeModal('financistoImportModal')" class="secondary" style="height:44px;">Cancel</button>
+                            <button id="fzCancelBtn" onclick="closeModal('financistoImportModal')" class="secondary" style="height:44px;">Cancel</button>
                         </div>
                     </div>
                 </div>
@@ -3564,9 +3578,24 @@
             }
 
             const btn = document.getElementById('fzImportBtn');
+            const cancelBtn = document.getElementById('fzCancelBtn');
+            const progress = document.getElementById('fzImportProgress');
+            const progressMsg = document.getElementById('fzImportProgressMsg');
             const original = btn.textContent;
             btn.disabled = true;
+            cancelBtn.disabled = true;
             btn.textContent = '⏳ Importing…';
+
+            // Indeterminate progress + elapsed timer so a long import never looks frozen.
+            progress.style.display = 'block';
+            const started = Date.now();
+            const noun = mode === 'replace' ? 'Replacing' : 'Importing';
+            const tick = () => {
+                const s = Math.floor((Date.now() - started) / 1000);
+                progressMsg.textContent = `⏳ ${noun}… ${s}s elapsed. Large backups take a while — please don't close this window.`;
+            };
+            tick();
+            const timer = setInterval(tick, 1000);
 
             try {
                 const fd = new FormData();
@@ -3588,7 +3617,10 @@
             } catch (e) {
                 showError('Import failed: ' + e.message);
             } finally {
+                clearInterval(timer);
+                progress.style.display = 'none';
                 btn.disabled = false;
+                cancelBtn.disabled = false;
                 btn.textContent = original;
             }
         }
