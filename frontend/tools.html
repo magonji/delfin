@@ -620,6 +620,10 @@
                     alone don't count).
                 </p>
 
+                <div id="mtStatusPanel" style="background: var(--panel); border:1px solid var(--border); border-radius:8px; padding:12px 14px; margin-bottom:16px; font-size:13px; line-height:1.7;">
+                    <span style="color: var(--muted);">Loading status…</span>
+                </div>
+
                 <div class="form-group" style="padding: 0; margin-bottom: 16px;">
                     <label for="mtTime">Daily maintenance time</label>
                     <input type="time" id="mtTime" value="02:28">
@@ -637,11 +641,16 @@
                     </select>
                 </div>
 
+                <div id="mtProgress" style="display:none; margin: 6px 0 12px;">
+                    <div class="progress-track"><div class="bar"></div></div>
+                    <div id="mtProgressMsg" style="font-size:13px; color: var(--muted);">⏳ Running maintenance…</div>
+                </div>
+
                 <div id="maintenanceStatus" style="display:none; padding: 12px; border-radius: 8px; margin: 12px 0;"></div>
 
                 <div style="display:flex; gap:10px; margin-top:18px;">
                     <button id="mtSaveBtn" onclick="saveMaintenanceSettings()" style="flex:1; height:44px;">Save settings</button>
-                    <button onclick="runMaintenanceNow()" class="secondary" style="height:44px;">Run now</button>
+                    <button id="mtRunBtn" onclick="runMaintenanceNow()" class="secondary" style="height:44px;">Run now</button>
                 </div>
             </div>
         </div>
@@ -926,6 +935,7 @@
                     break;
                 case 'maintenance':
                     await loadMaintenanceSettings();
+                    await loadMaintenanceStatus();
                     document.getElementById('maintenanceStatus').style.display = 'none';
                     document.getElementById('maintenanceModal').style.display = 'block';
                     break;
@@ -3404,6 +3414,10 @@
         // ===================================================================
         // MAINTENANCE SETTINGS
         // ===================================================================
+        let mtLastStatus = null;
+
+        function mtEsc(s) { const d = document.createElement('div'); d.textContent = (s == null ? '' : s); return d.innerHTML; }
+
         async function loadMaintenanceSettings() {
             try {
                 const res = await fetch(`${API_URL}/settings/maintenance`);
@@ -3416,12 +3430,58 @@
             }
         }
 
+        function mtRenderStatus(st) {
+            mtLastStatus = st;
+            const enabled = st.enabled;
+            const dirNote = st.dir_present ? '' : ' <span style="color:var(--danger,#c0392b);">(folder not found — is the disk mounted?)</span>';
+            const btn = enabled
+                ? `<button class="secondary" style="height:36px; margin-top:10px;" onclick="disableBackups()">Disable backups</button>`
+                : `<button style="height:36px; margin-top:10px;" onclick="enableBackups()">Enable backups on this disk</button>`;
+            document.getElementById('mtStatusPanel').innerHTML = `
+                <div><strong>Backups:</strong> ${enabled ? '✅ Enabled' : '⚠️ Disabled'}</div>
+                <div><strong>Folder:</strong> <code>${mtEsc(st.backup_dir)}</code>${dirNote}</div>
+                <div><strong>Last backup:</strong> ${st.last_backup ? mtEsc(st.last_backup) : '—'}</div>
+                <div><strong>Total backups:</strong> ${st.count}</div>
+                <div><strong>Last maintenance run:</strong> ${mtEsc(st.last_maintenance || 'never')}</div>
+                <div><strong>Schedule:</strong> daily at ${mtEsc(st.maintenance_time)} · keep ${mtEsc(st.backup_retention)}</div>
+                ${btn}`;
+        }
+
+        async function loadMaintenanceStatus() {
+            try {
+                const res = await fetch(`${API_URL}/maintenance/status`);
+                if (!res.ok) throw new Error('Failed to load status');
+                mtRenderStatus(await res.json());
+            } catch (e) {
+                document.getElementById('mtStatusPanel').innerHTML =
+                    `<span style="color:var(--danger,#c0392b);">Could not load status: ${mtEsc(e.message)}</span>`;
+            }
+        }
+
         function mtStatus(msg, ok = true) {
             const d = document.getElementById('maintenanceStatus');
             d.style.display = 'block';
             d.style.background = ok ? '#d1f2eb' : '#f8d7da';
             d.style.color = ok ? '#0f5132' : '#842029';
             d.innerHTML = msg;
+        }
+
+        async function enableBackups() {
+            try {
+                const res = await fetch(`${API_URL}/maintenance/enable-backups`, { method: 'POST' });
+                if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || 'Failed'); }
+                mtRenderStatus(await res.json());
+                mtStatus('✅ Backups enabled on this disk.');
+            } catch (e) { mtStatus('❌ ' + e.message, false); }
+        }
+
+        async function disableBackups() {
+            try {
+                const res = await fetch(`${API_URL}/maintenance/disable-backups`, { method: 'POST' });
+                if (!res.ok) throw new Error('Failed');
+                mtRenderStatus(await res.json());
+                mtStatus('Backups disabled.');
+            } catch (e) { mtStatus('❌ ' + e.message, false); }
         }
 
         async function saveMaintenanceSettings() {
@@ -3442,8 +3502,9 @@
                     throw new Error(err.detail || 'Failed to save');
                 }
                 const s = await res.json();
-                mtStatus(`✅ Saved. Maintenance runs daily at <strong>${s.maintenance_time}</strong>; backups kept: <strong>${s.backup_retention}</strong>.`);
+                mtStatus(`✅ Saved. Maintenance runs daily at <strong>${mtEsc(s.maintenance_time)}</strong>; backups kept: <strong>${mtEsc(s.backup_retention)}</strong>.`);
                 showSuccess('Maintenance settings saved');
+                loadMaintenanceStatus();
             } catch (e) {
                 mtStatus('❌ ' + e.message, false);
                 showError('Failed to save settings: ' + e.message);
@@ -3453,14 +3514,47 @@
         }
 
         async function runMaintenanceNow() {
+            const runBtn = document.getElementById('mtRunBtn');
+            const saveBtn = document.getElementById('mtSaveBtn');
+            const progress = document.getElementById('mtProgress');
+            const progressMsg = document.getElementById('mtProgressMsg');
+            document.getElementById('maintenanceStatus').style.display = 'none';
+            runBtn.disabled = true; saveBtn.disabled = true;
+            progress.style.display = 'block';
+            const started = Date.now();
+            const tick = () => {
+                const s = Math.floor((Date.now() - started) / 1000);
+                progressMsg.textContent = `⏳ Running maintenance… ${s}s (rates, balances, payees, backup). Please don't close this window.`;
+            };
+            tick();
+            const timer = setInterval(tick, 1000);
             try {
-                mtStatus('⏳ Maintenance started in the background (rates, balances, payees, backup)…');
                 const res = await fetch(`${API_URL}/maintenance/run`, { method: 'POST' });
-                if (!res.ok) throw new Error('Failed to start');
-                showSuccess('Maintenance started');
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const r = await res.json();
+                await loadMaintenanceStatus();
+                const enabled = mtLastStatus && mtLastStatus.enabled;
+                let msg;
+                if (r.status === 'already_running') {
+                    msg = '⏳ Maintenance was already running — try again in a moment.';
+                } else {
+                    const did = [];
+                    if (r.rates_updated) did.push('rates updated');
+                    if (r.balances) did.push('balances recalculated');
+                    if (typeof r.payees === 'number') did.push(`${r.payees} payees`);
+                    const didStr = did.length ? ` (${did.join(', ')})` : '';
+                    if (r.backup) msg = `✅ Done${didStr}. Backup created: <strong>${mtEsc(r.backup)}</strong>`;
+                    else if (!enabled) msg = `✅ Done${didStr}. No backup — backups are disabled. Use "Enable backups on this disk" above.`;
+                    else msg = `✅ Done${didStr}. No backup needed — no changes since the last one.`;
+                }
+                mtStatus(msg, r.status !== 'already_running');
+                localStorage.setItem('dirty_data', '1');
             } catch (e) {
-                mtStatus('❌ ' + e.message, false);
-                showError('Failed to start maintenance: ' + e.message);
+                mtStatus('❌ Maintenance failed: ' + e.message, false);
+            } finally {
+                clearInterval(timer);
+                progress.style.display = 'none';
+                runBtn.disabled = false; saveBtn.disabled = false;
             }
         }
 

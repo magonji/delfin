@@ -112,6 +112,20 @@ def run_maintenance(trigger: str = "scheduled") -> dict:
         _run_lock.release()
 
 
+def is_running() -> bool:
+    """True while a maintenance run is in progress."""
+    return _run_lock.locked()
+
+
+def last_run_date() -> "str | None":
+    """ISO date of the last successful maintenance, or None."""
+    try:
+        with open(STATE_PATH) as f:
+            return f.read().strip() or None
+    except OSError:
+        return None
+
+
 def _ran_today() -> bool:
     try:
         with open(STATE_PATH) as f:

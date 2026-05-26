@@ -123,6 +123,56 @@ def _prune(backup_dir: str) -> None:
                 logger.warning(f"Backup prune: could not remove {path}: {e}")
 
 
+def dir_present() -> bool:
+    """True if the backup directory exists (i.e. the target disk is mounted)."""
+    return bool(BACKUP_DIR) and os.path.isdir(BACKUP_DIR)
+
+
+def is_enabled() -> bool:
+    """True if backups are switched on (sentinel present in the backup dir)."""
+    return dir_present() and os.path.exists(os.path.join(BACKUP_DIR, SENTINEL))
+
+
+def list_backups() -> list:
+    """Backup filenames, oldest first (chronological by name)."""
+    if not dir_present():
+        return []
+    return [os.path.basename(p) for p in
+            sorted(glob.glob(os.path.join(BACKUP_DIR, f"{PREFIX}*{SUFFIX}")))]
+
+
+def enable() -> None:
+    """Switch backups on by creating the sentinel. Raises if the dir isn't available."""
+    if not dir_present():
+        raise RuntimeError(
+            f"Backup folder '{BACKUP_DIR}' is not available — is the disk mounted "
+            "and the volume mapped?")
+    open(os.path.join(BACKUP_DIR, SENTINEL), "w").close()
+
+
+def disable() -> None:
+    """Switch backups off by removing the sentinel."""
+    try:
+        os.remove(os.path.join(BACKUP_DIR, SENTINEL))
+    except OSError:
+        pass
+
+
+def status() -> dict:
+    """Backup state for the Tools UI."""
+    files = list_backups()
+    last = files[-1] if files else None
+    ts = _parse_ts(last) if last else None
+    return {
+        "backup_dir": BACKUP_DIR,
+        "dir_present": dir_present(),
+        "enabled": is_enabled(),
+        "count": len(files),
+        "last_backup": last,
+        "last_backup_at": ts.isoformat() if ts else None,
+    }
+
+
 def run_backup() -> Optional[str]:
     """Back up the live DB to the external disk if user data changed since the last
     backup, then prune by age. Returns the new filename, or None. Never raises."""

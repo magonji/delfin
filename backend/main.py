@@ -3276,13 +3276,44 @@ def update_maintenance_settings(payload: schemas.MaintenanceSettingsUpdate):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@app.get("/maintenance/status")
+def maintenance_status():
+    """Backup + schedule status for the Tools → Maintenance panel."""
+    from backend import backup as db_backup, settings_store
+    s = settings_store.get_settings()
+    st = db_backup.status()
+    st.update({
+        "maintenance_time": s["maintenance_time"],
+        "backup_retention": s["backup_retention"],
+        "last_maintenance": maintenance.last_run_date(),
+        "running": maintenance.is_running(),
+    })
+    return st
+
+
+@app.post("/maintenance/enable-backups")
+def enable_backups():
+    """Switch backups on (creates the sentinel in the backup folder)."""
+    from backend import backup as db_backup
+    try:
+        db_backup.enable()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return db_backup.status()
+
+
+@app.post("/maintenance/disable-backups")
+def disable_backups():
+    """Switch backups off (removes the sentinel)."""
+    from backend import backup as db_backup
+    db_backup.disable()
+    return db_backup.status()
+
+
 @app.post("/maintenance/run")
 def run_maintenance_now():
-    """Trigger the full maintenance job immediately (runs in the background)."""
-    threading.Thread(
-        target=maintenance.run_maintenance, kwargs={"trigger": "manual"}, daemon=True
-    ).start()
-    return {"status": "started"}
+    """Run the full maintenance job now (synchronously) and return what it did."""
+    return maintenance.run_maintenance(trigger="manual")
 
 
 @app.post("/admin/backup-database")
