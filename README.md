@@ -109,10 +109,13 @@ delfin/
 │   ├── sw.js                      # Service worker
 │   ├── manifest.json              # PWA manifest
 │   └── icons/                     # App icons (180, 192, 512)
-├── scripts/
-│   └── setup-pi.sh                # Raspberry Pi systemd service setup
 ├── data/
 │   └── finance.db                 # SQLite database (gitignored)
+├── .github/workflows/
+│   └── docker-publish.yml         # CI: build arm64+amd64 image, push to ghcr.io
+├── Dockerfile                     # Container image definition
+├── docker-compose.yml             # One-command run with a persistent data volume
+├── .dockerignore
 ├── requirements.txt
 └── README.md
 ```
@@ -121,12 +124,12 @@ delfin/
 > into the app (Tools page) — there are no helper scripts to run. The previous
 > external importer (`scripts/import_financisto_csv.py`), the now-redundant
 > `initialise_database.py` / `update_database.py` / `update_exchange_rates.py`,
-> and the `clean_duplicate_categories.py` maintenance script have all been
-> removed; their functionality lives in the app (rates update automatically on
-> startup, balances recalculate after every import, payee statistics refresh
-> from the Tools page, and duplicate categories are merged from Tools →
-> Categories). Only `setup-pi.sh` remains, since it just installs and runs the
-> app itself.
+> the `clean_duplicate_categories.py` maintenance script, and the old
+> `setup-pi.sh` installer have all been removed; their functionality lives in
+> the app (rates update automatically on startup, balances recalculate after
+> every import, payee statistics refresh from the Tools page, and duplicate
+> categories are merged from Tools → Categories), and deployment is now handled
+> by Docker (see [Run with Docker](#run-with-docker-recommended-for-raspberry-pi--always-on-hosting)).
 
 ## Getting Started
 
@@ -163,6 +166,52 @@ uvicorn backend.main:app --reload
 
 Tables are created/extended automatically by the SQLAlchemy models on startup,
 and exchange rates update automatically — no manual migration step needed.
+
+### Run with Docker (recommended for Raspberry Pi / always-on hosting)
+
+The image is published to the GitHub Container Registry at
+**`ghcr.io/magonji/delfin`** and rebuilt as a multi-arch image for **arm64**
+(Raspberry Pi 64-bit) and **amd64** (Windows/Mac/Linux x86 servers) on every push
+to `main` via GitHub Actions. Docker automatically pulls the right one for your host.
+
+**With Docker Compose** (easiest — persists the DB in `./data`):
+
+```bash
+git clone https://github.com/magonji/delfin.git
+cd delfin
+docker compose up -d
+```
+
+**Or pull and run the published image directly:**
+
+```bash
+docker run -d --name delfin --restart unless-stopped \
+  -p 8000:8000 \
+  -v "$(pwd)/data:/app/data" \
+  ghcr.io/magonji/delfin:latest
+```
+
+Open `http://<host>:8000/app/index.html`. The SQLite database lives in the
+mounted `data/` volume, so it survives container restarts and image updates. If
+`finance.db` doesn't exist yet, an empty one is created on first start — then use
+**Tools → Import Financisto** to load your data.
+
+**Update** to the latest image:
+
+```bash
+docker compose pull && docker compose up -d
+```
+
+**Build it yourself** (e.g. for a different architecture):
+
+```bash
+docker compose build                                    # local build via the Dockerfile
+docker buildx build --platform linux/arm64,linux/amd64 -t delfin .   # multi-arch
+```
+
+> The published GHCR package may be private by default. Make it public from the
+> repo's **Packages** page if you want to pull without authenticating, or run
+> `docker login ghcr.io` with a personal access token (scope `read:packages`).
 
 ## API Overview
 

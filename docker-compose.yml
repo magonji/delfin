@@ -1,0 +1,13 @@
+services:
+  delfin:
+    # Pull the published image from GitHub Container Registry...
+    image: ghcr.io/magonji/delfin:latest
+    # ...or build it locally instead with:  docker compose build
+    build: .
+    container_name: delfin
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persist the SQLite database on the host (replaces the bare-metal data/ folder)
+      - ./data:/app/data

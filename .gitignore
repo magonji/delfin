@@ -16,6 +16,9 @@ venv/
 env/
 ENV/
 
+# Not needed
+.claude/
+
 # iconos
 *.afdesign
 

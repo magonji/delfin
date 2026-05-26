@@ -1,0 +1,44 @@
+# Git / VCS
+.git
+.gitignore
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Local data — the SQLite DB lives in a mounted volume, never bake it into the image
+data/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Editor / OS junk
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Not needed at runtime
+.claude/
+scripts/
+*.afdesign
+*.bat
+*.command
+.env
+README.md
+Dockerfile
+docker-compose.yml
+.dockerignore
+.github/
