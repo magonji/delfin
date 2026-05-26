@@ -56,12 +56,13 @@ A personal finance PWA built with Python, FastAPI, and vanilla JavaScript. Impor
 - **Export Financisto**: Export your entire database as a native `.backup` (restorable in Financisto) or Financisto CSV
 - **Database backup**: Download timestamped `.db` backup files
 - **Refresh**: Recalculate all balances, payee statistics, and exchange rates
+- **Maintenance**: Configure the daily maintenance time (default 02:28) and backup retention (1 month → 2 years, or never), and trigger a maintenance run on demand
 
 ### Cross-cutting
 
 - **PWA**: Installable on iOS/Android/desktop with service worker (network-first for HTML, stale-while-revalidate for assets)
 - **Multi-currency**: 30+ currencies with historical ECB exchange rates. All conversions use the rate from the transaction date
-- **Auto rate updates**: Exchange rates update automatically on server startup and daily thereafter (no manual button needed)
+- **Auto rate updates**: Exchange rates update automatically on server startup and on page load, and again as part of the nightly maintenance job (no manual button needed)
 - **Cache with dirty flag**: Dashboard and loans cache data locally (14-day TTL). When transactions change, a `dirty_data` flag triggers cache invalidation on next page load
 - **Safari compatibility**: `-webkit-appearance: none` on all form controls, custom SVG dropdown arrows, no input zoom on iOS
 - **Responsive design**: Optimised layouts for desktop, tablet, and mobile. Sticky footer on all pages
@@ -93,6 +94,9 @@ delfin/
 │   ├── database.py                # DB engine and session config
 │   ├── helpers.py                 # Balance recalculation, rate helpers
 │   ├── update_exchange_rates.py   # ECB rate fetcher
+│   ├── maintenance.py             # Nightly job (rates+balances+payees+backup) & scheduler
+│   ├── backup.py                  # Off-disk DB backup (activity-detected, age-pruned)
+│   ├── settings_store.py          # Maintenance settings (time + retention), JSON in data/
 │   └── integrations/              # Self-contained import/export modules
 │       ├── report.py              # Compatibility report (transparent data-loss tracking)
 │       └── financisto/            # Financisto .backup + CSV import/export
@@ -186,6 +190,7 @@ docker compose up -d
 
 ```bash
 docker run -d --name delfin --restart unless-stopped \
+  -e TZ=Europe/Madrid \
   -p 8000:8000 \
   -v "$(pwd)/data:/app/data" \
   ghcr.io/magonji/delfin:latest
@@ -212,6 +217,60 @@ docker buildx build --platform linux/arm64,linux/amd64 -t delfin .   # multi-arc
 > The published GHCR package may be private by default. Make it public from the
 > repo's **Packages** page if you want to pull without authenticating, or run
 > `docker login ghcr.io` with a personal access token (scope `read:packages`).
+
+#### Nightly maintenance & off-disk backups
+
+Because Delfin runs continuously, it does its housekeeping in **one daily job** at
+a configurable time (default **02:28**, set in **Tools → Maintenance**):
+
+1. refresh exchange rates,
+2. recalculate balances (the data behind the dashboard graphs),
+3. recalculate payee statistics,
+4. **back up the database to a second disk** — but only if your data actually
+   changed.
+
+It's pure Python built into the app, so it works on any host (Linux/Windows/macOS)
+— no cron or systemd. If the machine was off during the scheduled window, the job
+runs a catch-up pass on the next start.
+
+**What counts as "changed":** the backup is taken only on real user activity.
+Exchange-rate refreshes, the `updated_at` bookkeeping the job itself writes, and
+the rate-derived `total_balance_after` cache are **ignored** when deciding whether
+to back up — so an idle day produces no backup even though rates were updated.
+
+Snapshots use SQLite's online backup API (consistent and WAL-safe — not a raw
+file copy). Old backups are pruned by age according to the **retention** you pick
+in Tools (1 month / 3 / 6 months / 1 / 2 years / never). For real resilience,
+point the backups at a **different physical disk** than the live DB.
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `DELFIN_BACKUP_DIR` | `/app/backups` | Where snapshots are written (inside the container) |
+
+(The maintenance time and retention are app settings — configured in the UI, not
+env vars.)
+
+Example: live DB on the SD card, backups on an external drive at `/srv/storage`:
+
+```bash
+mkdir -p ~/docker/delfin /srv/storage/backups/delfin
+# Enable backups (the sentinel also proves the external disk is mounted —
+# if it's missing, the backup is skipped instead of writing to the wrong disk):
+touch /srv/storage/backups/delfin/.delfin-backup-enabled
+
+docker run -d --name delfin --restart unless-stopped \
+  -e TZ=Europe/Madrid \
+  -p 8000:8000 \
+  -v ~/docker/delfin:/app/data \
+  -v /srv/storage/backups/delfin:/app/backups \
+  ghcr.io/magonji/delfin:latest
+```
+
+Without the `.delfin-backup-enabled` sentinel in the backup directory, the
+feature stays dormant — mounting the volume alone does nothing.
+
+> **Timezone:** the maintenance time is wall-clock time in the container's
+> timezone. Set `TZ` (e.g. `Europe/Madrid`) so 02:28 means 02:28 local, not UTC.
 
 ## API Overview
 

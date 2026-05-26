@@ -5,6 +5,11 @@ FROM python:3.12-slim
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
+# tzdata lets the TZ env var set the container's local time, so the nightly
+# maintenance runs at the configured wall-clock hour (e.g. 02:28 local, not UTC).
+RUN apt-get update && apt-get install -y --no-install-recommends tzdata \
+    && rm -rf /var/lib/apt/lists/*
+
 # WORKDIR must be the project root so the app's relative paths keep working:
 #   - DB:       sqlite:///./data/finance.db   -> /app/data/finance.db
 #   - frontend: StaticFiles(directory="frontend") -> /app/frontend

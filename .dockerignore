@@ -10,6 +10,7 @@ __pycache__/
 
 # Local data — the SQLite DB lives in a mounted volume, never bake it into the image
 data/
+backups/
 *.db
 *.db-wal
 *.db-shm

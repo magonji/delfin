@@ -12,6 +12,7 @@ import shutil
 import os
 from backend.database import get_db, engine
 from backend import models, schemas
+from backend import maintenance
 from backend.models import Account, Category, Payee, Location, Project, Transaction, ExchangeRate, Budget, RecurringExpense, RecurringExpenseHistory, RecurringExpensePayment, PlannedExpense
 from backend.schemas import ExchangeRateResponse
 from backend.helpers import (
@@ -71,9 +72,15 @@ def auto_update_exchange_rates():
     """Auto-update exchange rates on startup."""
     _check_and_update_rates()
 
+@app.on_event("startup")
+def start_maintenance_scheduler():
+    """Start the daily maintenance scheduler (rates + balances + payees + backup)."""
+    maintenance.start_scheduler()
+
 class CacheControlMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        # Trigger daily rate check when any HTML page is loaded
+        # Trigger daily rate check when any HTML page is loaded (the nightly
+        # maintenance job handles the full refresh + backup on its own schedule)
         if request.url.path.endswith(".html") or request.url.path == "/":
             threading.Thread(target=_check_and_update_rates, daemon=True).start()
         response = await call_next(request)
@@ -342,51 +349,16 @@ def recalculate_payee_stats(payee_id: int, db: Session = Depends(get_db)):
 def recalculate_all_payees_stats(db: Session = Depends(get_db)):
     """
     Recalculate statistics for all payees.
-    This can be triggered from the 'Manage Payees' interface.
+    This can be triggered from the 'Manage Payees' interface and is also part of
+    the nightly maintenance job (shared logic in maintenance.py).
     """
-    payees = db.query(Payee).all()
-    updated_count = 0
-    error_count = 0
-    for payee in payees:
-        try:
-            # Get all transactions for this payee
-            transactions = db.query(Transaction).filter(Transaction.payee_id == payee.id).all()
-            if not transactions:
-                payee.most_common_category_id = None
-                payee.most_common_location_id = None
-                payee.most_common_project_id = None
-                payee.updated_at = datetime.utcnow()
-                updated_count += 1
-                continue
-
-            # Count occurrences
-            category_counts = {}
-            location_counts = {}
-            project_counts = {}
-            for trans in transactions:
-                if trans.category_id:
-                    category_counts[trans.category_id] = category_counts.get(trans.category_id, 0) + 1
-                if trans.location_id:
-                    location_counts[trans.location_id] = location_counts.get(trans.location_id, 0) + 1
-                if trans.project_id:
-                    project_counts[trans.project_id] = project_counts.get(trans.project_id, 0) + 1
-
-            # Get most common values
-            payee.most_common_category_id = max(category_counts, key=category_counts.get) if category_counts else None
-            payee.most_common_location_id = max(location_counts, key=location_counts.get) if location_counts else None
-            payee.most_common_project_id = max(project_counts, key=project_counts.get) if project_counts else None
-            payee.updated_at = datetime.utcnow()
-            updated_count += 1
-        except Exception as e:
-            print(f"Error updating payee {payee.id}: {str(e)}")
-            error_count += 1
-
+    total = maintenance.recalculate_all_payee_stats(db)
     db.commit()
     return {
         "message": "All payee statistics recalculated",
-        "total_payees": len(payees),
-        "updated": updated_count,
-        "errors": error_count
+        "total_payees": total,
+        "updated": total,
+        "errors": 0
     }
 
 
@@ -3272,6 +3244,40 @@ def root():
         "docs": "/docs",
         "version": "1.0.0"
     }
+
+
+@app.get("/settings/maintenance")
+def get_maintenance_settings():
+    """Current maintenance settings (schedule time + backup retention)."""
+    from backend import settings_store
+    s = settings_store.get_settings()
+    return {
+        "maintenance_time": s["maintenance_time"],
+        "backup_retention": s["backup_retention"],
+        "retention_options": list(settings_store.RETENTION_DAYS.keys()),
+    }
+
+
+@app.put("/settings/maintenance")
+def update_maintenance_settings(payload: schemas.MaintenanceSettingsUpdate):
+    """Update the maintenance schedule time and/or backup retention."""
+    from backend import settings_store
+    try:
+        return settings_store.update_settings(
+            maintenance_time=payload.maintenance_time,
+            backup_retention=payload.backup_retention,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/maintenance/run")
+def run_maintenance_now():
+    """Trigger the full maintenance job immediately (runs in the background)."""
+    threading.Thread(
+        target=maintenance.run_maintenance, kwargs={"trigger": "manual"}, daemon=True
+    ).start()
+    return {"status": "started"}
 
 
 @app.post("/admin/backup-database")

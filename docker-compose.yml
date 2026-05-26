@@ -8,6 +8,16 @@ services:
     restart: unless-stopped
     ports:
       - "8000:8000"
+    environment:
+      # Local timezone — so the nightly maintenance runs at the configured
+      # wall-clock time (e.g. 02:28 local) instead of UTC. Change to your zone.
+      - TZ=Europe/London
+      # Daily off-disk backup target (inside the container). Defaults to /app/backups.
+      - DELFIN_BACKUP_DIR=/app/backups
     volumes:
-      # Persist the SQLite database on the host (replaces the bare-metal data/ folder)
+      # Live SQLite database.
       - ./data:/app/data
+      # Backups target 
+      # Backups stay dormant until you enable them with the sentinel file:
+      #   touch ./backups/.delfin-backup-enabled
+      - ./backups:/app/backups

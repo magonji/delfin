@@ -5,6 +5,9 @@ data/*.db-shm
 data/*.sqlite
 data/*.sqlite3
 
+# Runtime backups (created by the daily off-disk backup)
+backups/
+
 # Python cache
 __pycache__/
 *.py[cod]

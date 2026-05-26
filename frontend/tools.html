@@ -438,6 +438,12 @@
                     <div class="tool-description">Download a timestamped database backup.</div>
                 </div>
 
+                <div class="tool-card" onclick="openTool('maintenance')">
+                    <div class="tool-icon">🛠️</div>
+                    <div class="tool-title">Maintenance</div>
+                    <div class="tool-description">Schedule the nightly refresh & off-disk backup.</div>
+                </div>
+
                 <div class="tool-card" onclick="openTool('financistoImport')">
                     <div class="tool-icon">🐬</div>
                     <div class="tool-title">Import Financisto</div>
@@ -588,6 +594,45 @@
             <div style="padding: 25px; text-align: center;">
                 <div id="backupStatus" style="padding: 15px; border-radius: 8px; margin-bottom: 15px; display: none;"></div>
                 <button onclick="downloadDatabaseBackup()" style="width: 100%;">Download Backup (.db)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Maintenance settings -->
+    <div id="maintenanceModal" class="modal">
+        <div class="modal-content" style="max-width: 560px;">
+            <div class="modal-header"><h3>🛠️ Maintenance</h3><button class="close-btn" onclick="closeModal('maintenanceModal')">&times;</button></div>
+            <div style="padding: 20px 25px;">
+                <p style="color: var(--muted); font-size: 14px; margin-top: 0;">
+                    Once a day the app refreshes exchange rates, recalculates balances and
+                    payee statistics, and backs up the database to a second disk. The backup
+                    is only written when your data has actually changed (exchange-rate updates
+                    alone don't count).
+                </p>
+
+                <div class="form-group" style="padding: 0; margin-bottom: 16px;">
+                    <label for="mtTime">Daily maintenance time</label>
+                    <input type="time" id="mtTime" value="02:28">
+                </div>
+
+                <div class="form-group" style="padding: 0; margin-bottom: 16px;">
+                    <label for="mtRetention">Keep backups for</label>
+                    <select id="mtRetention">
+                        <option value="1m">1 month</option>
+                        <option value="3m">3 months</option>
+                        <option value="6m">6 months</option>
+                        <option value="1y">1 year</option>
+                        <option value="2y">2 years</option>
+                        <option value="never">Never delete</option>
+                    </select>
+                </div>
+
+                <div id="maintenanceStatus" style="display:none; padding: 12px; border-radius: 8px; margin: 12px 0;"></div>
+
+                <div style="display:flex; gap:10px; margin-top:18px;">
+                    <button id="mtSaveBtn" onclick="saveMaintenanceSettings()" style="flex:1; height:44px;">Save settings</button>
+                    <button onclick="runMaintenanceNow()" class="secondary" style="height:44px;">Run now</button>
+                </div>
             </div>
         </div>
     </div>
@@ -864,6 +909,11 @@
                 case 'backup':
                     document.getElementById('backupModal').style.display = 'block';
                     document.getElementById('backupStatus').style.display = 'none';
+                    break;
+                case 'maintenance':
+                    await loadMaintenanceSettings();
+                    document.getElementById('maintenanceStatus').style.display = 'none';
+                    document.getElementById('maintenanceModal').style.display = 'block';
                     break;
                 case 'financistoImport':
                     fzResetImport();
@@ -3334,6 +3384,69 @@
                 statusDiv.style.color = '#842029';
                 statusDiv.innerHTML = '❌ Failed to create backup. Please try again.';
                 showError('Failed to create backup: ' + error.message);
+            }
+        }
+
+        // ===================================================================
+        // MAINTENANCE SETTINGS
+        // ===================================================================
+        async function loadMaintenanceSettings() {
+            try {
+                const res = await fetch(`${API_URL}/settings/maintenance`);
+                if (!res.ok) throw new Error('Failed to load settings');
+                const s = await res.json();
+                document.getElementById('mtTime').value = s.maintenance_time || '02:28';
+                document.getElementById('mtRetention').value = s.backup_retention || '1y';
+            } catch (e) {
+                showError('Could not load maintenance settings: ' + e.message);
+            }
+        }
+
+        function mtStatus(msg, ok = true) {
+            const d = document.getElementById('maintenanceStatus');
+            d.style.display = 'block';
+            d.style.background = ok ? '#d1f2eb' : '#f8d7da';
+            d.style.color = ok ? '#0f5132' : '#842029';
+            d.innerHTML = msg;
+        }
+
+        async function saveMaintenanceSettings() {
+            const btn = document.getElementById('mtSaveBtn');
+            btn.disabled = true;
+            try {
+                const body = {
+                    maintenance_time: document.getElementById('mtTime').value,
+                    backup_retention: document.getElementById('mtRetention').value
+                };
+                const res = await fetch(`${API_URL}/settings/maintenance`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.detail || 'Failed to save');
+                }
+                const s = await res.json();
+                mtStatus(`✅ Saved. Maintenance runs daily at <strong>${s.maintenance_time}</strong>; backups kept: <strong>${s.backup_retention}</strong>.`);
+                showSuccess('Maintenance settings saved');
+            } catch (e) {
+                mtStatus('❌ ' + e.message, false);
+                showError('Failed to save settings: ' + e.message);
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function runMaintenanceNow() {
+            try {
+                mtStatus('⏳ Maintenance started in the background (rates, balances, payees, backup)…');
+                const res = await fetch(`${API_URL}/maintenance/run`, { method: 'POST' });
+                if (!res.ok) throw new Error('Failed to start');
+                showSuccess('Maintenance started');
+            } catch (e) {
+                mtStatus('❌ ' + e.message, false);
+                showError('Failed to start maintenance: ' + e.message);
             }
         }
 
