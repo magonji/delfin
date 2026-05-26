@@ -3236,12 +3236,17 @@ def recalculate_account_balances(db: Session = Depends(get_db)):
 
 @app.get("/")
 def root():
-    """
-    Root endpoint with API information.
-    """
+    """Send visitors straight to the app (so http://host:8000 just works)."""
+    return RedirectResponse(url="/app/index.html")
+
+
+@app.get("/api")
+def api_info():
+    """API information (the human UI lives at /app/index.html)."""
     return {
         "message": "Welcome to Delfin API",
         "docs": "/docs",
+        "app": "/app/index.html",
         "version": "1.0.0"
     }
 
