@@ -3,3 +3,5 @@ uvicorn
 sqlalchemy
 python-multipart
 requests
+cryptography
+sqlcipher3

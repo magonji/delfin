@@ -1313,5 +1313,26 @@
     <button class="fab-button" onclick="location.href='transactions.html#new-transaction'" title="New Transaction">+</button>
 </div>
 <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');</script>
+<script>
+/* Delfin auth: bounce to login on 401, and add a Log out item to the nav menu. */
+(function(){
+  const _fetch = window.fetch;
+  window.fetch = async function(){
+    const res = await _fetch.apply(this, arguments);
+    if (res.status === 401 && !location.pathname.endsWith('/login.html')) location.href = '/login.html';
+    return res;
+  };
+  document.addEventListener('DOMContentLoaded', function(){
+    const list = document.querySelector('#navMenu .list');
+    if (!list || document.getElementById('navLogout')) return;
+    const hr = document.createElement('hr');
+    hr.style.cssText = 'border:none;border-top:1px solid var(--border);margin:6px 0;';
+    const btn = document.createElement('button');
+    btn.className = 'navItem'; btn.id = 'navLogout'; btn.textContent = 'Log out';
+    btn.onclick = async function(){ try { await fetch('/auth/logout', {method:'POST'}); } finally { location.href = '/login.html'; } };
+    list.appendChild(hr); list.appendChild(btn);
+  });
+})();
+</script>
 </body>
 </html>

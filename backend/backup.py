@@ -27,7 +27,7 @@ import os
 import glob
 import hashlib
 import logging
-import sqlite3
+import shutil
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -52,12 +52,33 @@ EXCLUDE_TABLES = {"exchange_rates"}
 EXCLUDE_COLUMNS = {"updated_at", "total_balance_after"}
 
 
-def _snapshot_to(path: str) -> None:
-    """Write a consistent copy of the live DB via SQLite's online backup API.
-    Safe with WAL and concurrent writes — unlike a raw file copy."""
-    src = sqlite3.connect(LIVE_DB)
+def _copy_keyfile_to(dest_dir: str) -> None:
+    from backend import security
     try:
-        dst = sqlite3.connect(path)
+        if os.path.exists(security.KEYFILE):
+            shutil.copy2(security.KEYFILE, os.path.join(dest_dir, os.path.basename(security.KEYFILE)))
+    except OSError as e:
+        logger.warning(f"Could not copy keyfile to backup dir: {e}")
+
+
+def _connect(path: str):
+    """Open a SQLCipher DB applying the current data key, so encrypted DBs (the
+    live one and the snapshots) can be read/written."""
+    import sqlcipher3.dbapi2 as sqlcipher
+    from backend import database
+    con = sqlcipher.connect(path)
+    dek = database.get_dek_hex()
+    if dek:
+        con.execute(f"PRAGMA key = \"x'{dek}'\"")
+    return con
+
+
+def _snapshot_to(path: str) -> None:
+    """Write a consistent, encrypted copy of the live DB via SQLCipher's online
+    backup API (keyed with the same data key). Safe with WAL and concurrent writes."""
+    src = _connect(LIVE_DB)
+    try:
+        dst = _connect(path)
         try:
             src.backup(dst)
         finally:
@@ -74,7 +95,7 @@ def make_snapshot(dest_path: str) -> None:
 
 def _activity_hash(db_path: str) -> str:
     """Hash of user-facing data, ignoring rate-driven and bookkeeping columns."""
-    con = sqlite3.connect(db_path)
+    con = _connect(db_path)
     try:
         cur = con.cursor()
         tables = [
@@ -196,6 +217,10 @@ def run_backup() -> Optional[str]:
     if not os.path.exists(LIVE_DB):
         logger.warning("Live database not found — skipping backup.")
         return None
+
+    # Keep the keyfile next to the backups: the encrypted .db is unrecoverable
+    # without the wrapped data key, so disaster recovery needs both + the password.
+    _copy_keyfile_to(BACKUP_DIR)
 
     tmp_path = os.path.join(BACKUP_DIR, TMP_NAME)
     try:

@@ -8,6 +8,12 @@ data/*.sqlite3
 # Runtime backups (created by the daily off-disk backup)
 backups/
 
+# Encryption keyfile, session secret and runtime state — never commit these
+data/.delfin_keyfile.json
+data/.delfin_session_secret
+data/.maintenance_state
+data/maintenance_settings.json
+
 # Python cache
 __pycache__/
 *.py[cod]

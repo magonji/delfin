@@ -1,19 +1,22 @@
 from fastapi import FastAPI, Depends, HTTPException, Query, Request, Response, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime, date, timedelta, time
 from sqlalchemy import func as sql_func, case, and_, or_, func
 import shutil
 import os
-from backend.database import get_db, engine
+from backend.database import get_db
+from backend import database
 from backend import models, schemas
 from backend import maintenance
 from backend import backup as db_backup
+from backend import security
 from backend.models import Account, Category, Payee, Location, Project, Transaction, ExchangeRate, Budget, RecurringExpense, RecurringExpenseHistory, RecurringExpensePayment, PlannedExpense
 from backend.schemas import ExchangeRateResponse
 from backend.helpers import (
@@ -23,8 +26,8 @@ from backend.helpers import (
     get_latest_rates
 )
 
-# Create tables if they don't exist
-models.Base.metadata.create_all(bind=engine)
+# The database is encrypted; tables are created on unlock() after login,
+# not at import time (there is no engine until the app is unlocked).
 
 app = FastAPI(
     title="Delfin API",
@@ -43,6 +46,8 @@ _rates_lock = threading.Lock()
 def _check_and_update_rates():
     """Update exchange rates if last stored rate is from a previous day. Thread-safe, runs at most once per day."""
     global _rates_last_checked
+    if not database.is_unlocked():
+        return  # DB is locked (no one logged in yet) — nothing we can do
     today = date.today()
     if _rates_last_checked == today:
         return
@@ -70,12 +75,13 @@ def _check_and_update_rates():
 
 @app.on_event("startup")
 def auto_update_exchange_rates():
-    """Auto-update exchange rates on startup."""
+    """Auto-update exchange rates on startup (no-op until the app is unlocked)."""
     _check_and_update_rates()
 
 @app.on_event("startup")
 def start_maintenance_scheduler():
-    """Start the daily maintenance scheduler (rates + balances + payees + backup)."""
+    """Start the daily maintenance scheduler. It idles while the app is locked
+    and starts working once someone has logged in (unlocked the DB)."""
     maintenance.start_scheduler()
 
 class CacheControlMiddleware(BaseHTTPMiddleware):
@@ -92,8 +98,44 @@ class CacheControlMiddleware(BaseHTTPMiddleware):
                 response.headers["Cache-Control"] = "public, max-age=0, must-revalidate"
         return response
 
-app.add_middleware(CacheControlMiddleware)
+# --- Authentication gate -----------------------------------------------------
+# Paths reachable without a session (login flow + assets the login page needs).
+_PUBLIC_PREFIXES = ("/docs", "/redoc", "/app/icons/")
+_PUBLIC_PATHS = {
+    "/auth/status", "/auth/login", "/auth/setup", "/auth/recover",
+    "/login.html", "/favicon.ico", "/openapi.json", "/manifest.json", "/sw.js",
+}
+
+def _is_public(path: str) -> bool:
+    return path in _PUBLIC_PATHS or any(path.startswith(p) for p in _PUBLIC_PREFIXES)
+
+class AuthMiddleware(BaseHTTPMiddleware):
+    """Require a valid session AND an unlocked DB for every non-public route.
+    After a restart the DB is locked, so even a still-valid cookie is bounced to
+    login until the password re-unlocks the database."""
+    async def dispatch(self, request: Request, call_next):
+        path = request.url.path
+        if _is_public(path):
+            return await call_next(request)
+        if request.session.get("authenticated") and database.is_unlocked():
+            return await call_next(request)
+        accept = request.headers.get("accept", "")
+        if request.method == "GET" and ("text/html" in accept or path == "/" or path.startswith("/app")):
+            return RedirectResponse(url="/login.html")
+        return JSONResponse({"detail": "Not authenticated"}, status_code=401)
+
+# add_middleware prepends, so the LAST added runs first. Desired request order:
+# CORS -> Session -> Auth -> CacheControl -> GZip -> app.
 app.add_middleware(GZipMiddleware, minimum_size=500)
+app.add_middleware(CacheControlMiddleware)
+app.add_middleware(AuthMiddleware)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=security.get_session_secret(),
+    same_site="lax",
+    https_only=False,           # set True behind HTTPS
+    max_age=14 * 24 * 3600,
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Allow all origins (for development)
@@ -101,6 +143,118 @@ app.add_middleware(
     allow_methods=["*"],  # Allow all methods (GET, POST, etc.)
     allow_headers=["*"],  # Allow all headers
 )
+
+
+# --- Authentication endpoints -------------------------------------------------
+
+@app.get("/auth/status")
+def auth_status(request: Request):
+    """Tells the frontend whether to show first-run setup, login, or the app."""
+    return {
+        "initialised": security.is_initialised(),
+        "authenticated": bool(request.session.get("authenticated")),
+        "unlocked": database.is_unlocked(),
+    }
+
+@app.post("/auth/setup")
+def auth_setup(request: Request, payload: schemas.SetupIn):
+    """First-run: choose a password, encrypt the existing database, log in.
+    Returns the recovery code (shown once)."""
+    if security.is_initialised():
+        raise HTTPException(status_code=400, detail="Already set up.")
+    if not payload.password:
+        raise HTTPException(status_code=400, detail="Password must not be empty.")
+    dek_hex, recovery_code = security.setup(payload.password)
+    try:
+        _encrypt_existing_database(dek_hex)
+    except Exception as e:
+        # Roll back the keyfile so the user can retry cleanly.
+        try: os.remove(security.KEYFILE)
+        except OSError: pass
+        raise HTTPException(status_code=500, detail=f"Could not encrypt the database: {e}")
+    database.unlock(dek_hex)
+    request.session["authenticated"] = True
+    return {"recovery_code": recovery_code}
+
+@app.post("/auth/login")
+def auth_login(request: Request, payload: schemas.LoginIn):
+    if not security.is_initialised():
+        raise HTTPException(status_code=400, detail="Not set up yet.")
+    try:
+        dek_hex = security.unlock_with_password(payload.password)
+    except security.InvalidCredential:
+        raise HTTPException(status_code=401, detail="Incorrect password.")
+    database.unlock(dek_hex)
+    request.session["authenticated"] = True
+    return {"ok": True}
+
+@app.post("/auth/logout")
+def auth_logout(request: Request):
+    request.session.clear()
+    return {"ok": True}
+
+@app.post("/auth/recover")
+def auth_recover(request: Request, payload: schemas.RecoverIn):
+    """Set a new password using the recovery code, then log in."""
+    if not security.is_initialised():
+        raise HTTPException(status_code=400, detail="Not set up yet.")
+    try:
+        dek_hex = security.reset_password_with_recovery(payload.recovery_code, payload.new_password)
+    except security.InvalidCredential:
+        raise HTTPException(status_code=401, detail="Incorrect recovery code.")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    database.unlock(dek_hex)
+    request.session["authenticated"] = True
+    return {"ok": True}
+
+@app.post("/auth/change-password")
+def auth_change_password(payload: schemas.ChangePasswordIn):
+    """Change the password (re-wraps the data key; the DB is not re-encrypted)."""
+    try:
+        security.change_password(payload.old_password, payload.new_password)
+    except security.InvalidCredential:
+        raise HTTPException(status_code=401, detail="Incorrect current password.")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"ok": True}
+
+@app.get("/login.html")
+def login_page():
+    return FileResponse("frontend/login.html")
+
+
+def _encrypt_existing_database(dek_hex: str) -> None:
+    """Convert the current plaintext finance.db into a SQLCipher database keyed
+    with dek_hex. No-op if the DB doesn't exist yet (a fresh encrypted DB is then
+    created on unlock). Verifies the encrypted copy opens before replacing."""
+    import sqlcipher3.dbapi2 as sqlcipher
+    plain = database.DB_PATH
+    if not os.path.exists(plain):
+        return
+    enc = plain + ".enc.tmp"
+    if os.path.exists(enc):
+        os.remove(enc)
+    con = sqlcipher.connect(plain)           # opens the plaintext DB (no key)
+    try:
+        con.execute(f"ATTACH DATABASE '{enc}' AS encrypted KEY \"x'{dek_hex}'\"")
+        con.execute("SELECT sqlcipher_export('encrypted')")
+        con.execute("DETACH DATABASE encrypted")
+    finally:
+        con.close()
+    # Verify the encrypted copy really opens with the key before destroying the original.
+    v = sqlcipher.connect(enc)
+    try:
+        v.execute(f"PRAGMA key = \"x'{dek_hex}'\"")
+        v.execute("SELECT count(*) FROM sqlite_master").fetchone()
+    finally:
+        v.close()
+    for suffix in ("-wal", "-shm"):
+        p = plain + suffix
+        if os.path.exists(p):
+            try: os.remove(p)
+            except OSError: pass
+    os.replace(enc, plain)
 
 # ============================================
 # ACCOUNTS ENDPOINTS
@@ -3354,10 +3508,17 @@ async def restore_database(file: UploadFile = File(...)):
     """Restore the database from a Delfin .db backup (replaces ALL current data).
     The uploaded file is validated first, and a safety backup of the current
     database is taken before the swap."""
-    import sqlite3 as _sqlite3
+    import sqlcipher3.dbapi2 as sqlcipher
     data_dir = "./data"
-    live = os.path.join(data_dir, "finance.db")
+    live = database.DB_PATH
     tmp = os.path.join(data_dir, ".restore_upload.tmp")
+    enc = tmp + ".enc"
+    dek = database.get_dek_hex()
+
+    def _cleanup():
+        for p in (tmp, enc):
+            try: os.remove(p)
+            except OSError: pass
 
     # 1. Stream the upload to a temp file (next to the live DB, same filesystem)
     try:
@@ -3366,15 +3527,17 @@ async def restore_database(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Could not read the uploaded file: {e}")
 
-    # 2. Validate: real SQLite file, passes integrity check, has Delfin's core tables
+    # 2. Validate. A backup from THIS app is SQLCipher-encrypted (no plaintext
+    #    header); a pre-encryption backup is plaintext. Accept both.
     try:
-        with open(tmp, "rb") as f:
-            if f.read(16) != b"SQLite format 3\x00":
-                raise ValueError("That isn't a SQLite database file.")
-        con = _sqlite3.connect(tmp)
+        is_plaintext = open(tmp, "rb").read(16) == b"SQLite format 3\x00"
+        con = sqlcipher.connect(tmp)
+        if not is_plaintext and dek:
+            con.execute(f"PRAGMA key = \"x'{dek}'\"")
         try:
             if con.execute("PRAGMA quick_check").fetchone()[0] != "ok":
-                raise ValueError("The database file is corrupt (failed integrity check).")
+                raise ValueError("Could not read the backup — it's corrupt, or it was "
+                                 "encrypted on a different installation (different key).")
             tables = {r[0] for r in con.execute(
                 "SELECT name FROM sqlite_master WHERE type='table'")}
             missing = {"accounts", "transactions"} - tables
@@ -3387,35 +3550,56 @@ async def restore_database(file: UploadFile = File(...)):
         finally:
             con.close()
     except ValueError as e:
-        try: os.remove(tmp)
-        except OSError: pass
+        _cleanup()
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        try: os.remove(tmp)
-        except OSError: pass
-        raise HTTPException(status_code=400, detail=f"Invalid database file: {e}")
+        _cleanup()
+        raise HTTPException(status_code=400, detail=f"Could not open the backup file: {e}")
 
-    # 3. Safety backup of the current database
+    # 3. Safety backup of the current database (encrypted)
     safety = None
     if os.path.exists(live):
         ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         safety = f"finance_pre_restore_{ts}.db"
         db_backup.make_snapshot(os.path.join(data_dir, safety))
 
-    # 4. Swap in the restored DB. Close pooled connections first, then atomically
-    #    replace the file and remove the now-stale WAL/SHM (which belong to the old
-    #    DB — leaving them would corrupt the new one on next open).
+    # 4. If the upload is plaintext, encrypt it with the current key before installing.
+    to_install = tmp
+    if is_plaintext and dek:
+        try:
+            if os.path.exists(enc):
+                os.remove(enc)
+            c = sqlcipher.connect(tmp)
+            c.execute(f"ATTACH DATABASE '{enc}' AS e KEY \"x'{dek}'\"")
+            c.execute("SELECT sqlcipher_export('e')")
+            c.execute("DETACH DATABASE e")
+            c.close()
+            to_install = enc
+        except Exception as e:
+            _cleanup()
+            raise HTTPException(status_code=500, detail=f"Could not encrypt the restored data: {e}")
+
+    # 5. Swap. Close pooled connections, atomically replace the file, drop stale WAL/SHM.
     try:
-        engine.dispose()
-        os.replace(tmp, live)
+        eng = database.get_engine()
+        if eng is not None:
+            eng.dispose()
+        os.replace(to_install, live)
         for suffix in ("-wal", "-shm"):
             p = live + suffix
             if os.path.exists(p):
                 try: os.remove(p)
                 except OSError: pass
-        models.Base.metadata.create_all(bind=engine)  # add any tables a newer build expects
+        if eng is not None:
+            models.Base.metadata.create_all(bind=eng)  # add any tables a newer build expects
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Restore failed during swap: {e}")
+    finally:
+        try:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+        except OSError:
+            pass
 
     return {
         "message": "Database restored.",

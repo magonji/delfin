@@ -318,3 +318,20 @@ class MaintenanceSettingsUpdate(BaseModel):
     """Partial update for the nightly maintenance settings."""
     maintenance_time: Optional[str] = None   # HH:MM, 24h
     backup_retention: Optional[str] = None   # 1m | 3m | 6m | 1y | 2y | never
+
+
+# --- Authentication ---
+
+class SetupIn(BaseModel):
+    password: str
+
+class LoginIn(BaseModel):
+    password: str
+
+class ChangePasswordIn(BaseModel):
+    old_password: str
+    new_password: str
+
+class RecoverIn(BaseModel):
+    recovery_code: str
+    new_password: str

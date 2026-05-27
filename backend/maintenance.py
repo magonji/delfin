@@ -20,7 +20,7 @@ import threading
 import time
 from datetime import date, datetime, timedelta
 
-from backend.database import SessionLocal
+from backend import database
 from backend.helpers import initialise_all_balances
 from backend.models import Payee, Transaction
 from backend import backup as db_backup
@@ -63,7 +63,7 @@ def recalculate_all_payee_stats(db) -> int:
 
 def _update_rates_if_needed() -> bool:
     from backend.update_exchange_rates import update_exchange_rates, get_last_exchange_rate_date
-    db = SessionLocal()
+    db = database.SessionLocal()
     try:
         last = get_last_exchange_rate_date(db)
     finally:
@@ -76,6 +76,9 @@ def _update_rates_if_needed() -> bool:
 
 def run_maintenance(trigger: str = "scheduled") -> dict:
     """Run the full nightly maintenance. Serialized: concurrent triggers are skipped."""
+    if not database.is_unlocked():
+        logger.info("Maintenance skipped — app is locked (no one logged in).")
+        return {"status": "locked"}
     if not _run_lock.acquire(blocking=False):
         logger.info("Maintenance already running — skipping this trigger.")
         return {"status": "already_running"}
@@ -88,7 +91,7 @@ def run_maintenance(trigger: str = "scheduled") -> dict:
         except Exception as e:
             logger.warning(f"Maintenance: rate update failed (non-fatal): {e}")
 
-        db = SessionLocal()
+        db = database.SessionLocal()
         try:
             initialise_all_balances(db)        # recompute balances behind the graphs
             result["balances"] = True

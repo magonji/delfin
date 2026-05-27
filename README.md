@@ -98,6 +98,7 @@ delfin/
 │   ├── maintenance.py             # Nightly job (rates+balances+payees+backup) & scheduler
 │   ├── backup.py                  # Off-disk DB backup (activity-detected, age-pruned)
 │   ├── settings_store.py          # Maintenance settings (time + retention), JSON in data/
+│   ├── security.py                # DB encryption key mgmt (DEK wrapped by password + recovery code)
 │   └── integrations/              # Self-contained import/export modules
 │       ├── report.py              # Compatibility report (transparent data-loss tracking)
 │       └── financisto/            # Financisto .backup + CSV import/export
@@ -106,6 +107,7 @@ delfin/
 │           ├── importer.py        # Financisto → Delfin (.backup + CSV)
 │           └── exporter.py        # Delfin → Financisto (.backup + CSV)
 ├── frontend/
+│   ├── login.html                 # Login / first-run setup / recovery (served at /login.html)
 │   ├── index.html                 # Dashboard
 │   ├── transactions.html          # Transaction management
 │   ├── budget.html                # Budget tracker
@@ -312,11 +314,33 @@ Balances are cached on each transaction for display performance:
 
 Recalculation is triggered automatically on create/edit/delete, but deferred to background for UI responsiveness.
 
-## Security Notes
+## Security: encryption & login
 
-- `data/finance.db` is gitignored — never commit your financial data
-- No authentication by default — add it before exposing to a network
-- Database backups contain all financial data — store securely
+The database is **encrypted at rest with SQLCipher (AES-256)** and the app
+**requires a login**. On first run you set a password; the app encrypts the
+existing `finance.db` and shows a **recovery code** (saved once).
+
+How it works:
+- A random 256-bit data key encrypts the DB. That key is stored **wrapped** in
+  `data/.delfin_keyfile.json` — once with a key derived (Scrypt) from your
+  password, once from the recovery code. Either unlocks it; changing the password
+  only re-wraps the key (the DB is never re-encrypted, and backups stay valid).
+- The key is the password, so the file is unreadable without it — **and so are
+  the `.db` backups**, which are encrypted too.
+- After any restart the app is **locked until someone logs in** (the key lives
+  only in memory). The nightly maintenance/rate update waits for the first login.
+
+**Keep these safe — there is no other way back in:**
+- Your **password** and your **recovery code** (losing both = data unrecoverable).
+- The **keyfile** (`data/.delfin_keyfile.json`): the encrypted `.db` is useless
+  without it, so the off-disk backup folder keeps a copy of it for disaster
+  recovery. The keyfile and the session secret are gitignored — never commit them.
+
+> **Plain HTTP caveat:** over `http://` on the LAN the password/cookie travel
+> unencrypted. For real protection put Delfin behind HTTPS (reverse proxy / Tailscale).
+
+The login, first-run setup and "forgot password → recovery code" flows live on
+the `/login.html` page; **Log out** is in the nav menu on every page.
 
 ## Licence
 
