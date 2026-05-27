@@ -54,7 +54,8 @@ A personal finance PWA built with Python, FastAPI, and vanilla JavaScript. Impor
 - **CSV export**: Export transactions with date, account, and category filters in standard or detailed format
 - **Import Financisto**: Import a Financisto database — native `.backup` (gzipped) or CSV export — directly inside the app. Auto-detects the format, shows a pre-import **compatibility report** (so any data that can't be mapped is listed, never dropped silently), supports **merge** or **replace**, and always takes a safety backup first
 - **Export Financisto**: Export your entire database as a native `.backup` (restorable in Financisto) or Financisto CSV
-- **Database backup**: Download timestamped `.db` backup files
+- **Database backup**: Download a timestamped `.db` backup (a consistent, WAL-safe snapshot via SQLite's online backup API)
+- **Restore database**: Restore from a `.db` backup (from the Backup tool or the daily backups). Validates the file, takes a safety backup of current data first, then swaps it in
 - **Refresh**: Recalculate all balances, payee statistics, and exchange rates
 - **Maintenance**: Configure the daily maintenance time (default 02:28) and backup retention (1 month → 2 years, or never), and trigger a maintenance run on demand
 

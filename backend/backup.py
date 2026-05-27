@@ -66,6 +66,12 @@ def _snapshot_to(path: str) -> None:
         src.close()
 
 
+def make_snapshot(dest_path: str) -> None:
+    """Public: write a consistent, WAL-safe snapshot of the live DB to dest_path.
+    Use this for any backup copy instead of a raw file copy."""
+    _snapshot_to(dest_path)
+
+
 def _activity_hash(db_path: str) -> str:
     """Hash of user-facing data, ignoring rate-driven and bookkeeping columns."""
     con = sqlite3.connect(db_path)

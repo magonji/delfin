@@ -13,6 +13,7 @@ import os
 from backend.database import get_db, engine
 from backend import models, schemas
 from backend import maintenance
+from backend import backup as db_backup
 from backend.models import Account, Category, Payee, Location, Project, Transaction, ExchangeRate, Budget, RecurringExpense, RecurringExpenseHistory, RecurringExpensePayment, PlannedExpense
 from backend.schemas import ExchangeRateResponse
 from backend.helpers import (
@@ -3334,8 +3335,8 @@ def backup_database():
         backup_filename = f"finance_backup_{timestamp}.db"
         backup_path = f"./data/{backup_filename}"
 
-        # Create backup copy
-        shutil.copy2(source_db, backup_path)
+        # Consistent, WAL-safe snapshot (a raw copy could miss uncheckpointed data)
+        db_backup.make_snapshot(backup_path)
 
         # Return the file as a download
         return FileResponse(
@@ -3346,6 +3347,82 @@ def backup_database():
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create backup: {str(e)}")
+
+
+@app.post("/tools/restore-database")
+async def restore_database(file: UploadFile = File(...)):
+    """Restore the database from a Delfin .db backup (replaces ALL current data).
+    The uploaded file is validated first, and a safety backup of the current
+    database is taken before the swap."""
+    import sqlite3 as _sqlite3
+    data_dir = "./data"
+    live = os.path.join(data_dir, "finance.db")
+    tmp = os.path.join(data_dir, ".restore_upload.tmp")
+
+    # 1. Stream the upload to a temp file (next to the live DB, same filesystem)
+    try:
+        with open(tmp, "wb") as out:
+            shutil.copyfileobj(file.file, out)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Could not read the uploaded file: {e}")
+
+    # 2. Validate: real SQLite file, passes integrity check, has Delfin's core tables
+    try:
+        with open(tmp, "rb") as f:
+            if f.read(16) != b"SQLite format 3\x00":
+                raise ValueError("That isn't a SQLite database file.")
+        con = _sqlite3.connect(tmp)
+        try:
+            if con.execute("PRAGMA quick_check").fetchone()[0] != "ok":
+                raise ValueError("The database file is corrupt (failed integrity check).")
+            tables = {r[0] for r in con.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'")}
+            missing = {"accounts", "transactions"} - tables
+            if missing:
+                raise ValueError(
+                    f"This doesn't look like a Delfin backup — missing tables: "
+                    f"{', '.join(sorted(missing))}.")
+            tx_count = con.execute("SELECT COUNT(*) FROM transactions").fetchone()[0]
+            acc_count = con.execute("SELECT COUNT(*) FROM accounts").fetchone()[0]
+        finally:
+            con.close()
+    except ValueError as e:
+        try: os.remove(tmp)
+        except OSError: pass
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        try: os.remove(tmp)
+        except OSError: pass
+        raise HTTPException(status_code=400, detail=f"Invalid database file: {e}")
+
+    # 3. Safety backup of the current database
+    safety = None
+    if os.path.exists(live):
+        ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        safety = f"finance_pre_restore_{ts}.db"
+        db_backup.make_snapshot(os.path.join(data_dir, safety))
+
+    # 4. Swap in the restored DB. Close pooled connections first, then atomically
+    #    replace the file and remove the now-stale WAL/SHM (which belong to the old
+    #    DB — leaving them would corrupt the new one on next open).
+    try:
+        engine.dispose()
+        os.replace(tmp, live)
+        for suffix in ("-wal", "-shm"):
+            p = live + suffix
+            if os.path.exists(p):
+                try: os.remove(p)
+                except OSError: pass
+        models.Base.metadata.create_all(bind=engine)  # add any tables a newer build expects
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Restore failed during swap: {e}")
+
+    return {
+        "message": "Database restored.",
+        "transactions": tx_count,
+        "accounts": acc_count,
+        "safety_backup": safety,
+    }
 
 
 # ============================================
@@ -3359,7 +3436,7 @@ def _create_safety_backup() -> Optional[str]:
         return None
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     backup_filename = f"finance_pre_import_{timestamp}.db"
-    shutil.copy2(source_db, f"./data/{backup_filename}")
+    db_backup.make_snapshot(f"./data/{backup_filename}")
     return backup_filename
 
 
