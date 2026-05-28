@@ -460,6 +460,12 @@
                     <div class="tool-description">Schedule the nightly refresh & off-disk backup.</div>
                 </div>
 
+                <div class="tool-card" onclick="openTool('password')">
+                    <div class="tool-icon">🔑</div>
+                    <div class="tool-title">Password</div>
+                    <div class="tool-description">Change the password that unlocks your database.</div>
+                </div>
+
                 <div class="tool-card" onclick="openTool('financistoImport')">
                     <div class="tool-icon">🐬</div>
                     <div class="tool-title">Import Financisto</div>
@@ -641,6 +647,37 @@
                 <div style="display:flex; gap:10px; margin-top:16px;">
                     <button id="restoreBtn" onclick="restoreDatabase()" style="flex:1; height:44px;">Restore</button>
                     <button id="restoreCancelBtn" onclick="closeModal('restoreModal')" class="secondary" style="height:44px;">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Change password -->
+    <div id="passwordModal" class="modal">
+        <div class="modal-content" style="max-width: 480px;">
+            <div class="modal-header"><h3>🔑 Change password</h3><button class="close-btn" onclick="closeModal('passwordModal')">&times;</button></div>
+            <div style="padding: 20px 25px;">
+                <p style="color: var(--muted); font-size: 14px; margin-top: 0;">
+                    The data key is re-wrapped with the new password — the database itself is
+                    not re-encrypted, and existing backups stay valid (they're tied to the data
+                    key, not the password). Your recovery code is unchanged.
+                </p>
+                <div class="form-group" style="padding:0;">
+                    <label for="pwOld">Current password</label>
+                    <input type="password" id="pwOld" autocomplete="current-password">
+                </div>
+                <div class="form-group" style="padding:0;">
+                    <label for="pwNew">New password</label>
+                    <input type="password" id="pwNew" autocomplete="new-password">
+                </div>
+                <div class="form-group" style="padding:0;">
+                    <label for="pwNew2">Confirm new password</label>
+                    <input type="password" id="pwNew2" autocomplete="new-password">
+                </div>
+                <div id="pwStatus" style="display:none; padding: 12px; border-radius: 8px; margin: 12px 0;"></div>
+                <div style="display:flex; gap:10px; margin-top:14px;">
+                    <button id="pwSaveBtn" onclick="changePassword()" style="flex:1; height:44px;">Change password</button>
+                    <button onclick="closeModal('passwordModal')" class="secondary" style="height:44px;">Cancel</button>
                 </div>
             </div>
         </div>
@@ -982,6 +1019,11 @@
                     await loadMaintenanceStatus();
                     document.getElementById('maintenanceStatus').style.display = 'none';
                     document.getElementById('maintenanceModal').style.display = 'block';
+                    break;
+                case 'password':
+                    for (const id of ['pwOld','pwNew','pwNew2']) document.getElementById(id).value = '';
+                    document.getElementById('pwStatus').style.display = 'none';
+                    document.getElementById('passwordModal').style.display = 'block';
                     break;
                 case 'financistoImport':
                     fzResetImport();
@@ -3452,6 +3494,45 @@
                 statusDiv.style.color = '#842029';
                 statusDiv.innerHTML = '❌ Failed to create backup. Please try again.';
                 showError('Failed to create backup: ' + error.message);
+            }
+        }
+
+        // ===================================================================
+        // CHANGE PASSWORD
+        // ===================================================================
+        async function changePassword() {
+            const oldPw = document.getElementById('pwOld').value;
+            const newPw = document.getElementById('pwNew').value;
+            const newPw2 = document.getElementById('pwNew2').value;
+            const s = document.getElementById('pwStatus');
+            const setStatus = (msg, ok) => {
+                s.style.display = 'block';
+                s.style.background = ok ? '#d1f2eb' : '#f8d7da';
+                s.style.color = ok ? '#0f5132' : '#842029';
+                s.textContent = msg;
+            };
+            if (!oldPw || !newPw) { setStatus('Fill in both current and new password.', false); return; }
+            if (newPw !== newPw2) { setStatus("New passwords don't match.", false); return; }
+            const btn = document.getElementById('pwSaveBtn');
+            const orig = btn.textContent; btn.disabled = true; btn.textContent = '⏳ Saving…';
+            try {
+                const res = await fetch(`${API_URL}/auth/change-password`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ old_password: oldPw, new_password: newPw })
+                });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.detail || `HTTP ${res.status}`);
+                }
+                for (const id of ['pwOld','pwNew','pwNew2']) document.getElementById(id).value = '';
+                setStatus('✅ Password changed. Use the new one next time you log in.', true);
+                showSuccess('Password changed');
+                setTimeout(() => closeModal('passwordModal'), 1800);
+            } catch (e) {
+                setStatus('❌ ' + e.message, false);
+            } finally {
+                btn.disabled = false; btn.textContent = orig;
             }
         }
 

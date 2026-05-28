@@ -214,7 +214,9 @@ def auth_change_password(payload: schemas.ChangePasswordIn):
     try:
         security.change_password(payload.old_password, payload.new_password)
     except security.InvalidCredential:
-        raise HTTPException(status_code=401, detail="Incorrect current password.")
+        # 400 (not 401) so the UI's global "401 -> /login.html" handler doesn't
+        # kick the user out of their session over a wrong field.
+        raise HTTPException(status_code=400, detail="Incorrect current password.")
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"ok": True}
