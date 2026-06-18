@@ -556,10 +556,17 @@
                     </div>
                 </div>
                 <div id="mappingSection" style="display: none;">
-                    <p style="font-size: 13px; color: var(--muted); margin: 0 0 16px;">
-                        Map the columns of your bank's CSV. Saved as a reusable profile so future
-                        imports from the same bank are recognised automatically.
-                    </p>
+                    <div style="display: flex; align-items: flex-start; gap: 10px; margin: 0 0 16px;">
+                        <p style="font-size: 13px; color: var(--muted); margin: 0; flex: 1;">
+                            Map the columns of your bank's CSV. Saved as a reusable profile so future
+                            imports from the same bank are recognised automatically.
+                        </p>
+                        <button type="button" onclick="document.getElementById('importHelpModal').style.display='block'"
+                            title="How does this work?" aria-label="Help"
+                            style="flex: none; width: 26px; height: 26px; border-radius: 50%; border: 1.5px solid var(--btn-primary);
+                                   background: none; color: var(--btn-primary); cursor: pointer; line-height: 1;
+                                   font-family: 'Playfair Display', serif; font-style: italic; font-weight: 700; font-size: 15px;">i</button>
+                    </div>
                     <div class="form-group" style="margin-bottom: 16px;">
                         <label>Saved profile</label>
                         <select id="mapProfileSelect" onchange="onMapProfileChange()"></select>
@@ -611,7 +618,7 @@
                                 <option value="asis">As-is</option>
                                 <option value="flip">Flip (expenses positive in file)</option>
                             </select></div>
-                        <div class="form-group" style="flex: 1; min-width: 130px;"><label>Note column</label>
+                        <div class="form-group" style="flex: 1; min-width: 130px;"><label>Note column (optional)</label>
                             <select id="mapColNote"></select></div>
                     </div>
                     <div class="form-group" style="margin-bottom: 16px;"><label>Description column(s) — hold Ctrl/Cmd to pick several</label>
@@ -669,6 +676,61 @@
                         <button onclick="cancelImport()" class="secondary" style="height: 44px;">Cancel</button>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="importHelpModal" class="modal" style="z-index: 1100;">
+        <div class="modal-content" style="max-width: 720px;">
+            <div class="modal-header"><h3>❓ How to import a bank CSV</h3><button class="close-btn" onclick="closeModal('importHelpModal')">&times;</button></div>
+            <div style="padding: 25px; font-size: 14px; line-height: 1.6; color: var(--text);">
+                <p style="margin-top: 0;">
+                    Delfin imports <strong>any</strong> bank's CSV export. The first time you import from
+                    a bank you tell Delfin which column is which; it saves that as a <strong>profile</strong>
+                    so next time the same bank is recognised automatically and you go straight to the preview.
+                </p>
+
+                <h4 style="margin: 18px 0 6px;">Steps</h4>
+                <ol style="margin: 0; padding-left: 20px;">
+                    <li><strong>Select the account</strong> the statement belongs to, then choose the CSV file.</li>
+                    <li>This <strong>mapping screen</strong> appears (only for unknown files). Delfin pre-fills its
+                        best guesses — check them against the preview table at the bottom and fix anything wrong.</li>
+                    <li>Optionally type a <strong>profile name</strong> (e.g. your bank's name) and click
+                        <strong>Save profile</strong> so future imports skip this screen.</li>
+                    <li>Click <strong>Continue</strong> to see the full preview, where you can review/assign payees and
+                        categories, then <strong>Import</strong>.</li>
+                </ol>
+
+                <h4 style="margin: 18px 0 6px;">What each field means</h4>
+                <ul style="margin: 0; padding-left: 20px;">
+                    <li><strong>Delimiter</strong> — the character separating columns: comma <code>,</code> (UK/US) or
+                        semicolon <code>;</code> (common in Spain and the rest of Europe).</li>
+                    <li><strong>Encoding</strong> — how the file's text is stored. Leave on <em>Auto-detect</em>; switch to
+                        <em>Windows-1252 / ISO-8859-1</em> only if accents look wrong (e.g. <code>NÃ³mina</code>).</li>
+                    <li><strong>Decimal</strong> — the decimal symbol in amounts: point <code>1234.56</code> or comma
+                        <code>1.234,56</code>.</li>
+                    <li><strong>Date format</strong> — how dates are written in the file, e.g. <code>DD/MM/YYYY</code>.</li>
+                    <li><strong>Date column</strong> — the column holding each movement's date.</li>
+                    <li><strong>Amount type</strong> —
+                        <em>Single column</em> if one column holds the amount with a sign (negative = expense), or
+                        <em>Debit / Credit</em> if the bank uses two separate columns (charges in one, deposits in the other).</li>
+                    <li><strong>Sign</strong> — usually <em>As-is</em>. Choose <em>Flip</em> if your bank lists expenses as
+                        positive numbers.</li>
+                    <li><strong>Description column(s)</strong> — the text that names each movement (shop, payee…). Hold
+                        Ctrl/Cmd to combine several columns.</li>
+                    <li><strong>Note column (optional)</strong> — an extra column kept as the transaction's note (a reference
+                        or comment). Leave on <em>— none —</em> if you don't need it.</li>
+                    <li><strong>Saved profile</strong> — pick a previously saved profile to reload all of the above at once.</li>
+                </ul>
+
+                <h4 style="margin: 18px 0 6px;">Good to know</h4>
+                <ul style="margin: 0 0 4px; padding-left: 20px;">
+                    <li>Movements are shown <strong>oldest → newest</strong> in the preview.</li>
+                    <li><strong>Duplicates</strong> already in Delfin are detected and skipped, so re-importing an overlapping
+                        statement is safe.</li>
+                    <li>When a movement matches a known <strong>payee</strong>, its usual <strong>category</strong> is filled
+                        in for you automatically.</li>
+                </ul>
             </div>
         </div>
     </div>
@@ -1934,18 +1996,33 @@
         // ---- Column auto-guessing ----
         function guessMapping(headers) {
             const lower = headers.map(h => h.trim().toLowerCase());
-            const find = (...keys) => {
-                for (let i = 0; i < lower.length; i++)
+            // Find the first header matching any keyword, optionally skipping
+            // headers already used for another field.
+            const find = (keys, skip = []) => {
+                for (let i = 0; i < lower.length; i++) {
+                    if (skip.includes(headers[i])) continue;
                     if (keys.some(k => lower[i].includes(k))) return headers[i];
+                }
                 return '';
             };
-            const date = find('date', 'fecha');
-            const debit = find('debit', 'cargo', 'debe', 'pago');
-            const credit = find('credit', 'abono', 'haber', 'ingreso');
-            const amount = find('amount', 'importe', 'monto', 'cantidad');
-            const desc = find('description', 'concepto', 'concept', 'detalle', 'descripción',
-                'descripcion', 'name', 'movimiento', 'payee', 'beneficiario');
-            const mode = (debit || credit) && !amount ? 'debitcredit' : 'single';
+            const date = find(['date', 'fecha']);
+            const debit = find(['debit', 'cargo', 'debe', 'pago', 'adeudo']);
+            const credit = find(['credit', 'abono', 'haber', 'ingreso']);
+            // Don't let a generic "amount" match steal the Debit/Credit columns
+            // (e.g. "Debit Amount" / "Credit Amount" both contain "amount").
+            const amount = find(['amount', 'importe', 'monto', 'cantidad'], [debit, credit].filter(Boolean));
+            // Two-column Debit/Credit layout wins over a single signed amount.
+            const mode = (debit && credit) ? 'debitcredit' : (amount ? 'single' : ((debit || credit) ? 'debitcredit' : 'single'));
+
+            let desc = find(['description', 'concepto', 'concept', 'detalle', 'detail', 'descripción',
+                'descripcion', 'name', 'nombre', 'movimiento', 'payee', 'beneficiario', 'observ',
+                'referencia', 'reference', 'memo', 'merchant', 'comercio', 'establecimiento', 'remitente']);
+            // Fallback: if nothing matched, use the first column that isn't already
+            // mapped to date/amount/debit/credit — better than leaving it empty.
+            if (!desc) {
+                const used = new Set([date, amount, debit, credit].filter(Boolean));
+                desc = headers.find(h => !used.has(h)) || '';
+            }
             return { date, amount, debit, credit, description: desc ? [desc] : [], amountMode: mode };
         }
 
@@ -2160,6 +2237,10 @@
 
         async function continueFromMapping() {
             const profile = buildProfileFromControls();
+            if (!profile.columns.description || profile.columns.description.length === 0) {
+                showImportError('Select at least one Description column (highlight it in the list) so movements are not imported blank.');
+                return;
+            }
             try {
                 parseWithProfile(importHeaders, importRows, profile, importAccountId);
             } catch (e) {
