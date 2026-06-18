@@ -641,13 +641,16 @@
                     </div>
                 </div>
                 <div id="previewSection" style="display: none;">
-                    <div style="background: var(--panel); padding: 12px 20px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; border: 1px solid var(--border);">
+                    <div style="background: var(--panel); padding: 12px 20px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; border: 1px solid var(--border);">
                         <div style="font-family: 'IBM Plex Sans', sans-serif; font-size: 14px; font-weight: 500;">
                             Found <strong id="totalTransactions">0</strong> transactions
+                            <span id="activeProfileLabel" style="font-weight: 400; color: var(--muted); font-size: 12px;"></span>
                         </div>
-                        <div style="font-size: 12px; display: flex; gap: 15px;">
+                        <div style="font-size: 12px; display: flex; gap: 15px; align-items: center;">
                             <span class="badge badge-dup">Duplicates: <span id="duplicateCount">0</span></span>
                             <span class="badge badge-new">New: <span id="newCount">0</span></span>
+                            <button type="button" onclick="editMappingFromPreview()" class="secondary"
+                                style="font-size: 12px; padding: 6px 12px; height: auto;">✏️ Edit column mapping</button>
                         </div>
                     </div>
 
@@ -1890,6 +1893,7 @@
         let importHeaders = [];         // current header names
         let importRows = [];            // current data rows (arrays of strings)
         let importProfiles = [];        // cached saved profiles
+        let currentProfile = null;      // profile currently applied to the preview (for "Edit column mapping")
 
         // Entry point from the file input. Either auto-matches a saved profile
         // and goes straight to preview, or shows the column-mapping step.
@@ -2109,6 +2113,10 @@
         async function applyProfileAndPreview(profile) {
             const text = decodeFile(importRawBytes, profile.encoding || 'auto');
             const { headers, rows } = splitCSV(text, profile.delimiter || ',');
+            // Keep the rows/headers so "Edit column mapping" can reopen the mapping step.
+            importHeaders = headers;
+            importRows = rows;
+            currentProfile = profile;
             parseWithProfile(headers, rows, profile, importAccountId);
             if (parsedTransactions.length === 0)
                 throw new Error('No valid transactions found with this profile. Check the column mapping.');
@@ -2120,7 +2128,26 @@
             document.getElementById('uploadSection').style.display = 'none';
             document.getElementById('mappingSection').style.display = 'none';
             document.getElementById('previewSection').style.display = 'block';
+            const label = document.getElementById('activeProfileLabel');
+            if (label) label.textContent = (currentProfile && currentProfile.name) ? `· profile: ${currentProfile.name}` : '';
             displayTransactionsPreview();
+        }
+
+        // Reopen the column-mapping step from the preview (e.g. after an auto-matched
+        // profile) so the mapping/profile can be reviewed, edited and re-saved.
+        async function editMappingFromPreview() {
+            if (!importHeaders.length) { showImportError('Nothing to edit — re-select the file.'); return; }
+            document.getElementById('previewSection').style.display = 'none';
+            document.getElementById('uploadSection').style.display = 'none';
+            document.getElementById('mappingSection').style.display = 'block';
+            await populateProfileDropdown();
+            populateMappingSelects();
+            renderMappingPreview();
+            if (currentProfile) {
+                applyProfileToControls(currentProfile);
+                const sel = document.getElementById('mapProfileSelect');
+                if ([...sel.options].some(o => o.value === currentProfile.name)) sel.value = currentProfile.name;
+            }
         }
 
         // ============================================
@@ -2251,6 +2278,7 @@
                 showImportError('No valid transactions parsed. Check the column mapping, delimiter and date format.');
                 return;
             }
+            currentProfile = profile;
             await checkDuplicates();
             showImportPreview();
         }
@@ -2269,11 +2297,8 @@
             sel.innerHTML = '<option value="">— New profile —</option>' +
                 importProfiles.map(p => `<option value="${csvEsc(p.name)}">${csvEsc(p.name)}</option>`).join('');
         }
-        function onMapProfileChange() {
-            const name = document.getElementById('mapProfileSelect').value;
-            if (!name) return;
-            const p = importProfiles.find(x => x.name === name);
-            if (!p) return;
+        // Load a profile's settings into the mapping controls.
+        function applyProfileToControls(p) {
             document.getElementById('mapDelimiter').value = p.delimiter === '\t' ? 'tab' : (p.delimiter || ',');
             document.getElementById('mapEncoding').value = p.encoding || 'auto';
             document.getElementById('mapDecimal').value = p.decimal || '.';
@@ -2288,8 +2313,14 @@
             setMultiValues('mapColDescription', Array.isArray(c.description) ? c.description : (c.description ? [c.description] : []));
             document.getElementById('mapSign').value = c.amountSign || 'asis';
             setSelectValue('mapColNote', c.note || '');
-            document.getElementById('mapProfileName').value = p.name;
+            document.getElementById('mapProfileName').value = p.name || '';
             toggleAmountMode();
+        }
+        function onMapProfileChange() {
+            const name = document.getElementById('mapProfileSelect').value;
+            if (!name) return;
+            const p = importProfiles.find(x => x.name === name);
+            if (p) applyProfileToControls(p);
         }
         async function saveImportProfile() {
             const profile = buildProfileFromControls();
@@ -2467,6 +2498,7 @@
             importRawBytes = null;
             importHeaders = [];
             importRows = [];
+            currentProfile = null;
         }
 
         // Display transactions preview table
