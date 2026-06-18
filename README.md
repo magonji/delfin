@@ -50,7 +50,7 @@ A personal finance PWA built with Python, FastAPI, and vanilla JavaScript. Impor
 ### Tools (`tools.html`)
 
 - **Entity management**: Edit and merge categories, accounts, payees, locations, and projects. Includes one-click **detect & merge duplicate categories** (reassigns all references)
-- **CSV import**: Import bank statements (Bank of Scotland, PayPal, or custom format) with column mapping, duplicate detection, and inline entity creation
+- **CSV import**: Import any bank statement CSV via a generic column-mapping step (delimiter, decimal, encoding, debit/credit), with reusable per-bank profiles, duplicate detection, and inline entity creation
 - **CSV export**: Export transactions with date, account, and category filters in standard or detailed format
 - **Import Financisto**: Import a Financisto database — native `.backup` (gzipped) or CSV export — directly inside the app. Auto-detects the format, shows a pre-import **compatibility report** (so any data that can't be mapped is listed, never dropped silently), supports **merge** or **replace**, and always takes a safety backup first
 - **Export Financisto**: Export your entire database as a native `.backup` (restorable in Financisto) or Financisto CSV

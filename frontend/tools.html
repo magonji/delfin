@@ -555,6 +555,84 @@
                         <p id="selectAccountHint" style="margin-top: 10px; font-size: 12px; color: var(--muted);">Please select an account first</p>
                     </div>
                 </div>
+                <div id="mappingSection" style="display: none;">
+                    <p style="font-size: 13px; color: var(--muted); margin: 0 0 16px;">
+                        Map the columns of your bank's CSV. Saved as a reusable profile so future
+                        imports from the same bank are recognised automatically.
+                    </p>
+                    <div class="form-group" style="margin-bottom: 16px;">
+                        <label>Saved profile</label>
+                        <select id="mapProfileSelect" onchange="onMapProfileChange()"></select>
+                    </div>
+                    <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 8px;">
+                        <div class="form-group" style="flex: 1; min-width: 130px;"><label>Delimiter</label>
+                            <select id="mapDelimiter" onchange="refreshMapping()">
+                                <option value=",">, (comma)</option>
+                                <option value=";">; (semicolon)</option>
+                                <option value="tab">Tab</option>
+                            </select></div>
+                        <div class="form-group" style="flex: 1; min-width: 130px;"><label>Encoding</label>
+                            <select id="mapEncoding" onchange="refreshMapping()">
+                                <option value="auto">Auto-detect</option>
+                                <option value="utf-8">UTF-8</option>
+                                <option value="windows-1252">Windows-1252</option>
+                                <option value="iso-8859-1">ISO-8859-1</option>
+                            </select></div>
+                        <div class="form-group" style="flex: 1; min-width: 130px;"><label>Decimal</label>
+                            <select id="mapDecimal">
+                                <option value=".">. (point)</option>
+                                <option value=",">, (comma)</option>
+                            </select></div>
+                        <div class="form-group" style="flex: 1; min-width: 130px;"><label>Date format</label>
+                            <select id="mapDateFormat">
+                                <option value="DD/MM/YYYY">DD/MM/YYYY</option>
+                                <option value="MM/DD/YYYY">MM/DD/YYYY</option>
+                                <option value="YYYY-MM-DD">YYYY-MM-DD</option>
+                                <option value="DD-MM-YYYY">DD-MM-YYYY</option>
+                                <option value="DD.MM.YYYY">DD.MM.YYYY</option>
+                            </select></div>
+                    </div>
+                    <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 8px;">
+                        <div class="form-group" style="flex: 1; min-width: 130px;"><label>Date column</label>
+                            <select id="mapColDate"></select></div>
+                        <div class="form-group" style="flex: 1; min-width: 130px;"><label>Amount type</label>
+                            <select id="mapAmountMode" onchange="toggleAmountMode()">
+                                <option value="single">Single column (signed)</option>
+                                <option value="debitcredit">Debit / Credit</option>
+                            </select></div>
+                        <div class="form-group" id="mapSingleWrap" style="flex: 1; min-width: 130px;"><label>Amount column</label>
+                            <select id="mapColAmount"></select></div>
+                        <div class="form-group" id="mapDebitWrap" style="flex: 1; min-width: 130px; display: none;"><label>Debit (expense)</label>
+                            <select id="mapColDebit"></select></div>
+                        <div class="form-group" id="mapCreditWrap" style="flex: 1; min-width: 130px; display: none;"><label>Credit (income)</label>
+                            <select id="mapColCredit"></select></div>
+                        <div class="form-group" style="flex: 1; min-width: 130px;"><label>Sign</label>
+                            <select id="mapSign">
+                                <option value="asis">As-is</option>
+                                <option value="flip">Flip (expenses positive in file)</option>
+                            </select></div>
+                        <div class="form-group" style="flex: 1; min-width: 130px;"><label>Note column</label>
+                            <select id="mapColNote"></select></div>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 16px;"><label>Description column(s) — hold Ctrl/Cmd to pick several</label>
+                        <select id="mapColDescription" multiple size="4"></select></div>
+                    <div class="import-table-container" style="max-height: 220px; overflow: auto; margin-bottom: 16px;">
+                        <table class="import-table">
+                            <thead id="mapPreviewHead"></thead>
+                            <tbody id="mapPreviewBody"></tbody>
+                        </table>
+                    </div>
+                    <div style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 16px;">
+                        <div class="form-group" style="flex: 1;"><label>Profile name (to save / reuse)</label>
+                            <input type="text" id="mapProfileName" placeholder="e.g. BBVA"></div>
+                        <button onclick="saveImportProfile()" class="secondary" style="height: 40px;">💾 Save profile</button>
+                        <button onclick="deleteImportProfile()" class="secondary" style="height: 40px;">🗑️ Delete</button>
+                    </div>
+                    <div style="display: flex; gap: 10px; padding-top: 16px; border-top: 1px solid var(--border);">
+                        <button onclick="continueFromMapping()" style="flex: 1; height: 44px; font-size: 15px;">Continue →</button>
+                        <button onclick="cancelImport()" class="secondary" style="height: 44px;">Cancel</button>
+                    </div>
+                </div>
                 <div id="previewSection" style="display: none;">
                     <div style="background: var(--panel); padding: 12px 20px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; border: 1px solid var(--border);">
                         <div style="font-family: 'IBM Plex Sans', sans-serif; font-size: 14px; font-weight: 500;">
@@ -1654,6 +1732,12 @@
         // Load data needed for import
         async function loadImportData() {
             try {
+                // Always reopen on the upload step (a previous session may have
+                // left the mapping or preview section showing).
+                document.getElementById('uploadSection').style.display = 'block';
+                document.getElementById('mappingSection').style.display = 'none';
+                document.getElementById('previewSection').style.display = 'none';
+
                 // Load accounts for import selection
                 const accountsResponse = await fetch(`${API_URL}/accounts`);
                 allAccountsForImport = (await accountsResponse.json()).sort((a, b) => a.name.localeCompare(b.name));
@@ -1720,160 +1804,443 @@
             }
             
             try {
-                if (file.name.toLowerCase().endsWith('.csv')) {
-                    await parseCSV(file, accountId);
-                } else {
+                if (!file.name.toLowerCase().endsWith('.csv')) {
                     showImportError('Unsupported file format');
                     event.target.value = '';
                     return;
                 }
-                
-                // Show preview section
-                document.getElementById('uploadSection').style.display = 'none';
-                document.getElementById('previewSection').style.display = 'block';
-                
-                displayTransactionsPreview();
-                
+                // parseCSV either auto-applies a saved profile (-> preview) or
+                // opens the column-mapping step. It manages the view itself.
+                await parseCSV(file, accountId);
             } catch (error) {
                 console.error('Error processing file:', error);
-                // Show detailed error message
                 showError('Error processing file: ' + error.message + '\n\nCheck browser console (F12) for more details');
                 event.target.value = '';
-                
-                // Also log the full error to console
-                console.error('Full error details:', error);
                 console.error('Error stack:', error.stack);
             }
         }
 
-        // Parse CSV file
+        // ============================================
+        // GENERIC CSV IMPORT (profile-driven, no per-bank parsers)
+        // ============================================
+        let importRawBytes = null;     // ArrayBuffer of the uploaded file
+        let importAccountId = null;     // selected account id (string)
+        let importHeaders = [];         // current header names
+        let importRows = [];            // current data rows (arrays of strings)
+        let importProfiles = [];        // cached saved profiles
+
+        // Entry point from the file input. Either auto-matches a saved profile
+        // and goes straight to preview, or shows the column-mapping step.
         async function parseCSV(file, accountId) {
-            console.log('Starting CSV parse for file:', file.name);
-            
-            const text = await file.text();
-            console.log('File text length:', text.length);
-            
-            const lines = text.split('\n');
-            console.log('Total lines:', lines.length);
-            
-            if (lines.length < 2) {
-                throw new Error('CSV file is empty or invalid');
-            }
-            
-            // Get headers
-            const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
-            console.log('Headers found:', headers);
-            
-            // Detect bank type and parse accordingly
-            if (headers.includes('Transaction ID') && headers.includes('Emoji')) {
-                console.log('Detected format: Monzo');
-                await parseMonzoCSV(lines, headers, accountId);
-            } else if (headers.some(h => h.toLowerCase().includes('transaction date')) && 
-                    headers.some(h => h.toLowerCase().includes('transaction description')) && 
-                    headers.some(h => h.toLowerCase().includes('debit amount'))) {
-                console.log('Detected format: Bank of Scotland');
-                await parseBankOfScotlandCSV(lines, headers, accountId);
-            } else if (headers.some(h => h.toLowerCase() === 'date') &&
-                    headers.some(h => h.toLowerCase() === 'time') &&
-                    headers.some(h => h.toLowerCase() === 'gross') &&
-                    headers.some(h => h.toLowerCase() === 'fee') &&
-                    headers.some(h => h.toLowerCase() === 'transaction id')) {
-                console.log('Detected format: PayPal');
-                await parsePayPalCSV(lines, headers, accountId);
+            importRawBytes = await file.arrayBuffer();
+            importAccountId = accountId;
+
+            // First pass: auto encoding + detected delimiter, just to read the header.
+            const text = decodeFile(importRawBytes, 'auto');
+            const delimiter = detectDelimiter(text);
+            const { headers, rows } = splitCSV(text, delimiter);
+            if (headers.length === 0) throw new Error('CSV file is empty or invalid');
+
+            // Try to auto-match a saved profile by header signature.
+            await loadImportProfiles();
+            const sig = headers.map(h => h.trim().toLowerCase());
+            const match = importProfiles.find(p => Array.isArray(p.signature) &&
+                p.signature.length === sig.length &&
+                p.signature.every((h, i) => h === sig[i]));
+
+            if (match) {
+                console.log('Auto-matched import profile:', match.name);
+                await applyProfileAndPreview(match);
             } else {
-                console.log('Detected format: Generic');
-                await parseGenericCSV(lines, headers, accountId);
+                await showMappingUI(headers, rows, { delimiter });
             }
-            
+        }
+
+        // ---- File decoding / CSV splitting helpers ----
+        function decodeFile(buffer, encoding) {
+            const enc = (encoding && encoding !== 'auto') ? encoding : 'utf-8';
+            let text = new TextDecoder(enc).decode(buffer);
+            if ((!encoding || encoding === 'auto') && text.includes('�')) {
+                try { text = new TextDecoder('windows-1252').decode(buffer); } catch (e) {}
+            }
+            if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1); // strip BOM
+            return text;
+        }
+
+        function detectDelimiter(text) {
+            const firstLine = text.split(/\r?\n/).find(l => l.trim().length) || '';
+            const counts = { ',': 0, ';': 0, '\t': 0 };
+            for (const ch of firstLine) if (ch in counts) counts[ch]++;
+            let best = ',', bestN = -1;
+            for (const d of [',', ';', '\t']) if (counts[d] > bestN) { best = d; bestN = counts[d]; }
+            return bestN > 0 ? best : ',';
+        }
+
+        function splitCSV(text, delimiter) {
+            const lines = text.split(/\r?\n/).filter(l => l.length > 0);
+            if (lines.length === 0) return { headers: [], rows: [] };
+            const headers = parseCSVLine(lines[0], delimiter).map(h => h.replace(/"/g, '').trim());
+            const rows = [];
+            for (let i = 1; i < lines.length; i++) {
+                if (!lines[i].trim()) continue;
+                rows.push(parseCSVLine(lines[i], delimiter));
+            }
+            return { headers, rows };
+        }
+
+        // ---- Value parsing helpers ----
+        function parseNumber(str, decimal, thousands) {
+            if (str == null) return null;
+            let s = String(str).trim();
+            if (!s) return null;
+            s = s.replace(/[£€$\s]/g, '');
+            let neg = false;
+            if (/^\(.*\)$/.test(s)) { neg = true; s = s.slice(1, -1); }
+            if (s.endsWith('-')) { neg = true; s = s.slice(0, -1); }
+            if (thousands) s = s.split(thousands).join('');
+            if (decimal && decimal !== '.') s = s.split(decimal).join('.');
+            const n = parseFloat(s);
+            if (isNaN(n)) return null;
+            return neg ? -n : n;
+        }
+
+        function parseDateWithFormat(str, fmt) {
+            const digits = String(str || '').trim().match(/\d+/g);
+            if (!digits || digits.length < 3) {
+                const d = new Date(str);
+                return isNaN(d.getTime()) ? null : d;
+            }
+            const order = (String(fmt || 'DD/MM/YYYY').toUpperCase().match(/[DMY]+/g) || ['D', 'M', 'Y']);
+            let day, month, year;
+            order.forEach((tok, i) => {
+                const v = parseInt(digits[i], 10);
+                if (tok[0] === 'D') day = v;
+                else if (tok[0] === 'M') month = v;
+                else year = v;
+            });
+            if (year == null || month == null || day == null) return null;
+            if (year < 100) year += 2000;
+            const d = new Date(year, month - 1, day);
+            return isNaN(d.getTime()) ? null : d;
+        }
+
+        // Local ISO string (no timezone shift, unlike toISOString).
+        function toLocalISO(dt) {
+            const p = n => String(n).padStart(2, '0');
+            return `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}` +
+                `T${p(dt.getHours())}:${p(dt.getMinutes())}:${p(dt.getSeconds())}`;
+        }
+
+        // ---- Column auto-guessing ----
+        function guessMapping(headers) {
+            const lower = headers.map(h => h.trim().toLowerCase());
+            const find = (...keys) => {
+                for (let i = 0; i < lower.length; i++)
+                    if (keys.some(k => lower[i].includes(k))) return headers[i];
+                return '';
+            };
+            const date = find('date', 'fecha');
+            const debit = find('debit', 'cargo', 'debe', 'pago');
+            const credit = find('credit', 'abono', 'haber', 'ingreso');
+            const amount = find('amount', 'importe', 'monto', 'cantidad');
+            const desc = find('description', 'concepto', 'concept', 'detalle', 'descripción',
+                'descripcion', 'name', 'movimiento', 'payee', 'beneficiario');
+            const mode = (debit || credit) && !amount ? 'debitcredit' : 'single';
+            return { date, amount, debit, credit, description: desc ? [desc] : [], amountMode: mode };
+        }
+
+        function guessDateFormat(rows, headers, dateCol) {
+            const i = headers.findIndex(h => h === dateCol);
+            if (i < 0 || !rows.length) return 'DD/MM/YYYY';
+            const v = (rows[0][i] || '').trim();
+            if (/^\d{4}[-/.]/.test(v)) return 'YYYY-MM-DD';
+            return 'DD/MM/YYYY';
+        }
+
+        // ---- The single, profile-driven parser ----
+        function parseWithProfile(headers, rows, profile, accountId) {
+            parsedTransactions = [];
+            const cols = profile.columns || {};
+            const idx = name => headers.findIndex(h =>
+                h.trim().toLowerCase() === String(name || '').trim().toLowerCase());
+            const dateIdx = idx(cols.date);
+            if (dateIdx < 0) throw new Error('The date column is not mapped.');
+
+            const noteIdx = cols.note ? idx(cols.note) : -1;
+            const descIdxs = (Array.isArray(cols.description) ? cols.description
+                : (cols.description ? [cols.description] : [])).map(idx).filter(i => i >= 0);
+            const mode = cols.amountMode === 'debitcredit' ? 'debitcredit' : 'single';
+            const amountIdx = idx(cols.amount);
+            const debitIdx = idx(cols.debit);
+            const creditIdx = idx(cols.credit);
+            const decimal = profile.decimal || '.';
+            const thousands = profile.thousands || (decimal === ',' ? '.' : ',');
+            const fmt = profile.dateFormat || 'DD/MM/YYYY';
+            const flip = (cols.amountSign === 'flip');
+
+            const entries = [];
+            for (const values of rows) {
+                if (!values || values.length === 0) continue;
+                const dateStr = (values[dateIdx] || '').trim();
+                if (!dateStr) continue;
+                const d = parseDateWithFormat(dateStr, fmt);
+                if (!d) continue;
+
+                let amount;
+                if (mode === 'debitcredit') {
+                    const debit = debitIdx >= 0 ? Math.abs(parseNumber(values[debitIdx], decimal, thousands) || 0) : 0;
+                    const credit = creditIdx >= 0 ? Math.abs(parseNumber(values[creditIdx], decimal, thousands) || 0) : 0;
+                    if (!debit && !credit) continue;
+                    amount = credit - debit;
+                } else {
+                    amount = parseNumber(values[amountIdx], decimal, thousands);
+                    if (amount === null || isNaN(amount)) continue;
+                }
+                if (flip) amount = -amount;
+
+                const description = descIdxs.map(i => (values[i] || '').trim()).filter(Boolean).join(' - ');
+                const note = noteIdx >= 0 ? (values[noteIdx] || '').trim() : '';
+                entries.push({ d, description, amount, note });
+            }
+
+            // Order oldest -> newest. Detect file direction first, then stable-sort by date.
+            if (entries.length >= 2 && entries[0].d > entries[entries.length - 1].d) entries.reverse();
+            entries.sort((a, b) => a.d - b.d);
+
+            // Assign 12:00 + incremental minute within each day to keep a stable order.
+            let lastDay = null, counter = 0;
+            for (const e of entries) {
+                const dayKey = e.d.toDateString();
+                if (dayKey !== lastDay) { lastDay = dayKey; counter = 0; }
+                const dt = new Date(e.d);
+                dt.setHours(12, counter++, 0, 0);
+                parsedTransactions.push({
+                    date: toLocalISO(dt),
+                    description: e.description,
+                    amount: e.amount,
+                    note: e.note,
+                    account_id: parseInt(accountId),
+                    isDuplicate: false,
+                    type: 'transaction',
+                    payee_id: null, category_id: null, location_id: null, project_id: null
+                });
+            }
             console.log('Parsed transactions count:', parsedTransactions.length);
         }
 
-        // Parse Monzo CSV format
-        async function parseMonzoCSV(lines, headers, accountId) {
-            parsedTransactions = [];
-            
-            // Find column indices
-            const dateIdx = headers.indexOf('Date');
-            const timeIdx = headers.indexOf('Time');
-            const typeIdx = headers.indexOf('Type');
-            const nameIdx = headers.indexOf('Name');
-            const descriptionIdx = headers.indexOf('Description');
-            const amountIdx = headers.indexOf('Amount');
-            const categoryIdx = headers.indexOf('Category');
-            const notesIdx = headers.indexOf('Notes and #tags');
-            
-            for (let i = 1; i < lines.length; i++) {
-                const line = lines[i].trim();
-                if (!line) continue;
-                
-                const values = parseCSVLine(line);
-                
-                if (values.length < headers.length) continue;
-                
-                const dateStr = values[dateIdx];
-                const timeStr = values[timeIdx];
-                const type = values[typeIdx];
-                const name = values[nameIdx];
-                const descriptionCol = values[descriptionIdx];
-                const amount = parseFloat(values[amountIdx]);
-                const note = values[notesIdx];
-                
-                if (!dateStr || isNaN(amount)) continue;
-                
-                // Combine Type, Name and Description
-                let description = '';
-                if (type && name) {
-                    description = `${type} - ${name}`;
-                } else {
-                    description = name || type || '';
-                }
-                
-                // Add Description column in parentheses if available
-                if (descriptionCol && descriptionCol.trim() !== '') {
-                    description += ` (${descriptionCol})`;
-                }
-                
-                // Parse date - Monzo format is DD/MM/YYYY
-                let date;
-                try {
-                    const dateParts = dateStr.split('/');
-                    if (dateParts.length === 3) {
-                        const day = dateParts[0].padStart(2, '0');
-                        const month = dateParts[1].padStart(2, '0');
-                        const year = dateParts[2];
-                        
-                        // Parse time - format is HH:MM:SS
-                        let time = '12:00:00';
-                        if (timeStr) {
-                            time = timeStr;
-                        }
-                        
-                        // Create ISO format: YYYY-MM-DDTHH:MM:SS
-                        const datetime = `${year}-${month}-${day}T${time}`;
-                        
-                        parsedTransactions.push({
-                            date: datetime,
-                            description: description,
-                            amount: amount,
-                            note: note,
-                            account_id: parseInt(accountId),
-                            isDuplicate: false,
-                            type: 'transaction',
-                            payee_id: null,
-                            category_id: null,
-                            location_id: null,
-                            project_id: null
-                        });
-                    }
-                } catch (e) {
-                    console.error('Error parsing date:', dateStr, e);
-                    continue;
-                }
-            }
-            
-            // Check for duplicates
+        // ---- Apply a profile and jump to the preview ----
+        async function applyProfileAndPreview(profile) {
+            const text = decodeFile(importRawBytes, profile.encoding || 'auto');
+            const { headers, rows } = splitCSV(text, profile.delimiter || ',');
+            parseWithProfile(headers, rows, profile, importAccountId);
+            if (parsedTransactions.length === 0)
+                throw new Error('No valid transactions found with this profile. Check the column mapping.');
             await checkDuplicates();
+            showImportPreview();
         }
+
+        function showImportPreview() {
+            document.getElementById('uploadSection').style.display = 'none';
+            document.getElementById('mappingSection').style.display = 'none';
+            document.getElementById('previewSection').style.display = 'block';
+            displayTransactionsPreview();
+        }
+
+        // ============================================
+        // Column-mapping step
+        // ============================================
+        function csvEsc(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+        function setSelectValue(id, val) {
+            const s = document.getElementById(id);
+            if (s && [...s.options].some(o => o.value === val)) s.value = val;
+        }
+        function setMultiValues(id, vals) {
+            const s = document.getElementById(id);
+            if (!s) return;
+            const set = new Set((vals || []).map(String));
+            [...s.options].forEach(o => o.selected = set.has(o.value));
+        }
+        function fillColumnSelect(sel, headers, includeNone) {
+            const prev = sel.value;
+            sel.innerHTML = (includeNone ? '<option value="">— none —</option>' : '') +
+                headers.map(h => `<option value="${csvEsc(h)}">${csvEsc(h)}</option>`).join('');
+            if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
+        }
+        function populateMappingSelects() {
+            fillColumnSelect(document.getElementById('mapColDate'), importHeaders, false);
+            fillColumnSelect(document.getElementById('mapColAmount'), importHeaders, false);
+            fillColumnSelect(document.getElementById('mapColDebit'), importHeaders, false);
+            fillColumnSelect(document.getElementById('mapColCredit'), importHeaders, false);
+            fillColumnSelect(document.getElementById('mapColNote'), importHeaders, true);
+            fillColumnSelect(document.getElementById('mapColDescription'), importHeaders, false);
+        }
+        function renderMappingPreview() {
+            const head = document.getElementById('mapPreviewHead');
+            const body = document.getElementById('mapPreviewBody');
+            head.innerHTML = '<tr>' + importHeaders.map(h => `<th>${csvEsc(h)}</th>`).join('') + '</tr>';
+            body.innerHTML = importRows.slice(0, 8).map(r =>
+                '<tr>' + importHeaders.map((_, i) => `<td>${csvEsc(r[i] || '')}</td>`).join('') + '</tr>'
+            ).join('');
+        }
+        function toggleAmountMode() {
+            const mode = document.getElementById('mapAmountMode').value;
+            document.getElementById('mapSingleWrap').style.display = mode === 'single' ? 'block' : 'none';
+            document.getElementById('mapDebitWrap').style.display = mode === 'debitcredit' ? 'block' : 'none';
+            document.getElementById('mapCreditWrap').style.display = mode === 'debitcredit' ? 'block' : 'none';
+        }
+        function currentDelimiter() {
+            const v = document.getElementById('mapDelimiter').value;
+            return v === 'tab' ? '\t' : v;
+        }
+        // Re-decode + re-split when the delimiter or encoding changes.
+        function refreshMapping() {
+            const text = decodeFile(importRawBytes, document.getElementById('mapEncoding').value);
+            const split = splitCSV(text, currentDelimiter());
+            importHeaders = split.headers;
+            importRows = split.rows;
+            populateMappingSelects();
+            renderMappingPreview();
+        }
+
+        async function showMappingUI(headers, rows, opts) {
+            importHeaders = headers;
+            importRows = rows;
+            document.getElementById('mapDelimiter').value = opts.delimiter === '\t' ? 'tab' : (opts.delimiter || ',');
+            document.getElementById('mapEncoding').value = 'auto';
+            const g = guessMapping(headers);
+            document.getElementById('mapDecimal').value = (opts.delimiter === ';') ? ',' : '.';
+            document.getElementById('mapDateFormat').value = guessDateFormat(rows, headers, g.date);
+            populateMappingSelects();
+            setSelectValue('mapColDate', g.date);
+            document.getElementById('mapAmountMode').value = g.amountMode;
+            setSelectValue('mapColAmount', g.amount);
+            setSelectValue('mapColDebit', g.debit);
+            setSelectValue('mapColCredit', g.credit);
+            setMultiValues('mapColDescription', g.description);
+            document.getElementById('mapSign').value = 'asis';
+            document.getElementById('mapColNote').value = '';
+            document.getElementById('mapProfileName').value = '';
+            toggleAmountMode();
+            renderMappingPreview();
+            await populateProfileDropdown();
+            document.getElementById('uploadSection').style.display = 'none';
+            document.getElementById('mappingSection').style.display = 'block';
+            document.getElementById('previewSection').style.display = 'none';
+        }
+
+        function buildProfileFromControls() {
+            const mode = document.getElementById('mapAmountMode').value;
+            const descSel = document.getElementById('mapColDescription');
+            const description = [...descSel.selectedOptions].map(o => o.value).filter(Boolean);
+            const decimal = document.getElementById('mapDecimal').value;
+            return {
+                name: (document.getElementById('mapProfileName').value || '').trim(),
+                signature: importHeaders.map(h => h.trim().toLowerCase()),
+                delimiter: currentDelimiter(),
+                encoding: document.getElementById('mapEncoding').value,
+                decimal: decimal,
+                thousands: decimal === ',' ? '.' : ',',
+                dateFormat: document.getElementById('mapDateFormat').value,
+                columns: {
+                    date: document.getElementById('mapColDate').value,
+                    description: description,
+                    amountMode: mode,
+                    amount: mode === 'single' ? document.getElementById('mapColAmount').value : null,
+                    debit: mode === 'debitcredit' ? document.getElementById('mapColDebit').value : null,
+                    credit: mode === 'debitcredit' ? document.getElementById('mapColCredit').value : null,
+                    amountSign: document.getElementById('mapSign').value,
+                    note: document.getElementById('mapColNote').value || null
+                }
+            };
+        }
+
+        async function continueFromMapping() {
+            const profile = buildProfileFromControls();
+            try {
+                parseWithProfile(importHeaders, importRows, profile, importAccountId);
+            } catch (e) {
+                showImportError(e.message);
+                return;
+            }
+            if (parsedTransactions.length === 0) {
+                showImportError('No valid transactions parsed. Check the column mapping, delimiter and date format.');
+                return;
+            }
+            await checkDuplicates();
+            showImportPreview();
+        }
+
+        // ---- Saved-profile management ----
+        async function loadImportProfiles() {
+            try {
+                const res = await fetch(`${API_URL}/tools/import-profiles`);
+                if (res.ok) { const data = await res.json(); importProfiles = data.profiles || []; }
+            } catch (e) { console.warn('Could not load import profiles', e); }
+            return importProfiles;
+        }
+        async function populateProfileDropdown() {
+            await loadImportProfiles();
+            const sel = document.getElementById('mapProfileSelect');
+            sel.innerHTML = '<option value="">— New profile —</option>' +
+                importProfiles.map(p => `<option value="${csvEsc(p.name)}">${csvEsc(p.name)}</option>`).join('');
+        }
+        function onMapProfileChange() {
+            const name = document.getElementById('mapProfileSelect').value;
+            if (!name) return;
+            const p = importProfiles.find(x => x.name === name);
+            if (!p) return;
+            document.getElementById('mapDelimiter').value = p.delimiter === '\t' ? 'tab' : (p.delimiter || ',');
+            document.getElementById('mapEncoding').value = p.encoding || 'auto';
+            document.getElementById('mapDecimal').value = p.decimal || '.';
+            document.getElementById('mapDateFormat').value = p.dateFormat || 'DD/MM/YYYY';
+            refreshMapping();
+            const c = p.columns || {};
+            setSelectValue('mapColDate', c.date);
+            document.getElementById('mapAmountMode').value = c.amountMode || 'single';
+            setSelectValue('mapColAmount', c.amount);
+            setSelectValue('mapColDebit', c.debit);
+            setSelectValue('mapColCredit', c.credit);
+            setMultiValues('mapColDescription', Array.isArray(c.description) ? c.description : (c.description ? [c.description] : []));
+            document.getElementById('mapSign').value = c.amountSign || 'asis';
+            setSelectValue('mapColNote', c.note || '');
+            document.getElementById('mapProfileName').value = p.name;
+            toggleAmountMode();
+        }
+        async function saveImportProfile() {
+            const profile = buildProfileFromControls();
+            if (!profile.name) { showImportError('Enter a profile name to save it.'); return; }
+            try {
+                const res = await fetch(`${API_URL}/tools/import-profiles`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(profile)
+                });
+                if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || 'Save failed'); }
+                const data = await res.json();
+                importProfiles = data.profiles || [];
+                await populateProfileDropdown();
+                document.getElementById('mapProfileSelect').value = profile.name;
+                showToast(`Profile "${profile.name}" saved`, 'success');
+            } catch (e) { showImportError(e.message); }
+        }
+        async function deleteImportProfile() {
+            const name = document.getElementById('mapProfileSelect').value ||
+                document.getElementById('mapProfileName').value.trim();
+            if (!name) { showImportError('Select a saved profile to delete.'); return; }
+            if (!(await customConfirm(`Delete profile "${name}"?`, 'Delete profile', 'Delete'))) return;
+            const res = await fetch(`${API_URL}/tools/import-profiles/${encodeURIComponent(name)}`, { method: 'DELETE' });
+            if (res.ok) {
+                const data = await res.json();
+                importProfiles = data.profiles || [];
+                await populateProfileDropdown();
+                document.getElementById('mapProfileName').value = '';
+                showToast('Profile deleted', 'success');
+            }
+        }
+
 
         // Try to auto-suggest payee based on description
         function autoSuggestPayee(description, index) {
@@ -1933,25 +2300,31 @@
             }
         }
 
-        // Parse a CSV line handling quoted values
-        function parseCSVLine(line) {
+        // Parse a CSV line handling quoted values, a custom delimiter and the
+        // escaped-quote convention ("" -> a literal " inside a quoted field).
+        function parseCSVLine(line, delimiter = ',') {
             const values = [];
             let current = '';
             let inQuotes = false;
-            
+
             for (let i = 0; i < line.length; i++) {
                 const char = line[i];
-                
+
                 if (char === '"') {
-                    inQuotes = !inQuotes;
-                } else if (char === ',' && !inQuotes) {
+                    if (inQuotes && line[i + 1] === '"') {  // escaped quote
+                        current += '"';
+                        i++;
+                    } else {
+                        inQuotes = !inQuotes;
+                    }
+                } else if (char === delimiter && !inQuotes) {
                     values.push(current.trim());
                     current = '';
                 } else {
                     current += char;
                 }
             }
-            
+
             values.push(current.trim());
             return values;
         }
@@ -2005,10 +2378,14 @@
         // Cancel import
         function cancelImport() {
             document.getElementById('uploadSection').style.display = 'block';
+            document.getElementById('mappingSection').style.display = 'none';
             document.getElementById('previewSection').style.display = 'none';
             document.getElementById('fileInput').value = '';
             parsedTransactions = [];
             payeeSuggestions = {};
+            importRawBytes = null;
+            importHeaders = [];
+            importRows = [];
         }
 
         // Display transactions preview table
@@ -2846,414 +3223,6 @@
             }
         }
 
-        // Parse generic CSV format
-        async function parseGenericCSV(lines, headers, accountId) {
-            parsedTransactions = [];
-            
-            // Try to detect common column names
-            const dateIdx = headers.findIndex(h => 
-                h.toLowerCase().includes('date') || h.toLowerCase().includes('fecha'));
-            const descIdx = headers.findIndex(h => 
-                h.toLowerCase().includes('description') || h.toLowerCase().includes('concept') || 
-                h.toLowerCase().includes('name') || h.toLowerCase().includes('descripción'));
-            const amountIdx = headers.findIndex(h => 
-                h.toLowerCase().includes('amount') || h.toLowerCase().includes('importe'));
-            
-            if (dateIdx === -1 || amountIdx === -1) {
-                throw new Error('Could not detect date and amount columns. Please use a supported format.');
-            }
-            
-            // Track time for transactions on same day
-            let lastDate = null;
-            let timeCounter = 0;
-            
-            for (let i = 1; i < lines.length; i++) {
-                const line = lines[i].trim();
-                if (!line) continue;
-                
-                const values = parseCSVLine(line);
-                
-                if (values.length < headers.length) continue;
-                
-                const dateStr = values[dateIdx];
-                const description = descIdx !== -1 ? values[descIdx] : '';
-                const amountStr = values[amountIdx].replace(/[£€$,]/g, '');
-                const amount = parseFloat(amountStr);
-                
-                if (!dateStr || isNaN(amount)) continue;
-                
-                // Parse date and add time
-                let date;
-                try {
-                    date = new Date(dateStr);
-                    if (isNaN(date.getTime())) {
-                        // Try UK format DD/MM/YYYY
-                        const parts = dateStr.split('/');
-                        if (parts.length === 3) {
-                            date = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
-                        }
-                    }
-                } catch (e) {
-                    continue;
-                }
-                
-                // Handle time assignment for same day transactions
-                const dateOnly = date.toDateString();
-                if (dateOnly !== lastDate) {
-                    lastDate = dateOnly;
-                    timeCounter = 0;
-                }
-                
-                // Set time: 12:00 for first transaction of the day, then increment by minute
-                const hours = 12;
-                const minutes = timeCounter;
-                timeCounter++;
-                
-                const datetime = new Date(date);
-                datetime.setHours(hours, minutes, 0, 0);
-                
-                parsedTransactions.push({
-                    date: datetime.toISOString().slice(0, 19),
-                    description: description,
-                    amount: amount,
-                    note: '',
-                    account_id: parseInt(accountId),
-                    isDuplicate: false,
-                    type: 'transaction',
-                    payee_id: null,
-                    category_id: null,
-                    location_id: null,
-                    project_id: null
-                });
-            }
-            
-            // Check for duplicates
-            await checkDuplicates();
-        }
-
-        // Parse Bank of Scotland CSV format
-        async function parseBankOfScotlandCSV(lines, headers, accountId) {
-            console.log('=== Starting Bank of Scotland CSV Parse ===');
-            console.log('Headers:', headers);
-            
-            parsedTransactions = [];
-            
-            // Bank of Scotland CSV includes Sort Code and Account Number columns
-            // Find indices dynamically to handle column order
-            const dateIdx = headers.findIndex(h => h.toLowerCase().includes('transaction date'));
-            const typeIdx = headers.findIndex(h => h.toLowerCase().includes('transaction type'));
-            const descIdx = headers.findIndex(h => h.toLowerCase().includes('transaction description'));
-            const debitIdx = headers.findIndex(h => h.toLowerCase().includes('debit amount'));
-            const creditIdx = headers.findIndex(h => h.toLowerCase().includes('credit amount'));
-            const balanceIdx = headers.findIndex(h => h.toLowerCase().includes('balance'));
-            
-            console.log('Column indices found:');
-            console.log('  Date:', dateIdx);
-            console.log('  Type:', typeIdx);
-            console.log('  Description:', descIdx);
-            console.log('  Debit:', debitIdx);
-            console.log('  Credit:', creditIdx);
-            console.log('  Balance:', balanceIdx);
-            
-            // Validate that we found all required columns
-            if (dateIdx === -1 || descIdx === -1 || debitIdx === -1 || creditIdx === -1) {
-                const missingColumns = [];
-                if (dateIdx === -1) missingColumns.push('Transaction Date');
-                if (descIdx === -1) missingColumns.push('Transaction Description');
-                if (debitIdx === -1) missingColumns.push('Debit Amount');
-                if (creditIdx === -1) missingColumns.push('Credit Amount');
-                
-                throw new Error('Could not find required columns: ' + missingColumns.join(', ') + 
-                            '\n\nFound headers: ' + headers.join(', '));
-            }
-            
-            // Track time for transactions on same day
-            let lastDate = null;
-            let timeCounter = 0;
-            let successCount = 0;
-            let skipCount = 0;
-            
-            for (let i = 1; i < lines.length; i++) {
-                const line = lines[i].trim();
-                if (!line) {
-                    skipCount++;
-                    continue;
-                }
-                
-                try {
-                    const values = parseCSVLine(line);
-                    
-                    // Log first transaction for debugging
-                    if (i === 1) {
-                        console.log('First data line values:', values);
-                    }
-                    
-                    // Skip if we don't have enough values
-                    const maxIdx = Math.max(dateIdx, typeIdx, descIdx, debitIdx, creditIdx, balanceIdx);
-                    if (values.length <= maxIdx) {
-                        console.warn(`Line ${i}: Not enough values (${values.length} vs required ${maxIdx + 1})`);
-                        skipCount++;
-                        continue;
-                    }
-                    
-                    const dateStr = values[dateIdx];
-                    const type = typeIdx !== -1 ? values[typeIdx] : '';
-                    const description = values[descIdx];
-                    
-                    // Parse debit and credit amounts, removing any quotes
-                    const debitStr = values[debitIdx].replace(/['"]/g, '').trim();
-                    const creditStr = values[creditIdx].replace(/['"]/g, '').trim();
-                    
-                    const debit = debitStr ? parseFloat(debitStr) : 0;
-                    const credit = creditStr ? parseFloat(creditStr) : 0;
-                    
-                    if (!dateStr) {
-                        skipCount++;
-                        continue;
-                    }
-                    
-                    // Calculate amount (credit is positive, debit is negative)
-                    const amount = credit > 0 ? credit : -debit;
-                    
-                    if (amount === 0) {
-                        skipCount++;
-                        continue;
-                    }
-                    
-                    // Parse date (format: DD/MM/YYYY)
-                    let date;
-                    const dateParts = dateStr.split('/');
-                    if (dateParts.length === 3) {
-                        const day = dateParts[0].padStart(2, '0');
-                        const month = dateParts[1].padStart(2, '0');
-                        const year = dateParts[2];
-                        
-                        date = new Date(`${year}-${month}-${day}`);
-                        
-                        if (isNaN(date.getTime())) {
-                            throw new Error(`Invalid date: ${dateStr}`);
-                        }
-                    } else {
-                        throw new Error(`Invalid date format: ${dateStr} (expected DD/MM/YYYY)`);
-                    }
-                    
-                    // Handle time assignment
-                    const dateOnly = date.toDateString();
-                    if (dateOnly !== lastDate) {
-                        lastDate = dateOnly;
-                        timeCounter = 0;
-                    }
-                    
-                    const hours = 12;
-                    const minutes = timeCounter;
-                    timeCounter--;
-                    
-                    const datetime = new Date(date);
-                    datetime.setHours(hours, minutes, 0, 0);
-                    
-                    // Combine type and description for better context
-                    const fullDescription = type && description ? `${type} - ${description}` : (description || type || '');
-                    
-                    parsedTransactions.push({
-                        date: datetime.toISOString().slice(0, 19),
-                        description: fullDescription,
-                        amount: amount,
-                        note: '',
-                        account_id: parseInt(accountId),
-                        isDuplicate: false,
-                        type: 'transaction',
-                        payee_id: null,
-                        category_id: null,
-                        location_id: null,
-                        project_id: null
-                    });
-                    
-                    successCount++;
-                    
-                } catch (error) {
-                    console.error(`Error parsing line ${i}:`, error.message);
-                    console.error('Line content:', line);
-                    // Continue processing other lines instead of failing completely
-                    skipCount++;
-                }
-            }
-            
-            console.log(`Parse complete: ${successCount} successful, ${skipCount} skipped`);
-            
-            await checkDuplicates();
-            
-            if (parsedTransactions.length === 0) {
-                throw new Error('No transactions found in CSV. Please check the file format.\n\n' +
-                            `Processed ${lines.length - 1} lines, but none were valid transactions.`);
-            }
-            
-            console.log('=== Bank of Scotland CSV Parse Complete ===');
-        }
-
-        // Parse PayPal CSV format
-        async function parsePayPalCSV(lines, headers, accountId) {
-            console.log('=== Starting PayPal CSV Parse ===');
-            console.log('Headers:', headers);
-            
-            parsedTransactions = [];
-            
-            // Find column indices
-            const dateIdx = headers.findIndex(h => h.toLowerCase() === 'date');
-            const timeIdx = headers.findIndex(h => h.toLowerCase() === 'time');
-            const descriptionIdx = headers.findIndex(h => h.toLowerCase() === 'description');
-            const currencyIdx = headers.findIndex(h => h.toLowerCase() === 'currency');
-            const grossIdx = headers.findIndex(h => h.toLowerCase() === 'gross');
-            const feeIdx = headers.findIndex(h => h.toLowerCase() === 'fee');
-            const netIdx = headers.findIndex(h => h.toLowerCase() === 'net');
-            const nameIdx = headers.findIndex(h => h.toLowerCase() === 'name');
-            const invoiceIdx = headers.findIndex(h => h.toLowerCase() === 'invoice id');
-            
-            console.log('Column indices found:');
-            console.log('  Date:', dateIdx);
-            console.log('  Time:', timeIdx);
-            console.log('  Description:', descriptionIdx);
-            console.log('  Currency:', currencyIdx);
-            console.log('  Gross:', grossIdx);
-            console.log('  Fee:', feeIdx);
-            console.log('  Net:', netIdx);
-            console.log('  Name:', nameIdx);
-            console.log('  Invoice:', invoiceIdx);
-            
-            // Validate required columns
-            if (dateIdx === -1 || timeIdx === -1 || grossIdx === -1 || descriptionIdx === -1) {
-                const missingColumns = [];
-                if (dateIdx === -1) missingColumns.push('Date');
-                if (timeIdx === -1) missingColumns.push('Time');
-                if (grossIdx === -1) missingColumns.push('Gross');
-                if (descriptionIdx === -1) missingColumns.push('Description');
-                
-                throw new Error('Could not find required PayPal columns: ' + missingColumns.join(', ') + 
-                            '\n\nFound headers: ' + headers.join(', '));
-            }
-            
-            let successCount = 0;
-            let skipCount = 0;
-            
-            for (let i = 1; i < lines.length; i++) {
-                const line = lines[i].trim();
-                if (!line) {
-                    skipCount++;
-                    continue;
-                }
-                
-                try {
-                    const values = parseCSVLine(line);
-                    
-                    // Log first transaction for debugging
-                    if (i === 1) {
-                        console.log('First data line values:', values);
-                    }
-                    
-                    const maxIdx = Math.max(dateIdx, timeIdx, descriptionIdx, grossIdx, nameIdx, invoiceIdx);
-                    if (values.length <= maxIdx) {
-                        console.warn(`Line ${i}: Not enough values (${values.length} vs required ${maxIdx + 1})`);
-                        skipCount++;
-                        continue;
-                    }
-                    
-                    const dateStr = values[dateIdx].replace(/"/g, '');
-                    const timeStr = values[timeIdx].replace(/"/g, '');
-                    const description = values[descriptionIdx].replace(/"/g, '');
-                    const grossStr = values[grossIdx].replace(/"/g, '').trim();
-                    const feeStr = feeIdx !== -1 ? values[feeIdx].replace(/"/g, '').trim() : '0.00';
-                    const merchantName = nameIdx !== -1 ? values[nameIdx].replace(/"/g, '').trim() : '';
-                    const invoiceId = invoiceIdx !== -1 ? values[invoiceIdx].replace(/"/g, '').trim() : '';
-                    
-                    // Skip "BML Credit" entries as they're just funding transactions
-                    if (description.includes('BML Credit') || description.includes('Transfer from BML')) {
-                        skipCount++;
-                        continue;
-                    }
-                    
-                    if (!dateStr || !grossStr) {
-                        skipCount++;
-                        continue;
-                    }
-                    
-                    const gross = parseFloat(grossStr);
-                    const fee = parseFloat(feeStr);
-                    
-                    if (isNaN(gross)) {
-                        skipCount++;
-                        continue;
-                    }
-                    
-                    // Parse date (format: DD/MM/YYYY)
-                    let date;
-                    const dateParts = dateStr.split('/');
-                    if (dateParts.length === 3) {
-                        const day = dateParts[0].padStart(2, '0');
-                        const month = dateParts[1].padStart(2, '0');
-                        const year = dateParts[2];
-                        
-                        // Parse time (format: HH:MM:SS)
-                        const time = timeStr || '12:00:00';
-                        
-                        // Create ISO format datetime
-                        const datetime = `${year}-${month}-${day}T${time}`;
-                        
-                        // Build description combining merchant name and transaction type
-                        let fullDescription = '';
-                        if (merchantName) {
-                            fullDescription = merchantName;
-                            if (description && !description.includes('Express Checkout')) {
-                                fullDescription += ` (${description})`;
-                            }
-                        } else {
-                            fullDescription = description;
-                        }
-                        
-                        // Build note with additional info
-                        let note = '';
-                        if (invoiceId) {
-                            note = `Invoice: ${invoiceId}`;
-                        }
-                        if (fee !== 0) {
-                            note += (note ? ' | ' : '') + `Fee: £${fee.toFixed(2)}`;
-                        }
-                        
-                        parsedTransactions.push({
-                            date: datetime,
-                            description: fullDescription,
-                            amount: gross,
-                            note: note,
-                            account_id: parseInt(accountId),
-                            isDuplicate: false,
-                            type: 'transaction',
-                            payee_id: null,
-                            category_id: null,
-                            location_id: null,
-                            project_id: null
-                        });
-                        
-                        successCount++;
-                    } else {
-                        throw new Error(`Invalid date format: ${dateStr} (expected DD/MM/YYYY)`);
-                    }
-                    
-                } catch (error) {
-                    console.error(`Error parsing line ${i}:`, error.message);
-                    console.error('Line content:', line);
-                    skipCount++;
-                }
-            }
-            
-            console.log(`Parse complete: ${successCount} successful, ${skipCount} skipped`);
-            
-            await checkDuplicates();
-            
-            if (parsedTransactions.length === 0) {
-                throw new Error('No transactions found in CSV. Please check the file format.\n\n' +
-                            `Processed ${lines.length - 1} lines, but none were valid transactions.`);
-            }
-            
-            console.log('=== PayPal CSV Parse Complete ===');
-        }
 
         // Load data for export
         async function loadExportData() {

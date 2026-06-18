@@ -3713,6 +3713,34 @@ def financisto_export_notes():
 
 
 # ============================================
+# CSV IMPORT PROFILES (per-bank column mappings)
+# ============================================
+@app.get("/tools/import-profiles")
+def list_import_profiles():
+    """Return all saved bank CSV import profiles."""
+    from backend import profiles_store
+    return {"profiles": profiles_store.list_profiles()}
+
+
+@app.post("/tools/import-profiles")
+def save_import_profile(profile: dict):
+    """Create or update (by name) a bank CSV import profile."""
+    from backend import profiles_store
+    try:
+        profiles = profiles_store.save_profile(profile)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"profiles": profiles}
+
+
+@app.delete("/tools/import-profiles/{name}")
+def delete_import_profile(name: str):
+    """Delete a bank CSV import profile by name."""
+    from backend import profiles_store
+    return {"profiles": profiles_store.delete_profile(name)}
+
+
+# ============================================
 # CATEGORY DEDUPLICATION (integrated maintenance tool)
 # ============================================
 
