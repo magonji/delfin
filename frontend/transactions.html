@@ -1014,7 +1014,7 @@
     <div class="footer">© Royal Bank of González. 2025</div>
 
     <script>
-        const API_URL = (localStorage.getItem('delfin_api') || (location.pathname.startsWith('/app') ? location.origin : 'http://localhost:8000')).replace(/\/$/, '');
+        const API_URL = (localStorage.getItem('delfin_api') || (location.pathname.startsWith('/app') ? location.origin : 'http://localhost:8422')).replace(/\/$/, '');
         // --- Configuration and global state ---
         let allCategories = [], allPayees = [], allAccounts = [], allAccountsIncludingClosed = [], allLocations = [], regularTransactions = [], transferTransactions = [];
         let accountsMap = new Map();

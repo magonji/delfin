@@ -27,10 +27,10 @@ COPY frontend/ ./frontend/
 RUN mkdir -p /app/data
 VOLUME ["/app/data"]
 
-EXPOSE 8000
+EXPOSE 8422
 
 # Verify the app is actually serving (slim image has no curl, so use Python)
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/app/index.html', timeout=4).status==200 else 1)"
+    CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8422/app/index.html', timeout=4).status==200 else 1)"
 
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8422"]

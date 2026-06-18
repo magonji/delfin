@@ -3393,7 +3393,7 @@ def recalculate_account_balances(db: Session = Depends(get_db)):
 
 @app.get("/")
 def root():
-    """Send visitors straight to the app (so http://host:8000 just works)."""
+    """Send visitors straight to the app (so http://host:8422 just works)."""
     return RedirectResponse(url="/app/index.html")
 
 

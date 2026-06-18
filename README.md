@@ -194,12 +194,12 @@ docker compose up -d
 ```bash
 docker run -d --name delfin --restart unless-stopped \
   -e TZ=Europe/Madrid \
-  -p 8000:8000 \
+  -p 8422:8422 \
   -v "$(pwd)/data:/app/data" \
   ghcr.io/magonji/delfin:latest
 ```
 
-Open `http://<host>:8000/app/index.html`. The SQLite database lives in the
+Open `http://<host>:8422/app/index.html`. The SQLite database lives in the
 mounted `data/` volume, so it survives container restarts and image updates. If
 `finance.db` doesn't exist yet, an empty one is created on first start — then use
 **Tools → Import Financisto** to load your data.
@@ -263,7 +263,7 @@ touch /srv/storage/backups/delfin/.delfin-backup-enabled
 
 docker run -d --name delfin --restart unless-stopped \
   -e TZ=Europe/Madrid \
-  -p 8000:8000 \
+  -p 8422:8422 \
   -v ~/docker/delfin:/app/data \
   -v /srv/storage/backups/delfin:/app/backups \
   ghcr.io/magonji/delfin:latest

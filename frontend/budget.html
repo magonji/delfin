@@ -549,7 +549,7 @@
     </div>
 
     <script>
-        const API_BASE = (localStorage.getItem('delfin_api') || (location.pathname.startsWith('/app') ? location.origin : 'http://localhost:8000')).replace(/\/$/, '');
+        const API_BASE = (localStorage.getItem('delfin_api') || (location.pathname.startsWith('/app') ? location.origin : 'http://localhost:8422')).replace(/\/$/, '');
 
         let state = {
             currentMonth: new Date().toISOString().slice(0, 7),

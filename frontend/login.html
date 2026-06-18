@@ -19,6 +19,8 @@
     p.sub { margin:0 0 18px; color:var(--muted); font-size:14px; line-height:1.5; }
     label { display:block; font-size:13px; font-weight:600; color:var(--muted); margin:14px 0 6px; }
     input { width:100%; padding:12px; font-size:16px; font-family:'IBM Plex Sans',sans-serif; border:1px solid var(--border); border-radius:8px; background:#fff; -webkit-appearance:none; appearance:none; }
+    /* Keep checkboxes/radios native — the reset above would otherwise render them as empty full-width boxes. */
+    input[type="checkbox"], input[type="radio"] { width:auto; padding:0; margin:0; border:0; border-radius:0; background:transparent; appearance:auto; -webkit-appearance:auto; flex:0 0 auto; }
     button.primary { width:100%; margin-top:20px; padding:13px; font-size:16px; font-weight:700; color:#fff; background:var(--btn); border:none; border-radius:8px; cursor:pointer; font-family:'IBM Plex Sans',sans-serif; }
     button.primary:hover { background:var(--btn-hover); }
     button.primary:disabled { opacity:.6; cursor:default; }

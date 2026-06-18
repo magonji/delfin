@@ -253,7 +253,7 @@
     // CONFIGURATION & CONSTANTS
     // =============================================================================
     
-    const API_BASE = (localStorage.getItem('delfin_api') || (location.pathname.startsWith('/app') ? location.origin : 'http://localhost:8000')).replace(/\/$/, '');
+    const API_BASE = (localStorage.getItem('delfin_api') || (location.pathname.startsWith('/app') ? location.origin : 'http://localhost:8422')).replace(/\/$/, '');
     const q = (sel) => document.querySelector(sel);
     
     // Cache duration: 14 days in milliseconds
