@@ -5,6 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <title>Delfin · Sign in</title>
 <link rel="icon" href="/app/favicon.ico">
+<!-- iOS "Add to Home Screen" reads these from the *current* page; the login page
+     is usually where you add the shortcut, so it needs its own icon + app meta. -->
+<link rel="apple-touch-icon" sizes="180x180" href="/app/icons/icon-180.png">
+<link rel="manifest" href="/app/manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Delfin">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#FAE6D9">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Playfair+Display:wght@700;800&display=swap" rel="stylesheet">
 <style>
     :root { --bg:#FFF7F0; --card:#FAE6D9; --panel:#F3D9C8; --text:#2D2D2D; --muted:#8a7a6f; --border:#D4B5A0; --btn:#6B4D3E; --btn-hover:#5C3F32; --danger:#c0392b; }

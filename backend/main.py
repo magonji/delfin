@@ -104,6 +104,8 @@ _PUBLIC_PREFIXES = ("/docs", "/redoc", "/app/icons/")
 _PUBLIC_PATHS = {
     "/auth/status", "/auth/login", "/auth/setup", "/auth/recover",
     "/login.html", "/favicon.ico", "/openapi.json", "/manifest.json", "/sw.js",
+    # PWA assets the login page / "Add to Home Screen" needs before auth.
+    "/app/manifest.json", "/app/sw.js",
 }
 
 def _is_public(path: str) -> bool:
