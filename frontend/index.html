@@ -778,7 +778,22 @@ function renderCategoriesList() {
     q('#categoriesCount').textContent = state.selectedCategoryIds.size;
 }
 
+// Remember the user's category selection across reloads so the trend card
+// doesn't come up empty every time.
+const SELECTED_CATS_KEY = 'dashboard_selected_categories';
+function persistSelectedCategories() {
+    try { localStorage.setItem(SELECTED_CATS_KEY, JSON.stringify([...state.selectedCategoryIds])); } catch (e) {}
+}
+function restoreSelectedCategories() {
+    try {
+        const saved = JSON.parse(localStorage.getItem(SELECTED_CATS_KEY) || '[]');
+        const valid = new Set(state.categories.map(c => c.id));
+        saved.forEach(id => { if (valid.has(id)) state.selectedCategoryIds.add(id); });
+    } catch (e) {}
+}
+
 async function loadCategoriesSeries() {
+    persistSelectedCategories();
     if (!state.selectedCategoryIds.size) { if (window._catChart) window._catChart.destroy(); q('#categoriesLegend').innerHTML = ''; return; }
     
     const period = q('#catPeriod').value;
@@ -940,8 +955,10 @@ async function init() {
         if (years.length) loadYearlySummary(years[0]);
 
         state.categories = await api('/categories');
+        restoreSelectedCategories();
         renderCategoriesList();
-        
+        loadCategoriesSeries();
+
         loadTopList('/dashboard/top-payees', 'topPayees');
         loadTopList('/dashboard/top-individual-expenses', 'topTx', true);
 

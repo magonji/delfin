@@ -33,6 +33,9 @@
     .check { display:flex; gap:8px; align-items:flex-start; margin-top:14px; font-size:13px; color:var(--text); }
     .check input { width:auto; margin-top:2px; }
     .hidden { display:none; }
+    .pw-wrap { position:relative; }
+    .pw-wrap input { padding-right:46px; }
+    .pw-toggle { position:absolute; right:4px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; font-size:18px; line-height:1; padding:6px 8px; color:var(--muted); }
 </style>
 </head>
 <body>
@@ -45,7 +48,10 @@
             <p class="sub">Enter your password to unlock Delfin.</p>
             <form id="loginForm">
                 <label for="loginPw">Password</label>
-                <input type="password" id="loginPw" autocomplete="current-password" autofocus required>
+                <div class="pw-wrap">
+                    <input type="password" id="loginPw" autocomplete="current-password" autofocus required>
+                    <button type="button" class="pw-toggle" onclick="togglePw(this)" title="Show password" aria-label="Show password">👁</button>
+                </div>
                 <button class="primary" type="submit">Unlock</button>
             </form>
             <button class="link" onclick="show('recoverPanel')">Forgot your password? Use your recovery code</button>
@@ -57,9 +63,15 @@
             <p class="sub">Choose a password. It encrypts your database — there is no way to recover your data without it (or your recovery code), so pick something strong and memorable.</p>
             <form id="setupForm">
                 <label for="setupPw">Password</label>
-                <input type="password" id="setupPw" autocomplete="new-password" minlength="6" required>
+                <div class="pw-wrap">
+                    <input type="password" id="setupPw" autocomplete="new-password" minlength="6" required>
+                    <button type="button" class="pw-toggle" onclick="togglePw(this)" title="Show password" aria-label="Show password">👁</button>
+                </div>
                 <label for="setupPw2">Confirm password</label>
-                <input type="password" id="setupPw2" autocomplete="new-password" minlength="6" required>
+                <div class="pw-wrap">
+                    <input type="password" id="setupPw2" autocomplete="new-password" minlength="6" required>
+                    <button type="button" class="pw-toggle" onclick="togglePw(this)" title="Show password" aria-label="Show password">👁</button>
+                </div>
                 <button class="primary" type="submit">Encrypt & continue</button>
             </form>
         </div>
@@ -82,7 +94,10 @@
                 <label for="recCode">Recovery code</label>
                 <input type="text" id="recCode" placeholder="XXXXX-XXXXX-XXXXX-XXXXX-XXXXX" autocomplete="off" required>
                 <label for="recPw">New password</label>
-                <input type="password" id="recPw" autocomplete="new-password" minlength="6" required>
+                <div class="pw-wrap">
+                    <input type="password" id="recPw" autocomplete="new-password" minlength="6" required>
+                    <button type="button" class="pw-toggle" onclick="togglePw(this)" title="Show password" aria-label="Show password">👁</button>
+                </div>
                 <button class="primary" type="submit">Set new password & unlock</button>
             </form>
             <button class="link" onclick="show('loginPanel')">Back to sign in</button>
@@ -98,6 +113,14 @@
     function msg(text, ok=false){ const m=$('#msg'); m.textContent=text; m.className='msg '+(ok?'ok':'err'); m.style.display='block'; }
     function hideMsg(){ $('#msg').style.display='none'; }
     function go(){ location.href='/app/index.html'; }
+    function togglePw(btn){
+        const input = btn.parentElement.querySelector('input');
+        const reveal = input.type === 'password';
+        input.type = reveal ? 'text' : 'password';
+        btn.textContent = reveal ? '🙈' : '👁';
+        btn.title = reveal ? 'Hide password' : 'Show password';
+        btn.setAttribute('aria-label', btn.title);
+    }
 
     async function post(url, body){
         const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
