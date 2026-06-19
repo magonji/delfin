@@ -106,6 +106,7 @@ _PUBLIC_PATHS = {
     "/login.html", "/favicon.ico", "/openapi.json", "/manifest.json", "/sw.js",
     # PWA assets the login page / "Add to Home Screen" needs before auth.
     "/app/manifest.json", "/app/sw.js",
+    "/apple-touch-icon.png", "/apple-touch-icon-precomposed.png",
 }
 
 def _is_public(path: str) -> bool:
@@ -4878,5 +4879,12 @@ def toggle_planned_expense_paid(
 @app.get("/", include_in_schema=False)
 def root():
     return RedirectResponse(url="/app/index.html")
+
+# Root-level Apple touch icons. iOS falls back to fetching these at the domain
+# root when adding to the Home Screen, so serve the 180px icon there too.
+@app.get("/apple-touch-icon.png", include_in_schema=False)
+@app.get("/apple-touch-icon-precomposed.png", include_in_schema=False)
+def apple_touch_icon():
+    return FileResponse("frontend/icons/icon-180.png", media_type="image/png")
 
 app.mount("/app", StaticFiles(directory="frontend"), name="frontend")

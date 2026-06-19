@@ -2,21 +2,31 @@
   "name": "Delfin",
   "short_name": "Delfin",
   "description": "Personal finance management",
+  "id": "/app/index.html",
   "start_url": "/app/index.html",
+  "scope": "/app/",
   "display": "standalone",
   "background_color": "#faf4f0",
   "theme_color": "#FAE6D9",
   "orientation": "any",
   "icons": [
     {
-      "src": "icons/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png"
+      "src": "/app/icons/icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
     },
     {
-      "src": "icons/icon-512.png",
+      "src": "/app/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/app/icons/icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     }
   ]
 }
