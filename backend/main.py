@@ -3741,6 +3741,27 @@ def delete_import_profile(name: str):
 
 
 # ============================================
+# LEARNED IMPORT RULES (normalised description -> payee)
+# ============================================
+@app.get("/tools/import-rules")
+def list_import_rules():
+    """Return all learned description->payee import rules."""
+    from backend import rules_store
+    return {"rules": rules_store.get_rules()}
+
+
+@app.post("/tools/import-rules")
+def merge_import_rules(payload: dict):
+    """Upsert learned description->payee rules. Body: {"rules": {desc: payee, ...}}."""
+    from backend import rules_store
+    try:
+        rules = rules_store.merge_rules(payload.get("rules", {}))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"rules": rules}
+
+
+# ============================================
 # CATEGORY DEDUPLICATION (integrated maintenance tool)
 # ============================================
 

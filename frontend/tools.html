@@ -605,6 +605,8 @@
                     <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 8px;">
                         <div class="form-group" style="flex: 1; min-width: 130px;"><label>Date column</label>
                             <select id="mapColDate"></select></div>
+                        <div class="form-group" style="flex: 1; min-width: 130px;"><label>Time column (optional)</label>
+                            <select id="mapColTime"></select></div>
                         <div class="form-group" style="flex: 1; min-width: 130px;"><label>Amount type</label>
                             <select id="mapAmountMode" onchange="toggleAmountMode()">
                                 <option value="single">Single column (signed)</option>
@@ -1852,7 +1854,10 @@
                 // Load projects
                 const projectsResponse = await fetch(`${API_URL}/projects`);
                 allProjects = await projectsResponse.json();
-                
+
+                // Load learned description -> payee rules
+                await loadImportRules();
+
             } catch (error) {
                 console.error('Error loading import data:', error);
                 showImportError('Failed to load data for import');
@@ -1916,6 +1921,27 @@
         let importRows = [];            // current data rows (arrays of strings)
         let importProfiles = [];        // cached saved profiles
         let currentProfile = null;      // profile currently applied to the preview (for "Edit column mapping")
+        let importRules = {};           // learned normalisedDescription -> payee name
+
+        // Normalise a bank description for rule matching: drop dates, times and digit
+        // runs (card refs / amounts) so "CARD 15/03 MERCADONA" and "CARD 16/03
+        // MERCADONA" share one rule.
+        function normalizeDesc(s) {
+            return String(s || '')
+                .toUpperCase()
+                .replace(/\d{1,4}[\/.\-]\d{1,2}([\/.\-]\d{2,4})?/g, ' ')  // dates
+                .replace(/\d{1,2}:\d{2}(:\d{2})?/g, ' ')                   // times
+                .replace(/\d+/g, ' ')                                     // any remaining digits
+                .replace(/[^A-ZÁÉÍÓÚÑÜ ]+/g, ' ')                          // punctuation/symbols
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+        async function loadImportRules() {
+            try {
+                const res = await fetch(`${API_URL}/tools/import-rules`);
+                if (res.ok) { const d = await res.json(); importRules = d.rules || {}; }
+            } catch (e) { console.warn('Could not load import rules', e); }
+        }
 
         // Entry point from the file input. Either auto-matches a saved profile
         // and goes straight to preview, or shows the column-mapping step.
@@ -1955,21 +1981,39 @@
             return text;
         }
 
+        // Pick the delimiter that splits the data into the most columns (robust to
+        // preamble lines that don't contain the real delimiter).
         function detectDelimiter(text) {
-            const firstLine = text.split(/\r?\n/).find(l => l.trim().length) || '';
-            const counts = { ',': 0, ';': 0, '\t': 0 };
-            for (const ch of firstLine) if (ch in counts) counts[ch]++;
-            let best = ',', bestN = -1;
-            for (const d of [',', ';', '\t']) if (counts[d] > bestN) { best = d; bestN = counts[d]; }
-            return bestN > 0 ? best : ',';
+            const lines = text.split(/\r?\n/).filter(l => l.trim().length).slice(0, 15);
+            let best = ',', bestCols = 1;
+            for (const d of [',', ';', '\t']) {
+                let mx = 1;
+                for (const ln of lines) mx = Math.max(mx, parseCSVLine(ln, d).length);
+                if (mx > bestCols) { bestCols = mx; best = d; }
+            }
+            return best;
+        }
+
+        // Skip preamble: the header row is the first of the leading rows with the
+        // most columns (logos / IBAN / date-range lines have fewer columns).
+        function findHeaderRow(lines, delimiter) {
+            let best = 0, bestCols = 0;
+            const scan = Math.min(lines.length, 15);
+            for (let i = 0; i < scan; i++) {
+                if (!lines[i].trim()) continue;
+                const cols = parseCSVLine(lines[i], delimiter).length;
+                if (cols > bestCols) { bestCols = cols; best = i; }
+            }
+            return bestCols >= 2 ? best : 0;
         }
 
         function splitCSV(text, delimiter) {
             const lines = text.split(/\r?\n/).filter(l => l.length > 0);
             if (lines.length === 0) return { headers: [], rows: [] };
-            const headers = parseCSVLine(lines[0], delimiter).map(h => h.replace(/"/g, '').trim());
+            const h = findHeaderRow(lines, delimiter);
+            const headers = parseCSVLine(lines[h], delimiter).map(x => x.replace(/"/g, '').trim());
             const rows = [];
-            for (let i = 1; i < lines.length; i++) {
+            for (let i = h + 1; i < lines.length; i++) {
                 if (!lines[i].trim()) continue;
                 rows.push(parseCSVLine(lines[i], delimiter));
             }
@@ -2032,6 +2076,7 @@
                 return '';
             };
             const date = find(['date', 'fecha']);
+            const time = find(['time', 'hora', 'hour'], [date].filter(Boolean));
             const debit = find(['debit', 'cargo', 'debe', 'pago', 'adeudo']);
             const credit = find(['credit', 'abono', 'haber', 'ingreso']);
             // Don't let a generic "amount" match steal the Debit/Credit columns
@@ -2049,15 +2094,51 @@
                 const used = new Set([date, amount, debit, credit].filter(Boolean));
                 desc = headers.find(h => !used.has(h)) || '';
             }
-            return { date, amount, debit, credit, description: desc ? [desc] : [], amountMode: mode };
+            return { date, time, amount, debit, credit, description: desc ? [desc] : [], amountMode: mode };
         }
 
+        // Sample real date values: a part > 12 can only be a day, which disambiguates
+        // DD/MM vs MM/DD instead of silently mis-parsing.
         function guessDateFormat(rows, headers, dateCol) {
             const i = headers.findIndex(h => h === dateCol);
             if (i < 0 || !rows.length) return 'DD/MM/YYYY';
-            const v = (rows[0][i] || '').trim();
-            if (/^\d{4}[-/.]/.test(v)) return 'YYYY-MM-DD';
+            let iso = 0, dm = 0, md = 0, total = 0;
+            for (const r of rows.slice(0, 50)) {
+                const v = (r[i] || '').trim();
+                const m = v.match(/^(\d{1,4})[-/.](\d{1,2})[-/.](\d{1,4})/);
+                if (!m) continue;
+                total++;
+                if (m[1].length === 4) iso++;
+                else if (+m[1] > 12) dm++;
+                else if (+m[2] > 12) md++;
+            }
+            if (total && iso >= total / 2) return 'YYYY-MM-DD';
+            if (md > dm) return 'MM/DD/YYYY';
             return 'DD/MM/YYYY';
+        }
+
+        // Sample amount values: the separator that appears last is the decimal one.
+        function guessDecimal(rows, headers, cols) {
+            const idxs = (cols || []).map(c => headers.findIndex(h => h === c)).filter(i => i >= 0);
+            if (!idxs.length || !rows.length) return null;
+            let comma = 0, dot = 0;
+            for (const r of rows.slice(0, 50)) {
+                for (const i of idxs) {
+                    const v = (r[i] || '').trim();
+                    if (!v) continue;
+                    const lc = v.lastIndexOf(','), ld = v.lastIndexOf('.');
+                    if (lc >= 0 && lc > ld) comma++;
+                    else if (ld >= 0 && ld > lc) dot++;
+                }
+            }
+            if (!comma && !dot) return null;
+            return comma > dot ? ',' : '.';
+        }
+
+        function parseTimeStr(s) {
+            const m = String(s || '').match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+            if (!m) return null;
+            return { h: +m[1], m: +m[2], s: m[3] ? +m[3] : 0 };
         }
 
         // ---- The single, profile-driven parser ----
@@ -2070,6 +2151,8 @@
             if (dateIdx < 0) throw new Error('The date column is not mapped.');
 
             const noteIdx = cols.note ? idx(cols.note) : -1;
+            const timeIdx = cols.time ? idx(cols.time) : -1;
+            const hasTime = timeIdx >= 0;
             const descIdxs = (Array.isArray(cols.description) ? cols.description
                 : (cols.description ? [cols.description] : [])).map(idx).filter(i => i >= 0);
             const mode = cols.amountMode === 'debitcredit' ? 'debitcredit' : 'single';
@@ -2088,6 +2171,7 @@
                 if (!dateStr) continue;
                 const d = parseDateWithFormat(dateStr, fmt);
                 if (!d) continue;
+                if (hasTime) { const t = parseTimeStr(values[timeIdx]); if (t) d.setHours(t.h, t.m, t.s, 0); }
 
                 let amount;
                 if (mode === 'debitcredit') {
@@ -2106,17 +2190,24 @@
                 entries.push({ d, description, amount, note });
             }
 
-            // Order oldest -> newest. Detect file direction first, then stable-sort by date.
-            if (entries.length >= 2 && entries[0].d > entries[entries.length - 1].d) entries.reverse();
+            // Order oldest -> newest. With a real time column the sort is exact;
+            // without it, detect the file direction first (dates are at midnight).
+            if (!hasTime && entries.length >= 2 && entries[0].d > entries[entries.length - 1].d) entries.reverse();
             entries.sort((a, b) => a.d - b.d);
 
-            // Assign 12:00 + incremental minute within each day to keep a stable order.
+            // Use the real time when available; otherwise 12:00 + incremental minute
+            // within each day to keep a stable order.
             let lastDay = null, counter = 0;
             for (const e of entries) {
-                const dayKey = e.d.toDateString();
-                if (dayKey !== lastDay) { lastDay = dayKey; counter = 0; }
-                const dt = new Date(e.d);
-                dt.setHours(12, counter++, 0, 0);
+                let dt;
+                if (hasTime) {
+                    dt = new Date(e.d);
+                } else {
+                    const dayKey = e.d.toDateString();
+                    if (dayKey !== lastDay) { lastDay = dayKey; counter = 0; }
+                    dt = new Date(e.d);
+                    dt.setHours(12, counter++, 0, 0);
+                }
                 parsedTransactions.push({
                     date: toLocalISO(dt),
                     description: e.description,
@@ -2198,6 +2289,7 @@
         }
         function populateMappingSelects() {
             fillColumnSelect(document.getElementById('mapColDate'), importHeaders, false);
+            fillColumnSelect(document.getElementById('mapColTime'), importHeaders, true);
             fillColumnSelect(document.getElementById('mapColAmount'), importHeaders, false);
             fillColumnSelect(document.getElementById('mapColDebit'), importHeaders, false);
             fillColumnSelect(document.getElementById('mapColCredit'), importHeaders, false);
@@ -2238,10 +2330,12 @@
             document.getElementById('mapDelimiter').value = opts.delimiter === '\t' ? 'tab' : (opts.delimiter || ',');
             document.getElementById('mapEncoding').value = 'auto';
             const g = guessMapping(headers);
-            document.getElementById('mapDecimal').value = (opts.delimiter === ';') ? ',' : '.';
+            const decGuess = guessDecimal(rows, headers, [g.amount, g.debit, g.credit].filter(Boolean));
+            document.getElementById('mapDecimal').value = decGuess || (opts.delimiter === ';' ? ',' : '.');
             document.getElementById('mapDateFormat').value = guessDateFormat(rows, headers, g.date);
             populateMappingSelects();
             setSelectValue('mapColDate', g.date);
+            setSelectValue('mapColTime', g.time || '');
             document.getElementById('mapAmountMode').value = g.amountMode;
             setSelectValue('mapColAmount', g.amount);
             setSelectValue('mapColDebit', g.debit);
@@ -2273,6 +2367,7 @@
                 dateFormat: document.getElementById('mapDateFormat').value,
                 columns: {
                     date: document.getElementById('mapColDate').value,
+                    time: document.getElementById('mapColTime').value || null,
                     description: description,
                     amountMode: mode,
                     amount: mode === 'single' ? document.getElementById('mapColAmount').value : null,
@@ -2328,6 +2423,7 @@
             refreshMapping();
             const c = p.columns || {};
             setSelectValue('mapColDate', c.date);
+            setSelectValue('mapColTime', c.time || '');
             document.getElementById('mapAmountMode').value = c.amountMode || 'single';
             setSelectValue('mapColAmount', c.amount);
             setSelectValue('mapColDebit', c.debit);
@@ -2379,9 +2475,19 @@
         // Try to auto-suggest payee based on description
         function autoSuggestPayee(description, index) {
             if (!description) return;
-            
+
             const descLower = description.toLowerCase();
-            
+
+            // Learned rule (description normalised so embedded dates/refs don't matter).
+            const ruleHit = importRules[normalizeDesc(description)];
+            if (ruleHit) {
+                const payeeInput = document.getElementById(`payee_${index}`);
+                payeeInput.value = ruleHit;
+                payeeSuggestions[description] = ruleHit;
+                handlePayeeChange(index);
+                return;
+            }
+
             // Check if we already have a suggestion for this exact description
             if (payeeSuggestions[description]) {
                 const payeeInput = document.getElementById(`payee_${index}`);
@@ -2389,7 +2495,7 @@
                 handlePayeeChange(index);
                 return;
             }
-            
+
             // Try to find a matching payee by name similarity
             for (const payee of allPayees) {
                 const payeeLower = payee.name.toLowerCase();
@@ -3262,25 +3368,31 @@
                 // PHASE 3: Batch create regular transactions (FAST!)
                 // ============================================
                 const regularTransactions = [];
-                
+                const learnedRules = {};   // normalised description -> payee (saved after import)
+
                 for (let i = 0; i < parsedTransactions.length; i++) {
                     const trans = parsedTransactions[i];
                     if (trans.isDuplicate || trans.skip) continue;
-                    
+
                     const type = document.getElementById(`type_${i}`).value;
                     if (type === 'transfer') continue;
-                    
+
                     const payeeName = document.getElementById(`payee_${i}`).value.trim();
                     const payeeId = payeeName ? (payeeNameToIdMap[payeeName.toLowerCase()] || null) : null;
-                    
+                    // Remember description -> payee so future imports auto-fill it
+                    // (re-assigning a different payee overwrites the rule).
+                    if (payeeName && trans.description) learnedRules[normalizeDesc(trans.description)] = payeeName;
+
                     const categoryId = document.getElementById(`category_${i}`).value;
                     const locationId = document.getElementById(`location_${i}`).value;
                     const projectId = document.getElementById(`project_${i}`).value;
-                    
+                    // Stamp the transaction with the account's own currency, not a fixed GBP.
+                    const acctCur = (allAccountsForImport.find(a => a.id === trans.account_id) || {}).currency || 'GBP';
+
                     regularTransactions.push({
                         date: trans.date,
                         amount: trans.amount,
-                        currency: 'GBP',
+                        currency: acctCur,
                         account_id: trans.account_id,
                         category_id: categoryId ? parseInt(categoryId) : null,
                         payee_id: payeeId,
@@ -3289,7 +3401,18 @@
                         note: trans.note
                     });
                 }
-                
+
+                // Persist the learned description->payee rules (fire and forget).
+                if (Object.keys(learnedRules).length) {
+                    try {
+                        await fetch(`${API_URL}/tools/import-rules`, {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ rules: learnedRules })
+                        });
+                        Object.assign(importRules, learnedRules);
+                    } catch (e) { console.warn('Could not save import rules', e); }
+                }
+
                 // Send batch request if we have regular transactions
                 if (regularTransactions.length > 0) {
                     console.log(`Sending batch of ${regularTransactions.length} transactions`);
