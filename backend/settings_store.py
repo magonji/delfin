@@ -1,6 +1,6 @@
 """
-Persistent settings for the daily maintenance job (schedule time + backup
-retention).
+Persistent app settings (daily-maintenance schedule + backup retention, and the
+display currency used for dashboard totals).
 
 Stored as JSON in the data volume rather than in the database, so that changing
 a setting never interferes with the backup change-detection (which inspects the
@@ -11,11 +11,14 @@ import os
 import threading
 from typing import Dict, Optional
 
+from backend.currencies import is_supported
+
 SETTINGS_PATH = "./data/maintenance_settings.json"
 
 DEFAULTS: Dict[str, str] = {
     "maintenance_time": "02:28",   # HH:MM, 24h, server local time
     "backup_retention": "1y",      # one of RETENTION_DAYS below
+    "display_currency": "auto",    # "auto" (most-used currency) or a supported code
 }
 
 # Retention code -> max age in days (None = keep forever).
@@ -57,7 +60,8 @@ def _valid_time(s: str) -> bool:
 
 
 def update_settings(maintenance_time: Optional[str] = None,
-                    backup_retention: Optional[str] = None) -> Dict[str, str]:
+                    backup_retention: Optional[str] = None,
+                    display_currency: Optional[str] = None) -> Dict[str, str]:
     """Validate and persist settings. Raises ValueError on bad input."""
     with _lock:
         data = _read()
@@ -72,6 +76,12 @@ def update_settings(maintenance_time: Optional[str] = None,
                     f"backup_retention must be one of {list(RETENTION_DAYS)}"
                 )
             data["backup_retention"] = backup_retention
+        if display_currency is not None:
+            if display_currency != "auto" and not is_supported(display_currency):
+                raise ValueError(
+                    "display_currency must be 'auto' or a supported currency code"
+                )
+            data["display_currency"] = display_currency
         os.makedirs(os.path.dirname(SETTINGS_PATH), exist_ok=True)
         tmp = SETTINGS_PATH + ".tmp"
         with open(tmp, "w") as f:

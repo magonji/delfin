@@ -923,15 +923,15 @@ def get_transactions(
     currency: Optional[str] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
-    search: Optional[str] = None,                # nuevo: búsqueda de texto (payee.name o note)
+    search: Optional[str] = None,                # text search (payee.name or note)
     db: Session = Depends(get_db)
 ):
     """
     Retrieve transactions with optional filters. Returns enriched transactions with entity names.
 
-    - Usa joinedload(...) para evitar N+1.
-    - Soporta paginación con skip & limit (útil para scroll infinito).
-    - `search` aplica búsqueda en payee.name y transaction.note en el backend.
+    - Uses joinedload(...) to avoid N+1 queries.
+    - Supports pagination with skip & limit (useful for infinite scroll).
+    - `search` filters on payee.name and transaction.note in the backend.
     """
     # Base query
     query = db.query(models.Transaction)
@@ -1325,7 +1325,7 @@ def create_transaction(
     if not skip_recalculation:
         try:
             recalculate_balances_from_transaction(db, db_transaction.id)
-            db.commit()  # Commit después de recalcular
+            db.commit()  # Commit after recalculation
         except Exception as e:
             # If calculation fails, we MUST rollback the transaction so we don't save bad data
             db.rollback()
@@ -1362,8 +1362,8 @@ def update_transaction(
         setattr(db_transaction, key, value)
     db_transaction.updated_at = datetime.utcnow()
 
-    # NO hacer commit aquí - se hará después del recálculo
-    db.flush()  # Flush para que los cambios estén disponibles para las queries siguientes
+    # Do NOT commit here — that happens after the recalculation
+    db.flush()  # Flush so the changes are visible to the following queries
 
     # Recalculate balances from the EARLIEST date for both accounts
     affected_account_ids = list(set([old_account_id, transaction.account_id]))
@@ -1405,7 +1405,7 @@ def delete_transaction(
 
     # Delete the transaction
     db.delete(db_transaction)
-    db.flush()  # Flush en lugar de commit para mantener la transacción abierta
+    db.flush()  # Flush instead of commit to keep the transaction open
 
     # Find the next transaction after the deleted one to trigger recalculation
     next_transaction = db.query(models.Transaction).filter(
@@ -1865,16 +1865,10 @@ def get_latest_exchange_rates(db: Session = Depends(get_db)):
     # Always ensure GBP is 1.0 (base currency)
     rates_dict['GBP'] = 1.0
 
-    # Get most common currency
-    currency_counts = db.query(
-        Transaction.currency,
-        func.count(Transaction.id).label('count')
-    ).group_by(Transaction.currency).order_by(func.count(Transaction.id).desc()).all()
-
-    most_common_currency = currency_counts[0][0] if currency_counts else "GBP"
+    from backend.helpers import get_base_currency
 
     return {
-        "base_currency": most_common_currency,
+        "base_currency": get_base_currency(db),
         "rates": rates_dict,
         "last_updated": rates_query[0].date.isoformat() if rates_query else None
     }
@@ -1886,7 +1880,7 @@ def trigger_exchange_rate_update(db: Session = Depends(get_db)):
     Manually trigger an exchange rate update.
     """
     try:
-        from backend.update_exchange_rates import update_exchange_rates  # ← Así
+        from backend.update_exchange_rates import update_exchange_rates
         update_exchange_rates()
         return {"message": "Exchange rates updated successfully"}
     except Exception as e:
@@ -3411,29 +3405,52 @@ def api_info():
     }
 
 
+@app.get("/api/currencies")
+def list_currencies():
+    """Canonical list of currencies the app can price (code + name)."""
+    from backend.currencies import currency_options
+    return {"currencies": currency_options()}
+
+
 @app.get("/settings/maintenance")
 def get_maintenance_settings():
-    """Current maintenance settings (schedule time + backup retention)."""
+    """Current app settings (schedule time, backup retention, display currency)."""
     from backend import settings_store
     s = settings_store.get_settings()
     return {
         "maintenance_time": s["maintenance_time"],
         "backup_retention": s["backup_retention"],
+        "display_currency": s["display_currency"],
         "retention_options": list(settings_store.RETENTION_DAYS.keys()),
     }
 
 
 @app.put("/settings/maintenance")
-def update_maintenance_settings(payload: schemas.MaintenanceSettingsUpdate):
-    """Update the maintenance schedule time and/or backup retention."""
+def update_maintenance_settings(payload: schemas.MaintenanceSettingsUpdate,
+                                db: Session = Depends(get_db)):
+    """Update the maintenance schedule, backup retention and/or display currency."""
     from backend import settings_store
     try:
-        return settings_store.update_settings(
+        settings = settings_store.update_settings(
             maintenance_time=payload.maintenance_time,
             backup_retention=payload.backup_retention,
+            display_currency=payload.display_currency,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+    # If the chosen display currency has no rates yet, backfill now so dashboard
+    # totals convert correctly without waiting for the nightly maintenance run.
+    dc = settings.get("display_currency")
+    if dc and dc != "auto":
+        from backend.update_exchange_rates import get_currencies_with_rates, update_exchange_rates
+        if dc not in get_currencies_with_rates(db):
+            try:
+                update_exchange_rates()
+            except Exception as e:
+                print(f"Exchange-rate backfill after display-currency change failed: {e}")
+
+    return settings
 
 
 @app.get("/maintenance/status")

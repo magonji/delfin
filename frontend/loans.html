@@ -262,9 +262,21 @@
     // Pattern to identify interest/fee transactions (matches category names)
     const INTEREST_PATTERN = /interest|fee|hipoteca|comisiones|interés|comisión/i;
     
-    // Currency symbol mapping
-    const CURRENCY_SYMBOLS = { 'GBP': '£', 'EUR': '€', 'USD': '$', 'JPY': '¥' };
-    const sym = (currency) => CURRENCY_SYMBOLS[currency] || currency + ' ';
+    // Currency symbol for any ISO 4217 code, derived via Intl (falls back to the code).
+    const _symCache = {};
+    const sym = (currency) => {
+        if (!currency) return '';
+        if (_symCache[currency] === undefined) {
+            try {
+                const parts = new Intl.NumberFormat('en', { style: 'currency', currency, currencyDisplay: 'narrowSymbol' }).formatToParts(0);
+                const s = (parts.find(p => p.type === 'currency') || {}).value;
+                _symCache[currency] = s || (currency + ' ');
+            } catch (e) {
+                _symCache[currency] = currency + ' ';
+            }
+        }
+        return _symCache[currency];
+    };
 
     // Global state for currency display
     let globalCurrency = 'GBP';
@@ -351,7 +363,7 @@
      */
     function updateSummaryUI(data) {
         globalCurrency = data.base_currency || 'GBP';
-        globalSymbol = CURRENCY_SYMBOLS[globalCurrency] || globalCurrency + ' ';
+        globalSymbol = sym(globalCurrency);
         
         q('#activeCreditCards').textContent = data.active_credit_cards;
         q('#activeLoans').textContent = data.active_loans;

@@ -199,7 +199,7 @@
         }
 
         .import-table th {
-            background: #FFF8F3; /* Un tono más claro que --panel */
+            background: #FFF8F3; /* A slightly lighter shade than --panel */
             color: var(--muted);
             font-family: 'IBM Plex Sans', sans-serif;
             font-weight: 600;
@@ -305,7 +305,7 @@
             position: fixed;
             top: 25px;
             right: 25px;
-            z-index: 9999; /* Por encima de todo, incluidos los modales (z-index 1000) */
+            z-index: 9999; /* Above everything, including modals (z-index 1000) */
             display: flex;
             flex-direction: column;
             gap: 10px;
@@ -533,7 +533,7 @@
                 <div class="form-group"><label>Name</label><input type="text" id="editName"></div>
                 <div class="form-group" id="editCurrencyGroup" style="display: none;">
                     <label>Currency</label>
-                    <select id="editCurrency"><option value="GBP">GBP (£)</option><option value="EUR">EUR (€)</option><option value="USD">USD ($)</option></select>
+                    <select id="editCurrency"></select>
                 </div>
                 <div class="form-group" id="editParentGroup" style="display: none;"><label>Parent Category</label><input type="text" id="editParent" readonly style="background: #f0f0f0;"></div>
                 <div style="display: flex; gap: 10px; padding: 0 25px;">
@@ -873,6 +873,14 @@
                     </select>
                 </div>
 
+                <div class="form-group" style="padding: 0; margin-bottom: 16px;">
+                    <label for="mtDisplayCurrency">Display currency</label>
+                    <select id="mtDisplayCurrency"></select>
+                    <div style="color: var(--muted); font-size: 12px; margin-top: 4px;">
+                        Currency used for dashboard and budget totals. "Automatic" uses your most-used currency.
+                    </div>
+                </div>
+
                 <div id="mtProgress" style="display:none; margin: 6px 0 12px;">
                     <div class="progress-track"><div class="bar"></div></div>
                     <div id="mtProgressMsg" style="font-size:13px; color: var(--muted);">⏳ Running maintenance…</div>
@@ -1108,7 +1116,26 @@
                 if (e.key === 'Enter') closeCustomDialog(true);
                 if (e.key === 'Escape') closeCustomDialog(false);
             });
+            populateCurrencies('editCurrency');
         });
+
+        // Fetch the canonical currency list once and fill a <select> with it.
+        let _currencyCache = null;
+        async function populateCurrencies(selectId, selected) {
+            const sel = document.getElementById(selectId);
+            if (!sel) return;
+            if (!_currencyCache) {
+                try {
+                    const res = await fetch(`${API_URL}/api/currencies`);
+                    _currencyCache = (await res.json()).currencies || [];
+                } catch (e) {
+                    _currencyCache = [{ code: 'GBP', name: 'Pound Sterling' }, { code: 'EUR', name: 'Euro' }, { code: 'USD', name: 'US Dollar' }];
+                }
+            }
+            const cur = selected || sel.value;
+            sel.innerHTML = _currencyCache.map(c => `<option value="${c.code}">${c.code} — ${c.name}</option>`).join('');
+            if (cur) sel.value = cur;
+        }
         
         let allCategories = [];
         let allAccounts = [];
@@ -3818,6 +3845,24 @@
 
         function mtEsc(s) { const d = document.createElement('div'); d.textContent = (s == null ? '' : s); return d.innerHTML; }
 
+        // Fill the display-currency select with an "Automatic" option + the currency list.
+        async function populateDisplayCurrency(selected) {
+            const sel = document.getElementById('mtDisplayCurrency');
+            if (!sel) return;
+            if (!_currencyCache) {
+                try {
+                    const res = await fetch(`${API_URL}/api/currencies`);
+                    _currencyCache = (await res.json()).currencies || [];
+                } catch (e) {
+                    _currencyCache = [{ code: 'GBP', name: 'Pound Sterling' }, { code: 'EUR', name: 'Euro' }, { code: 'USD', name: 'US Dollar' }];
+                }
+            }
+            const opts = ['<option value="auto">Automatic (most-used)</option>']
+                .concat(_currencyCache.map(c => `<option value="${c.code}">${c.code} — ${c.name}</option>`));
+            sel.innerHTML = opts.join('');
+            sel.value = selected || 'auto';
+        }
+
         async function loadMaintenanceSettings() {
             try {
                 const res = await fetch(`${API_URL}/settings/maintenance`);
@@ -3825,6 +3870,7 @@
                 const s = await res.json();
                 document.getElementById('mtTime').value = s.maintenance_time || '02:28';
                 document.getElementById('mtRetention').value = s.backup_retention || '1y';
+                await populateDisplayCurrency(s.display_currency || 'auto');
             } catch (e) {
                 showError('Could not load maintenance settings: ' + e.message);
             }
@@ -3890,7 +3936,8 @@
             try {
                 const body = {
                     maintenance_time: document.getElementById('mtTime').value,
-                    backup_retention: document.getElementById('mtRetention').value
+                    backup_retention: document.getElementById('mtRetention').value,
+                    display_currency: document.getElementById('mtDisplayCurrency').value
                 };
                 const res = await fetch(`${API_URL}/settings/maintenance`, {
                     method: 'PUT',

@@ -808,12 +808,7 @@
                     </div>
                     <div class="form-group">
                         <label>Currency</label>
-                        <select id="newAccountCurrency">
-                            <option value="GBP">GBP</option>
-                            <option value="EUR">EUR</option>
-                            <option value="USD">USD</option>
-                            <option value="JPY">JPY</option>
-                        </select>
+                        <select id="newAccountCurrency"></select>
                     </div>
                     <div class="modal-footer">
                         <button class="btn-save" onclick="saveNewAccount()">Save</button>
@@ -1324,12 +1319,13 @@
         document.addEventListener('DOMContentLoaded', async () => {
             // Load ALL data in parallel for faster initial load
             // Transaction fetch doesn't depend on dropdown data - they're used only for rendering
-            const [, , , , , transactionsData] = await Promise.all([
-                loadAccounts(), 
-                loadCategories(), 
-                loadPayees(), 
-                loadLocations(), 
+            const [, , , , , , transactionsData] = await Promise.all([
+                loadAccounts(),
+                loadCategories(),
+                loadPayees(),
+                loadLocations(),
                 loadProjects(),
+                populateCurrencies('newAccountCurrency'),
                 fetchTransactionsData()  // Fetch raw data in parallel
             ]);
             
@@ -1352,6 +1348,24 @@
             if (location.hash === '#new-transfer') { openTransferModal(); history.replaceState(null, '', location.pathname); }
         });
         
+        // Fetch the canonical currency list once and fill a <select> with it.
+        let _currencyCache = null;
+        async function populateCurrencies(selectId, selected) {
+            const sel = document.getElementById(selectId);
+            if (!sel) return;
+            if (!_currencyCache) {
+                try {
+                    const res = await fetch(`${API_URL}/api/currencies`);
+                    _currencyCache = (await res.json()).currencies || [];
+                } catch (e) {
+                    _currencyCache = [{ code: 'GBP', name: 'Pound Sterling' }, { code: 'EUR', name: 'Euro' }, { code: 'USD', name: 'US Dollar' }];
+                }
+            }
+            const cur = selected || sel.value;
+            sel.innerHTML = _currencyCache.map(c => `<option value="${c.code}">${c.code} — ${c.name}</option>`).join('');
+            if (cur) sel.value = cur;
+        }
+
         // Helper to fetch transaction data without processing (for parallel loading)
         async function fetchTransactionsData() {
             const params = new URLSearchParams({ skip: 0, limit: LIMIT });

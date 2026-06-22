@@ -6,7 +6,7 @@ A personal finance PWA built with Python, FastAPI, and vanilla JavaScript. Impor
 
 ### Dashboard (`index.html`)
 
-- **KPI cards**: Total balance, monthly income/expenses, savings rate — all converted to base currency (GBP) using historical exchange rates
+- **KPI cards**: Total balance, monthly income/expenses, savings rate — all converted to your display currency using historical exchange rates (display currency is configurable in Tools → Maintenance; defaults to your most-used currency)
 - **Net Worth Evolution**: Interactive chart with configurable interval (daily/weekly/monthly) and time range (1 month to all time). Accounts can be excluded individually
 - **Monthly Category Spend**: Doughnut chart with month navigation. View by top expenses, category, or subcategory
 - **Balance by Account**: All accounts with balances in original and converted currencies
@@ -62,7 +62,7 @@ A personal finance PWA built with Python, FastAPI, and vanilla JavaScript. Impor
 ### Cross-cutting
 
 - **PWA**: Installable on iOS/Android/desktop with service worker (network-first for HTML, stale-while-revalidate for assets)
-- **Multi-currency**: 30+ currencies with historical ECB exchange rates. All conversions use the rate from the transaction date
+- **Multi-currency**: every currency in the ECB reference-rate feed (30+) is selectable for accounts and as the display currency, with historical exchange rates. All conversions use the rate from the transaction date. Newly-added currencies are backfilled across history on the next rate update
 - **Auto rate updates**: Exchange rates update automatically on server startup and on page load, and again as part of the nightly maintenance job (no manual button needed)
 - **Cache with dirty flag**: Dashboard and loans cache data locally (14-day TTL). When transactions change, a `dirty_data` flag triggers cache invalidation on next page load
 - **Safari compatibility**: `-webkit-appearance: none` on all form controls, custom SVG dropdown arrows, no input zoom on iOS

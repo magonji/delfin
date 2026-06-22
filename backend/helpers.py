@@ -157,7 +157,18 @@ def convert_amount(amount: float, from_currency: str, to_currency: str,
 # =============================================================================
 
 def get_base_currency(db: Session) -> str:
-    """Get the most commonly used currency in transactions."""
+    """
+    Currency used to display aggregated totals (dashboard, budgets, etc.).
+
+    Honours the user's ``display_currency`` setting: a fixed supported code, or
+    "auto" to use the most commonly used currency across transactions.
+    """
+    from backend import settings_store
+
+    configured = settings_store.get_settings().get("display_currency", "auto")
+    if configured and configured != "auto":
+        return configured
+
     result = db.query(
         Transaction.currency,
         func.count(Transaction.id).label('count')

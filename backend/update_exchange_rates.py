@@ -28,10 +28,25 @@ def get_last_exchange_rate_date(db: Session) -> Optional[date]:
     return None
 
 
+def get_currencies_with_rates(db: Session) -> set:
+    """Currencies that already have at least one stored rate."""
+    return {c[0] for c in db.query(ExchangeRate.currency).distinct().all() if c[0]}
+
+
 def get_currencies_in_use(db: Session) -> List[str]:
-    """Get all unique currencies used in transactions (excluding GBP)."""
-    currencies = db.query(Transaction.currency).distinct().all()
-    return [c[0] for c in currencies if c[0] and c[0] != 'GBP']
+    """
+    Currencies we need rates for (excluding the GBP base): every currency used
+    in transactions, plus the configured display currency so dashboard totals
+    can always be converted even if no transaction uses that currency yet.
+    """
+    currencies = {c[0] for c in db.query(Transaction.currency).distinct().all() if c[0]}
+
+    from backend import settings_store
+    display = settings_store.get_settings().get("display_currency", "auto")
+    if display and display != "auto":
+        currencies.add(display)
+
+    return [c for c in currencies if c != 'GBP']
 
 
 def fetch_ecb_historical_rates() -> Optional[Dict[date, Dict[str, float]]]:
@@ -150,34 +165,45 @@ def update_exchange_rates():
         if not currencies_needed:
             print("No non-GBP currencies found. Nothing to update.")
             return
-        
+
         print(f"Currencies needed: {', '.join(currencies_needed)}")
-        
+
+        # Currencies that already have rates only need the new dates appended;
+        # newly-added currencies (a new account/display currency) must be
+        # backfilled across the full history, not just from the last stored date.
+        have_rates = get_currencies_with_rates(db)
+        backfill_currencies = [c for c in currencies_needed if c not in have_rates]
+        incremental_currencies = [c for c in currencies_needed if c in have_rates]
+        if backfill_currencies:
+            print(f"Backfilling history for: {', '.join(backfill_currencies)}")
+
         historical_rates = fetch_ecb_historical_rates()
         if not historical_rates:
             print("Failed to fetch rates from ECB")
             return
-        
-        # Filter to new dates only
-        rates_to_add = {
-            d: rates for d, rates in historical_rates.items()
-            if d >= first_tx_date and (not last_stored_date or d > last_stored_date)
-        }
-        
-        if not rates_to_add:
+
+        total_stored = 0
+        dates_touched = 0
+        for rates_date in sorted(historical_rates.keys()):
+            if rates_date < first_tx_date:
+                continue
+            is_new_date = (not last_stored_date) or rates_date > last_stored_date
+            todo = list(backfill_currencies)
+            if is_new_date:
+                todo += incremental_currencies
+            if not todo:
+                continue
+            stored = store_rates_for_date(db, rates_date, historical_rates[rates_date], todo)
+            total_stored += stored
+            dates_touched += 1
+
+        if total_stored == 0:
             print("All exchange rates are up to date!")
             return
-        
-        print(f"Adding {len(rates_to_add)} new dates...")
-        
-        total_stored = 0
-        for rates_date in sorted(rates_to_add.keys()):
-            stored = store_rates_for_date(db, rates_date, rates_to_add[rates_date], currencies_needed)
-            total_stored += stored
-        
+
         db.commit()
         print("=" * 50)
-        print(f"Stored {total_stored} exchange rates across {len(rates_to_add)} dates")
+        print(f"Stored {total_stored} exchange rates across {dates_touched} dates")
         
     except Exception as e:
         print(f"Error: {e}")
