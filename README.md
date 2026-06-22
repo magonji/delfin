@@ -154,10 +154,10 @@ cd delfin
 pip install -r requirements.txt
 
 # Start the server
-uvicorn backend.main:app --reload
+uvicorn backend.main:app --reload --port 8422
 ```
 
-Open `http://localhost:8000/app/index.html` in your browser, then go to
+Open `http://localhost:8422/app/index.html` in your browser, then go to
 **Tools → Import Financisto** and select your Financisto `.backup` (or CSV
 export). Delfin parses it in-app, shows a compatibility report, and imports it —
 no scripts to run. Exchange rates fetch automatically on startup and balances
@@ -168,7 +168,7 @@ are recalculated as part of the import.
 ```bash
 git pull
 pip install -r requirements.txt
-uvicorn backend.main:app --reload
+uvicorn backend.main:app --reload --port 8422
 ```
 
 Tables are created/extended automatically by the SQLAlchemy models on startup,
@@ -277,7 +277,7 @@ feature stays dormant — mounting the volume alone does nothing.
 
 ## API Overview
 
-Full interactive docs at `http://localhost:8000/docs`.
+Full interactive docs at `http://localhost:8422/docs`.
 
 | Area | Key Endpoints |
 |------|--------------|
@@ -310,7 +310,7 @@ Full interactive docs at `http://localhost:8000/docs`.
 
 Balances are cached on each transaction for display performance:
 - `account_balance_after` — running balance for the transaction's account
-- `total_balance_after` — portfolio-wide running balance (all accounts, converted to GBP using historical rates)
+- `total_balance_after` — portfolio-wide running balance (all accounts, converted to the display currency using historical rates)
 
 Recalculation is triggered automatically on create/edit/delete, but deferred to background for UI responsiveness.
 
@@ -344,7 +344,8 @@ the `/login.html` page; **Log out** is in the nav menu on every page.
 
 ## Licence
 
-Personal use. Fork and modify freely.
+Released under the [MIT License](LICENSE) — use, modify, and distribute freely,
+keeping the copyright notice. © 2025 Mario González Jiménez.
 
 ---
 
