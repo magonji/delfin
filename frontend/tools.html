@@ -262,6 +262,17 @@
             box-shadow: 0 0 0 2px rgba(107, 77, 62, 0.1);
         }
 
+        .import-input:disabled, .import-select:disabled, .import-textarea:disabled {
+            background-color: #f0f0f0;
+            color: #aaa;
+            border-color: #e8e8e8;
+            cursor: not-allowed;
+            opacity: 1;
+        }
+        .import-select:disabled {
+            background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23bbb%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+        }
+
         .import-textarea {
             resize: none;
             height: 32px;
@@ -1118,6 +1129,12 @@
             });
             populateCurrencies('editCurrency');
         });
+
+        // Format a money amount with the proper symbol for any ISO currency
+        // (Intl natively knows every ECB currency we support). Mirrors index.html.
+        const fmtMoney = (n, c = 'GBP') => new Intl.NumberFormat('en-GB', {
+            style: 'currency', currency: c, maximumFractionDigits: 2
+        }).format(n || 0);
 
         // Fetch the canonical currency list once and fill a <select> with it.
         let _currencyCache = null;
@@ -2179,7 +2196,6 @@
 
             const noteIdx = cols.note ? idx(cols.note) : -1;
             const timeIdx = cols.time ? idx(cols.time) : -1;
-            const hasTime = timeIdx >= 0;
             const descIdxs = (Array.isArray(cols.description) ? cols.description
                 : (cols.description ? [cols.description] : [])).map(idx).filter(i => i >= 0);
             const mode = cols.amountMode === 'debitcredit' ? 'debitcredit' : 'single';
@@ -2192,13 +2208,19 @@
             const flip = (cols.amountSign === 'flip');
 
             const entries = [];
+            let anyTime = false;
             for (const values of rows) {
                 if (!values || values.length === 0) continue;
                 const dateStr = (values[dateIdx] || '').trim();
                 if (!dateStr) continue;
                 const d = parseDateWithFormat(dateStr, fmt);
                 if (!d) continue;
-                if (hasTime) { const t = parseTimeStr(values[timeIdx]); if (t) d.setHours(t.h, t.m, t.s, 0); }
+                // Time may sit in its own column or be embedded in the date column
+                // (e.g. "25/06/2026 14:30"). Try the dedicated column first, then
+                // fall back to scanning the date value itself.
+                const t = parseTimeStr(timeIdx >= 0 ? values[timeIdx] : dateStr);
+                let entryHasTime = false;
+                if (t) { d.setHours(t.h, t.m, t.s, 0); entryHasTime = true; anyTime = true; }
 
                 let amount;
                 if (mode === 'debitcredit') {
@@ -2214,12 +2236,12 @@
 
                 const description = descIdxs.map(i => (values[i] || '').trim()).filter(Boolean).join(' - ');
                 const note = noteIdx >= 0 ? (values[noteIdx] || '').trim() : '';
-                entries.push({ d, description, amount, note });
+                entries.push({ d, description, amount, note, hasTime: entryHasTime });
             }
 
-            // Order oldest -> newest. With a real time column the sort is exact;
-            // without it, detect the file direction first (dates are at midnight).
-            if (!hasTime && entries.length >= 2 && entries[0].d > entries[entries.length - 1].d) entries.reverse();
+            // Order oldest -> newest. With a real time the sort is exact; without it,
+            // detect the file direction first (dates are at midnight).
+            if (!anyTime && entries.length >= 2 && entries[0].d > entries[entries.length - 1].d) entries.reverse();
             entries.sort((a, b) => a.d - b.d);
 
             // Use the real time when available; otherwise 12:00 + incremental minute
@@ -2227,7 +2249,7 @@
             let lastDay = null, counter = 0;
             for (const e of entries) {
                 let dt;
-                if (hasTime) {
+                if (e.hasTime) {
                     dt = new Date(e.d);
                 } else {
                     const dayKey = e.d.toDateString();
@@ -2692,7 +2714,7 @@
                         ${trans.description || '-'}
                     </td>
                     <td class="col-amount" style="color: ${trans.amount < 0 ? 'var(--red)' : 'var(--green)'};">
-                        £${Math.abs(trans.amount).toFixed(2)}
+                        ${fmtMoney(Math.abs(trans.amount), (allAccountsForImport.find(a => a.id === trans.account_id) || {}).currency || 'GBP')}
                     </td>
                     <td>
                         <select id="type_${index}" class="import-select" onchange="handleTypeChange(${index})">
