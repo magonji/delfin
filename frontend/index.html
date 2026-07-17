@@ -42,6 +42,8 @@
         }
         .tools select { background: var(--bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%232D2D2D'/%3E%3C/svg%3E") no-repeat right 8px center; padding-right: 24px; }
         .tools button { cursor: pointer; }
+        .custom-range { gap: 6px; align-items: center; }
+        .custom-range input[type="date"] { cursor: text; }
         .tools .primary { background: var(--panel); border-color: var(--border); }
         .tools .danger { background: var(--panel); border-color: var(--border); }
 
@@ -267,7 +269,8 @@
                 <h2 class="title">Net Worth Evolution</h2>
                 <div class="tools">
                     <select id="nwPeriod"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly" selected>Monthly</option></select>
-                    <select id="nwRange"><option value="all">All time</option><option value="last60">5 years</option><option value="last24">2 years</option><option value="last12">Last year</option><option value="last6">Last 6 months</option><option value="last3">Last 3 months</option><option value="last1">Last month</option></select>
+                    <select id="nwRange"><option value="all">All time</option><option value="last60">5 years</option><option value="last24">2 years</option><option value="last12">Last year</option><option value="last6">Last 6 months</option><option value="last3">Last 3 months</option><option value="last1">Last month</option><option value="custom">Custom range…</option></select>
+                    <span id="nwCustom" class="custom-range" style="display:none;"><input type="date" id="nwFrom" title="From"><input type="date" id="nwTo" title="To"></span>
                     <div class="dropdown" id="excludeDropdown">
                         <button class="btn" id="excludeBtn" onclick="toggleExclude()">Exclude <span class="count" id="excludeCount" style="display:none">0</span>▾</button>
                         <div class="menu" id="excludeMenu">
@@ -316,7 +319,7 @@
 
     <section class="two-col-cards">
         <div class="card">
-            <div class="head"><h2 class="title">Monthly trend (year)</h2><div class="tools"><select id="selectYear"></select></div></div>
+            <div class="head"><h2 class="title">Monthly trend (year)</h2><div class="tools"><button id="yearAxisToggle" style="display:none;" title="Toggle full / truncated Y axis">Full view</button><select id="selectYear"></select></div></div>
             <div class="content">
                 <canvas id="yearChart" height="400"></canvas>
                 <div class="kpis" style="grid-template-columns: repeat(3, 1fr); margin: 12px 0 0;">
@@ -327,7 +330,7 @@
             </div>
         </div>
         <div class="card">
-            <div class="head"><h2 class="title">Yearly trend</h2></div>
+            <div class="head"><h2 class="title">Yearly trend</h2><div class="tools"><button id="yearlyAxisToggle" style="display:none;" title="Toggle full / truncated Y axis">Full view</button></div></div>
             <div class="content">
                 <canvas id="yearlyTrendChart" height="400"></canvas>
                 <div class="kpis" style="grid-template-columns: repeat(3, 1fr); margin: 12px 0 0;">
@@ -345,7 +348,8 @@
                 <h2 class="title">Category spending trend</h2>
                 <div class="tools">
                     <select id="catPeriod"><option value="monthly" selected>Monthly</option><option value="weekly">Weekly</option><option value="daily">Daily</option></select>
-                    <select id="catRange"><option value="last12" selected>Last year</option><option value="last6">Last 6 months</option><option value="last3">Last 3 months</option><option value="last1">Last month</option><option value="all">All time</option></select>
+                    <select id="catRange"><option value="last12" selected>Last year</option><option value="last6">Last 6 months</option><option value="last3">Last 3 months</option><option value="last1">Last month</option><option value="all">All time</option><option value="custom">Custom range…</option></select>
+                    <span id="catCustom" class="custom-range" style="display:none;"><input type="date" id="catFrom" title="From"><input type="date" id="catTo" title="To"></span>
                     <div class="dropdown" id="categoriesDropdown">
                         <button class="btn" id="categoriesBtn" onclick="toggleCategories()">Select categories <span class="count" id="categoriesCount">0</span> ▾</button>
                         <div class="menu" id="categoriesMenu" style="max-height: 400px;">
@@ -444,12 +448,47 @@ function cacheClearAll() {
 }
 
 // Application state
-const state = { baseCurrency: 'GBP', months: [], categories: [], accounts: [], excludedAccountIds: new Set(), selectedCategoryIds: new Set() };
+const state = { baseCurrency: 'GBP', months: [], categories: [], accounts: [], excludedAccountIds: new Set(), selectedCategoryIds: new Set(), yearAxisFull: false, yearlyAxisFull: false };
 
 // Chart rendering
 function renderChart(canvasId, config, globalVarName) {
     if (window[globalVarName]) window[globalVarName].destroy();
     window[globalVarName] = new Chart(q(canvasId), config);
+}
+
+// Hard Y-axis {min,max} that hides extreme outliers (e.g. a house purchase) using
+// Tukey fences, so normal bars stay readable. Returns {} when nothing qualifies as
+// an outlier (then the chart just auto-scales). Values beyond the range are clipped.
+function truncatedAxis(values) {
+    const nums = values.filter(v => Number.isFinite(v)).sort((a, b) => a - b);
+    if (nums.length < 4) return {};
+    const qt = p => {
+        const idx = (nums.length - 1) * p, lo = Math.floor(idx), hi = Math.ceil(idx);
+        return nums[lo] + (nums[hi] - nums[lo]) * (idx - lo);
+    };
+    const q1 = qt(0.25), q3 = qt(0.75), iqr = q3 - q1;
+    const dataMin = nums[0], dataMax = nums[nums.length - 1];
+    const max = Math.min(dataMax, q3 + 1.5 * iqr);
+    const min = Math.max(dataMin, q1 - 1.5 * iqr);
+    // No real outlier on either end → let Chart.js auto-scale.
+    if (max >= dataMax && min <= dataMin) return {};
+    const pad = (max - min) * 0.08 || 1;
+    return { max: Math.round(max + pad), min: Math.round(Math.min(0, min - pad)) };
+}
+
+// Wire a trend chart's "Full view / Truncate" button to its Y axis and return the
+// y-scale config. Hides the button when there is no outlier worth truncating.
+function configureAxisToggle(btnSelector, isFull, values) {
+    const yScale = { grid: { color: '#D4B5A0' } };
+    const axis = truncatedAxis(values);
+    const hasOutlier = axis.max !== undefined;
+    const btn = q(btnSelector);
+    if (btn) {
+        btn.style.display = hasOutlier ? '' : 'none';
+        btn.textContent = isFull ? 'Truncate' : 'Full view';
+    }
+    if (hasOutlier && !isFull) { yScale.min = axis.min; yScale.max = axis.max; }
+    return yScale;
 }
 
 // Convert date range key to from/to dates
@@ -462,6 +501,39 @@ function rangeFor(key) {
         from.setMonth(from.getMonth() - months);
     }
     return { from: from?.toISOString().slice(0, 10), to: key !== 'all' ? today.toISOString().slice(0, 10) : null };
+}
+
+// Earliest available date (first day of the oldest month with data) .. today.
+function dataDateBounds() {
+    const max = new Date().toISOString().slice(0, 10);
+    if (!state.months.length) return { min: null, max };
+    // state.months is newest-first, so the last entry ('YYYY-MM') is the oldest.
+    return { min: `${state.months[state.months.length - 1].value}-01`, max };
+}
+
+// {from,to} for a range control: preset via rangeFor, or the two date inputs
+// when the user picked "Custom range…".
+function resolveRange(selectId, fromId, toId) {
+    if (q(selectId).value !== 'custom') return rangeFor(q(selectId).value);
+    return { from: q(fromId).value || null, to: q(toId).value || null };
+}
+
+// Reveal/hide the date inputs for a range control and keep them within the
+// available data range. Returns true while custom mode is active.
+function setupCustomRange(selectId, wrapId, fromId, toId) {
+    const isCustom = q(selectId).value === 'custom';
+    q(wrapId).style.display = isCustom ? 'inline-flex' : 'none';
+    if (!isCustom) return false;
+    const b = dataDateBounds();
+    const f = q(fromId), t = q(toId);
+    if (b.min) { f.min = b.min; t.min = b.min; }
+    if (b.max) { f.max = b.max; t.max = b.max; }
+    if (!f.value) f.value = b.min || '';
+    if (!t.value) t.value = b.max || '';
+    // Keep the pair coherent: `to` can't precede `from` and vice versa.
+    if (f.value) t.min = f.value;
+    if (t.value) f.max = t.value;
+    return true;
 }
 
 async function loadSummary() {
@@ -570,7 +642,7 @@ async function toggleLoanExclusion() {
 
 async function loadNetworth() {
     const period = q('#nwPeriod').value;
-    const { from, to } = rangeFor(q('#nwRange').value);
+    const { from, to } = resolveRange('#nwRange', '#nwFrom', '#nwTo');
     const excluded = Array.from(state.excludedAccountIds).join(',');
     const cacheKey = `cache_nw_${period}_${from}_${to}_${excluded}`;
 
@@ -755,16 +827,18 @@ async function showCategoryModal(name, viewMode, ym, baseCurrency) {
 async function loadYearlySummary(year) {
     const cacheKey = `cache_yearly_${year}`;
     const data = cacheGet(cacheKey) || await api(`/dashboard/yearly-summary?year=${year}`).then(d => { cacheSet(cacheKey, d); return d; });
+    const net = data.monthly_data.map(m => m.net), income = data.monthly_data.map(m => m.income), expenses = data.monthly_data.map(m => m.expenses);
+    const yAxis = configureAxisToggle('#yearAxisToggle', state.yearAxisFull, [...net, ...income, ...expenses]);
     renderChart('#yearChart', {
         data: {
             labels: data.monthly_data.map(m => m.month),
             datasets: [
-                { type: 'line', label: 'Net', data: data.monthly_data.map(m => m.net), borderColor: '#00689d', tension: 0.1 },
-                { type: 'bar', label: 'In', data: data.monthly_data.map(m => m.income), backgroundColor: '#0e9530' },
-                { type: 'bar', label: 'Out', data: data.monthly_data.map(m => m.expenses), backgroundColor: '#d52811' }
+                { type: 'line', label: 'Net', data: net, borderColor: '#00689d', tension: 0.1 },
+                { type: 'bar', label: 'In', data: income, backgroundColor: '#0e9530' },
+                { type: 'bar', label: 'Out', data: expenses, backgroundColor: '#d52811' }
             ]
         },
-        options: { scales: { x: { grid: { color: 'transparent' } }, y: { grid: { color: '#D4B5A0' } } } }
+        options: { scales: { x: { grid: { color: 'transparent' } }, y: yAxis } }
     }, '_yearChart');
 
     const setVal = (id, val) => { q(id).textContent = fmtMoney(val, data.base_currency); q(id).style.color = val >= 0 ? 'var(--green)' : 'var(--red)'; };
@@ -784,17 +858,19 @@ async function loadYearlyTrendAll() {
     }));
     const base = results[0]?.base_currency || 'GBP';
     const totals = (prop) => results.map(r => r.summary[prop]);
+    const net = totals('net_savings'), income = totals('total_income'), expenses = totals('total_expenses');
+    const yAxis = configureAxisToggle('#yearlyAxisToggle', state.yearlyAxisFull, [...net, ...income, ...expenses]);
 
     renderChart('#yearlyTrendChart', {
         data: {
             labels: years,
             datasets: [
-                { type: 'line', label: 'Net', data: totals('net_savings'), borderColor: '#00689d', tension: 0.1 },
-                { type: 'bar', label: 'In', data: totals('total_income'), backgroundColor: '#0e9530' },
-                { type: 'bar', label: 'Out', data: totals('total_expenses'), backgroundColor: '#d52811' }
+                { type: 'line', label: 'Net', data: net, borderColor: '#00689d', tension: 0.1 },
+                { type: 'bar', label: 'In', data: income, backgroundColor: '#0e9530' },
+                { type: 'bar', label: 'Out', data: expenses, backgroundColor: '#d52811' }
             ]
         },
-        options: { scales: { x: { grid: { color: 'transparent' } }, y: { grid: { color: '#D4B5A0' } } } }
+        options: { scales: { x: { grid: { color: 'transparent' } }, y: yAxis } }
     }, '_yearlyTrend');
 
     const sum = arr => arr.reduce((a, b) => a + (Number(b) || 0), 0);
@@ -934,7 +1010,7 @@ async function loadCategoriesSeries() {
     if (!state.selectedCategoryIds.size) { if (window._catChart) window._catChart.destroy(); q('#categoriesLegend').innerHTML = ''; return; }
     
     const period = q('#catPeriod').value;
-    const { from, to } = rangeFor(q('#catRange').value);
+    const { from, to } = resolveRange('#catRange', '#catFrom', '#catTo');
     const catIds = Array.from(state.selectedCategoryIds).sort().join(',');
     const ps = new URLSearchParams();
     if (from) ps.set('date_from', from);
@@ -1053,15 +1129,23 @@ q('#navMenu').addEventListener('click', (e) => {
 
 // Event bindings
 q('#nwPeriod').onchange = loadNetworth;
-q('#nwRange').onchange = loadNetworth;
+const nwRangeChanged = () => { setupCustomRange('#nwRange', '#nwCustom', '#nwFrom', '#nwTo'); loadNetworth(); };
+q('#nwRange').onchange = nwRangeChanged;
+q('#nwFrom').onchange = nwRangeChanged;
+q('#nwTo').onchange = nwRangeChanged;
 q('#excludeLoansBtn').onclick = async () => { await toggleLoanExclusion(); loadNetworth(); };
 q('#btnPrevMonth').onclick = () => { const s=q('#selectMonth'); if(s.selectedIndex<s.options.length-1) { s.selectedIndex++; s.dispatchEvent(new Event('change')); }};
 q('#btnNextMonth').onclick = () => { const s=q('#selectMonth'); if(s.selectedIndex>0) { s.selectedIndex--; s.dispatchEvent(new Event('change')); }};
 q('#selectMonth').onchange = (e) => loadMonthlyBreakdown(e.target.value);
 q('#selectViewMode').onchange = () => loadMonthlyBreakdown(q('#selectMonth').value);
 q('#selectYear').onchange = (e) => loadYearlySummary(e.target.value);
+q('#yearAxisToggle').onclick = () => { state.yearAxisFull = !state.yearAxisFull; loadYearlySummary(q('#selectYear').value); };
+q('#yearlyAxisToggle').onclick = () => { state.yearlyAxisFull = !state.yearlyAxisFull; loadYearlyTrendAll(); };
 q('#catPeriod').onchange = loadCategoriesSeries;
-q('#catRange').onchange = loadCategoriesSeries;
+const catRangeChanged = () => { setupCustomRange('#catRange', '#catCustom', '#catFrom', '#catTo'); loadCategoriesSeries(); };
+q('#catRange').onchange = catRangeChanged;
+q('#catFrom').onchange = catRangeChanged;
+q('#catTo').onchange = catRangeChanged;
 q('#payeeType').onchange = () => loadTopList('/dashboard/top-payees', 'topPayees');
 q('#payeeRange').onchange = () => loadTopList('/dashboard/top-payees', 'topPayees');
 q('#txType').onchange = () => loadTopList('/dashboard/top-individual-expenses', 'topTx', true);
