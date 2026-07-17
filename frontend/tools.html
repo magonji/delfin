@@ -131,6 +131,9 @@
         }
         .item-row:nth-child(even) { background: #fbe7dd; }
         .item-name { font-weight: 600; font-size: 14px; }
+        .item-info { min-width: 0; }
+        .item-meta { font-size: 12px; color: var(--muted); margin-top: 3px; line-height: 1.35; }
+        .item-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 
         /* Form inputs and controls */
         .form-group { margin-bottom: 18px; padding: 0 25px; }
@@ -1493,49 +1496,188 @@
         function displayPayees(filtered = null) {
             const payees = filtered || allPayees;
             const list = document.getElementById('payeesList');
-            
-            list.innerHTML = payees.map(payee => `
+
+            list.innerHTML = payees.map(payee => {
+                const count = payee.transaction_count ?? 0;
+                const cats = (payee.top_categories || []).map(c =>
+                    (c.parent && c.parent !== c.name)
+                        ? `${csvEsc(c.parent)} › ${csvEsc(c.name)} (${c.count})`
+                        : `${csvEsc(c.name || 'Uncategorised')} (${c.count})`
+                );
+                const meta = `${count} transaction${count === 1 ? '' : 's'}`
+                    + (cats.length ? ` · ${cats.join(' · ')}` : '');
+                return `
                 <div class="item-row">
                     <div class="item-info">
-                        <div class="item-name">${payee.name}</div>
+                        <div class="item-name">${csvEsc(payee.name)}</div>
+                        <div class="item-meta">${meta}</div>
                     </div>
                     <div class="item-actions">
                         <button onclick="editItem('payee', ${payee.id})">✏️ Edit</button>
+                        <button onclick="mergePayee(${payee.id})">🔀 Merge</button>
+                        <button class="danger" onclick="deletePayee(${payee.id})">🗑️ Delete</button>
                     </div>
-                </div>
-            `).join('');
+                </div>`;
+            }).join('');
+        }
+
+        // Merge this payee into another one: its transactions move to the target and
+        // this payee is deleted. Uses the customConfirm modal with an embedded select.
+        async function mergePayee(id) {
+            const source = allPayees.find(p => p.id === id);
+            if (!source) return;
+            const others = allPayees.filter(p => p.id !== id).sort((a, b) => a.name.localeCompare(b.name));
+            if (!others.length) { showError('There are no other payees to merge into.'); return; }
+            const options = others.map(p => `<option value="${p.id}">${csvEsc(p.name)}</option>`).join('');
+            const confirmed = await customConfirm(
+                `Merge <b>"${csvEsc(source.name)}"</b> (${source.transaction_count ?? 0} transactions) into another payee. `
+                + `All its transactions move to the target and <b>"${csvEsc(source.name)}"</b> is then deleted.\n\n`
+                + `Merge into: <select id="mergeTargetSelect" style="margin-top:6px;">${options}</select>`,
+                'Merge Payee', 'Merge'
+            );
+            if (!confirmed) return;
+            const sel = document.getElementById('mergeTargetSelect');
+            const targetId = sel ? parseInt(sel.value) : NaN;
+            if (!targetId || targetId === id) return;
+            const target = allPayees.find(p => p.id === targetId);
+            try {
+                const res = await fetch(`${API_URL}/payees/${targetId}/merge/${id}`, { method: 'POST' });
+                if (!res.ok) throw new Error('Merge failed');
+                const result = await res.json();
+                localStorage.setItem('dirty_data', '1');
+                showSuccess(`Merged "${source.name}" into "${target?.name || 'payee'}" (${result.transactions_reassigned} transactions reassigned)`);
+                await loadPayees();
+                filterPayees();
+            } catch (e) {
+                showError('Error merging payee: ' + e.message);
+            }
+        }
+
+        // Delete a payee without deleting its transactions (they keep their data but
+        // become payee-less).
+        async function deletePayee(id) {
+            const payee = allPayees.find(p => p.id === id);
+            if (!payee) return;
+            const count = payee.transaction_count ?? 0;
+            const confirmed = await customConfirm(
+                `Delete <b>"${csvEsc(payee.name)}"</b>?\n\n`
+                + (count
+                    ? `Its ${count} transaction${count === 1 ? '' : 's'} will be kept but left without a payee.`
+                    : `It has no transactions.`),
+                'Delete Payee', 'Delete', true
+            );
+            if (!confirmed) return;
+            try {
+                const res = await fetch(`${API_URL}/payees/${id}`, { method: 'DELETE' });
+                if (!res.ok) throw new Error('Delete failed');
+                localStorage.setItem('dirty_data', '1');
+                showSuccess(`Deleted "${payee.name}"`);
+                await loadPayees();
+                filterPayees();
+            } catch (e) {
+                showError('Error deleting payee: ' + e.message);
+            }
         }
         
         function displayLocations(filtered = null) {
             const locations = (filtered || allLocations).filter(l => l.name !== 'Transfer In' && l.name !== 'Transfer Out');
             const list = document.getElementById('locationsList');
-            
-            list.innerHTML = locations.map(loc => `
+
+            list.innerHTML = locations.map(loc => {
+                const count = loc.transaction_count ?? 0;
+                return `
                 <div class="item-row">
                     <div class="item-info">
-                        <div class="item-name">${loc.name}</div>
+                        <div class="item-name">${csvEsc(loc.name)}</div>
+                        <div class="item-meta">${count} transaction${count === 1 ? '' : 's'}</div>
                     </div>
                     <div class="item-actions">
                         <button onclick="editItem('location', ${loc.id})">✏️ Edit</button>
+                        <button onclick="mergeEntity('location', ${loc.id})">🔀 Merge</button>
+                        <button class="danger" onclick="deleteEntity('location', ${loc.id})">🗑️ Delete</button>
                     </div>
-                </div>
-            `).join('');
+                </div>`;
+            }).join('');
         }
-        
+
         function displayProjects(filtered = null) {
             const projects = filtered || allProjects;
             const list = document.getElementById('projectsList');
-            
-            list.innerHTML = projects.map(proj => `
+
+            list.innerHTML = projects.map(proj => {
+                const count = proj.transaction_count ?? 0;
+                return `
                 <div class="item-row">
                     <div class="item-info">
-                        <div class="item-name">${proj.name}</div>
+                        <div class="item-name">${csvEsc(proj.name)}</div>
+                        <div class="item-meta">${count} transaction${count === 1 ? '' : 's'}</div>
                     </div>
                     <div class="item-actions">
                         <button onclick="editItem('project', ${proj.id})">✏️ Edit</button>
+                        <button onclick="mergeEntity('project', ${proj.id})">🔀 Merge</button>
+                        <button class="danger" onclick="deleteEntity('project', ${proj.id})">🗑️ Delete</button>
                     </div>
-                </div>
-            `).join('');
+                </div>`;
+            }).join('');
+        }
+
+        // Generic merge/delete for locations and projects (payees have their own
+        // versions because they also show category stats).
+        const _ENTITY_CFG = {
+            location: { list: () => allLocations, reload: () => loadLocations(), refilter: () => filterLocations(), path: 'locations', label: 'location', system: n => n === 'Transfer In' || n === 'Transfer Out' },
+            project:  { list: () => allProjects,  reload: () => loadProjects(),  refilter: () => filterProjects(),  path: 'projects',  label: 'project',  system: () => false },
+        };
+        const _cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+
+        async function mergeEntity(type, id) {
+            const cfg = _ENTITY_CFG[type];
+            const all = cfg.list();
+            const source = all.find(x => x.id === id);
+            if (!source) return;
+            const others = all.filter(x => x.id !== id && !cfg.system(x.name)).sort((a, b) => a.name.localeCompare(b.name));
+            if (!others.length) { showError(`There are no other ${cfg.label}s to merge into.`); return; }
+            const options = others.map(x => `<option value="${x.id}">${csvEsc(x.name)}</option>`).join('');
+            const confirmed = await customConfirm(
+                `Merge <b>"${csvEsc(source.name)}"</b> (${source.transaction_count ?? 0} transactions) into another ${cfg.label}. `
+                + `All its transactions move to the target and <b>"${csvEsc(source.name)}"</b> is then deleted.\n\n`
+                + `Merge into: <select id="mergeTargetSelect" style="margin-top:6px;">${options}</select>`,
+                `Merge ${_cap(cfg.label)}`, 'Merge'
+            );
+            if (!confirmed) return;
+            const sel = document.getElementById('mergeTargetSelect');
+            const targetId = sel ? parseInt(sel.value) : NaN;
+            if (!targetId || targetId === id) return;
+            const target = all.find(x => x.id === targetId);
+            try {
+                const res = await fetch(`${API_URL}/${cfg.path}/${targetId}/merge/${id}`, { method: 'POST' });
+                if (!res.ok) throw new Error('Merge failed');
+                const result = await res.json();
+                localStorage.setItem('dirty_data', '1');
+                showSuccess(`Merged "${source.name}" into "${target?.name || cfg.label}" (${result.transactions_reassigned} transactions reassigned)`);
+                await cfg.reload();
+                cfg.refilter();
+            } catch (e) { showError(`Error merging ${cfg.label}: ` + e.message); }
+        }
+
+        async function deleteEntity(type, id) {
+            const cfg = _ENTITY_CFG[type];
+            const item = cfg.list().find(x => x.id === id);
+            if (!item) return;
+            const count = item.transaction_count ?? 0;
+            const confirmed = await customConfirm(
+                `Delete <b>"${csvEsc(item.name)}"</b>?\n\n`
+                + (count ? `Its ${count} transaction${count === 1 ? '' : 's'} will be kept but left without a ${cfg.label}.` : `It has no transactions.`),
+                `Delete ${_cap(cfg.label)}`, 'Delete', true
+            );
+            if (!confirmed) return;
+            try {
+                const res = await fetch(`${API_URL}/${cfg.path}/${id}`, { method: 'DELETE' });
+                if (!res.ok) throw new Error('Delete failed');
+                localStorage.setItem('dirty_data', '1');
+                showSuccess(`Deleted "${item.name}"`);
+                await cfg.reload();
+                cfg.refilter();
+            } catch (e) { showError(`Error deleting ${cfg.label}: ` + e.message); }
         }
         
         // Filter functions

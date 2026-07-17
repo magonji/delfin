@@ -76,11 +76,21 @@ class PayeeResponse(PayeeBase):
         from_attributes = True
 
 
+class PayeeCategoryStat(BaseModel):
+    """One of a payee's most-used categories, with occurrence count."""
+    category_id: Optional[int] = None
+    name: Optional[str] = None
+    parent: Optional[str] = None
+    count: int = 0
+
+
 class PayeeWithDetails(PayeeResponse):
-    """Payee response with related entity names."""
+    """Payee response with related entity names and usage statistics."""
     most_common_category_name: Optional[str] = None
     most_common_location_name: Optional[str] = None
     most_common_project_name: Optional[str] = None
+    transaction_count: int = 0
+    top_categories: List[PayeeCategoryStat] = []
 
 
 # --- Location schemas ---
@@ -96,7 +106,8 @@ class LocationCreate(LocationBase):
 class LocationResponse(LocationBase):
     id: int
     created_at: datetime
-    
+    transaction_count: int = 0
+
     class Config:
         from_attributes = True
 
@@ -114,7 +125,8 @@ class ProjectCreate(ProjectBase):
 class ProjectResponse(ProjectBase):
     id: int
     created_at: datetime
-    
+    transaction_count: int = 0
+
     class Config:
         from_attributes = True
 

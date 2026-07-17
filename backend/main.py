@@ -419,8 +419,37 @@ def get_payees(db: Session = Depends(get_db)):
     Retrieve all payees with their most common associations.
     """
     payees = db.query(Payee).all()
+
+    # Bulk stats so we don't run a query per payee.
+    tx_counts = dict(
+        db.query(Transaction.payee_id, func.count(Transaction.id))
+        .filter(Transaction.payee_id.isnot(None))
+        .group_by(Transaction.payee_id).all()
+    )
+
+    # (payee, category) counts, to derive each payee's most-used categories.
+    per_payee_cats = {}
+    for pid, cid, cnt in (
+        db.query(Transaction.payee_id, Transaction.category_id, func.count(Transaction.id))
+        .filter(Transaction.payee_id.isnot(None), Transaction.category_id.isnot(None))
+        .group_by(Transaction.payee_id, Transaction.category_id).all()
+    ):
+        per_payee_cats.setdefault(pid, []).append((cid, cnt))
+
+    cat_info = {c.id: (c.name, c.parent) for c in db.query(Category).all()}
+
     result = []
     for payee in payees:
+        top = sorted(per_payee_cats.get(payee.id, []), key=lambda x: x[1], reverse=True)[:3]
+        top_categories = [
+            {
+                "category_id": cid,
+                "name": cat_info.get(cid, (None, None))[0],
+                "parent": cat_info.get(cid, (None, None))[1],
+                "count": cnt,
+            }
+            for cid, cnt in top
+        ]
         payee_dict = {
             "id": payee.id,
             "name": payee.name,
@@ -432,6 +461,8 @@ def get_payees(db: Session = Depends(get_db)):
             "most_common_category_name": payee.most_common_category.name if payee.most_common_category else None,
             "most_common_location_name": payee.most_common_location.name if payee.most_common_location else None,
             "most_common_project_name": payee.most_common_project.name if payee.most_common_project else None,
+            "transaction_count": tx_counts.get(payee.id, 0),
+            "top_categories": top_categories,
         }
         result.append(payee_dict)
     return result
@@ -519,6 +550,32 @@ def recalculate_all_payees_stats(db: Session = Depends(get_db)):
         "total_payees": total,
         "updated": total,
         "errors": 0
+    }
+
+
+@app.delete("/payees/{payee_id}")
+def delete_payee(payee_id: int, db: Session = Depends(get_db)):
+    """Delete a payee WITHOUT deleting its transactions: their payee link is
+    cleared (set to NULL). Recurring expenses referencing it are unlinked too."""
+    payee = db.query(Payee).filter(Payee.id == payee_id).first()
+    if not payee:
+        raise HTTPException(status_code=404, detail="Payee not found")
+
+    payee_name = payee.name
+    tx_cleared = db.query(Transaction).filter(
+        Transaction.payee_id == payee_id
+    ).update({Transaction.payee_id: None})
+    rec_cleared = db.query(RecurringExpense).filter(
+        RecurringExpense.payee_id == payee_id
+    ).update({RecurringExpense.payee_id: None})
+
+    db.delete(payee)
+    db.commit()
+
+    return {
+        "deleted": {"id": payee_id, "name": payee_name},
+        "transactions_unlinked": tx_cleared,
+        "recurring_unlinked": rec_cleared,
     }
 
 
@@ -611,16 +668,18 @@ def get_locations(
     """
     Retrieve all locations ordered by usage count (most used first).
     """
-    locations = (
-        db.query(models.Location)
-        .outerjoin(models.Transaction, models.Transaction.location_id == models.Location.id)
-        .group_by(models.Location.id)
-        .order_by(func.count(models.Transaction.id).desc())
-        .offset(skip)
-        .limit(limit)
-        .all()
+    counts = dict(
+        db.query(models.Transaction.location_id, func.count(models.Transaction.id))
+        .filter(models.Transaction.location_id.isnot(None))
+        .group_by(models.Transaction.location_id).all()
     )
-    return locations
+    result = [
+        {"id": loc.id, "name": loc.name, "created_at": loc.created_at,
+         "transaction_count": counts.get(loc.id, 0)}
+        for loc in db.query(models.Location).all()
+    ]
+    result.sort(key=lambda x: x["transaction_count"], reverse=True)
+    return result[skip:skip + limit]
 
 
 @app.post("/locations", response_model=schemas.LocationResponse)
@@ -638,6 +697,64 @@ def create_location(
     return db_location
 
 
+_SYSTEM_LOCATIONS = ("Transfer In", "Transfer Out")
+
+
+@app.delete("/locations/{location_id}")
+def delete_location(location_id: int, db: Session = Depends(get_db)):
+    """Delete a location WITHOUT deleting its transactions: their location link is
+    cleared (set to NULL). Payee 'most common location' hints are cleared too."""
+    loc = db.query(models.Location).filter(models.Location.id == location_id).first()
+    if not loc:
+        raise HTTPException(status_code=404, detail="Location not found")
+    if loc.name in _SYSTEM_LOCATIONS:
+        raise HTTPException(status_code=400, detail="Cannot delete a system transfer location")
+
+    name = loc.name
+    tx_cleared = db.query(Transaction).filter(
+        Transaction.location_id == location_id
+    ).update({Transaction.location_id: None})
+    db.query(Payee).filter(
+        Payee.most_common_location_id == location_id
+    ).update({Payee.most_common_location_id: None})
+
+    db.delete(loc)
+    db.commit()
+    return {"deleted": {"id": location_id, "name": name}, "transactions_unlinked": tx_cleared}
+
+
+@app.post("/locations/{location_id}/merge/{duplicate_id}")
+def merge_locations(location_id: int, duplicate_id: int, db: Session = Depends(get_db)):
+    """Merge the duplicate location into the kept one: reassign its transactions
+    (and payee hints), then delete the duplicate."""
+    if location_id == duplicate_id:
+        raise HTTPException(status_code=400, detail="Cannot merge a location into itself")
+    keep = db.query(models.Location).filter(models.Location.id == location_id).first()
+    if not keep:
+        raise HTTPException(status_code=404, detail="Location to keep not found")
+    dup = db.query(models.Location).filter(models.Location.id == duplicate_id).first()
+    if not dup:
+        raise HTTPException(status_code=404, detail="Duplicate location not found")
+    if keep.name in _SYSTEM_LOCATIONS or dup.name in _SYSTEM_LOCATIONS:
+        raise HTTPException(status_code=400, detail="Cannot merge a system transfer location")
+
+    tx_updated = db.query(Transaction).filter(
+        Transaction.location_id == duplicate_id
+    ).update({Transaction.location_id: location_id})
+    db.query(Payee).filter(
+        Payee.most_common_location_id == duplicate_id
+    ).update({Payee.most_common_location_id: location_id})
+
+    dup_name = dup.name
+    db.delete(dup)
+    db.commit()
+    return {
+        "kept": {"id": keep.id, "name": keep.name},
+        "deleted": {"id": duplicate_id, "name": dup_name},
+        "transactions_reassigned": tx_updated,
+    }
+
+
 # ============================================
 # PROJECTS ENDPOINTS
 # ============================================
@@ -649,10 +766,20 @@ def get_projects(
     db: Session = Depends(get_db)
 ):
     """
-    Retrieve all projects.
+    Retrieve all projects ordered by usage count (most used first).
     """
-    projects = db.query(models.Project).offset(skip).limit(limit).all()
-    return projects
+    counts = dict(
+        db.query(models.Transaction.project_id, func.count(models.Transaction.id))
+        .filter(models.Transaction.project_id.isnot(None))
+        .group_by(models.Transaction.project_id).all()
+    )
+    result = [
+        {"id": proj.id, "name": proj.name, "created_at": proj.created_at,
+         "transaction_count": counts.get(proj.id, 0)}
+        for proj in db.query(models.Project).all()
+    ]
+    result.sort(key=lambda x: x["transaction_count"], reverse=True)
+    return result[skip:skip + limit]
 
 
 @app.post("/projects", response_model=schemas.ProjectResponse)
@@ -668,6 +795,57 @@ def create_project(
     db.commit()
     db.refresh(db_project)
     return db_project
+
+
+@app.delete("/projects/{project_id}")
+def delete_project(project_id: int, db: Session = Depends(get_db)):
+    """Delete a project WITHOUT deleting its transactions: their project link is
+    cleared (set to NULL). Payee 'most common project' hints are cleared too."""
+    proj = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not proj:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    name = proj.name
+    tx_cleared = db.query(Transaction).filter(
+        Transaction.project_id == project_id
+    ).update({Transaction.project_id: None})
+    db.query(Payee).filter(
+        Payee.most_common_project_id == project_id
+    ).update({Payee.most_common_project_id: None})
+
+    db.delete(proj)
+    db.commit()
+    return {"deleted": {"id": project_id, "name": name}, "transactions_unlinked": tx_cleared}
+
+
+@app.post("/projects/{project_id}/merge/{duplicate_id}")
+def merge_projects(project_id: int, duplicate_id: int, db: Session = Depends(get_db)):
+    """Merge the duplicate project into the kept one: reassign its transactions
+    (and payee hints), then delete the duplicate."""
+    if project_id == duplicate_id:
+        raise HTTPException(status_code=400, detail="Cannot merge a project into itself")
+    keep = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not keep:
+        raise HTTPException(status_code=404, detail="Project to keep not found")
+    dup = db.query(models.Project).filter(models.Project.id == duplicate_id).first()
+    if not dup:
+        raise HTTPException(status_code=404, detail="Duplicate project not found")
+
+    tx_updated = db.query(Transaction).filter(
+        Transaction.project_id == duplicate_id
+    ).update({Transaction.project_id: project_id})
+    db.query(Payee).filter(
+        Payee.most_common_project_id == duplicate_id
+    ).update({Payee.most_common_project_id: project_id})
+
+    dup_name = dup.name
+    db.delete(dup)
+    db.commit()
+    return {
+        "kept": {"id": keep.id, "name": keep.name},
+        "deleted": {"id": duplicate_id, "name": dup_name},
+        "transactions_reassigned": tx_updated,
+    }
 
 
 # ============================================
