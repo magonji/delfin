@@ -2603,6 +2603,9 @@
             closeModal('newCategoryModal');
             document.getElementById('newCategoryName').value = '';
             await loadCategories();
+            // Auto-select the newly created parent category (option value is its name)
+            document.getElementById('parentCategory').value = name;
+            loadSubcategories(name);
         }
         async function saveNewSubcategory(){ 
             const name = document.getElementById('newSubcategoryName').value.trim();
@@ -2622,7 +2625,7 @@
             document.getElementById('category').value = newCategory.id;
         }
         async function saveNewLocation(){ const n=document.getElementById('newLocationName').value; const created=await (await fetch(`${API_URL}/locations`,{method:'POST',body:JSON.stringify({name:n}),headers:{'Content-Type':'application/json'}})).json(); closeModal('newLocationModal'); await loadLocations(); if(created && created.id) document.getElementById('location').value=created.id; }
-        async function saveNewProject(){ const n=document.getElementById('newProjectName').value; await fetch(`${API_URL}/projects`,{method:'POST',body:JSON.stringify({name:n}),headers:{'Content-Type':'application/json'}}); closeModal('newProjectModal'); loadProjects(); }
+        async function saveNewProject(){ const n=document.getElementById('newProjectName').value; const created=await (await fetch(`${API_URL}/projects`,{method:'POST',body:JSON.stringify({name:n}),headers:{'Content-Type':'application/json'}})).json(); closeModal('newProjectModal'); await loadProjects(); if(created && created.id) document.getElementById('project').value=created.id; }
         async function saveNewAccount(){ const n=document.getElementById('newAccountName').value; const c=document.getElementById('newAccountCurrency').value; await fetch(`${API_URL}/accounts`,{method:'POST',body:JSON.stringify({name:n,currency:c,type:'Regular',initial_balance:0}),headers:{'Content-Type':'application/json'}}); closeModal('newAccountModal'); loadAccounts(); }
         
         function selectAllVisible() {

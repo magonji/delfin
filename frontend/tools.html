@@ -622,13 +622,18 @@
                             <select id="mapAmountMode" onchange="toggleAmountMode()">
                                 <option value="single">Single column (signed)</option>
                                 <option value="debitcredit">Debit / Credit</option>
+                                <option value="indicator">Amount + sign column</option>
                             </select></div>
                         <div class="form-group" id="mapSingleWrap" style="flex: 1; min-width: 130px;"><label>Amount column</label>
                             <select id="mapColAmount"></select></div>
                         <div class="form-group" id="mapDebitWrap" style="flex: 1; min-width: 130px; display: none;"><label>Debit (expense)</label>
-                            <select id="mapColDebit"></select></div>
+                            <select id="mapColDebit" onchange="updateAmountWarning()"></select></div>
                         <div class="form-group" id="mapCreditWrap" style="flex: 1; min-width: 130px; display: none;"><label>Credit (income)</label>
-                            <select id="mapColCredit"></select></div>
+                            <select id="mapColCredit" onchange="updateAmountWarning()"></select></div>
+                        <div class="form-group" id="mapIndicatorWrap" style="flex: 1; min-width: 130px; display: none;"><label>Sign column</label>
+                            <select id="mapColIndicator"></select></div>
+                        <div class="form-group" id="mapIndicatorDebitWrap" style="flex: 1; min-width: 130px; display: none;"><label>Debit value(s)</label>
+                            <input type="text" id="mapIndicatorDebit" placeholder="e.g. DBIT, DR, D" title="Comma-separated values in the sign column that mean an expense; anything else is treated as income."></div>
                         <div class="form-group" style="flex: 1; min-width: 130px;"><label>Sign</label>
                             <select id="mapSign">
                                 <option value="asis">As-is</option>
@@ -636,6 +641,13 @@
                             </select></div>
                         <div class="form-group" style="flex: 1; min-width: 130px;"><label>Note column (optional)</label>
                             <select id="mapColNote"></select></div>
+                    </div>
+                    <div id="mapAmountWarning" style="display: none; margin-bottom: 16px; padding: 10px 14px; border-radius: 8px;
+                        background: #fff6e5; border: 1px solid #f0c36d; color: #7a5200; font-size: 13px;
+                        font-family: 'IBM Plex Sans', sans-serif; line-height: 1.4;">
+                        ⚠️ <strong>Debit and Credit point to the same column</strong>, so every amount comes out as
+                        <strong>0.00</strong>. If your file has one amount column plus a separate column that flags each row
+                        as debit or credit, switch <em>Amount type</em> to <strong>“Amount + sign column”</strong>.
                     </div>
                     <div class="form-group" style="margin-bottom: 16px;"><label>Description column(s) — hold Ctrl/Cmd to pick several</label>
                         <select id="mapColDescription" multiple size="4"></select></div>
@@ -731,8 +743,11 @@
                     <li><strong>Date format</strong> — how dates are written in the file, e.g. <code>DD/MM/YYYY</code>.</li>
                     <li><strong>Date column</strong> — the column holding each movement's date.</li>
                     <li><strong>Amount type</strong> —
-                        <em>Single column</em> if one column holds the amount with a sign (negative = expense), or
-                        <em>Debit / Credit</em> if the bank uses two separate columns (charges in one, deposits in the other).</li>
+                        <em>Single column</em> if one column holds the amount with a sign (negative = expense);
+                        <em>Debit / Credit</em> if the bank uses two separate columns (charges in one, deposits in the other); or
+                        <em>Amount + sign column</em> if there is one (always positive) amount column plus a separate column
+                        that flags each row as debit or credit (e.g. <code>DBIT</code>/<code>CRDT</code>). For that last one,
+                        list in <em>Debit value(s)</em> the tokens that mean an expense — anything else counts as income.</li>
                     <li><strong>Sign</strong> — usually <em>As-is</em>. Choose <em>Flip</em> if your bank lists expenses as
                         positive numbers.</li>
                     <li><strong>Description column(s)</strong> — the text that names each movement (shop, payee…). Hold
@@ -2121,24 +2136,37 @@
             };
             const date = find(['date', 'fecha']);
             const time = find(['time', 'hora', 'hour'], [date].filter(Boolean));
-            const debit = find(['debit', 'cargo', 'debe', 'pago', 'adeudo']);
-            const credit = find(['credit', 'abono', 'haber', 'ingreso']);
+            let debit = find(['debit', 'cargo', 'debe', 'pago', 'adeudo']);
+            let credit = find(['credit', 'abono', 'haber', 'ingreso']);
             // Don't let a generic "amount" match steal the Debit/Credit columns
             // (e.g. "Debit Amount" / "Credit Amount" both contain "amount").
             const amount = find(['amount', 'importe', 'monto', 'cantidad'], [debit, credit].filter(Boolean));
-            // Two-column Debit/Credit layout wins over a single signed amount.
-            const mode = (debit && credit) ? 'debitcredit' : (amount ? 'single' : ((debit || credit) ? 'debitcredit' : 'single'));
+            // A single header that reads as BOTH debit and credit (e.g. "Debit or
+            // Credit", "DR/CR", "D/C") is a sign-indicator column paired with one
+            // amount column — not two separate amount columns.
+            let indicator = (debit && credit && debit === credit) ? debit
+                : find(['debit or credit', 'debit/credit', 'dr/cr', 'cr/dr', 'd/c', 'indicator']);
+            let mode;
+            if (indicator && amount) {
+                mode = 'indicator'; debit = ''; credit = '';
+            } else {
+                indicator = '';
+                // Two-column Debit/Credit layout wins over a single signed amount.
+                mode = (debit && credit) ? 'debitcredit' : (amount ? 'single' : ((debit || credit) ? 'debitcredit' : 'single'));
+            }
 
             let desc = find(['description', 'concepto', 'concept', 'detalle', 'detail', 'descripción',
                 'descripcion', 'name', 'nombre', 'movimiento', 'payee', 'beneficiario', 'observ',
                 'referencia', 'reference', 'memo', 'merchant', 'comercio', 'establecimiento', 'remitente']);
             // Fallback: if nothing matched, use the first column that isn't already
-            // mapped to date/amount/debit/credit — better than leaving it empty.
+            // mapped to date/amount/debit/credit/indicator — better than leaving it empty.
             if (!desc) {
-                const used = new Set([date, amount, debit, credit].filter(Boolean));
+                const used = new Set([date, amount, debit, credit, indicator].filter(Boolean));
                 desc = headers.find(h => !used.has(h)) || '';
             }
-            return { date, time, amount, debit, credit, description: desc ? [desc] : [], amountMode: mode };
+            return { date, time, amount, debit, credit, indicator,
+                indicatorDebit: indicator ? 'DBIT, DR, DEBIT, D, DB' : '',
+                description: desc ? [desc] : [], amountMode: mode };
         }
 
         // Sample real date values: a part > 12 can only be a day, which disambiguates
@@ -2198,10 +2226,15 @@
             const timeIdx = cols.time ? idx(cols.time) : -1;
             const descIdxs = (Array.isArray(cols.description) ? cols.description
                 : (cols.description ? [cols.description] : [])).map(idx).filter(i => i >= 0);
-            const mode = cols.amountMode === 'debitcredit' ? 'debitcredit' : 'single';
+            const mode = (cols.amountMode === 'debitcredit' || cols.amountMode === 'indicator')
+                ? cols.amountMode : 'single';
             const amountIdx = idx(cols.amount);
             const debitIdx = idx(cols.debit);
             const creditIdx = idx(cols.credit);
+            const indicatorIdx = cols.indicator ? idx(cols.indicator) : -1;
+            // Values in the sign column that mark an expense (case-insensitive).
+            const debitTokens = String(cols.indicatorDebit || 'DBIT,DR,DEBIT,D,DB')
+                .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
             const decimal = profile.decimal || '.';
             const thousands = profile.thousands || (decimal === ',' ? '.' : ',');
             const fmt = profile.dateFormat || 'DD/MM/YYYY';
@@ -2228,6 +2261,13 @@
                     const credit = creditIdx >= 0 ? Math.abs(parseNumber(values[creditIdx], decimal, thousands) || 0) : 0;
                     if (!debit && !credit) continue;
                     amount = credit - debit;
+                } else if (mode === 'indicator') {
+                    // One amount column (always positive) + a column whose value
+                    // says whether the row is a debit (expense) or a credit (income).
+                    const raw = Math.abs(parseNumber(values[amountIdx], decimal, thousands) || 0);
+                    if (!raw) continue;
+                    const ind = (indicatorIdx >= 0 ? (values[indicatorIdx] || '') : '').trim().toLowerCase();
+                    amount = debitTokens.includes(ind) ? -raw : raw;
                 } else {
                     amount = parseNumber(values[amountIdx], decimal, thousands);
                     if (amount === null || isNaN(amount)) continue;
@@ -2342,6 +2382,7 @@
             fillColumnSelect(document.getElementById('mapColAmount'), importHeaders, false);
             fillColumnSelect(document.getElementById('mapColDebit'), importHeaders, false);
             fillColumnSelect(document.getElementById('mapColCredit'), importHeaders, false);
+            fillColumnSelect(document.getElementById('mapColIndicator'), importHeaders, false);
             fillColumnSelect(document.getElementById('mapColNote'), importHeaders, true);
             fillColumnSelect(document.getElementById('mapColDescription'), importHeaders, false);
         }
@@ -2355,9 +2396,24 @@
         }
         function toggleAmountMode() {
             const mode = document.getElementById('mapAmountMode').value;
-            document.getElementById('mapSingleWrap').style.display = mode === 'single' ? 'block' : 'none';
+            // The amount-value column is shared by 'single' and 'indicator' modes.
+            document.getElementById('mapSingleWrap').style.display = (mode === 'single' || mode === 'indicator') ? 'block' : 'none';
             document.getElementById('mapDebitWrap').style.display = mode === 'debitcredit' ? 'block' : 'none';
             document.getElementById('mapCreditWrap').style.display = mode === 'debitcredit' ? 'block' : 'none';
+            document.getElementById('mapIndicatorWrap').style.display = mode === 'indicator' ? 'block' : 'none';
+            document.getElementById('mapIndicatorDebitWrap').style.display = mode === 'indicator' ? 'block' : 'none';
+            updateAmountWarning();
+        }
+        // True when in Debit/Credit mode but both columns are the same one — every
+        // row then yields amount = X - X = 0. Surfaces the inline warning banner.
+        function amountColumnsCollide() {
+            if (document.getElementById('mapAmountMode').value !== 'debitcredit') return false;
+            const d = document.getElementById('mapColDebit').value;
+            const c = document.getElementById('mapColCredit').value;
+            return !!d && d === c;
+        }
+        function updateAmountWarning() {
+            document.getElementById('mapAmountWarning').style.display = amountColumnsCollide() ? 'block' : 'none';
         }
         function currentDelimiter() {
             const v = document.getElementById('mapDelimiter').value;
@@ -2389,6 +2445,8 @@
             setSelectValue('mapColAmount', g.amount);
             setSelectValue('mapColDebit', g.debit);
             setSelectValue('mapColCredit', g.credit);
+            setSelectValue('mapColIndicator', g.indicator);
+            document.getElementById('mapIndicatorDebit').value = g.indicatorDebit || '';
             setMultiValues('mapColDescription', g.description);
             document.getElementById('mapSign').value = 'asis';
             document.getElementById('mapColNote').value = '';
@@ -2419,9 +2477,11 @@
                     time: document.getElementById('mapColTime').value || null,
                     description: description,
                     amountMode: mode,
-                    amount: mode === 'single' ? document.getElementById('mapColAmount').value : null,
+                    amount: (mode === 'single' || mode === 'indicator') ? document.getElementById('mapColAmount').value : null,
                     debit: mode === 'debitcredit' ? document.getElementById('mapColDebit').value : null,
                     credit: mode === 'debitcredit' ? document.getElementById('mapColCredit').value : null,
+                    indicator: mode === 'indicator' ? document.getElementById('mapColIndicator').value : null,
+                    indicatorDebit: mode === 'indicator' ? (document.getElementById('mapIndicatorDebit').value || '').trim() : null,
                     amountSign: document.getElementById('mapSign').value,
                     note: document.getElementById('mapColNote').value || null
                 }
@@ -2429,6 +2489,10 @@
         }
 
         async function continueFromMapping() {
+            if (amountColumnsCollide()) {
+                showImportError('Debit and Credit are mapped to the same column, so every amount would be 0.00. Use the “Amount + sign column” type, or pick two different columns.');
+                return;
+            }
             const profile = buildProfileFromControls();
             if (!profile.columns.description || profile.columns.description.length === 0) {
                 showImportError('Select at least one Description column (highlight it in the list) so movements are not imported blank.');
@@ -2477,6 +2541,8 @@
             setSelectValue('mapColAmount', c.amount);
             setSelectValue('mapColDebit', c.debit);
             setSelectValue('mapColCredit', c.credit);
+            setSelectValue('mapColIndicator', c.indicator);
+            document.getElementById('mapIndicatorDebit').value = c.indicatorDebit || '';
             setMultiValues('mapColDescription', Array.isArray(c.description) ? c.description : (c.description ? [c.description] : []));
             document.getElementById('mapSign').value = c.amountSign || 'asis';
             setSelectValue('mapColNote', c.note || '');
