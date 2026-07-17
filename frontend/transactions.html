@@ -2621,7 +2621,7 @@
             loadSubcategories(parent);
             document.getElementById('category').value = newCategory.id;
         }
-        async function saveNewLocation(){ const n=document.getElementById('newLocationName').value; await fetch(`${API_URL}/locations`,{method:'POST',body:JSON.stringify({name:n}),headers:{'Content-Type':'application/json'}}); closeModal('newLocationModal'); loadLocations(); }
+        async function saveNewLocation(){ const n=document.getElementById('newLocationName').value; const created=await (await fetch(`${API_URL}/locations`,{method:'POST',body:JSON.stringify({name:n}),headers:{'Content-Type':'application/json'}})).json(); closeModal('newLocationModal'); await loadLocations(); if(created && created.id) document.getElementById('location').value=created.id; }
         async function saveNewProject(){ const n=document.getElementById('newProjectName').value; await fetch(`${API_URL}/projects`,{method:'POST',body:JSON.stringify({name:n}),headers:{'Content-Type':'application/json'}}); closeModal('newProjectModal'); loadProjects(); }
         async function saveNewAccount(){ const n=document.getElementById('newAccountName').value; const c=document.getElementById('newAccountCurrency').value; await fetch(`${API_URL}/accounts`,{method:'POST',body:JSON.stringify({name:n,currency:c,type:'Regular',initial_balance:0}),headers:{'Content-Type':'application/json'}}); closeModal('newAccountModal'); loadAccounts(); }
         

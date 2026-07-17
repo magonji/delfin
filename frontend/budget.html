@@ -611,6 +611,10 @@
         // Modals
         function openModal(id) {
             const modal = document.getElementById(id);
+            // Ensure the modal is a direct child of <body> so it's a sibling of any
+            // primary modal. Otherwise, if it lives inside a container that a primary
+            // modal marks as `inert`, it would render but stay non-interactive.
+            if (modal.parentElement !== document.body) document.body.appendChild(modal);
             modal.classList.add('active');
             const parent = modal.parentElement;
             if (parent) {
