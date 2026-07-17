@@ -640,7 +640,13 @@ async function toggleLoanExclusion() {
     renderExcludeList();
 }
 
+let _nwReqId = 0;
 async function loadNetworth() {
+    // Guard against out-of-order responses: the endpoint is slow (it walks every
+    // transaction with historical rates), so overlapping calls — e.g. the initial
+    // monthly/all-time load vs. a user-picked daily/range — could otherwise render
+    // out of order and the chart would flip to whichever landed last.
+    const reqId = ++_nwReqId;
     const period = q('#nwPeriod').value;
     const { from, to } = resolveRange('#nwRange', '#nwFrom', '#nwTo');
     const excluded = Array.from(state.excludedAccountIds).join(',');
@@ -652,9 +658,16 @@ async function loadNetworth() {
         if (from) ps.set('date_from', from);
         if (to) ps.set('date_to', to);
         if (excluded) ps.set('excluded_accounts', excluded);
-        data = await api(`/dashboard/networth/${period}?${ps}`);
+        try {
+            data = await api(`/dashboard/networth/${period}?${ps}`);
+        } catch (e) {
+            if (reqId === _nwReqId) console.error('Net worth load failed', e);
+            return;
+        }
         cacheSet(cacheKey, data);
     }
+    // A newer request started while we were awaiting — drop this stale result.
+    if (reqId !== _nwReqId) return;
 
     renderChart('#networthChart', {
         type: 'line',
