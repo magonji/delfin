@@ -152,6 +152,41 @@
         .fab-button { width: 60px; height: 60px; border-radius: 50%; background: #6B4D3E; color: white; border: none; font-size: 28px; font-weight: 700; cursor: pointer; box-shadow: 0 5px 15px rgba(0,0,0,0.2); transition: transform 0.2s; display: flex; align-items: center; justify-content: center; font-family: 'IBM Plex Sans', sans-serif; }
         .fab-button:hover { transform: scale(1.05); background: #5C3F32; }
 
+        /* Clickable cells in the monthly category-spend box */
+        .row--clickable { cursor: pointer; transition: border-color 0.15s, transform 0.05s; }
+        .row--clickable:hover { border-color: #6B4D3E; }
+        .row--clickable:active { transform: scale(0.99); }
+
+        /* Detail modal (top-expense / category drill-down) */
+        .modal { display: none; position: fixed; inset: 0; z-index: 1000;
+            background: rgba(45, 45, 45, 0.45); backdrop-filter: blur(2px);
+            align-items: center; justify-content: center; padding: 16px; }
+        .modal.active { display: flex; }
+        .modal-content { background: var(--bg); border: 1px solid var(--border); border-radius: 14px;
+            width: 100%; max-width: 460px; max-height: 85vh; overflow: hidden;
+            display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,0.25); }
+        .modal-header { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+            padding: 16px 20px; border-bottom: 1px solid var(--border); background: var(--panel); }
+        .modal-header h3 { margin: 0; font-family: 'Playfair Display', serif; font-size: 20px; color: var(--text);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .modal-close { background: none; border: none; font-size: 26px; line-height: 1; color: var(--muted); cursor: pointer; padding: 0 4px; }
+        .modal-close:hover { color: var(--text); }
+        .modal-body { padding: 18px 20px; overflow-y: auto; }
+        .detail-loading { color: var(--muted); text-align: center; padding: 20px 0; }
+        .detail-grid { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; margin: 0; }
+        .detail-grid dt { color: var(--muted); font-size: 13px; }
+        .detail-grid dd { margin: 0; text-align: right; font-weight: 600; word-break: break-word; }
+        .detail-grid dd.detail-amt { font-size: 20px; font-weight: 800; color: var(--red); font-variant-numeric: tabular-nums; }
+        .detail-cat-head { display: flex; justify-content: space-between; align-items: baseline;
+            padding-bottom: 12px; margin-bottom: 4px; border-bottom: 1px solid var(--border); color: var(--muted); font-size: 13px; }
+        .detail-cat-head strong { font-size: 18px; color: var(--red); font-variant-numeric: tabular-nums; }
+        .detail-exp { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+        .detail-exp:last-child { border-bottom: none; }
+        .detail-exp-main { min-width: 0; }
+        .detail-exp-main strong { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .detail-exp-main .muted { font-size: 12px; }
+        .detail-exp-amt { font-weight: 700; color: var(--red); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
         @media (max-width: 1200px) {
             .container { grid-template-columns: 1fr; }
             .cat-monthly .chart-box { width: 300px; height: 300px; }
@@ -182,6 +217,9 @@
             .card .title { font-size: 14px; }
             .cat-monthly .chart-box { width: 100%; max-width: 280px; height: 280px; }
             .list .row { padding: 8px; }
+            /* Drop the 15px side margins so the top-expenses list aligns with the
+               card padding instead of sitting inset (looked odd on phones). */
+            #monthlyListTitle, #topExpenses { margin-left: 0 !important; margin-right: 0 !important; }
             .row .right { min-width: 100px; }
             .row .amt { font-size: 16px; }
             .badge_spe { width: 50px; height: 22px; font-size: 12px; margin-right: 8px; }
@@ -351,6 +389,16 @@
         </div>
     </section>
 
+    <div id="detailModal" class="modal" onclick="if(event.target===this)closeDetailModal()">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="detailModalTitle">Details</h3>
+                <button class="modal-close" onclick="closeDetailModal()" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body" id="detailModalBody"></div>
+        </div>
+    </div>
+
     <div class="footer">© Royal Bank of González. 2025</div>
 
 <script>
@@ -368,6 +416,7 @@ const PALETTE = [
 const q = (sel) => document.querySelector(sel);
 const qa = (sel) => Array.from(document.querySelectorAll(sel));
 const fmtMoney = (n, c = 'GBP') => new Intl.NumberFormat('en-GB', { style: 'currency', currency: c, maximumFractionDigits: 2 }).format(n || 0);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
 const colour = (i) => PALETTE[i % PALETTE.length];
 
 // API and caching (14-day TTL)
@@ -582,7 +631,8 @@ async function loadAvailableMonths() {
 
 async function loadMonthlyBreakdown(ym) {
     const viewMode = q('#selectViewMode').value;
-    const cacheKey = `cache_monthly_${ym}_${viewMode}`;
+    // v2: payload now carries per-expense detail (id, account, …) for the modals.
+    const cacheKey = `cache_monthly_v2_${ym}_${viewMode}`;
     const data = cacheGet(cacheKey) || await api(`/dashboard/categories/breakdown/${ym}?view_mode=${viewMode}`).then(d => { cacheSet(cacheKey, d); return d; });
     const labels = data.categories.map(c => c.name);
     
@@ -600,19 +650,79 @@ async function loadMonthlyBreakdown(ym) {
         titleEl.textContent = 'Top 10 expenses this month';
         (data.top_expenses || []).forEach(tx => {
             const row = document.createElement('div');
-            row.className = 'row';
-            row.innerHTML = `<div><strong>${tx.payee || '—'}</strong><div class="muted">${tx.category || 'Uncat.'}</div></div><div class="right"><div class="amt">${fmtMoney(tx.amount, data.base_currency)}</div><div class="date">${new Date(tx.date).toLocaleDateString('en-GB')}</div></div>`;
+            row.className = 'row row--clickable';
+            row.innerHTML = `<div><strong>${esc(tx.payee || '—')}</strong><div class="muted">${esc(tx.category || 'Uncat.')}</div></div><div class="right"><div class="amt">${fmtMoney(tx.amount, data.base_currency)}</div><div class="date">${new Date(tx.date).toLocaleDateString('en-GB')}</div></div>`;
+            row.addEventListener('click', () => showExpenseModal(tx, data.base_currency));
             list.appendChild(row);
         });
     } else {
         titleEl.textContent = viewMode === 'category' ? 'Spending by category' : 'Spending by subcategory';
         (data.categories || []).forEach(cat => {
             const row = document.createElement('div');
-            row.className = 'row';
-            row.innerHTML = `<div><strong>${cat.name}</strong><div class="muted">${cat.transaction_count} transactions</div></div><div class="right"><div class="amt">${fmtMoney(cat.amount, data.base_currency)}</div><div class="date">${cat.percentage}%</div></div>`;
+            row.className = 'row row--clickable';
+            row.innerHTML = `<div><strong>${esc(cat.name)}</strong><div class="muted">${cat.transaction_count} transactions</div></div><div class="right"><div class="amt">${fmtMoney(cat.amount, data.base_currency)}</div><div class="date">${cat.percentage}%</div></div>`;
+            row.addEventListener('click', () => showCategoryModal(cat.name, viewMode, ym, data.base_currency));
             list.appendChild(row);
         });
     }
+}
+
+// ---- Detail modals for the monthly category-spend box ----
+function openDetailModal(title, bodyHtml) {
+    q('#detailModalTitle').textContent = title;
+    q('#detailModalBody').innerHTML = bodyHtml;
+    q('#detailModal').classList.add('active');
+}
+function closeDetailModal() {
+    q('#detailModal').classList.remove('active');
+}
+
+// Single expense (from the "Top 10 expenses" cells). All info is already in `tx`.
+function showExpenseModal(tx, baseCurrency) {
+    const category = tx.parent_category && tx.parent_category !== tx.category
+        ? `${tx.parent_category} › ${tx.category}` : (tx.category || 'Uncategorised');
+    const rows = [
+        ['Amount', fmtMoney(tx.amount, baseCurrency)],
+        (tx.currency && tx.currency !== baseCurrency)
+            ? ['Original', fmtMoney(tx.original_amount, tx.currency)] : null,
+        ['Date', new Date(tx.date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' })],
+        ['Payee', tx.payee || '—'],
+        ['Category', category],
+        ['Account', tx.account || '—'],
+        tx.location ? ['Location', tx.location] : null,
+        tx.project ? ['Project', tx.project] : null,
+        tx.note ? ['Note', tx.note] : null,
+    ].filter(Boolean);
+    const body = `<dl class="detail-grid">${rows.map(([k, v]) =>
+        `<dt>${esc(k)}</dt><dd${k === 'Amount' ? ' class="detail-amt"' : ''}>${esc(v)}</dd>`).join('')}</dl>`;
+    openDetailModal(tx.payee || 'Expense', body);
+}
+
+// All expenses in a clicked category/subcategory for the current month.
+async function showCategoryModal(name, viewMode, ym, baseCurrency) {
+    openDetailModal(name, '<div class="detail-loading">Loading…</div>');
+    let data;
+    try {
+        const cacheKey = `cache_monthexp_${ym}`;
+        data = cacheGet(cacheKey) || await api(`/dashboard/categories/breakdown/${ym}/expenses`).then(d => { cacheSet(cacheKey, d); return d; });
+    } catch (e) {
+        q('#detailModalBody').innerHTML = `<div class="detail-loading">Couldn't load expenses.</div>`;
+        return;
+    }
+    const base = data.base_currency || baseCurrency;
+    const key = viewMode === 'category' ? 'parent_category' : 'category';
+    const items = (data.expenses || []).filter(e => e[key] === name);
+    const total = items.reduce((s, e) => s + e.amount, 0);
+    const header = `<div class="detail-cat-head"><span>${items.length} expense${items.length === 1 ? '' : 's'}</span><strong>${fmtMoney(total, base)}</strong></div>`;
+    const list = items.map(e => `
+        <div class="detail-exp">
+            <div class="detail-exp-main">
+                <strong>${esc(e.payee || '—')}</strong>
+                <div class="muted">${esc(e.account || '—')} · ${new Date(e.date).toLocaleDateString('en-GB')}</div>
+            </div>
+            <div class="detail-exp-amt">${fmtMoney(e.amount, base)}</div>
+        </div>`).join('');
+    q('#detailModalBody').innerHTML = header + (list || '<div class="detail-loading">No expenses.</div>');
 }
 
 async function loadYearlySummary(year) {
@@ -934,6 +1044,7 @@ q('#excludeSelectAll').onclick = () => { state.accounts.forEach(a => state.exclu
 q('#excludeClear').onclick = () => { state.excludedAccountIds.clear(); updateExcludeCount(); renderExcludeList(); loadNetworth(); };
 q('#categoriesSelectAll').onclick = () => { state.categories.forEach(c => state.selectedCategoryIds.add(c.id)); renderCategoriesList(); loadCategoriesSeries(); };
 q('#categoriesClear').onclick = () => { state.selectedCategoryIds.clear(); renderCategoriesList(); loadCategoriesSeries(); };
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDetailModal(); });
 
 // Initialisation
 async function init() {

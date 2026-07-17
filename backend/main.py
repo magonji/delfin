@@ -2293,15 +2293,8 @@ def get_categories_evolution(
         "base_currency": base_currency
     }
 
-@app.get("/dashboard/categories/breakdown/{year_month}")
-def get_monthly_category_breakdown(
-    year_month: str,
-    view_mode: str = Query("top", description="View mode: 'top' for top expenses, 'category' for parent categories, 'subcategory' for full category names"),
-    db: Session = Depends(get_db)
-):
-    """
-    Get category breakdown for a month with historical exchange rates.
-    """
+def _parse_year_month(year_month: str):
+    """Parse 'YYYY-MM' into the first and last calendar dates of that month."""
     try:
         year, month = map(int, year_month.split('-'))
         start_date = date(year, month, 1)
@@ -2309,8 +2302,17 @@ def get_monthly_category_breakdown(
             end_date = date(year + 1, 1, 1) - timedelta(days=1)
         else:
             end_date = date(year, month + 1, 1) - timedelta(days=1)
+        return start_date, end_date
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid year_month format. Use YYYY-MM")
+
+
+def _collect_month_expenses(db: Session, start_date, end_date):
+    """Collect every expense transaction in [start_date, end_date], converted to
+    the base currency (GBP) with that day's historical rate and excluding
+    transfers. Returns (expenses, base_currency); each expense is a dict whose
+    `amount`/`original_amount` are positive and unrounded."""
+    base_currency = "GBP"
 
     transfer_ids = [
         r.id for r in db.query(Location.id)
@@ -2326,8 +2328,57 @@ def get_monthly_category_breakdown(
         filters.append(~Transaction.location_id.in_(transfer_ids))
 
     transactions = db.query(Transaction).filter(and_(*filters)).all()
-
     if not transactions:
+        return [], base_currency
+
+    currencies = list(set([t.currency for t in transactions if t.currency]))
+    historical_rates = get_rates_bulk(db, currencies, start_date, end_date)
+
+    expenses = []
+    for trans in transactions:
+        trans_date = _to_date(trans.date)
+        rates_for_day = historical_rates.get(trans_date, {'GBP': 1.0})
+        trans_rate = rates_for_day.get(trans.currency, 1.0)
+        base_rate = rates_for_day.get(base_currency, 1.0)
+        converted = trans.amount * (base_rate / trans_rate)
+
+        if converted > 0:
+            continue  # income
+
+        cat_name = trans.category.name if trans.category else "Uncategorised"
+        parent_name = trans.category.parent if (trans.category and trans.category.parent) else cat_name
+
+        expenses.append({
+            "id": trans.id,
+            "date": trans_date.isoformat(),
+            "amount": abs(converted),
+            "original_amount": abs(trans.amount),
+            "currency": trans.currency,
+            "category": cat_name,
+            "parent_category": parent_name,
+            "payee": trans.payee.name if trans.payee else "Unknown",
+            "account": trans.account.name if trans.account else None,
+            "location": trans.location.name if trans.location else None,
+            "project": trans.project.name if trans.project else None,
+            "note": trans.note,
+        })
+
+    return expenses, base_currency
+
+
+@app.get("/dashboard/categories/breakdown/{year_month}")
+def get_monthly_category_breakdown(
+    year_month: str,
+    view_mode: str = Query("top", description="View mode: 'top' for top expenses, 'category' for parent categories, 'subcategory' for full category names"),
+    db: Session = Depends(get_db)
+):
+    """
+    Get category breakdown for a month with historical exchange rates.
+    """
+    start_date, end_date = _parse_year_month(year_month)
+    all_expenses, base_currency = _collect_month_expenses(db, start_date, end_date)
+
+    if not all_expenses:
         return {
             "month": year_month,
             "categories": [],
@@ -2337,57 +2388,18 @@ def get_monthly_category_breakdown(
                 "num_categories": 0,
                 "num_transactions": 0
             },
-            "base_currency": "GBP"
+            "base_currency": base_currency
         }
 
-    currencies = list(set([t.currency for t in transactions if t.currency]))
-    historical_rates = get_rates_bulk(db, currencies, start_date, end_date)
-    base_currency = "GBP"
-
     category_data = {}
-    total_income = 0
     total_expenses = 0
-    all_expenses = []
 
-    for trans in transactions:
-        trans_date = _to_date(trans.date)
-        rates_for_day = historical_rates.get(trans_date, {'GBP': 1.0})
-        
-        trans_rate = rates_for_day.get(trans.currency, 1.0)
-        base_rate = rates_for_day.get(base_currency, 1.0)
-        converted = trans.amount * (base_rate / trans_rate)
-
-        if converted > 0:
-            total_income += converted
-        else:
-            total_expenses += abs(converted)
-            
-            cat_name = trans.category.name if trans.category else "Uncategorised"
-            parent_name = trans.category.parent if (trans.category and trans.category.parent) else cat_name
-            
-            all_expenses.append({
-                "date": trans_date.isoformat(),
-                "amount": abs(converted),
-                "category": cat_name,
-                "parent_category": parent_name,
-                "payee": trans.payee.name if trans.payee else "Unknown",
-                "note": trans.note
-            })
-
-            if view_mode == "category":
-                cat_key = parent_name
-            else:
-                cat_key = cat_name
-
-            if cat_key not in category_data:
-                category_data[cat_key] = {
-                    "name": cat_key,
-                    "amount": 0,
-                    "transaction_count": 0
-                }
-            
-            category_data[cat_key]["amount"] += abs(converted)
-            category_data[cat_key]["transaction_count"] += 1
+    for e in all_expenses:
+        total_expenses += e["amount"]
+        cat_key = e["parent_category"] if view_mode == "category" else e["category"]
+        bucket = category_data.setdefault(cat_key, {"name": cat_key, "amount": 0, "transaction_count": 0})
+        bucket["amount"] += e["amount"]
+        bucket["transaction_count"] += 1
 
     categories = sorted(category_data.values(), key=lambda x: x["amount"], reverse=True)[:20]
 
@@ -2395,9 +2407,12 @@ def get_monthly_category_breakdown(
         category["percentage"] = round((category["amount"] / total_expenses * 100), 1) if total_expenses > 0 else 0
         category["amount"] = round(category["amount"], 2)
 
+    # Top 10, rounded for display (the full list is served by the /expenses endpoint).
     top_expenses = sorted(all_expenses, key=lambda x: x["amount"], reverse=True)[:10]
-    for expense in top_expenses:
-        expense["amount"] = round(expense["amount"], 2)
+    top_expenses = [
+        {**e, "amount": round(e["amount"], 2), "original_amount": round(e["original_amount"], 2)}
+        for e in top_expenses
+    ]
 
     return {
         "month": year_month,
@@ -2410,6 +2425,30 @@ def get_monthly_category_breakdown(
         },
         "base_currency": base_currency
     }
+
+
+@app.get("/dashboard/categories/breakdown/{year_month}/expenses")
+def get_monthly_category_expenses(
+    year_month: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Full list of the month's expense transactions (converted to base currency,
+    transfers excluded), sorted by amount descending. Powers the per-category
+    detail modal on the dashboard; the client filters by category/parent.
+    """
+    start_date, end_date = _parse_year_month(year_month)
+    all_expenses, base_currency = _collect_month_expenses(db, start_date, end_date)
+    for e in all_expenses:
+        e["amount"] = round(e["amount"], 2)
+        e["original_amount"] = round(e["original_amount"], 2)
+    all_expenses.sort(key=lambda x: x["amount"], reverse=True)
+    return {
+        "month": year_month,
+        "expenses": all_expenses,
+        "base_currency": base_currency
+    }
+
 
 @app.get("/dashboard/yearly-summary")
 def get_yearly_summary(
