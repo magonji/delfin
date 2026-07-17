@@ -634,12 +634,39 @@ async function loadMonthlyBreakdown(ym) {
     // v2: payload now carries per-expense detail (id, account, …) for the modals.
     const cacheKey = `cache_monthly_v2_${ym}_${viewMode}`;
     const data = cacheGet(cacheKey) || await api(`/dashboard/categories/breakdown/${ym}?view_mode=${viewMode}`).then(d => { cacheSet(cacheKey, d); return d; });
-    const labels = data.categories.map(c => c.name);
-    
+    // In "top" mode the doughnut shows each of the 10 biggest expenses as a slice
+    // (its share of the month's total spend) plus a light-grey "Other expenses"
+    // slice for everything else. Other modes keep the per-category breakdown.
+    let pieLabels, pieData, pieColors, pieTotal;
+    if (viewMode === 'top') {
+        const top = data.top_expenses || [];
+        pieTotal = data.summary?.total_spent ?? top.reduce((s, t) => s + t.amount, 0);
+        const topSum = top.reduce((s, t) => s + t.amount, 0);
+        const rest = Math.max(0, pieTotal - topSum);
+        pieLabels = top.map(t => t.payee || '—');
+        pieData = top.map(t => t.amount);
+        pieColors = top.map((_, i) => colour(i));
+        if (rest > EPS) { pieLabels.push('Other expenses'); pieData.push(rest); pieColors.push('#D6D0CA'); }
+    } else {
+        pieLabels = data.categories.map(c => c.name);
+        pieData = data.categories.map(c => c.amount);
+        pieColors = pieLabels.map((_, i) => colour(i));
+        pieTotal = pieData.reduce((s, v) => s + v, 0);
+    }
+
     renderChart('#catPie', {
         type: 'doughnut',
-        data: { labels, datasets: [{ data: data.categories.map(c => c.amount), backgroundColor: labels.map((_, i) => colour(i)) }] },
-        options: { maintainAspectRatio: false, cutout: '60%', plugins: { legend: { display: false } } }
+        data: { labels: pieLabels, datasets: [{ data: pieData, backgroundColor: pieColors }] },
+        options: {
+            maintainAspectRatio: false, cutout: '60%',
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: (ctx) => {
+                    const pct = pieTotal > 0 ? (ctx.parsed / pieTotal * 100).toFixed(1) : '0';
+                    return `${ctx.label}: ${fmtMoney(ctx.parsed, data.base_currency)} (${pct}%)`;
+                } } }
+            }
+        }
     }, '_pie');
 
     const list = q('#topExpenses');
