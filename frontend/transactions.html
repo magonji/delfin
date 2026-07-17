@@ -2508,6 +2508,11 @@
         }
         function openModal(id) {
             const modal = document.getElementById(id);
+            // Ensure the modal is a direct child of <body> so it's a sibling of any
+            // primary modal. Otherwise, if it lives inside a container that a primary
+            // modal marks as `inert` (via trapFocus), it would render but stay
+            // non-interactive (can't type or close it).
+            if (modal.parentElement !== document.body) document.body.appendChild(modal);
             modal.classList.add('active');
             // Trap focus inside the modal
             trapFocus(modal);
