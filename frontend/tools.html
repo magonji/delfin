@@ -174,6 +174,9 @@
         button.danger { background: var(--danger); color: white; border: none; }
         button.danger:hover { opacity: 0.9; }
 
+        button.merge { background: transparent; color: var(--btn-primary); border: 1px solid var(--btn-primary); }
+        button.merge:hover { background: var(--btn-primary); color: white; }
+
         .success-message { background: var(--green); color: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: none; }
         .error-message { background: var(--red); color: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: none; }
 
@@ -376,7 +379,11 @@
             .modal-header { padding: 12px 15px; }
             .modal-header h3 { font-size: 16px; }
             .item-list { padding: 12px; }
-            .item-row { padding: 10px; }
+            /* Stack info over actions so long category stats and the three buttons
+               don't get squeezed into a narrow column. */
+            .item-row { padding: 10px; grid-template-columns: 1fr; }
+            .item-actions { justify-content: stretch; }
+            .item-actions button { flex: 1; min-width: 0; padding: 8px 6px; font-size: 14px; }
             .form-group { padding: 0 15px; }
             .search-box { padding: 12px 15px 0; }
             .import-table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -681,7 +688,7 @@
                             <span class="badge badge-dup">Duplicates: <span id="duplicateCount">0</span></span>
                             <span class="badge badge-new">New: <span id="newCount">0</span></span>
                             <button type="button" onclick="editMappingFromPreview()" class="secondary"
-                                style="font-size: 12px; padding: 6px 12px; height: auto;">✏️ Edit column mapping</button>
+                                style="font-size: 12px; padding: 6px 12px; height: auto;">Edit column mapping</button>
                         </div>
                     </div>
 
@@ -1410,7 +1417,7 @@
                         <div style="margin-bottom: 25px;">
                             <div style="display: flex; justify-content: space-between; align-items: center; font-size: 18px; font-weight: bold; color: #667eea; margin-bottom: 10px; padding: 10px; background: #f0f4ff; border-radius: 8px;">
                                 <span>📁 ${parent}</span>
-                                <button onclick="editParentCategory('${parent.replace(/'/g, "\\'")}', ${JSON.stringify(subcategories.map(c => c.id))})" style="padding: 6px 12px; font-size: 13px;">✏️ Edit Parent</button>
+                                <button onclick="editParentCategory('${parent.replace(/'/g, "\\'")}', ${JSON.stringify(subcategories.map(c => c.id))})" style="padding: 6px 12px; font-size: 13px;">Edit Parent</button>
                             </div>
                     `;
                     
@@ -1427,7 +1434,7 @@
                                     </div>
                                 </div>
                                 <div class="item-actions">
-                                    <button onclick="editItem('category', ${cat.id})">✏️ Edit</button>
+                                    <button onclick="editItem('category', ${cat.id})">Edit</button>
                                     <button onclick="deleteCategory(${cat.id}, '${cat.name.replace(/'/g, "\\'")}', '${(cat.parent || '').replace(/'/g, "\\'")}')" style="background: #f87171; color: white;">🗑️</button>
                                 </div>
                             </div>
@@ -1446,7 +1453,7 @@
                                     <div class="item-meta">Parent Category (no subcategories)</div>
                                 </div>
                                 <div class="item-actions">
-                                    <button onclick="editItem('category', ${standaloneCategory.id})">✏️ Edit</button>
+                                    <button onclick="editItem('category', ${standaloneCategory.id})">Edit</button>
                                     <button onclick="deleteCategory(${standaloneCategory.id}, '${parent.replace(/'/g, "\\'")}', null)" style="background: #f87171; color: white;">🗑️</button>
                                 </div>
                             </div>
@@ -1485,7 +1492,7 @@
                             <div class="item-meta">Currency: ${acc.currency} | Type: ${acc.type || 'Regular'} | Balance: ${acc.current_balance.toFixed(2)}</div>
                         </div>
                         <div class="item-actions">
-                            <button onclick="editItem('account', ${acc.id})">✏️ Edit</button>
+                            <button onclick="editItem('account', ${acc.id})">Edit</button>
                             ${action_button}
                         </div>
                     </div>
@@ -1513,9 +1520,9 @@
                         <div class="item-meta">${meta}</div>
                     </div>
                     <div class="item-actions">
-                        <button onclick="editItem('payee', ${payee.id})">✏️ Edit</button>
-                        <button onclick="mergePayee(${payee.id})">🔀 Merge</button>
-                        <button class="danger" onclick="deletePayee(${payee.id})">🗑️ Delete</button>
+                        <button onclick="editItem('payee', ${payee.id})">Edit</button>
+                        <button class="merge" onclick="mergePayee(${payee.id})">Merge</button>
+                        <button class="danger" onclick="deletePayee(${payee.id})">Delete</button>
                     </div>
                 </div>`;
             }).join('');
@@ -1592,9 +1599,9 @@
                         <div class="item-meta">${count} transaction${count === 1 ? '' : 's'}</div>
                     </div>
                     <div class="item-actions">
-                        <button onclick="editItem('location', ${loc.id})">✏️ Edit</button>
-                        <button onclick="mergeEntity('location', ${loc.id})">🔀 Merge</button>
-                        <button class="danger" onclick="deleteEntity('location', ${loc.id})">🗑️ Delete</button>
+                        <button onclick="editItem('location', ${loc.id})">Edit</button>
+                        <button class="merge" onclick="mergeEntity('location', ${loc.id})">Merge</button>
+                        <button class="danger" onclick="deleteEntity('location', ${loc.id})">Delete</button>
                     </div>
                 </div>`;
             }).join('');
@@ -1613,9 +1620,9 @@
                         <div class="item-meta">${count} transaction${count === 1 ? '' : 's'}</div>
                     </div>
                     <div class="item-actions">
-                        <button onclick="editItem('project', ${proj.id})">✏️ Edit</button>
-                        <button onclick="mergeEntity('project', ${proj.id})">🔀 Merge</button>
-                        <button class="danger" onclick="deleteEntity('project', ${proj.id})">🗑️ Delete</button>
+                        <button onclick="editItem('project', ${proj.id})">Edit</button>
+                        <button class="merge" onclick="mergeEntity('project', ${proj.id})">Merge</button>
+                        <button class="danger" onclick="deleteEntity('project', ${proj.id})">Delete</button>
                     </div>
                 </div>`;
             }).join('');
