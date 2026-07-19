@@ -13,34 +13,53 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Delfin">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#FAE6D9">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Playfair+Display:wght@700;800&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#EFE1CE">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;0,800;0,900;1,500&display=swap" rel="stylesheet">
 <style>
-    :root { --bg:#FFF7F0; --card:#FAE6D9; --panel:#F3D9C8; --text:#2D2D2D; --muted:#8a7a6f; --border:#D4B5A0; --btn:#6B4D3E; --btn-hover:#5C3F32; --danger:#c0392b; }
+    :root {
+        --bg:#EFE1CE; --paper:#FFFDFA; --ink:#23201C; --muted:#8A7D6C; --border:#D8C6B0;
+        --hair:#EFE4D3; --field:#E4D5C1; --btn:#2B2621; --btn-hover:#1c1814;
+        --accent:#B0402E; --green:#3C7A57;
+    }
     * { box-sizing: border-box; }
-    body { margin:0; min-height:100vh; background:var(--bg); color:var(--text); font-family:'IBM Plex Sans',sans-serif;
+    body { margin:0; min-height:100vh; background:var(--bg); color:var(--ink); font-family:'IBM Plex Sans',sans-serif;
+           -webkit-font-smoothing:antialiased;
+           background-image:radial-gradient(circle at 50% 0%, rgba(255,255,255,.5), transparent 55%);
            display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px; }
-    .brand { display:flex; align-items:center; gap:10px; margin-bottom:18px; }
-    .brand h1 { font-family:'Playfair Display',serif; font-size:30px; margin:0; }
-    .brand .dolphin { font-size:30px; }
-    .card { width:100%; max-width:420px; background:var(--card); border:1px solid var(--border); border-radius:14px; padding:26px; box-shadow:0 10px 30px rgba(0,0,0,0.08); }
-    h2 { margin:0 0 6px; font-size:20px; }
-    p.sub { margin:0 0 18px; color:var(--muted); font-size:14px; line-height:1.5; }
-    label { display:block; font-size:13px; font-weight:600; color:var(--muted); margin:14px 0 6px; }
-    input { width:100%; padding:12px; font-size:16px; font-family:'IBM Plex Sans',sans-serif; border:1px solid var(--border); border-radius:8px; background:#fff; -webkit-appearance:none; appearance:none; }
+    ::selection { background:var(--accent); color:#FAF3E9; }
+
+    /* Masthead */
+    .brand { width:100%; max-width:430px; text-align:center; margin-bottom:22px; }
+    .brand .kicker { font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:3px; text-transform:uppercase; color:var(--muted); }
+    .brand .rule-thick { height:2px; background:var(--btn); margin:8px 0 3px; }
+    .brand .rule-thin { height:1px; background:var(--btn); }
+    .brand h1 { font-family:'Playfair Display',serif; font-size:46px; font-weight:900; letter-spacing:-.5px; line-height:1; margin:12px 0 2px; }
+    .brand .motto { font-family:'Playfair Display',serif; font-style:italic; font-size:14px; color:#5A4E3C; }
+
+    .card { width:100%; max-width:430px; background:var(--paper); border:1px solid var(--border); border-radius:16px; padding:32px 30px; box-shadow:0 18px 50px rgba(60,40,20,.18); }
+
+    h2 { margin:0 0 0 -15px; font-family:'Playfair Display',serif; font-size:23px; font-weight:800; padding-left:12px; border-left:3px solid var(--accent); }
+    p.sub { margin:10px 0 22px; color:var(--muted); font-size:13.5px; line-height:1.5; }
+    label { display:block; font-size:11px; font-weight:600; letter-spacing:1px; text-transform:uppercase; color:var(--muted); margin:16px 0 7px; }
+    input { width:100%; padding:0 13px; height:46px; font-size:15px; font-family:'IBM Plex Sans',sans-serif; color:var(--ink); border:1px solid var(--field); border-radius:9px; background:#fff; -webkit-appearance:none; appearance:none; transition:border-color .15s; }
+    input:focus { outline:none; border-color:var(--btn); }
+    #recCode { font-family:'IBM Plex Mono',monospace; letter-spacing:1px; }
     /* Keep checkboxes/radios native — the reset above would otherwise render them as empty full-width boxes. */
-    input[type="checkbox"], input[type="radio"] { width:auto; padding:0; margin:0; border:0; border-radius:0; background:transparent; appearance:auto; -webkit-appearance:auto; flex:0 0 auto; }
-    button.primary { width:100%; margin-top:20px; padding:13px; font-size:16px; font-weight:700; color:#fff; background:var(--btn); border:none; border-radius:8px; cursor:pointer; font-family:'IBM Plex Sans',sans-serif; }
+    input[type="checkbox"], input[type="radio"] { width:auto; height:auto; padding:0; margin:0; border:0; border-radius:0; background:transparent; appearance:auto; -webkit-appearance:auto; flex:0 0 auto; }
+    button.primary { width:100%; margin-top:22px; height:48px; font-size:16px; font-weight:600; color:#F6EFE3; background:var(--btn); border:none; border-radius:9px; cursor:pointer; font-family:'Playfair Display',serif; transition:background .15s; }
     button.primary:hover { background:var(--btn-hover); }
-    button.primary:disabled { opacity:.6; cursor:default; }
-    .link { display:inline-block; margin-top:16px; color:var(--btn); font-size:13px; cursor:pointer; text-decoration:underline; background:none; border:none; padding:0; font-family:inherit; }
-    .msg { margin-top:14px; padding:11px 13px; border-radius:8px; font-size:14px; display:none; }
-    .msg.err { background:#f8d7da; color:#842029; }
-    .msg.ok { background:#d1f2eb; color:#0f5132; }
-    .code-box { font-family:'IBM Plex Mono',monospace; font-size:20px; letter-spacing:1px; text-align:center; background:#fff; border:2px dashed var(--border); border-radius:10px; padding:16px; margin:14px 0; word-break:break-all; }
-    .warn { background:#fff3cd; color:#7a5b00; border:1px solid #ffe69c; border-radius:8px; padding:12px; font-size:13px; line-height:1.5; }
-    .check { display:flex; gap:8px; align-items:flex-start; margin-top:14px; font-size:13px; color:var(--text); }
-    .check input { width:auto; margin-top:2px; }
+    button.primary:disabled { opacity:.55; cursor:default; }
+    .link { display:inline-block; margin-top:18px; color:var(--muted); font-size:13px; cursor:pointer; text-decoration:none; background:none; border:none; padding:0; font-family:inherit; }
+    .link:hover { color:var(--accent); text-decoration:underline; }
+    .foot { width:100%; max-width:430px; text-align:center; margin-top:20px; font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:1px; color:#A2937E; }
+
+    .msg { margin-top:16px; padding:12px 14px; border-radius:9px; font-size:13.5px; line-height:1.5; display:none; }
+    .msg.err { background:#FBEDE9; color:#8A2D1C; border:1px solid #E7C3B8; }
+    .msg.ok { background:#E6F0EA; color:#2C5C42; border:1px solid #BFD9C9; }
+    .code-box { font-family:'IBM Plex Mono',monospace; font-size:20px; font-weight:600; letter-spacing:1px; text-align:center; background:#fff; border:2px dashed var(--field); border-radius:10px; padding:16px; margin:16px 0; word-break:break-all; }
+    .warn { background:#FBF3E6; color:#7A5B22; border:1px solid #EBD9BE; border-radius:9px; padding:12px 14px; font-size:12.5px; line-height:1.55; }
+    .check { display:flex; gap:9px; align-items:flex-start; margin-top:16px; font-size:13px; color:var(--ink); line-height:1.45; }
+    .check input { width:auto; height:auto; margin-top:2px; }
     .hidden { display:none; }
     .pw-wrap { position:relative; }
     .pw-wrap input { padding-right:46px; }
@@ -48,7 +67,15 @@
 </style>
 </head>
 <body>
-    <div class="brand"><span class="dolphin">🐬</span><h1>Delfin</h1></div>
+    <div class="brand">
+        <div class="kicker">Personal Finance · Est. MMXXV</div>
+        <div class="rule-thick"></div>
+        <div class="rule-thin"></div>
+        <h1>Delfin</h1>
+        <div class="motto">Your ledger, kept quietly.</div>
+        <div class="rule-thin" style="margin-top:12px;"></div>
+        <div class="rule-thick" style="margin-top:2px;"></div>
+    </div>
     <div class="card">
 
         <!-- LOGIN -->
@@ -81,7 +108,7 @@
                     <input type="password" id="setupPw2" autocomplete="new-password" minlength="6" required>
                     <button type="button" class="pw-toggle" onclick="togglePw(this)" title="Show password" aria-label="Show password">👁</button>
                 </div>
-                <button class="primary" type="submit">Encrypt & continue</button>
+                <button class="primary" type="submit">Encrypt &amp; continue</button>
             </form>
         </div>
 
@@ -107,13 +134,15 @@
                     <input type="password" id="recPw" autocomplete="new-password" minlength="6" required>
                     <button type="button" class="pw-toggle" onclick="togglePw(this)" title="Show password" aria-label="Show password">👁</button>
                 </div>
-                <button class="primary" type="submit">Set new password & unlock</button>
+                <button class="primary" type="submit">Set new password &amp; unlock</button>
             </form>
-            <button class="link" onclick="show('loginPanel')">Back to sign in</button>
+            <button class="link" onclick="show('loginPanel')">← Back to sign in</button>
         </div>
 
         <div id="msg" class="msg"></div>
     </div>
+
+    <div class="foot">© Royal Bank of González, 2026 · locally encrypted</div>
 
 <script>
     const $ = s => document.querySelector(s);
