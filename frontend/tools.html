@@ -37,6 +37,22 @@
                 background:rgba(250,243,233,.86); border-bottom:1px solid var(--border); }
         h1 { font-size:25px; margin:0; font-family:'Playfair Display',serif; font-weight:800; letter-spacing:-.3px; }
 
+        /* Editorial brand wordmark (left of header) */
+        .brand-left { display:flex; align-items:center; gap:14px; }
+        .brand-left .wordmark { font-family:'Playfair Display',serif; font-size:25px; font-weight:800; letter-spacing:-.3px; color:var(--ink); }
+        .brand-left .sep { width:1px; height:20px; background:var(--border); }
+        .brand-left .tag { font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:2px; text-transform:uppercase; color:var(--muted); }
+
+        /* Desktop: turn the JS-wired dropdown into a horizontal nav bar (mobile keeps the burger) */
+        @media (min-width:821px) {
+            #navBtn { display:none; }
+            #navDropdown .menu { position:static; display:block; box-shadow:none; border:none; background:transparent; padding:0; min-width:0; }
+            #navDropdown .list { display:flex; align-items:center; gap:2px; padding:0 !important; }
+            #navDropdown .list hr { display:none; }
+            #navDropdown .navItem { width:auto; padding:7px 12px; font-weight:600; border-radius:8px; }
+            #btnRefresh { margin-left:6px; background:#F1E7D6; font-family:'Playfair Display',serif; font-weight:500; }
+        }
+
         /* ── Nav dropdown ── */
         .tools { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
         .dropdown { position:relative; }
@@ -62,6 +78,11 @@
         .tool-section { margin-bottom:40px; }
         .tool-section-head { padding-bottom:12px; border-bottom:2px solid var(--btn-primary); }
         .sechead { margin:0 0 0 -22px; font-family:'Playfair Display',serif; font-size:24px; font-weight:800;
+            padding-left:19px; border-left:3px solid var(--accent); }
+
+        /* ── Page title ── */
+        .page-head { margin-bottom:30px; }
+        .page-title { margin:0 0 0 -22px; font-family:'Playfair Display',serif; font-size:34px; font-weight:800;
             padding-left:19px; border-left:3px solid var(--accent); }
 
         /* ── Tools grid & tiles (editorial rows with SVG icons, no chunky cards) ── */
@@ -252,6 +273,10 @@
         <div id="errorMessage" class="error-message"></div>
         
         <div class="card">
+            <!-- Page title -->
+            <div class="page-head"><h1 class="page-title">Tools</h1></div>
+
+            <!-- ── Organise Your Data ── -->
             <div class="tool-section">
                 <div class="tool-section-head"><h2 class="sechead">Organise Your Data</h2></div>
                 <div class="tools-grid">
@@ -336,7 +361,6 @@
                     </div>
                 </div>
             </div>
-        </div>
     </div>
 
     <div id="categoriesModal" class="modal">
