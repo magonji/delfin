@@ -16,390 +16,219 @@
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg: #FFF1E6; 
-            --panel: #FEE5D7; 
-            --card: #D4B5A0; 
-            --border: #D4B5A0;
-            --muted: #5F5F5F; 
-            --text: #2D2D2D;
-            --btn-primary: #6B4D3E;   /* Primary button colour */
-            --btn-hover: #5C3F32;     /* Hover state colour */
-            --danger: #D65A4A;
-            --green: #0e9530; 
-            --red: #d52811; 
-            --yellow: #f5b700;
+            --bg:#FAF3E9; --paper:#FFFDFA; --panel:#F3E9DA; --ink:#23201C; --muted:#8A7D6C;
+            --border:#D8C6B0; --hair:#EFE4D3; --field:#E4D5C1;
+            --btn-primary:#2B2621; --btn-hover:#1c1814; --danger:#B0402E;
+            --green:#3C7A57; --red:#B0402E; --yellow:#C6893F; --accent:#B0402E;
         }
 
-        html { min-height: 100%; scrollbar-gutter: stable both-edges; background: #FAE6D9; }
-        body { min-height: 100vh; margin: 0; background: var(--bg); color: var(--text); font-family: 'IBM Plex Mono', monospace;
-               display: flex; flex-direction: column;
-               padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); padding-bottom: env(safe-area-inset-bottom); }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        html { min-height:100%; scrollbar-gutter: stable both-edges; background:var(--bg); }
+        body { min-height:100vh; margin:0; background:var(--bg); color:var(--ink);
+            font-family:'IBM Plex Sans',sans-serif; -webkit-font-smoothing:antialiased;
+            display:flex; flex-direction:column;
+            background-image:radial-gradient(circle at 20% 0%, rgba(255,255,255,.35), transparent 45%);
+            padding-left:env(safe-area-inset-left); padding-right:env(safe-area-inset-right); padding-bottom:env(safe-area-inset-bottom); }
 
-        header { display: flex; align-items: center; justify-content: space-between; padding: 18px 20px; padding-top: calc(18px + env(safe-area-inset-top)); position: sticky; top: 0; backdrop-filter: blur(8px); background: #FAE6D9; border-bottom: 1px solid var(--border); z-index: 50; }
-        h1 { font-size: 30px; margin: 0; letter-spacing: 0.2px; font-family: 'Playfair Display', serif; }
+        /* ── Header ── */
+        header { display:flex; align-items:center; justify-content:space-between; gap:16px;
+                padding:15px 30px; padding-top:calc(15px + env(safe-area-inset-top));
+                position:sticky; top:0; z-index:50; backdrop-filter:blur(10px);
+                background:rgba(250,243,233,.86); border-bottom:1px solid var(--border); }
+        h1 { font-size:25px; margin:0; font-family:'Playfair Display',serif; font-weight:800; letter-spacing:-.3px; }
 
-        /* Navigation dropdown menu */
-        .tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-        .dropdown { position: relative; }
-        .dropdown .btn { display: flex; align-items: center; gap: 8px; }
-        #navBtn { font-size: 22px; padding: 4px 8px; line-height: 1; background: transparent; border: none; cursor: pointer; color: var(--text); }
-        .dropdown .menu {
-            position: absolute; top: calc(100% + 6px); right: 0; min-width: 180px;
-            background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.35); display: none; padding: 8px; z-index: 100;
+        /* ── Nav dropdown ── */
+        .tools { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+        .dropdown { position:relative; }
+        .dropdown .btn { display:flex; align-items:center; gap:8px; }
+        #navBtn { font-size:22px; padding:4px 8px; line-height:1; background:transparent; border:none; cursor:pointer; color:var(--ink); }
+        .dropdown .menu { position:absolute; top:calc(100% + 6px); right:0; min-width:190px;
+            background:var(--paper); border:1px solid var(--border); border-radius:12px;
+            box-shadow:0 14px 40px rgba(60,40,20,.22); display:none; padding:8px; z-index:100; }
+        .dropdown.open .menu { display:block; }
+        #navDropdown .navItem { width:100%; text-align:left; padding:9px 12px; background:transparent;
+            cursor:pointer; border:none !important; border-radius:8px; transition:background .2s;
+            font-size:14px; font-weight:600; font-family:'IBM Plex Sans',sans-serif; color:var(--ink); }
+        #navDropdown .navItem:hover { background:var(--panel); }
+        #navDropdown .navItem.active { background:var(--field); color:var(--ink); pointer-events:none; }
+
+        /* ── Container & page frame ── */
+        .container { margin:26px auto 0; max-width:1080px; padding:0 30px 80px; width:100%; }
+
+        /* The outer .card wrapper becomes invisible — sections are separated by rules. */
+        .card { background:transparent; padding:0; border:none; border-radius:0; }
+
+        /* ── Section headers (editorial) ── */
+        .tool-section { margin-bottom:40px; }
+        .tool-section-head { padding-bottom:12px; border-bottom:2px solid var(--btn-primary); }
+        .sechead { margin:0 0 0 -22px; font-family:'Playfair Display',serif; font-size:24px; font-weight:800;
+            padding-left:19px; border-left:3px solid var(--accent); }
+
+        /* ── Tools grid & tiles (editorial rows with SVG icons, no chunky cards) ── */
+        .tools-grid { display:grid; grid-template-columns:1fr 1fr; gap:0 40px; padding-top:6px; }
+        .tool-card { display:grid; grid-template-columns:34px 1fr auto; gap:16px; align-items:center;
+            text-align:left; background:transparent; border:none; border-bottom:1px solid var(--hair);
+            border-radius:0; padding:16px 10px; margin:0; cursor:pointer; transition:background .15s; }
+        .tool-card:hover { transform:none; box-shadow:none; background:#F4EAD9; }
+        .tool-card::after { content:"›"; grid-column:3; color:#B7A88F; font-size:16px; transition:transform .15s; }
+        .tool-card:hover::after { transform:translateX(3px); }
+        /* SVG icon sits in column 1; the title/description share column 2 */
+        .tool-card > svg { grid-column:1; grid-row:1 / span 2; width:22px; height:22px; color:#3A342C; }
+        .tool-icon { grid-column:1; grid-row:1 / span 2; font-size:20px; line-height:1; filter:grayscale(.2); } /* fallback if emoji kept */
+        .tool-title { grid-column:2; grid-row:1; font-family:'Playfair Display',serif; font-size:17px; font-weight:700; color:var(--ink); margin:0; }
+        .tool-description { grid-column:2; grid-row:2; font-family:'IBM Plex Sans',sans-serif; font-size:12px; color:var(--muted); line-height:1.4; margin-top:2px; }
+
+        /* ── Modals ── */
+        .modal { display:none; position:fixed; z-index:1000; inset:0; width:100%; height:100%;
+            background:rgba(35,32,28,.4); backdrop-filter:blur(3px); }
+        .modal-content { background:var(--paper); padding:0; border-radius:16px; width:90%; max-width:560px;
+            max-height:88vh; overflow-y:auto; box-shadow:0 24px 60px rgba(40,28,14,.35);
+            border:1px solid #F1E8D9; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+            animation:slideUpCentered .3s ease; }
+        .modal-header { background:transparent; padding:18px 24px; border-bottom:1px solid var(--hair);
+            display:flex; justify-content:space-between; align-items:center; }
+        .modal-header h3 { margin:0; color:var(--ink); font-size:21px; font-weight:700;
+            font-family:'Playfair Display',serif; padding-left:12px; border-left:3px solid var(--accent); }
+        .close-btn { background:#F1E7D6; border:none; border-radius:8px; width:32px; height:32px;
+            font-size:18px; line-height:1; color:#3A342C; cursor:pointer; }
+        .close-btn:hover { background:var(--field); }
+
+        /* ── List items / entity rows ── */
+        .item-list { padding:14px 24px 22px; }
+        .item-row { display:grid; grid-template-columns:1fr auto; gap:10px; padding:12px 0;
+            background:transparent; border:none; border-bottom:1px solid var(--hair); border-radius:0;
+            margin-bottom:0; align-items:center; font-family:'IBM Plex Sans',sans-serif; }
+        .item-row:nth-child(even) { background:transparent; }
+        .item-name { font-weight:600; font-size:14px; }
+        .item-info { min-width:0; }
+        .item-meta { font-size:12px; color:var(--muted); margin-top:3px; line-height:1.35; }
+        .item-actions { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+
+        /* ── Forms ── */
+        .form-group { margin-bottom:18px; padding:0 24px; }
+        label { display:block; margin-bottom:7px; font-weight:600; font-size:11px; letter-spacing:1px;
+            text-transform:uppercase; color:var(--muted); font-family:'IBM Plex Sans',sans-serif; }
+        input, select, textarea { width:100%; padding:11px 12px; border:1px solid var(--field);
+            border-radius:9px; background:#fff; font-family:'IBM Plex Sans',sans-serif; font-size:14px;
+            color:var(--ink); -webkit-appearance:none; appearance:none; transition:border-color .15s; }
+        input:focus, select:focus, textarea:focus { outline:none; border-color:var(--btn-primary); }
+        .pw-wrap { position:relative; }
+        .pw-wrap input { padding-right:44px; }
+        .pw-toggle { position:absolute; right:4px; top:50%; transform:translateY(-50%); background:none;
+            border:none; cursor:pointer; font-size:18px; line-height:1; padding:6px 8px; width:auto; color:var(--muted); }
+        select { background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%238A7D6C'/%3E%3C/svg%3E") no-repeat right 12px center; padding-right:28px; }
+        input[type="radio"], input[type="checkbox"] { width:auto; padding:0; margin:0; border:0; border-radius:0;
+            appearance:auto; -webkit-appearance:auto; flex:0 0 auto; }
+        .progress-track { height:8px; background:var(--field); border-radius:999px; overflow:hidden; margin:10px 0; }
+        .progress-track .bar { height:100%; width:40%; border-radius:999px; background:var(--btn-primary);
+            animation:indeterminate 1.2s ease-in-out infinite; }
+        @keyframes indeterminate { 0% { margin-left:-40%; } 100% { margin-left:100%; } }
+        .search-box { padding:18px 24px 0; margin-bottom:10px; }
+
+        /* ── Buttons ── */
+        button { padding:10px 16px; border-radius:9px; border:none; font-weight:500; cursor:pointer;
+            font-family:'Playfair Display',serif; font-size:14px; transition:background .15s, transform .15s;
+            background:var(--btn-primary); color:#F6EFE3; -webkit-appearance:none; appearance:none; }
+        button:hover { background:var(--btn-hover); transform:translateY(-1px); }
+        button.secondary { background:#F1E7D6; border:none !important; color:#3A342C; }
+        button.secondary:hover { background:var(--field); color:var(--ink); }
+        button.danger { background:#FBEDE9; color:var(--danger); border:1px solid #E7C3B8; }
+        button.danger:hover { background:#F6DED6; }
+        button.merge { background:transparent; color:var(--btn-primary); border:1px solid var(--border); }
+        button.merge:hover { background:var(--panel); color:var(--ink); }
+
+        .success-message { background:#E6F0EA; color:#2C5C42; border:1px solid #BFD9C9; padding:14px; border-radius:9px; margin-bottom:20px; display:none; }
+        .error-message { background:#FBEDE9; color:#8A2D1C; border:1px solid #E7C3B8; padding:14px; border-radius:9px; margin-bottom:20px; display:none; }
+
+        @keyframes slideUpCentered { from { transform:translate(-50%,-45%); opacity:0; } to { transform:translate(-50%,-50%); opacity:1; } }
+        .footer { opacity:.8; font-size:11px; text-align:center; margin-top:auto; padding:60px 0 20px;
+            font-family:'IBM Plex Mono',monospace; letter-spacing:1px; color:#A2937E; }
+
+        #transactionsTable th { padding:10px; background:var(--panel); border:1px solid var(--border); }
+        #transactionsTable td { padding:8px; border:1px solid var(--border); background:#fff; }
+
+        /* ── Import table ── */
+        .import-table-container { border:1px solid var(--border); border-radius:10px; overflow:hidden; background:#fff; box-shadow:0 2px 10px rgba(60,40,20,.05); }
+        .import-table { width:100%; border-collapse:collapse; font-size:13px; }
+        .import-table th { background:var(--panel); color:var(--muted); font-family:'IBM Plex Sans',sans-serif;
+            font-weight:700; font-size:10px; text-transform:uppercase; letter-spacing:1px; padding:12px 10px;
+            text-align:left; border-bottom:2px solid var(--border); white-space:nowrap; position:sticky; top:0; z-index:10; }
+        .import-table td { padding:8px 10px; border-bottom:1px solid var(--hair); vertical-align:middle; color:var(--ink); transition:background .2s; }
+        .import-table tr:last-child td { border-bottom:none; }
+        .import-table tr:hover td { background-color:#FBF4EA; }
+        .col-skip { width:40px; text-align:center; }
+        .col-date { width:100px; white-space:nowrap; color:var(--muted); font-size:12px; }
+        .col-desc { max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; color:var(--muted); }
+        .col-amount { text-align:right; font-family:'IBM Plex Mono',monospace; font-weight:600; white-space:nowrap; }
+        .col-status { width:80px; text-align:center; }
+        .import-input, .import-select, .import-textarea { width:100%; padding:6px 8px; font-size:12px;
+            border:1px solid var(--field); border-radius:6px; background:#fff; font-family:'IBM Plex Sans',sans-serif; color:var(--ink); transition:all .2s; }
+        .import-input:focus, .import-select:focus, .import-textarea:focus { border-color:var(--btn-primary);
+            outline:none; box-shadow:0 0 0 2px rgba(43,38,33,.1); }
+        .import-input:disabled, .import-select:disabled, .import-textarea:disabled { background:#f0eae0; color:#aaa; border-color:#e8e0d4; cursor:not-allowed; opacity:1; }
+        .import-textarea { resize:none; height:32px; line-height:1.2; }
+        .badge { display:inline-flex; align-items:center; justify-content:center; padding:4px 8px;
+            border-radius:999px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; }
+        .badge-new { background:#E6F0EA; color:#2C5C42; border:1px solid #BFD9C9; }
+        .badge-dup { background:#FBEDE9; color:#8A2D1C; border:1px solid #E7C3B8; }
+        .custom-checkbox { width:16px; height:16px; cursor:pointer; accent-color:var(--btn-primary); }
+        tr.duplicate td { background-color:#FBF4EA !important; opacity:.8; }
+        tr.duplicate:hover td { background-color:#FBF4EA; opacity:1; }
+        tr.skipped td { opacity:.4; filter:grayscale(100%); background:#f5efe4; }
+        tr.skipped:hover td { opacity:.6; }
+        .gap-small { display:flex; flex-direction:column; gap:4px; }
+
+        /* ── Toasts ── */
+        #toast-container { position:fixed; top:25px; right:25px; z-index:9999; display:flex; flex-direction:column; gap:10px; }
+        .toast { min-width:300px; padding:16px 20px; border-radius:9px; color:white;
+            font-family:'IBM Plex Sans',sans-serif; font-size:13px; font-weight:500;
+            box-shadow:0 14px 40px rgba(40,28,14,.22); display:flex; align-items:center; justify-content:space-between;
+            animation:slideInToast .4s cubic-bezier(.175,.885,.32,1.275); opacity:.98; cursor:pointer; }
+        .toast.success { background-color:var(--green); border-left:5px solid #2C5C42; }
+        .toast.error { background-color:var(--red); border-left:5px solid #7a1d12; }
+        @keyframes slideInToast { from { transform:translateX(100%); opacity:0; } to { transform:translateX(0); opacity:1; } }
+        @keyframes fadeOutToast { from { transform:translateX(0); opacity:1; } to { transform:translateX(100%); opacity:0; } }
+
+        /* ── FAB ── */
+        .fab-container { position:fixed; bottom:28px; right:28px; display:flex; gap:12px; z-index:900; }
+        .fab-button { width:60px; height:60px; border-radius:50%; background:var(--btn-primary); color:#fff;
+            border:none; font-size:28px; font-weight:300; cursor:pointer; box-shadow:0 12px 30px rgba(40,28,14,.4);
+            transition:transform .18s, box-shadow .18s; display:flex; align-items:center; justify-content:center;
+            font-family:'IBM Plex Sans',sans-serif; }
+        .fab-button:hover { transform:translateY(-3px) scale(1.05); background:var(--btn-hover); box-shadow:0 16px 34px rgba(40,28,14,.45); }
+
+        /* ── Responsive ── */
+        @media (max-width:820px) {
+            .tools-grid { grid-template-columns:1fr; gap:0; }
         }
-        .dropdown.open .menu { display: block; }
-        #navDropdown .navItem {
-            width: 100%; text-align: left; padding: 8px 12px; background: transparent;
-            cursor: pointer; border: none !important; border-radius: 6px; transition: background 0.2s;
-            font-size: 14px; font-weight: 600; font-family: 'IBM Plex Sans', sans-serif; color: var(--text);
-        }
-        #navDropdown .navItem:hover { background: var(--panel); }
-        #navDropdown .navItem.active { background: var(--card); color: var(--text); pointer-events: none; }
-
-        .container { margin: 20px auto; max-width: 1600px; padding: 0 20px; width: 100%; }
-        .card { background: var(--bg); padding: 25px; border: 1px solid var(--border); border-radius: 10px; }
-
-        /* Tools grid layout and cards */
-        .tools-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 20px;
-        }
-        
-        .tool-card {
-            background: #fff;
-            padding: 30px;
-            border-radius: 12px;
-            border: 1px solid var(--border);
-            cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
-            text-align: center;
-        }
-        
-        .tool-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 20px rgba(212, 181, 160, 0.3);
-            background: #fbe7dd;
-        }
-        
-        .tool-icon { font-size: 40px; margin-bottom: 15px; }
-        .tool-title { font-family: 'Playfair Display', serif; font-size: 20px; font-weight: bold; color: var(--text); margin-bottom: 10px; }
-        .tool-description { font-family: 'IBM Plex Sans', sans-serif; font-size: 13px; color: var(--muted); line-height: 1.4; }
-
-        /* Modal dialogs (centred) */
-        .modal {
-            display: none; position: fixed; z-index: 1000;
-            left: 0; top: 0; width: 100%; height: 100%;
-            background-color: rgba(45, 45, 45, 0.4);
-            backdrop-filter: blur(2px);
-        }
-        
-        .modal-content {
-            background-color: var(--bg);
-            padding: 0;
-            border-radius: 12px;
-            width: 90%;
-            max-width: 800px;
-            max-height: 90vh;
-            overflow-y: auto;
-            box-shadow: 0 20px 50px rgba(0,0,0,0.2);
-            border: 1px solid var(--border);
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            animation: slideUpCentered 0.3s ease;
-        }
-
-        .modal-header {
-            background: var(--panel); padding: 15px 25px;
-            border-bottom: 1px solid var(--border);
-            display: flex; justify-content: space-between; align-items: center;
-        }
-        .modal-header h3 { margin: 0; color: var(--text); font-size: 20px; font-family: 'Playfair Display', serif; }
-        .close-btn { background: none; border: none; font-size: 24px; color: var(--muted); cursor: pointer; }
-        
-        /* List items and rows */
-        .item-list { padding: 20px; }
-        .item-row {
-            display: grid; grid-template-columns: 1fr auto; gap: 10px;
-            padding: 12px 15px; background: #fff3ed; border: 0.5px solid var(--border);
-            border-radius: 8px; margin-bottom: 8px; align-items: center;
-            font-family: 'IBM Plex Sans', sans-serif;
-        }
-        .item-row:nth-child(even) { background: #fbe7dd; }
-        .item-name { font-weight: 600; font-size: 14px; }
-        .item-info { min-width: 0; }
-        .item-meta { font-size: 12px; color: var(--muted); margin-top: 3px; line-height: 1.35; }
-        .item-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
-
-        /* Form inputs and controls */
-        .form-group { margin-bottom: 18px; padding: 0 25px; }
-        label { display: block; margin-bottom: 6px; font-weight: 500; font-size: 13px; color: var(--muted); font-family: 'IBM Plex Sans', sans-serif; }
-        input, select, textarea {
-            width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px;
-            background: #fff; font-family: 'IBM Plex Sans', sans-serif; font-size: 14px;
-            -webkit-appearance: none; appearance: none;
-        }
-        .pw-wrap { position: relative; }
-        .pw-wrap input { padding-right: 44px; }
-        .pw-toggle { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; font-size: 18px; line-height: 1; padding: 6px 8px; width: auto; color: var(--muted); }
-        select { background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%232D2D2D'/%3E%3C/svg%3E") no-repeat right 10px center; padding-right: 28px; }
-        /* Radios/checkboxes must keep their native look — the reset above would
-           otherwise render them as empty full-width boxes. */
-        input[type="radio"], input[type="checkbox"] {
-            width: auto; min-height: 0; padding: 0; margin: 0; border: 0; border-radius: 0;
-            appearance: auto; -webkit-appearance: auto; flex: 0 0 auto;
-        }
-        /* Indeterminate progress bar for long operations (e.g. Financisto import) */
-        .progress-track { height: 8px; background: var(--border); border-radius: 999px; overflow: hidden; margin: 10px 0; }
-        .progress-track .bar { height: 100%; width: 40%; border-radius: 999px; background: var(--btn-primary); animation: indeterminate 1.2s ease-in-out infinite; }
-        @keyframes indeterminate { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
-        .search-box { padding: 20px 25px 0 25px; margin-bottom: 10px; }
-        
-        /* Button styles with updated theme colours */
-        button {
-            padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border);
-            font-weight: 600; cursor: pointer; font-family: 'IBM Plex Sans', sans-serif;
-            transition: all 0.2s; background: var(--btn-primary); color: white;
-            -webkit-appearance: none; appearance: none;
-        }
-        button:hover { background: var(--btn-hover); transform: translateY(-1px); }
-        
-        button.secondary { background: transparent; border: 1px solid var(--border) !important; color: var(--muted); }
-        button.secondary:hover { background: var(--panel); color: var(--text); }
-        
-        button.danger { background: var(--danger); color: white; border: none; }
-        button.danger:hover { opacity: 0.9; }
-
-        button.merge { background: transparent; color: var(--btn-primary); border: 1px solid var(--btn-primary); }
-        button.merge:hover { background: var(--btn-primary); color: white; }
-
-        .success-message { background: var(--green); color: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: none; }
-        .error-message { background: var(--red); color: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: none; }
-
-        @keyframes slideUpCentered { 
-            from { transform: translate(-50%, -45%); opacity: 0; } 
-            to { transform: translate(-50%, -50%); opacity: 1; } 
-        }
-        .footer { opacity: 0.7; font-size: 12px; text-align: center; margin-top: auto; padding: 100px 0 40px; font-family: 'Playfair Display', serif; }
-
-        #transactionsTable th { padding: 10px; background: var(--panel); border: 1px solid var(--border); }
-        #transactionsTable td { padding: 8px; border: 1px solid var(--border); background: #fff; }
-
-        /* --- IMPORT MODAL STYLES --- */
-        .import-table-container {
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            overflow: hidden;
-            background: #fff;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.02);
-        }
-
-        .import-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 13px;
-        }
-
-        .import-table th {
-            background: #FFF8F3; /* A slightly lighter shade than --panel */
-            color: var(--muted);
-            font-family: 'IBM Plex Sans', sans-serif;
-            font-weight: 600;
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 0.8px;
-            padding: 12px 10px;
-            text-align: left;
-            border-bottom: 2px solid var(--border);
-            white-space: nowrap;
-            position: sticky; 
-            top: 0; 
-            z-index: 10;
-        }
-
-        .import-table td {
-            padding: 8px 10px;
-            border-bottom: 1px solid #eee;
-            vertical-align: middle;
-            color: var(--text);
-            transition: background 0.2s;
-        }
-
-        .import-table tr:last-child td { border-bottom: none; }
-        .import-table tr:hover td { background-color: #fafafa; }
-
-        /* Column Specifics */
-        .col-skip { width: 40px; text-align: center; }
-        .col-date { width: 100px; white-space: nowrap; color: var(--muted); font-size: 12px; }
-        .col-desc { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--muted); }
-        .col-amount { text-align: right; font-family: 'IBM Plex Mono', monospace; font-weight: 600; white-space: nowrap; }
-        .col-status { width: 80px; text-align: center; }
-
-        /* Inputs styling inside table */
-        .import-input, .import-select, .import-textarea {
-            width: 100%;
-            padding: 6px 8px;
-            font-size: 12px;
-            border: 1px solid #e0e0e0;
-            border-radius: 6px;
-            background: #fff;
-            font-family: 'IBM Plex Sans', sans-serif;
-            color: var(--text);
-            transition: all 0.2s;
-        }
-
-        .import-select {
-            padding-right: 20px;
-            background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%235F5F5F%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
-            background-repeat: no-repeat;
-            background-position: right 8px center;
-            background-size: 8px auto;
-            appearance: none;
-            -webkit-appearance: none;
-        }
-
-        .import-input:focus, .import-select:focus, .import-textarea:focus {
-            border-color: var(--btn-primary);
-            outline: none;
-            box-shadow: 0 0 0 2px rgba(107, 77, 62, 0.1);
-        }
-
-        .import-input:disabled, .import-select:disabled, .import-textarea:disabled {
-            background-color: #f0f0f0;
-            color: #aaa;
-            border-color: #e8e8e8;
-            cursor: not-allowed;
-            opacity: 1;
-        }
-        .import-select:disabled {
-            background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23bbb%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
-        }
-
-        .import-textarea {
-            resize: none;
-            height: 32px;
-            line-height: 1.2;
-        }
-
-        /* Badges */
-        .badge {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            padding: 4px 8px;
-            border-radius: 99px;
-            font-size: 10px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        .badge-new { background: #E6FFFA; color: #047857; border: 1px solid #B2F5EA; }
-        .badge-dup { background: #FFF5F5; color: #C53030; border: 1px solid #FED7D7; }
-
-        /* Checkbox styling */
-        .custom-checkbox {
-            width: 16px;
-            height: 16px;
-            cursor: pointer;
-            accent-color: var(--btn-primary);
-        }
-
-        /* Row States */
-        tr.duplicate td { background-color: #fffaf0 !important; opacity: 0.8; }
-        tr.duplicate:hover td { background-color: #fffaf0; opacity: 1; }
-        tr.skipped td { opacity: 0.4; filter: grayscale(100%); background: #f9f9f9; }
-        tr.skipped:hover td { opacity: 0.6; }
-
-        /* Compact gap for stacked selects */
-        .gap-small { display: flex; flex-direction: column; gap: 4px; }
-
-        /* --- TOAST NOTIFICATIONS --- */
-        #toast-container {
-            position: fixed;
-            top: 25px;
-            right: 25px;
-            z-index: 9999; /* Above everything, including modals (z-index 1000) */
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        .toast {
-            min-width: 300px;
-            padding: 16px 20px;
-            border-radius: 8px;
-            color: white;
-            font-family: 'IBM Plex Sans', sans-serif;
-            font-size: 13px;
-            font-weight: 500;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            animation: slideInToast 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            opacity: 0.98;
-            cursor: pointer;
-        }
-
-        .toast.success { background-color: var(--green); border-left: 5px solid #065f46; }
-        .toast.error { background-color: var(--red); border-left: 5px solid #7f1d1d; }
-
-        @keyframes slideInToast {
-            from { transform: translateX(100%); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
-        }
-
-        @keyframes fadeOutToast {
-            from { transform: translateX(0); opacity: 1; }
-            to { transform: translateX(100%); opacity: 0; }
-        }
-
-        /* Floating Action Buttons */
-        .fab-container { position: fixed; bottom: 30px; right: 30px; display: flex; flex-direction: row; gap: 12px; z-index: 900; }
-        .fab-button { width: 60px; height: 60px; border-radius: 50%; background: #6B4D3E; color: white; border: none; font-size: 28px; font-weight: 700; cursor: pointer; box-shadow: 0 5px 15px rgba(0,0,0,0.2); transition: transform 0.2s; display: flex; align-items: center; justify-content: center; font-family: 'IBM Plex Sans', sans-serif; }
-        .fab-button:hover { transform: scale(1.05); background: #5C3F32; }
-
-        /* ── Responsive: Mobile ── */
-        @media (max-width: 600px) {
-            header { flex-wrap: nowrap; padding: 12px 15px; padding-top: calc(12px + env(safe-area-inset-top)); position: sticky; top: 0; }
-            h1 { font-size: 22px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-            button, select, input, textarea { min-height: 44px; font-size: 16px; }
-            .container { padding: 0 12px; margin: 12px auto; }
-            .card { padding: 15px; }
-            .tools-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
-            .tool-card { padding: 18px 12px; }
-            .tool-icon { font-size: 30px; margin-bottom: 8px; }
-            .tool-title { font-size: 16px; }
-            .tool-description { font-size: 12px; }
-            .modal-content { width: 95%; max-width: none; }
-            .modal-header { padding: 12px 15px; }
-            .modal-header h3 { font-size: 16px; }
-            .item-list { padding: 12px; }
-            /* Stack info over actions so long category stats and the three buttons
-               don't get squeezed into a narrow column. */
-            .item-row { padding: 10px; grid-template-columns: 1fr; }
-            .item-actions { justify-content: stretch; }
-            .item-actions button { flex: 1; min-width: 0; padding: 8px 6px; font-size: 14px; }
-            .form-group { padding: 0 15px; }
-            .search-box { padding: 12px 15px 0; }
-            .import-table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-            .import-table { min-width: 600px; }
-            #toast-container { top: 10px; right: 10px; left: 10px; }
-            .toast { min-width: unset; }
-            .dropdown .menu { right: -10px; min-width: 180px; }
-            .fab-container { bottom: 20px; right: 15px; gap: 10px; }
-            .fab-button { width: 60px; height: 60px; font-size: 28px; }
-            .footer { padding-top: 60px; }
+        @media (max-width:600px) {
+            header { padding:12px 15px; padding-top:calc(12px + env(safe-area-inset-top)); }
+            h1 { font-size:22px; }
+            button, select, input, textarea { min-height:44px; font-size:16px; }
+            .container { padding:0 15px 60px; }
+            .modal-content { width:95%; max-width:none; }
+            .modal-header { padding:14px 16px; }
+            .item-list { padding:12px 16px; }
+            .item-row { grid-template-columns:1fr; padding:12px 0; }
+            .item-actions { justify-content:stretch; }
+            .item-actions button { flex:1; min-width:0; }
+            .form-group { padding:0 16px; }
+            .search-box { padding:14px 16px 0; }
+            .import-table-container { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+            .import-table { min-width:600px; }
+            #toast-container { top:10px; right:10px; left:10px; }
+            .toast { min-width:unset; }
+            .fab-container { bottom:20px; right:15px; }
         }
     </style>
 </head>
 <body>
     <header>
-        <h1>🐬 Delfin · Tools</h1>
+        <div class="brand-left">
+            <span class="wordmark">Delfin</span>
+            <span class="sep"></span>
+            <span class="tag">Personal Finance</span>
+        </div>
         <div class="tools">
             <div class="dropdown" id="navDropdown">
                 <button class="btn" id="navBtn" onclick="toggleNav()">&#9776;</button>
@@ -423,83 +252,88 @@
         <div id="errorMessage" class="error-message"></div>
         
         <div class="card">
-            <div class="tools-grid">
-                <div class="tool-card" onclick="openTool('categories')">
-                    <div class="tool-icon">📁</div>
-                    <div class="tool-title">Categories</div>
-                    <div class="tool-description">Manage parent categories and their sub-items.</div>
+            <div class="tool-section">
+                <div class="tool-section-head"><h2 class="sechead">Organise Your Data</h2></div>
+                <div class="tools-grid">
+                    <div class="tool-card" onclick="openTool('categories')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4l2 2.5h9A1.5 1.5 0 0 1 21 9v9.5A1.5 1.5 0 0 1 19.5 20h-15A1.5 1.5 0 0 1 3 18.5Z"/></svg>
+                        <div class="tool-title">Categories</div>
+                        <div class="tool-description">Manage parent categories and their sub-items.</div>
+                    </div>
+                    <div class="tool-card" onclick="openTool('accounts')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.5 12 4l9 5.5"/><path d="M5 10v8"/><path d="M10 10v8"/><path d="M14 10v8"/><path d="M19 10v8"/><path d="M3 20h18"/></svg>
+                        <div class="tool-title">Accounts</div>
+                        <div class="tool-description">Manage names, currencies and active status.</div>
+                    </div>
+                    <div class="tool-card" onclick="openTool('payees')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"/><path d="M5.5 20a6.5 6.5 0 0 1 13 0"/></svg>
+                        <div class="tool-title">Payees</div>
+                        <div class="tool-description">Edit payee names and view statistics.</div>
+                    </div>
+                    <div class="tool-card" onclick="openTool('locations')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg>
+                        <div class="tool-title">Locations</div>
+                        <div class="tool-description">Edit common location names.</div>
+                    </div>
+                    <div class="tool-card" onclick="openTool('projects')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h6l1.5 2H20v9H4Z"/><path d="M4 7V5.5A1.5 1.5 0 0 1 5.5 4h3L10 6"/></svg>
+                        <div class="tool-title">Projects</div>
+                        <div class="tool-description">Manage your active projects.</div>
+                    </div>
                 </div>
-                
-                <div class="tool-card" onclick="openTool('accounts')">
-                    <div class="tool-icon">💳</div>
-                    <div class="tool-title">Accounts</div>
-                    <div class="tool-description">Manage names, currencies and active status.</div>
-                </div>
-                
-                <div class="tool-card" onclick="openTool('payees')">
-                    <div class="tool-icon">👤</div>
-                    <div class="tool-title">Payees</div>
-                    <div class="tool-description">Edit payee names and view statistics.</div>
-                </div>
-                
-                <div class="tool-card" onclick="openTool('locations')">
-                    <div class="tool-icon">📍</div>
-                    <div class="tool-title">Locations</div>
-                    <div class="tool-description">Edit common location names.</div>
-                </div>
-                
-                <div class="tool-card" onclick="openTool('projects')">
-                    <div class="tool-icon">📋</div>
-                    <div class="tool-title">Projects</div>
-                    <div class="tool-description">Manage your active projects.</div>
-                </div>
+            </div>
 
-                <div class="tool-card" onclick="openTool('import')">
-                    <div class="tool-icon">📥</div>
-                    <div class="tool-title">Import</div>
-                    <div class="tool-description">Import from CSV bank statements.</div>
+            <!-- ── Import & Export ── -->
+            <div class="tool-section">
+                <div class="tool-section-head"><h2 class="sechead">Import &amp; Export</h2></div>
+                <div class="tools-grid">
+                    <div class="tool-card" onclick="openTool('import')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11"/><path d="m8 10 4 4 4-4"/><path d="M5 20h14"/></svg>
+                        <div class="tool-title">Import</div>
+                        <div class="tool-description">Import from CSV bank statements.</div>
+                    </div>
+                    <div class="tool-card" onclick="openTool('export')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4"/><path d="m8 8 4-4 4 4"/><path d="M5 20h14"/></svg>
+                        <div class="tool-title">Export</div>
+                        <div class="tool-description">Export your data to CSV format.</div>
+                    </div>
+                    <div class="tool-card" onclick="openTool('financistoImport')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 12h6"/><path d="m12 9 3 3-3 3"/></svg>
+                        <div class="tool-title">Import Financisto</div>
+                        <div class="tool-description">Import a Financisto database (.backup or CSV).</div>
+                    </div>
+                    <div class="tool-card" onclick="openTool('financistoExport')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5 12 4l9 4.5v7L12 20l-9-4.5Z"/><path d="M3 8.5 12 13l9-4.5"/><path d="M12 13v7"/></svg>
+                        <div class="tool-title">Export Financisto</div>
+                        <div class="tool-description">Export all your data in Financisto format.</div>
+                    </div>
                 </div>
+            </div>
 
-                <div class="tool-card" onclick="openTool('export')">
-                    <div class="tool-icon">📤</div>
-                    <div class="tool-title">Export</div>
-                    <div class="tool-description">Export your data to CSV format.</div>
-                </div>
-                
-                <div class="tool-card" onclick="openTool('backup')">
-                    <div class="tool-icon">💾</div>
-                    <div class="tool-title">Backup</div>
-                    <div class="tool-description">Download a timestamped database backup.</div>
-                </div>
-
-                <div class="tool-card" onclick="openTool('restore')">
-                    <div class="tool-icon">♻️</div>
-                    <div class="tool-title">Restore</div>
-                    <div class="tool-description">Restore the database from a .db backup file.</div>
-                </div>
-
-                <div class="tool-card" onclick="openTool('maintenance')">
-                    <div class="tool-icon">🛠️</div>
-                    <div class="tool-title">Maintenance</div>
-                    <div class="tool-description">Schedule the nightly refresh & off-disk backup.</div>
-                </div>
-
-                <div class="tool-card" onclick="openTool('password')">
-                    <div class="tool-icon">🔑</div>
-                    <div class="tool-title">Password</div>
-                    <div class="tool-description">Change the password that unlocks your database.</div>
-                </div>
-
-                <div class="tool-card" onclick="openTool('financistoImport')">
-                    <div class="tool-icon">🐬</div>
-                    <div class="tool-title">Import Financisto</div>
-                    <div class="tool-description">Import a Financisto database (.backup or CSV).</div>
-                </div>
-
-                <div class="tool-card" onclick="openTool('financistoExport')">
-                    <div class="tool-icon">📦</div>
-                    <div class="tool-title">Export Financisto</div>
-                    <div class="tool-description">Export all your data in Financisto format.</div>
+            <!-- ── Database & Security ── -->
+            <div class="tool-section">
+                <div class="tool-section-head"><h2 class="sechead">Database &amp; Security</h2></div>
+                <div class="tools-grid">
+                    <div class="tool-card" onclick="openTool('backup')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/><path d="M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/></svg>
+                        <div class="tool-title">Backup</div>
+                        <div class="tool-description">Download a timestamped database backup.</div>
+                    </div>
+                    <div class="tool-card" onclick="openTool('restore')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 1 2.3 5.6"/><path d="M4 20v-4h4"/></svg>
+                        <div class="tool-title">Restore</div>
+                        <div class="tool-description">Restore the database from a .db backup file.</div>
+                    </div>
+                    <div class="tool-card" onclick="openTool('maintenance')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.2 5.2L4 17l3 3 5.5-5.5a4 4 0 0 0 5.2-5.2l-2.4 2.4-2.1-.6-.6-2.1Z"/></svg>
+                        <div class="tool-title">Maintenance</div>
+                        <div class="tool-description">Schedule the nightly refresh &amp; off-disk backup.</div>
+                    </div>
+                    <div class="tool-card" onclick="openTool('password')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="12" r="3.5"/><path d="M11.5 12H21"/><path d="M17 12v3"/><path d="M20 12v2"/></svg>
+                        <div class="tool-title">Password</div>
+                        <div class="tool-description">Change the password that unlocks your database.</div>
+                    </div>
                 </div>
             </div>
         </div>
