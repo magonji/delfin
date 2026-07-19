@@ -63,7 +63,8 @@
     .hidden { display:none; }
     .pw-wrap { position:relative; }
     .pw-wrap input { padding-right:46px; }
-    .pw-toggle { position:absolute; right:4px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; font-size:18px; line-height:1; padding:6px 8px; color:var(--muted); }
+    .pw-toggle { position:absolute; right:4px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; line-height:1; padding:6px 8px; color:var(--muted); display:flex; }
+    .pw-toggle:hover { color:var(--accent); }
 </style>
 </head>
 <body>
@@ -86,7 +87,7 @@
                 <label for="loginPw">Password</label>
                 <div class="pw-wrap">
                     <input type="password" id="loginPw" autocomplete="current-password" autofocus required>
-                    <button type="button" class="pw-toggle" onclick="togglePw(this)" title="Show password" aria-label="Show password">👁</button>
+                    <button type="button" class="pw-toggle" onclick="togglePw(this)" title="Show password" aria-label="Show password"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button>
                 </div>
                 <button class="primary" type="submit">Unlock</button>
             </form>
@@ -101,12 +102,12 @@
                 <label for="setupPw">Password</label>
                 <div class="pw-wrap">
                     <input type="password" id="setupPw" autocomplete="new-password" minlength="6" required>
-                    <button type="button" class="pw-toggle" onclick="togglePw(this)" title="Show password" aria-label="Show password">👁</button>
+                    <button type="button" class="pw-toggle" onclick="togglePw(this)" title="Show password" aria-label="Show password"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button>
                 </div>
                 <label for="setupPw2">Confirm password</label>
                 <div class="pw-wrap">
                     <input type="password" id="setupPw2" autocomplete="new-password" minlength="6" required>
-                    <button type="button" class="pw-toggle" onclick="togglePw(this)" title="Show password" aria-label="Show password">👁</button>
+                    <button type="button" class="pw-toggle" onclick="togglePw(this)" title="Show password" aria-label="Show password"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button>
                 </div>
                 <button class="primary" type="submit">Encrypt &amp; continue</button>
             </form>
@@ -132,7 +133,7 @@
                 <label for="recPw">New password</label>
                 <div class="pw-wrap">
                     <input type="password" id="recPw" autocomplete="new-password" minlength="6" required>
-                    <button type="button" class="pw-toggle" onclick="togglePw(this)" title="Show password" aria-label="Show password">👁</button>
+                    <button type="button" class="pw-toggle" onclick="togglePw(this)" title="Show password" aria-label="Show password"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button>
                 </div>
                 <button class="primary" type="submit">Set new password &amp; unlock</button>
             </form>
@@ -151,11 +152,13 @@
     function msg(text, ok=false){ const m=$('#msg'); m.textContent=text; m.className='msg '+(ok?'ok':'err'); m.style.display='block'; }
     function hideMsg(){ $('#msg').style.display='none'; }
     function go(){ location.href='/app/index.html'; }
+    const EYE_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>';
+    const EYE_OFF_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18"/><path d="M10.6 6.1A9.7 9.7 0 0 1 12 6c6.5 0 10 7 10 7a15.7 15.7 0 0 1-3.4 4.1"/><path d="M6.2 6.6A15.6 15.6 0 0 0 2 12s3.5 7 10 7a9.6 9.6 0 0 0 4.3-1"/><path d="M9.5 9.5a3 3 0 0 0 4.2 4.2"/></svg>';
     function togglePw(btn){
         const input = btn.parentElement.querySelector('input');
         const reveal = input.type === 'password';
         input.type = reveal ? 'text' : 'password';
-        btn.textContent = reveal ? '🙈' : '👁';
+        btn.innerHTML = reveal ? EYE_OFF_SVG : EYE_SVG;
         btn.title = reveal ? 'Hide password' : 'Show password';
         btn.setAttribute('aria-label', btn.title);
     }
