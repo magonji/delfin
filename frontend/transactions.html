@@ -13,35 +13,79 @@
     <title>Delfin · Transactions</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
 
         :root {
-            --bg: #FFF1E6; 
-            --panel: #FEE5D7; 
-            --card: #D4B5A0; 
-            --border: #D4B5A0;
-            --muted: #5F5F5F; 
-            --text: #2D2D2D;
-            --green: #0e9530; 
-            --red: #d52811; 
-            --yellow: #f5b700;
-            --btn-primary: #6B4D3E;  
-            --btn-hover: #5C3F32;  
-            --btn-red: #D65A4A;
-            --btn-yellow: #E29B38;
-            --btn-green: #4FAF73;
-            --page-gutter: clamp(10px, 4vw, 20px);
+            --bg: #FAF3E9;
+            --paper: #FFFDFA;
+            --panel: #F3E9DA;
+            --card: #E4D5C1;
+            --border: #D8C6B0;
+            --hair: #EFE4D3;
+            --field: #E4D5C1;
+            --muted: #8A7D6C;
+            --text: #23201C;
+            --ink: #23201C;
+            --accent: #B0402E;
+            --green: #3C7A57;
+            --red: #B0402E;
+            --yellow: #C6893F;
+            --btn-primary: #2B2621;
+            --btn-hover: #1c1814;
+            --btn-red: #B0402E;
+            --btn-yellow: #C6893F;
+            --btn-green: #3C7A57;
+            --danger: #B0402E;
+            --page-gutter: clamp(16px, 4vw, 30px);
         }
 
-        html { min-height: 100%; scrollbar-gutter: stable both-edges; background: #FAE6D9; }
+        html { min-height: 100%; scrollbar-gutter: stable both-edges; background: var(--bg); }
         body { min-height: 100vh; margin: 0; background: var(--bg); color: var(--text); font-family: 'IBM Plex Mono', monospace;
                display: flex; flex-direction: column;
                padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); padding-bottom: env(safe-area-inset-bottom); }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
-        header { display: flex; align-items: center; justify-content: space-between; padding: 18px 20px; padding-top: calc(18px + env(safe-area-inset-top)); position: sticky; top: 0; backdrop-filter: blur(8px); background: #FAE6D9; border-bottom: 1px solid #D4B5A0; z-index: 50; }
+        header { position: sticky; top: 0; z-index: 50; display: flex; align-items: center; justify-content: space-between;
+            gap: 16px; padding: 15px 30px; padding-top: calc(15px + env(safe-area-inset-top));
+            background: rgba(250,243,233,.86); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); }
         h1 { font-size: 30px; margin: 0; letter-spacing: 0.2px; font-family: 'Playfair Display', serif; }
+
+        /* Editorial brand wordmark (left of header) */
+        .brand { display: flex; align-items: center; gap: 14px; min-width: 0; }
+        .brand .word { font-family: 'Playfair Display', serif; font-size: 25px; font-weight: 800; letter-spacing: -.3px; color: var(--ink); }
+        .brand .rule { width: 1px; height: 20px; background: var(--border); }
+        .brand .tag { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+
+        /* Nav + header actions (right) */
+        .nav-right { display: flex; align-items: center; gap: 8px; }
+        .nav-links { display: flex; align-items: center; gap: 4px; }
+        .nav-links a { font-size: 13px; font-weight: 600; color: var(--muted); padding: 7px 12px; border-bottom: 2px solid transparent; text-decoration: none; }
+        .nav-links a:hover { color: var(--ink); }
+        .nav-links a.active { color: var(--ink); border-bottom-color: var(--accent); pointer-events: none; }
+        .burger { display: none; background: transparent; border: none; font-size: 22px; cursor: pointer; color: var(--ink); padding: 0 4px; }
+        .icon-btn { background: transparent; border: none; padding: 4px; display: flex; align-items: center; justify-content: center; color: var(--muted); cursor: pointer; }
+        .icon-btn svg { width: 16px; height: 16px; display: block; }
+        .icon-btn:hover { color: var(--ink); }
+        #btnLogout:hover { color: var(--danger); }
+        /* Refresh spinner + hover tooltip (same as dashboard/tools) */
+        @keyframes delfinspin { to { transform: rotate(360deg); } }
+        #btnRefresh.spinning svg, #btnRefresh svg.spin { animation: delfinspin .9s linear infinite; transform-origin: 50% 50%; }
+        .tip-wrap { position: relative; display: inline-flex; }
+        .refresh-tip { position: absolute; top: 100%; right: 0; margin-top: 8px; white-space: nowrap;
+            background: var(--paper); color: var(--ink); border: 1px solid var(--hair); padding: 6px 10px; border-radius: 8px; font-size: 12px;
+            font-family: 'IBM Plex Sans', sans-serif; box-shadow: 0 8px 20px rgba(40,28,14,.18);
+            opacity: 0; pointer-events: none; transform: translateY(-4px); transition: opacity .15s, transform .15s; z-index: 60; }
+        .refresh-tip.show { opacity: 1; transform: translateY(0); }
+        @media (max-width: 760px) {
+            .nav-links { position: absolute; top: calc(100% + 10px); right: 0; flex-direction: column; align-items: stretch;
+                background: var(--paper); border: 1px solid var(--hair); border-radius: 12px; box-shadow: 0 12px 30px rgba(40,28,14,.18);
+                padding: 8px; min-width: 190px; display: none; }
+            #navDropdown.open .nav-links { display: flex; }
+            .nav-links a { padding: 10px 12px; border-bottom: none; border-radius: 8px; }
+            .nav-links a.active { background: var(--field); border-bottom: none; }
+            .burger { display: block; }
+        }
     
         /* Header toolbar controls and buttons */
         .tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
@@ -471,23 +515,8 @@
             color: var(--text);
         }
 
-        /* Navigation dropdown menu */
-        .dropdown { position: relative; }
-        .dropdown .btn { display: flex; align-items: center; gap: 8px; }
-        #navBtn { font-size: 22px; padding: 4px 8px; line-height: 1; background: transparent; border: none; cursor: pointer; color: var(--text); }
-        .dropdown .menu {
-            position: absolute; top: calc(100% + 6px); right: 0; min-width: 180px;
-            background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.35); display: none; padding: 8px; z-index: 100;
-        }
-        .dropdown.open .menu { display: block; }
-        #navDropdown .navItem {
-            width: 100%; text-align: left; padding: 8px 12px; background: transparent;
-            cursor: pointer; border: none !important; border-radius: 6px; transition: background 0.2s;
-            font-size: 14px; font-weight: 600; font-family: 'IBM Plex Sans', sans-serif; color: var(--text);
-        }
-        #navDropdown .navItem:hover { background: var(--panel); }
-        #navDropdown .navItem.active { background: var(--card); color: var(--text); pointer-events: none; }
+        /* Navigation (nav-links live in the header block above) */
+        .dropdown { position: relative; display: inline-flex; }
 
         .footer { opacity: 0.7; font-size: 12px; text-align: center; margin-top: auto; padding: 104px 0 10px; font-family: 'Playfair Display', serif; }
 
@@ -643,23 +672,32 @@
 </head>
 <body>
     <header>
-        <h1>🐬 Delfin · Transactions</h1>
-        <div class="tools">
-            <span class="help-icon" onclick="openModal('shortcutsModal')" title="Keyboard shortcuts">ⓘ</span>
+        <div class="brand">
+            <span class="word">Delfin</span>
+            <span class="rule"></span>
+            <span class="tag">Personal Finance</span>
+        </div>
+        <div class="nav-right">
             <div class="dropdown" id="navDropdown">
-                <button class="btn" id="navBtn" onclick="toggleNav()">&#9776;</button>
-                <div class="menu" id="navMenu">
-                    <div class="list" style="padding: 6px;">
-                        <button class="navItem" onclick="location.href='index.html'">Dashboard</button>
-                        <button class="navItem active">Transactions</button>
-                        <button class="navItem" onclick="location.href='budget.html'">Budget</button>
-                        <button class="navItem" onclick="location.href='loans.html'">Loans</button>
-                        <button class="navItem" onclick="location.href='tools.html'">Tools</button>
-                        <hr style="border: none; border-top: 1px solid var(--border); margin: 6px 0;">
-                        <button class="navItem" id="btnRefresh">Refresh</button>
-                    </div>
-                </div>
+                <button class="burger" id="navBtn" onclick="toggleNav()" aria-label="Menu" aria-expanded="false">&#9776;</button>
+                <nav class="nav-links" id="navMenu">
+                    <a href="index.html">Dashboard</a>
+                    <a class="active" href="transactions.html">Transactions</a>
+                    <a href="budget.html">Budget</a>
+                    <a href="loans.html">Loans</a>
+                    <a href="tools.html">Tools</a>
+                </nav>
             </div>
+            <span class="help-icon icon-btn" onclick="openModal('shortcutsModal')" title="Keyboard shortcuts" aria-label="Keyboard shortcuts">ⓘ</span>
+            <span class="tip-wrap">
+                <button class="icon-btn" id="btnRefresh" title="Refresh" aria-label="Refresh">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+                </button>
+                <span class="refresh-tip" id="refreshTip" role="status"></span>
+            </span>
+            <button class="icon-btn" id="btnLogout" title="Log out" aria-label="Log out">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5"/><path d="M15 12H5"/></svg>
+            </button>
         </div>
     </header>
     <div class="container">
@@ -1246,42 +1284,38 @@
             Object.keys(localStorage).filter(k => k.startsWith('cache_')).forEach(k => localStorage.removeItem(k));
         }
         
+        // Refresh: spin the icon (via CSS) and show the current stage in a tooltip on hover.
+        const _refreshTip = document.querySelector('#refreshTip');
+        function setRefreshStage(text) { _refreshTip.textContent = text || ''; if (!text) _refreshTip.classList.remove('show'); }
+        (() => {
+            const btn = document.querySelector('#btnRefresh');
+            btn.addEventListener('mouseenter', () => { if (btn.classList.contains('spinning') && _refreshTip.textContent) _refreshTip.classList.add('show'); });
+            btn.addEventListener('mouseleave', () => _refreshTip.classList.remove('show'));
+        })();
         document.querySelector('#btnRefresh').onclick = async () => {
+            const btn = document.querySelector('#btnRefresh');
+            if (btn.classList.contains('spinning')) return;
+            btn.disabled = true;
+            btn.classList.add('spinning');
+            const wasHovered = btn.matches(':hover');
             try {
-                const btnRefresh = document.querySelector('#btnRefresh');
-                const originalText = btnRefresh.textContent;
-                btnRefresh.disabled = true;
-                
                 cacheClearAll();
-                
-                btnRefresh.textContent = '⏳ Recalculating balances...';
-                const balanceResponse = await fetch(`${API_URL}/admin/initialise-balances`, {
-                    method: 'POST'
-                });
-
-                if (!balanceResponse.ok) {
-                    throw new Error('Failed to recalculate balances');
-                }
-
-                btnRefresh.textContent = '⏳ Updating payee statistics...';
+                setRefreshStage('Recalculating balances…');
+                if (wasHovered) _refreshTip.classList.add('show');
+                const balanceResponse = await fetch(`${API_URL}/admin/initialise-balances`, { method: 'POST' });
+                if (!balanceResponse.ok) throw new Error('Failed to recalculate balances');
+                setRefreshStage('Updating payee statistics…');
                 await fetch(`${API_URL}/payees/recalculate-all-stats`, { method: 'POST' });
-
-                btnRefresh.textContent = '⏳ Refreshing display...';
+                setRefreshStage('Refreshing display…');
                 await loadRecentTransactions(true);
-
-                btnRefresh.textContent = originalText;
-                btnRefresh.disabled = false;
-
-                alert(`Success! Recalculated all balances and payee statistics.`);
             } catch (error) {
                 console.error('Error during refresh:', error);
                 alert('Error refreshing data: ' + error.message);
-
-                const btnRefresh = document.querySelector('#btnRefresh');
-                btnRefresh.textContent = '🔄 Refresh';
-                btnRefresh.disabled = false;
+            } finally {
+                btn.classList.remove('spinning');
+                btn.disabled = false;
+                setRefreshStage('');
             }
-            toggleDropdown('#navDropdown', false);
         };
 
         // Close nav menu when clicking a navigation item
@@ -2890,7 +2924,7 @@
     </script>
 <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');</script>
 <script>
-/* Delfin auth: bounce to login on 401, and add a Log out item to the nav menu. */
+/* Delfin auth: bounce to login on 401, and wire the header Log out button. */
 (function(){
   const _fetch = window.fetch;
   window.fetch = async function(){
@@ -2899,14 +2933,8 @@
     return res;
   };
   document.addEventListener('DOMContentLoaded', function(){
-    const list = document.querySelector('#navMenu .list');
-    if (!list || document.getElementById('navLogout')) return;
-    const hr = document.createElement('hr');
-    hr.style.cssText = 'border:none;border-top:1px solid var(--border);margin:6px 0;';
-    const btn = document.createElement('button');
-    btn.className = 'navItem'; btn.id = 'navLogout'; btn.textContent = 'Log out';
-    btn.onclick = async function(){ try { await fetch('/auth/logout', {method:'POST'}); } finally { location.href = '/login.html'; } };
-    list.appendChild(hr); list.appendChild(btn);
+    const btn = document.getElementById('btnLogout');
+    if (btn) btn.onclick = async function(){ try { await fetch('/auth/logout', {method:'POST'}); } finally { location.href = '/login.html'; } };
   });
 })();
 </script>
