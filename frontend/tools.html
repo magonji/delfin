@@ -4286,7 +4286,7 @@
 </div>
 <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');</script>
 <script>
-/* Delfin auth: bounce to login on 401, and add a Log out item to the nav menu. */
+/* Delfin auth: bounce to login on 401, and wire the header Log out icon. */
 (function(){
   const _fetch = window.fetch;
   window.fetch = async function(){
@@ -4295,14 +4295,9 @@
     return res;
   };
   document.addEventListener('DOMContentLoaded', function(){
-    const list = document.querySelector('#navMenu .list');
-    if (!list || document.getElementById('navLogout')) return;
-    const hr = document.createElement('hr');
-    hr.style.cssText = 'border:none;border-top:1px solid var(--border);margin:6px 0;';
-    const btn = document.createElement('button');
-    btn.className = 'navItem'; btn.id = 'navLogout'; btn.textContent = 'Log out';
+    const btn = document.getElementById('btnLogout');
+    if (!btn) return;
     btn.onclick = async function(){ try { await fetch('/auth/logout', {method:'POST'}); } finally { location.href = '/login.html'; } };
-    list.appendChild(hr); list.appendChild(btn);
   });
 })();
 </script>
