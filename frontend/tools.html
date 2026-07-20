@@ -1238,126 +1238,81 @@
         function displayCategories(filtered = null) {
             const categories = filtered || allCategories;
             const list = document.getElementById('categoriesList');
-            
-            // Group categories by parent
-            const grouped = {};
-            const allParentNames = new Set();
-            
+            const grouped = {}, allParentNames = new Set();
             categories.forEach(cat => {
                 if (cat.parent) {
                     allParentNames.add(cat.parent);
-                    if (!grouped[cat.parent]) {
-                        grouped[cat.parent] = [];
-                    }
-                    grouped[cat.parent].push(cat);
+                    (grouped[cat.parent] = grouped[cat.parent] || []).push(cat);
                 }
             });
-            
-            // Find standalone parent categories (parents without children)
-            const standaloneParents = categories.filter(cat => 
-                !cat.parent && !allParentNames.has(cat.name)
-            );
-            
-            // Add standalone parents to grouped (with empty array)
-            standaloneParents.forEach(cat => {
-                grouped[cat.name] = [];
-            });
-            
-            // Sort all parent names alphabetically
+            const standaloneParents = categories.filter(cat => !cat.parent && !allParentNames.has(cat.name));
+            standaloneParents.forEach(cat => { grouped[cat.name] = []; });
             const sortedParents = Object.keys(grouped).sort((a, b) => a.localeCompare(b));
-            
-            // Build HTML
             let html = '';
-            
             sortedParents.forEach(parent => {
                 const subcategories = grouped[parent].sort((a, b) => a.name.localeCompare(b.name));
-                
-                // Header with parent name and edit button
                 if (subcategories.length > 0) {
                     html += `
-                        <div style="margin-bottom: 25px;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 18px; font-weight: bold; color: #667eea; margin-bottom: 10px; padding: 10px; background: #f0f4ff; border-radius: 8px;">
-                                <span>📁 ${parent}</span>
-                                <button onclick="editParentCategory('${parent.replace(/'/g, "\\'")}', ${JSON.stringify(subcategories.map(c => c.id))})" style="padding: 6px 12px; font-size: 13px;">Edit Parent</button>
-                            </div>
-                    `;
-                    
+                        <div style="margin-bottom:26px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0 8px; border-bottom:2px solid var(--btn-primary); margin-bottom:4px;">
+                                <span style="font-family:'Playfair Display',serif; font-size:17px; font-weight:700; color:var(--ink);">${parent}</span>
+                                <button class="secondary" style="padding:6px 12px; font-size:12px;" onclick="editParentCategory('${parent.replace(/'/g, "\\'")}', ${JSON.stringify(subcategories.map(c => c.id))})">Edit Parent</button>
+                            </div>`;
                     subcategories.forEach((cat, index) => {
-                        const isLast = index === subcategories.length - 1;
-                        const connector = isLast ? '└─' : '├─';
-                        
+                        const connector = index === subcategories.length - 1 ? '└─' : '├─';
                         html += `
-                            <div class="item-row" style="margin-left: 20px; margin-bottom: 8px;">
+                            <div class="item-row" style="margin-left:16px;">
                                 <div class="item-info">
-                                    <div class="item-name">
-                                        <span style="color: #999; margin-right: 8px;">${connector}</span>
-                                        ${cat.name}
-                                    </div>
+                                    <div class="item-name"><span style="color:var(--muted); margin-right:8px;">${connector}</span>${cat.name}</div>
                                 </div>
                                 <div class="item-actions">
                                     <button onclick="editItem('category', ${cat.id})">Edit</button>
-                                    <button onclick="deleteCategory(${cat.id}, '${cat.name.replace(/'/g, "\\'")}', '${(cat.parent || '').replace(/'/g, "\\'")}')" style="background: #f87171; color: white;">🗑️</button>
+                                    <button class="danger" onclick="deleteCategory(${cat.id}, '${cat.name.replace(/'/g, "\\'")}', '${(cat.parent || '').replace(/'/g, "\\'")}')">Delete</button>
                                 </div>
-                            </div>
-                        `;
+                            </div>`;
                     });
-                    
                     html += '</div>';
                 } else {
-                    // Standalone parent (no children)
                     const standaloneCategory = standaloneParents.find(c => c.name === parent);
                     html += `
-                        <div style="margin-bottom: 25px;">
+                        <div style="margin-bottom:26px;">
                             <div class="item-row">
                                 <div class="item-info">
-                                    <div class="item-name">📁 ${parent}</div>
-                                    <div class="item-meta">Parent Category (no subcategories)</div>
+                                    <div class="item-name">${parent}</div>
+                                    <div class="item-meta">Parent category · no subcategories</div>
                                 </div>
                                 <div class="item-actions">
                                     <button onclick="editItem('category', ${standaloneCategory.id})">Edit</button>
-                                    <button onclick="deleteCategory(${standaloneCategory.id}, '${parent.replace(/'/g, "\\'")}', null)" style="background: #f87171; color: white;">🗑️</button>
+                                    <button class="danger" onclick="deleteCategory(${standaloneCategory.id}, '${parent.replace(/'/g, "\\'")}', null)">Delete</button>
                                 </div>
                             </div>
-                        </div>
-                    `;
+                        </div>`;
                 }
             });
-            
-            if (html === '') {
-                html = '<p style="text-align: center; color: #666; padding: 20px;">No categories found</p>';
-            }
-            
-            list.innerHTML = html;
+            list.innerHTML = html || '<p style="text-align:center; color:var(--muted); padding:20px;">No categories found</p>';
         }
         
         function displayAccounts(filtered = null) {
             const accounts = filtered || allAccounts;
             const list = document.getElementById('accountsList');
-            
             list.innerHTML = accounts.map(acc => {
-                const status_badge = acc.is_active === 1 
-                    ? '<span style="background: #4ade80; color: white; padding: 3px 8px; border-radius: 5px; font-size: 11px; margin-left: 10px;">Active</span>' 
-                    : '<span style="background: #f87171; color: white; padding: 3px 8px; border-radius: 5px; font-size: 11px; margin-left: 10px;">Closed</span>';
-                
+                const status_badge = acc.is_active === 1
+                    ? '<span class="badge badge-new" style="margin-left:8px;">Active</span>'
+                    : '<span class="badge badge-dup" style="margin-left:8px;">Closed</span>';
                 const action_button = acc.is_active === 1
-                    ? `<button onclick="closeAccount(${acc.id}, '${acc.name.replace(/'/g, "\\'")}', ${acc.current_balance})" style="background: #f87171; color: white;">🔒 Close Account</button>`
-                    : `<button onclick="openAccount(${acc.id}, '${acc.name.replace(/'/g, "\\'")}')">🔓 Open Account</button>`;
-                
+                    ? `<button class="danger" onclick="closeAccount(${acc.id}, '${acc.name.replace(/'/g, "\\'")}', ${acc.current_balance})">Close</button>`
+                    : `<button class="secondary" onclick="openAccount(${acc.id}, '${acc.name.replace(/'/g, "\\'")}')">Reopen</button>`;
                 return `
-                    <div class="item-row" style="${acc.is_active === 0 ? 'opacity: 0.6;' : ''}">
+                    <div class="item-row" style="${acc.is_active === 0 ? 'opacity:0.55;' : ''}">
                         <div class="item-info">
-                            <div class="item-name">
-                                ${acc.name}
-                                ${status_badge}
-                            </div>
-                            <div class="item-meta">Currency: ${acc.currency} | Type: ${acc.type || 'Regular'} | Balance: ${acc.current_balance.toFixed(2)}</div>
+                            <div class="item-name">${acc.name}${status_badge}</div>
+                            <div class="item-meta">Currency: ${acc.currency} · Type: ${acc.type || 'Regular'} · Balance: ${acc.current_balance.toFixed(2)}</div>
                         </div>
                         <div class="item-actions">
                             <button onclick="editItem('account', ${acc.id})">Edit</button>
                             ${action_button}
                         </div>
-                    </div>
-                `;
+                    </div>`;
             }).join('');
         }
         
