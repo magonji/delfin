@@ -138,7 +138,7 @@
 
         /* Transaction table layout and styling */
         .transactions-wrapper { border: none; border-radius: 0; overflow: visible; }
-        .grid-layout { display: grid; grid-template-columns: 25px 88px 148px minmax(150px, 1.1fr) minmax(170px, 1.5fr) 116px 116px 116px 58px; gap: 14px; align-items: center; }
+        .grid-layout { display: grid; grid-template-columns: 25px 88px 150px minmax(160px, 1.15fr) minmax(190px, 1.6fr) 120px 122px 122px; gap: 14px; align-items: center; }
         .transactions-list:not(.bulk-edit-mode) input[type="checkbox"] { visibility: hidden; }
         .transactions-header:not(.bulk-edit-mode) .t-cell:first-child { visibility: hidden; }
 
@@ -309,6 +309,16 @@
         .btn-cancel {
             background: #fff;
             color: #3A342C;
+        }
+        .btn-dup {
+            background: var(--field) !important;
+            color: #3A342C !important;
+            border-color: var(--field) !important;
+        }
+        .btn-del {
+            background: #FBEDE9 !important;
+            color: var(--red) !important;
+            border-color: #E7C3B8 !important;
         }
         
         /* Batch mode indicator */
@@ -624,7 +634,6 @@
             }
             .transaction-item > :nth-child(7),
             .transaction-item > :nth-child(8) { display: none; } /* balances */
-            .transaction-item > :nth-child(9) { display: none; } /* actions */
 
             /* Disable hover effects on mobile (touch) */
             .transaction-item:hover .date-display { opacity: 1; }
@@ -773,7 +782,6 @@
                     <div class="t-right">Amount</div>
                     <div class="t-right">Acct Bal.</div>
                     <div class="t-right">Total Bal.</div>
-                    <div> </div>
                 </div>
 
                 <div class="transactions-list" id="transactionsList">
@@ -991,7 +999,9 @@
                     <div class="modal-footer-batch">
                         <button type="submit" class="btn-save">Save</button>
                         <button type="button" class="btn-cancel" onclick="closeTransactionModal()">Cancel</button>
-                        <button type="button" class="btn-save-new" onclick="saveTransactionAndNew()">Save & New</button>
+                        <button type="button" class="btn-save-new" data-new-only onclick="saveTransactionAndNew()">Save & New</button>
+                        <button type="button" class="btn-dup" data-edit-only style="display:none;" onclick="duplicateFromModal()">Duplicate</button>
+                        <button type="button" class="btn-del" data-edit-only style="display:none;" onclick="deleteFromModal()">Delete</button>
                     </div>
                 </form>
             </div>
@@ -1025,7 +1035,8 @@
                     <div class="modal-footer-batch">
                         <button type="submit" class="btn-save">Save</button>
                         <button type="button" class="btn-cancel" onclick="closeTransferModal()">Cancel</button>
-                        <button type="button" class="btn-save-new" onclick="saveTransferAndNew()">Save & New</button>
+                        <button type="button" class="btn-save-new" data-new-only onclick="saveTransferAndNew()">Save & New</button>
+                        <button type="button" class="btn-del" data-edit-only style="display:none;grid-column:1/-1;" onclick="deleteFromTransferModal()">Delete</button>
                     </div>
                 </form>
             </div>
@@ -1881,7 +1892,7 @@
             const detailHtml = mobileDetails.map(([l, v]) => `<span class="md-label">${l}</span><span class="md-value">${v}</span>`).join('');
 
             return `
-            <div class="transaction-item grid-layout ${isSel ? 'selected' : ''}" data-transaction-id="${t.id}" onclick="${bulkEditMode ? `toggleTransactionSelection(${t.id})` : 'toggleMobileDetail(this)'}">
+            <div class="transaction-item grid-layout ${isSel ? 'selected' : ''}" data-transaction-id="${t.id}" onclick="${bulkEditMode ? `toggleTransactionSelection(${t.id})` : `rowClick(this, () => editTransaction(${t.id}))`}">
                 <div class="checkbox-column"><input type="checkbox" ${isSel ? 'checked' : ''} onclick="event.stopPropagation(); toggleTransactionSelection(${t.id})"></div>
                 <div class="t-cell date-cell ledger-date">
                     <span class="date-display">${dateStr}</span>
@@ -1899,11 +1910,6 @@
                 <div class="t-cell t-amount ${t.amount < 0 ? 'amount-negative' : 'amount-positive'}">${formatMoneyWithSymbol(t.amount, t.currency)}</div>
                 <div class="t-cell balance-cell" style="color: ${balanceAccountColor}">${t.account_balance_after != null ? formatMoneyWithSymbol(t.account_balance_after, accountCurrency) : ''}</div>
                 <div class="t-cell balance-cell" style="color: ${balanceTotalColor}">${t.total_balance_after != null ? formatMoneyWithSymbol(t.total_balance_after, 'GBP') : ''}</div>
-                <div class="action-buttons">
-                    <button onclick="event.stopPropagation(); duplicateTransaction(${t.id})" class="btn-xs" title="Duplicate">⧉</button>
-                    <button onclick="event.stopPropagation(); editTransaction(${t.id})" class="btn-xs" title="Edit">✎</button>
-                    <button onclick="event.stopPropagation(); deleteTransaction(${t.id})" class="btn-xs" title="Delete">×</button>
-                </div>
                 <div class="mobile-detail">
                     <div class="mobile-detail-grid">${detailHtml}</div>
                     <div class="mobile-detail-actions">
@@ -1949,7 +1955,7 @@
             const trDetailHtml = trDetails.map(([l, v]) => `<span class="md-label">${l}</span><span class="md-value">${v}</span>`).join('');
 
             return `
-            <div class="transaction-item grid-layout ${isSel ? 'selected' : ''}" data-transfer-id="${tid}" onclick="${bulkEditMode ? `toggleTransferSelection('${tid}')` : 'toggleMobileDetail(this)'}">
+            <div class="transaction-item grid-layout ${isSel ? 'selected' : ''}" data-transfer-id="${tid}" onclick="${bulkEditMode ? `toggleTransferSelection('${tid}')` : `rowClick(this, () => editTransfer(${t.transfer_out_id}, ${t.transfer_in_id}))`}">
                 <div class="checkbox-column"><input type="checkbox" ${isSel ? 'checked' : ''} onclick="event.stopPropagation(); toggleTransferSelection('${tid}')"></div>
                 <div class="t-cell date-cell ledger-date">
                     <span class="date-display">${dateStr}</span>
@@ -1967,10 +1973,6 @@
                 <div class="t-cell t-amount ${diffCurr ? 'amount-cell' : ''}" style="color:#3C5A6E">${amountHtml}</div>
                 <div class="t-cell balance-cell-transfer">${balanceHtml}</div>
                 <div class="t-cell" style="text-align:right;color:#c9bda8">–</div>
-                <div class="action-buttons">
-                    <button onclick="event.stopPropagation(); editTransfer(${t.transfer_out_id}, ${t.transfer_in_id})" class="btn-xs">✎</button>
-                    <button onclick="event.stopPropagation(); deleteTransfer(${t.transfer_out_id}, ${t.transfer_in_id})" class="btn-xs">×</button>
-                </div>
                 <div class="mobile-detail">
                     <div class="mobile-detail-grid">${trDetailHtml}</div>
                     <div class="mobile-detail-actions">
@@ -2352,6 +2354,39 @@
             }
         }
         
+        // Row click: on mobile (≤600px, columns collapsed) expand the inline detail;
+        // on desktop open the edit modal.
+        function rowClick(el, editFn) {
+            if (window.innerWidth <= 600) toggleMobileDetail(el);
+            else editFn();
+        }
+        // Show/hide the edit-only (Duplicate/Delete) vs new-only (Save & New) footer
+        // buttons of a modal.
+        function setModalMode(modalId, isEdit) {
+            const m = document.getElementById(modalId);
+            m.querySelectorAll('[data-edit-only]').forEach(b => b.style.display = isEdit ? '' : 'none');
+            m.querySelectorAll('[data-new-only]').forEach(b => b.style.display = isEdit ? 'none' : '');
+        }
+        function duplicateFromModal() {
+            const id = document.getElementById('transactionForm').dataset.editingId;
+            if (!id) return;
+            closeTransactionModal();
+            duplicateTransaction(+id);
+        }
+        function deleteFromModal() {
+            const id = document.getElementById('transactionForm').dataset.editingId;
+            if (!id) return;
+            closeTransactionModal();
+            deleteTransaction(+id);
+        }
+        function deleteFromTransferModal() {
+            const f = document.getElementById('transferForm');
+            const out = f.dataset.editingOutId, inn = f.dataset.editingInId;
+            if (!out || !inn) return;
+            closeTransferModal();
+            deleteTransfer(+out, +inn);
+        }
+
         async function editTransaction(id) {
             setScrollTarget(id);
             const t = await (await fetch(`${API_URL}/transactions/${id}`)).json();
@@ -2370,6 +2405,7 @@
             if(t.location_id) document.getElementById('location').value = t.location_id;
             if(t.project_id) document.getElementById('project').value = t.project_id;
             const f = document.getElementById('transactionForm'); f.dataset.editingId = id; f.querySelector('button[type="submit"]').textContent = 'Update';
+            setModalMode('transactionModal', true);
         }
 
         async function duplicateTransaction(id) {
@@ -2413,6 +2449,7 @@
             if(o.currency !== i.currency) document.getElementById('toAmount').value = i.amount;
             document.getElementById('transferNote').value = o.note || ''; checkTransferCurrencies();
             const f = document.getElementById('transferForm'); f.dataset.editingOutId = outId; f.dataset.editingInId = inId; f.querySelector('button[type="submit"]').textContent = 'Update';
+            setModalMode('transferModal', true);
         }
       
 
@@ -2633,8 +2670,9 @@
                 delete el.dataset.inertByModal;
             });
         }
-        function openTransactionModal() { 
-            openModal('transactionModal'); 
+        function openTransactionModal() {
+            openModal('transactionModal');
+            setModalMode('transactionModal', false);
             const now = new Date();
             const dateStr = now.toISOString().split('T')[0];
             const timeStr = now.toTimeString().split(' ')[0].substring(0,5);
@@ -2661,8 +2699,9 @@
             delete document.getElementById('transactionForm').dataset.editingId; 
             document.getElementById('transactionForm').querySelector('button[type="submit"]').textContent='Save'; 
         }
-        function openTransferModal() { 
-            openModal('transferModal'); 
+        function openTransferModal() {
+            openModal('transferModal');
+            setModalMode('transferModal', false);
             const now = new Date();
             const dateStr = now.toISOString().split('T')[0];
             const timeStr = now.toTimeString().split(' ')[0].substring(0,5);
