@@ -47,11 +47,20 @@
         @media (min-width:821px) {
             #navBtn { display:none; }
             #navDropdown .menu { position:static; display:block; box-shadow:none; border:none; background:transparent; padding:0; min-width:0; }
-            #navDropdown .list { display:flex; align-items:center; gap:2px; padding:0 !important; }
+            #navDropdown .list { display:flex; align-items:center; gap:20px; padding:0 !important; }
             #navDropdown .list hr { display:none; }
-            #navDropdown .navItem { width:auto; padding:7px 12px; font-weight:600; border-radius:8px; }
-            #btnRefresh { margin-left:6px; background:#F1E7D6; font-family:'Playfair Display',serif; font-weight:500; }
+            #navDropdown .navItem { width:auto; padding:6px 2px; font-weight:600; border-radius:0; border-bottom:2px solid transparent; }
+            header .tools #navDropdown .navItem:hover { background:transparent !important; color:var(--ink); border-bottom-color:var(--border); }
+            header .tools #navDropdown .navItem.active { background:transparent !important; color:var(--ink); border-bottom:2px solid var(--accent); }
+            #btnRefresh { margin-left:4px; padding:6px 12px !important; border-bottom:none !important; background:#F1E7D6; border-radius:8px; font-family:'Playfair Display',serif; font-weight:500; }
+            header .tools #btnRefresh:hover { background:var(--field) !important; }
         }
+
+        /* Log-out icon (right of header, all breakpoints) — bare glyph, no capsule */
+        .logout-btn { background:none !important; border:none !important; border-radius:0; padding:0 !important; margin-left:8px; flex:0 0 auto;
+            cursor:pointer; color:var(--muted); display:flex; align-items:center; justify-content:center; transition:color .15s; }
+        .logout-btn:hover { background:none !important; color:var(--danger); transform:none; }
+        .logout-btn svg { width:16px; height:16px; }
 
         /* ── Nav dropdown ── */
         .tools { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
@@ -270,11 +279,12 @@
                         <button class="navItem active">Tools</button>
                         <hr style="border: none; border-top: 1px solid var(--border); margin: 6px 0;">
                         <button class="navItem" id="btnRefresh">Refresh</button>
-                        <!-- Keep your existing logout handler here (e.g. onclick="logout()" or href) -->
-                        <button class="navItem" id="btnLogout">Log out</button>
                     </div>
                 </div>
             </div>
+            <button class="logout-btn" id="btnLogout" title="Log out" aria-label="Log out">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5"/><path d="M15 12H5"/></svg>
+            </button>
         </div>
     </header>
 
