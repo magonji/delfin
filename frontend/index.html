@@ -6,299 +6,334 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Delfin" />
-    <meta name="theme-color" content="#FAE6D9" />
+    <meta name="theme-color" content="#FAF3E9" />
     <link rel="icon" href="favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/app/icons/icon-180.png" />
     <link rel="manifest" href="manifest.json" />
     <title>Delfin · The Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <style>
         :root {
-            --bg: #FFF1E6; --panel: #FEE5D7; --card: #D4B5A0; --border: #D4B5A0;
-            --muted: #5F5F5F; --text: #2D2D2D;
-            --green: #0e9530; --red: #d52811; --yellow: #f5b700;
-            --page-gutter: clamp(10px, 4vw, 20px);
+            --bg: #FAF3E9; --paper: #FFFDFA; --text: #23201C;
+            --red: #B0402E; --green: #3C7A57; --ink: #3C5A6E;
+            --muted: #8A7D6C; --hair: #EFE4D3; --hair2: #D8C6B0;
+            --chip: #F1E7D6; --chip2: #E3D3BA;
+            --page-gutter: clamp(16px, 4vw, 30px);
         }
-
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        html { min-height: 100%; scrollbar-gutter: stable both-edges; background: #FAE6D9; }
-        body { min-height: 100vh; margin: 0; background: var(--bg); color: var(--text); font-family: 'IBM Plex Mono', monospace;
-               display: flex; flex-direction: column;
-               padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); padding-bottom: env(safe-area-inset-bottom); }
+        html { background: var(--bg); scrollbar-gutter: stable; }
+        body { margin: 0; background: var(--bg); color: var(--text); font-family: 'IBM Plex Sans', sans-serif;
+               -webkit-font-smoothing: antialiased; min-height: 100vh;
+               padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+        a { color: var(--red); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        ::selection { background: var(--red); color: var(--bg); }
+        h2, h3 { margin: 0; }
 
-        /* Header and toolbar */
-        header { display: flex; align-items: center; justify-content: space-between; padding: 18px 20px; padding-top: calc(18px + env(safe-area-inset-top)); position: sticky; top: 0; backdrop-filter: blur(8px); background: #FAE6D9; border-bottom: 1px solid #D4B5A0; z-index: 50; }
-        h1 { font-size: 30px; margin: 0; letter-spacing: 0.2px; font-family: 'Playfair Display', serif; }
+        /* ── Header ── */
+        header { position: sticky; top: 0; z-index: 50; display: flex; align-items: center; justify-content: space-between;
+            gap: 16px; padding: 15px var(--page-gutter); padding-top: calc(15px + env(safe-area-inset-top));
+            background: rgba(250,243,233,.86); backdrop-filter: blur(10px); border-bottom: 1px solid var(--hair2); }
+        .brand { display: flex; align-items: center; gap: 14px; min-width: 0; }
+        .brand .word { font-family: 'Playfair Display', serif; font-size: 25px; font-weight: 800; letter-spacing: -.3px; }
+        .brand .rule { width: 1px; height: 20px; background: var(--hair2); }
+        .brand .tag { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+        .nav-right { display: flex; align-items: center; gap: 8px; }
+        .dropdown { position: relative; display: inline-flex; }
+        .nav-links { display: flex; align-items: center; gap: 4px; }
+        .nav-links a { font-size: 13px; font-weight: 600; color: var(--muted); padding: 7px 12px; border-bottom: 2px solid transparent; }
+        .nav-links a:hover { color: var(--text); text-decoration: none; }
+        .nav-links a.active { color: var(--text); border-bottom-color: var(--red); }
+        .burger { display: none; background: transparent; border: none; font-size: 22px; cursor: pointer; color: var(--text); padding: 0 4px; }
+        .chip-btn { background: var(--chip); border: none; border-radius: 8px; height: 30px; padding: 0 12px;
+            font-family: 'Playfair Display', serif; font-size: 13px; font-weight: 500; color: #3A342C; cursor: pointer; white-space: nowrap; }
+        .chip-btn:hover { background: var(--chip2); }
+        .icon-btn { background: transparent; border: none; padding: 4px; display: flex; align-items: center; justify-content: center; color: var(--muted); cursor: pointer; }
+        .icon-btn:hover { color: var(--red); }
 
-        /* Toolbar controls */
-        .tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-        .tools select, .tools input, .tools button, .dropdown .btn {
-            background: var(--bg); color: var(--text); border: 1px solid var(--border);
-            border-radius: 8px; padding: 6px 10px; font-size: 12px; cursor: pointer; box-sizing: border-box; height: 32px;
-            -webkit-appearance: none; appearance: none;
-        }
-        .tools select { background: var(--bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%232D2D2D'/%3E%3C/svg%3E") no-repeat right 8px center; padding-right: 24px; }
-        .tools button { cursor: pointer; }
-        .custom-range { gap: 6px; align-items: center; }
-        .custom-range input[type="date"] { cursor: text; }
-        .tools .primary { background: var(--panel); border-color: var(--border); }
-        .tools .danger { background: var(--panel); border-color: var(--border); }
+        /* ── Page frame & flat section separators (no cards) ── */
+        .content { max-width: 1280px; margin: 0 auto; padding: 26px var(--page-gutter) 64px; }
+        .content > * { border-top: 1px solid var(--hair2); padding-top: 30px; margin-top: 30px; }
+        .content > *:first-child { border-top: none; padding-top: 0; margin-top: 0; }
 
-        /* KPI cards */
-        .kpis { display: grid; grid-template-columns: repeat(4, minmax(180px, 1fr)); gap: 12px; margin: 12px 20px; }
-        .kpi { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
-        .kpi h3 { margin: 0 0 6px 0; color: var(--muted); font-size: 14px; font-weight: 600; font-family: 'IBM Plex Sans', sans-serif; text-transform: uppercase; letter-spacing: 2px; }
-        .kpi .value { font-size: 22px; font-weight: 700; }
+        .split { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+        .split > * { min-width: 0; }
+        .split > *:first-child { padding-right: 44px; }
+        .split > *:last-child { padding-left: 44px; border-left: 1px solid var(--hair2); }
+
+        /* ── Section head ── */
+        .head-row { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+            padding: 0 0 16px; border-bottom: 1px solid var(--hair); margin-bottom: 20px; flex-wrap: wrap; }
+        .sec-title { font-family: 'Playfair Display', serif; font-size: 25px; font-weight: 800; padding-left: 15px; border-left: 3px solid var(--red); }
+        .tools { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+        /* ── Controls (chips) ── */
+        .tools select, .tools .chip-btn, .tools button, .tools input {
+            background: var(--chip); color: #3A342C; border: none; border-radius: 7px; height: 28px; padding: 0 10px;
+            font-family: 'Playfair Display', serif; font-size: 13px; font-weight: 500; cursor: pointer; }
+        .tools select { -webkit-appearance: none; appearance: none; padding-right: 24px;
+            background: var(--chip) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%238A7D6C'/%3E%3C/svg%3E") no-repeat right 9px center; }
+        .tools button:hover, .tools select:hover { background: var(--chip2); }
+        .tools .nav-mini { width: 24px; padding: 0; font-size: 10px; }
+        .month-label { font-family: 'Playfair Display', serif; font-size: 13px; font-weight: 500; min-width: 60px; text-align: center; }
+        .count { background: var(--chip2); border-radius: 99px; padding: 1px 6px; font-size: 10px; color: #5A4E3C; font-family: 'IBM Plex Sans', sans-serif; }
+        .custom-range { display: inline-flex; gap: 6px; align-items: center; }
+        .custom-range input[type="date"] { cursor: text; font-family: 'IBM Plex Mono', monospace; font-size: 12px; }
+
+        /* ── Dropdown menus ── */
+        .menu { display: none; position: absolute; top: calc(100% + 8px); right: 0; z-index: 60;
+            background: var(--paper); border: 1px solid var(--hair); border-radius: 12px; box-shadow: 0 12px 30px rgba(40,28,14,.18);
+            padding: 10px; min-width: 220px; }
+        .dropdown.open .menu { display: block; }
+        .menu .menu-actions { display: flex; gap: 6px; margin-bottom: 8px; }
+        .menu .menu-actions button { flex: 1; height: 28px; font-size: 12px; }
+        .menu .menu-list { max-height: 300px; overflow: auto; display: flex; flex-direction: column; gap: 2px; }
+        .menu label { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; font-size: 13px; cursor: pointer; }
+        .menu label:hover { background: var(--chip); }
+        .menu input[type="checkbox"] { accent-color: var(--red); width: 15px; height: 15px; flex: 0 0 auto; }
+        .menu .search input { width: 100%; height: 32px; background: var(--bg); border: 1px solid var(--hair); border-radius: 8px; padding: 0 10px; font-family: 'IBM Plex Sans', sans-serif; font-size: 13px; }
+
+        /* Category multiselect groups */
+        .cat-group-header { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; }
+        .cat-group-header:hover { background: var(--chip); }
+        .cat-group-header .arrow { font-size: 9px; color: var(--muted); transition: transform .15s; }
+        .cat-group.open .cat-group-header .arrow { transform: rotate(90deg); }
+        .cat-group-children { display: none; padding-left: 20px; }
+        .cat-group.open .cat-group-children { display: block; }
+
+        /* ── KPI band ── */
+        .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); }
+        .kpi-cell { padding: 4px 24px; }
+        .kpi-cell:first-child { padding-left: 0; }
+        .kpi-cell + .kpi-cell { border-left: 1px solid var(--hair); }
+        .kpi-label { font-size: 10.5px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
+        .kpi-val { font-family: 'Playfair Display', serif; font-size: 31px; font-weight: 800; line-height: 1.1; margin-top: 8px; font-variant-numeric: tabular-nums; }
+
+        /* ── Chart boxes ── */
+        .chart-box { position: relative; }
+        .chart-box canvas { width: 100% !important; }
+
+        /* ── Stat strips under charts ── */
+        .statstrip { display: grid; margin-top: 18px; border-top: 1px solid var(--hair); padding-top: 16px; }
+        .statstrip .stat { padding: 0 16px; border-left: 1px solid var(--hair); }
+        .statstrip .stat:first-child { padding-left: 0; border-left: none; }
+        .stat-label { font-size: 10px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
+        .stat-val { font-family: 'Playfair Display', serif; font-size: 21px; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; }
+        .statstrip.small .stat-val { font-size: 19px; }
         #ysExpenses, #totExpenses { color: var(--red) !important; }
 
-        /* Layout grids */
-        .container { display: grid; grid-template-columns: 1.3fr 0.7fr; gap: 14px; margin: 0 20px 40px; }
-        .two-col-cards { display: grid; padding-inline: var(--page-gutter); grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: stretch; }
-        /* Equal-height cards come from the grid's align-items:stretch (the default).
-           Do NOT use height:100% here — Safari mis-resolves it against the auto-sized
-           row track, collapsing the cards and overlapping the footer. Chrome/Firefox
-           tolerate it, but stretch is the correct, cross-browser way. */
-        .two-col-cards canvas { width: 100% !important; height: 400px; max-width: 100%; }
-        .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
-
-        /* Card component */
-        .card { background: var(--bg); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
-        .card.full { grid-column: 1 / -1; }
-        .card .head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--border); background: var(--bg); }
-        .card .title { margin: 0; font-size: 18px; font-weight: 700; letter-spacing: 2px; font-family: 'IBM Plex Sans', sans-serif; text-transform: uppercase; }
-        .card .content { padding: 12px 14px; }
-
-        /* List rows */
-        .list { display: flex; flex-direction: column; gap: 8px; }
-        .list .row { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); align-items: center; }
-        .list.list--2col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-        .list.list--2col .row { height: 100%; }
-        .list .row > :first-child { min-width: 0; }
-        .list .row .title, #accountsList .row .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        
-        #accountsList .row { grid-template-columns: 1fr auto; padding: 8px 10px; }
-        
-        /* Top expenses and transactions lists */
-        #topExpenses .row, #topTx .row { display: grid !important; grid-template-columns: 1fr auto !important; align-items: center; gap: 8px; }
-        #topExpenses .row > :first-child, #topTx .row > :first-child { min-width: 0; }
-        .row strong, .row .muted { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .row .right { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; min-width: 140px; text-align: right; }
-        .row .amt { font-size: 20px; font-weight: 800; line-height: 1.1; color: var(--red); font-variant-numeric: tabular-nums; }
-        .row .date { font-size: 14px; color: var(--muted); }
-
-        .title_te { color: var(--muted); font-size: 18px; font-weight: 600; font-family: 'IBM Plex Sans', sans-serif; text-transform: uppercase; letter-spacing: 2px; padding-top: 30px; padding-bottom: 10px; }
-
-        /* Dropdown menus */
-        .dropdown { position: relative; }
-        .dropdown .btn { display: flex; align-items: center; gap: 8px; }
-        #navBtn { font-size: 22px; padding: 4px 8px; line-height: 1; background: transparent; border: none; cursor: pointer; color: var(--text); }
-        .dropdown .btn .count { background: var(--bg); border: 1px solid var(--border); border-radius: 999px; padding: 1px 6px; font-size: 11px; }
-        .dropdown .menu { position: absolute; top: calc(100% + 6px); right: 0; min-width: 280px; max-height: 280px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.35); display: none; padding: 8px; z-index: 20; }
-        .dropdown.open .menu { display: block; }
-        .dropdown .menu .search input { width: 100%; margin-bottom: 6px; }
-        .dropdown .menu .actions { display: flex; gap: 6px; margin: 6px 0; }
-        .dropdown .menu .list { max-height: 180px; overflow: auto; display: flex; flex-direction: column; gap: 4px; }
-        .dropdown .menu label { display: flex; align-items: center; gap: 8px; padding: 6px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); cursor: pointer; }
-        .dropdown .menu input[type="checkbox"] { accent-color: var(--card); }
-        
-        #navDropdown .menu { min-width: 180px; max-height: none; z-index: 100; }
-        #navDropdown .list { max-height: none; overflow: visible; }
-        #navDropdown .navItem {
-            width: 100%;
-            text-align: left;
-            padding: 8px 12px;
-            background: transparent;
-            cursor: pointer;
-            border: none !important;
-            border-radius: 6px;
-            transition: background 0.2s;
-            font-size: 14px;
-            font-weight: 600;
-            font-family: 'IBM Plex Sans', sans-serif; color: var(--text);
-        }
-        #navDropdown .navItem:hover { background: var(--panel); }
-        #navDropdown .navItem.active { background: var(--card); color: var(--text); pointer-events: none; }
-
-        /* Category accordion */
-        .cat-group { margin-bottom: 4px; }
-        .cat-group-header { 
-            display: flex; align-items: center; gap: 8px; padding: 8px; 
-            border-radius: 8px; border: 1px solid var(--border); background: var(--panel); 
-            cursor: pointer; font-weight: 600; font-size: 13px;
-        }
-        .cat-group-header:hover { background: var(--card); }
-        .cat-group-header .arrow { transition: transform 0.2s; font-size: 10px; }
-        .cat-group.open .cat-group-header .arrow { transform: rotate(90deg); }
-        .cat-group-children { display: none; padding-left: 16px; margin-top: 4px; }
-        .cat-group.open .cat-group-children { display: flex; flex-direction: column; gap: 4px; }
-        .cat-group-children label { font-size: 12px; padding: 5px 8px; }
-
-        /* Charts and utilities */
-        .cat-monthly .chart-center { display: flex; align-items: center; justify-content: center; padding: 6px 0; }
-        .cat-monthly .chart-box { width: 560px; height: 560px; }
-        .cat-monthly #catPie { width: 100% !important; height: 100% !important; display: block; padding: 40px; }
-        
+        /* ── Lists (payees, expenses, top-expenses) ── */
+        .list { display: flex; flex-direction: column; }
+        .list.list--2col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 32px; }
+        .list .row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: baseline;
+            padding: 10px 0; border-bottom: 1px solid var(--hair); }
+        .list .row.ranked { grid-template-columns: auto 1fr auto; }
+        .list .row .rank { font-family: 'Playfair Display', serif; font-size: 15px; font-weight: 800; color: var(--red); width: 20px; }
+        .list .row strong { font-weight: 600; font-size: 13.5px; }
+        .list .row .muted { color: var(--muted); font-size: 11px; }
+        .row--clickable { cursor: pointer; margin: 0 -8px; padding-left: 8px; padding-right: 8px; border-radius: 8px; }
+        .row--clickable:hover { background: #F3E9DA; }
+        .right { text-align: right; white-space: nowrap; }
+        .amt { font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 14px; }
+        .date { color: var(--muted); font-size: 10.5px; }
         .muted { color: var(--muted); }
-        .badge { padding: 2px 6px; border-radius: 999px; font-size: 11px; background: var(--card); border: 1px solid var(--border); }
-        .badge_spe { display: inline-flex; justify-content: center; align-items: center; width: 60px; height: 25px; border-radius: 999px; margin-right: 15px; font-size: 14px; font-weight: 400; background: var(--panel); border: 1px solid var(--border); color: var(--text); word-spacing: -5px; }
-        .legend { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
-        .legend .dot { width: 10px; height: 10px; border-radius: 50%; }
-        .footer { opacity: 0.7; font-size: 12px; text-align: center; margin-top: auto; padding: 24px 10px 10px; font-family: 'Playfair Display', serif; }
-        .nw-chart-wrap { position: relative; height: 597px; }
 
-        /* Floating Action Buttons */
-        .fab-container { position: fixed; bottom: 30px; right: 30px; display: flex; flex-direction: row; gap: 12px; z-index: 900; }
-        .fab-button { width: 60px; height: 60px; border-radius: 50%; background: #6B4D3E; color: white; border: none; font-size: 28px; font-weight: 700; cursor: pointer; box-shadow: 0 5px 15px rgba(0,0,0,0.2); transition: transform 0.2s; display: flex; align-items: center; justify-content: center; font-family: 'IBM Plex Sans', sans-serif; }
-        .fab-button:hover { transform: scale(1.05); background: #5C3F32; }
+        /* ── Balance by account ── */
+        .accts { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0 40px; }
+        .acct-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: baseline; padding: 11px 0; border-bottom: 1px solid var(--hair); }
+        .acct-name { font-weight: 600; font-size: 14px; }
+        .acct-sub { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: var(--muted); }
+        .acct-amt { font-family: 'IBM Plex Mono', monospace; font-size: 16px; font-weight: 600; }
+        .acct-total { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr auto; align-items: baseline;
+            margin-top: 6px; padding: 13px 0 2px; border-top: 1.5px solid var(--hair2); }
+        .acct-total .lbl { font-weight: 700; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; color: #4C463E; }
+        .acct-total .val { font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 800; color: var(--green); }
 
-        /* Clickable cells in the monthly category-spend box */
-        .row--clickable { cursor: pointer; transition: border-color 0.15s, transform 0.05s; }
-        .row--clickable:hover { border-color: #6B4D3E; }
-        .row--clickable:active { transform: scale(0.99); }
+        /* ── Category spend (doughnut + list) ── */
+        .catspend-body { display: flex; gap: 40px; align-items: center; flex-wrap: wrap; }
+        .pie-wrap { position: relative; width: 220px; height: 220px; flex: 0 0 auto; }
+        .pie-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
+        .pie-center .lbl { font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
+        .pie-center .val { font-family: 'Playfair Display', serif; font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; }
+        .catspend-list { flex: 1; min-width: 260px; }
+        .title_te { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin: 0 0 12px; }
 
-        /* Detail modal (top-expense / category drill-down) */
-        .modal { display: none; position: fixed; inset: 0; z-index: 1000;
-            background: rgba(45, 45, 45, 0.45); backdrop-filter: blur(2px);
-            align-items: center; justify-content: center; padding: 16px; }
+        /* ── Trend legend ── */
+        .legend { display: flex; gap: 16px; flex-wrap: wrap; justify-content: flex-end; margin-bottom: 10px; }
+        .legend > div { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; }
+        .legend .dot { width: 12px; height: 3px; border-radius: 2px; display: inline-block; }
+
+        /* ── Detail modal ── */
+        .modal { display: none; position: fixed; inset: 0; z-index: 80; background: rgba(35,32,28,.4); backdrop-filter: blur(3px);
+            align-items: center; justify-content: center; padding: 18px; }
         .modal.active { display: flex; }
-        .modal-content { background: var(--bg); border: 1px solid var(--border); border-radius: 14px;
-            width: 100%; max-width: 460px; max-height: 85vh; overflow: hidden;
-            display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,0.25); }
-        .modal-header { display: flex; align-items: center; justify-content: space-between; gap: 12px;
-            padding: 16px 20px; border-bottom: 1px solid var(--border); background: var(--panel); }
-        .modal-header h3 { margin: 0; font-family: 'Playfair Display', serif; font-size: 20px; color: var(--text);
-            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .modal-close { background: none; border: none; font-size: 26px; line-height: 1; color: var(--muted); cursor: pointer; padding: 0 4px; }
-        .modal-close:hover { color: var(--text); }
-        .modal-body { padding: 18px 20px; overflow-y: auto; }
+        .modal-content { background: var(--paper); border: 1px solid var(--hair); border-radius: 16px; width: 100%; max-width: 460px;
+            max-height: 85vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 24px 60px rgba(40,28,14,.35); }
+        .modal-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 22px; border-bottom: 1px solid var(--hair); }
+        .modal-header h3 { font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .modal-close { background: var(--chip); border: none; border-radius: 8px; width: 32px; height: 32px; font-size: 18px; line-height: 1; color: #3A342C; cursor: pointer; }
+        .modal-body { padding: 16px 22px 20px; overflow-y: auto; }
         .detail-loading { color: var(--muted); text-align: center; padding: 20px 0; }
         .detail-grid { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; margin: 0; }
         .detail-grid dt { color: var(--muted); font-size: 13px; }
         .detail-grid dd { margin: 0; text-align: right; font-weight: 600; word-break: break-word; }
-        .detail-grid dd.detail-amt { font-size: 20px; font-weight: 800; color: var(--red); font-variant-numeric: tabular-nums; }
-        .detail-cat-head { display: flex; justify-content: space-between; align-items: baseline;
-            padding-bottom: 12px; margin-bottom: 4px; border-bottom: 1px solid var(--border); color: var(--muted); font-size: 13px; }
-        .detail-cat-head strong { font-size: 18px; color: var(--red); font-variant-numeric: tabular-nums; }
-        .detail-exp { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+        .detail-grid dd.detail-amt { font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 800; color: var(--red); }
+        .detail-cat-head { display: flex; justify-content: space-between; align-items: baseline; padding-bottom: 12px; margin-bottom: 4px;
+            border-bottom: 1px solid var(--hair); color: var(--muted); font-size: 12px; }
+        .detail-cat-head strong { font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 800; color: var(--red); }
+        .detail-exp { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--hair); }
         .detail-exp:last-child { border-bottom: none; }
         .detail-exp-main { min-width: 0; }
-        .detail-exp-main strong { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .detail-exp-main .muted { font-size: 12px; }
-        .detail-exp-amt { font-weight: 700; color: var(--red); white-space: nowrap; font-variant-numeric: tabular-nums; }
+        .detail-exp-main strong { font-weight: 600; font-size: 14px; }
+        .detail-exp-main .muted { font-size: 11px; }
+        .detail-exp-amt { font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 14px; color: var(--red); white-space: nowrap; }
 
-        @media (max-width: 1200px) {
-            .container { grid-template-columns: 1fr; }
-            .cat-monthly .chart-box { width: 300px; height: 300px; }
+        /* ── Floating actions ── */
+        .fab-container { position: fixed; bottom: 28px; right: 28px; display: flex; gap: 12px; z-index: 60; }
+        .fab-button { border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;
+            transition: transform .18s ease, box-shadow .18s ease; }
+        .fab-button:first-child { width: 54px; height: 54px; border-radius: 50%; background: var(--chip); color: #3A342C; font-size: 22px; box-shadow: 0 10px 24px rgba(40,28,14,.24); }
+        .fab-button:last-child { width: 60px; height: 60px; border-radius: 50%; background: #2B2621; color: #fff; font-size: 30px; font-weight: 300; box-shadow: 0 12px 30px rgba(40,28,14,.4); }
+        .fab-button:hover { transform: translateY(-3px) scale(1.05); }
+
+        .footer { text-align: center; margin-top: 40px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 1px; color: #A99A85; }
+
+        /* ── Responsive ── */
+        @media (max-width: 1000px) {
+            .kpi-grid { grid-template-columns: 1fr 1fr; }
+            .kpi-cell { padding: 14px 20px; border-top: 1px solid var(--hair); }
+            .kpi-cell:nth-child(1), .kpi-cell:nth-child(2) { border-top: none; }
+            .kpi-cell:first-child { padding-left: 20px; }
+            .kpi-cell:nth-child(odd) { border-left: none; padding-left: 0; }
+            .split { grid-template-columns: 1fr; }
+            .split > *:first-child { padding-right: 0; }
+            .split > *:last-child { padding-left: 0; border-left: none; border-top: 1px solid var(--hair2); padding-top: 34px; margin-top: 34px; }
         }
-        @media (max-width: 900px) {
-            .list.list--2col, .two-col-cards { grid-template-columns: 1fr; }
-            .cat-monthly .chart-box { width: 260px; height: 260px; }
-            .kpis { grid-template-columns: repeat(2, 1fr); }
-            .grid-4 { grid-template-columns: repeat(2, 1fr); }
+        @media (max-width: 760px) {
+            .nav-links { position: absolute; top: calc(100% + 10px); right: 0; flex-direction: column; align-items: stretch;
+                background: var(--paper); border: 1px solid var(--hair); border-radius: 12px; box-shadow: 0 12px 30px rgba(40,28,14,.18);
+                padding: 8px; min-width: 190px; display: none; }
+            #navDropdown.open .nav-links { display: flex; }
+            .nav-links a { padding: 10px 12px; border-bottom: none; border-radius: 8px; }
+            .nav-links a.active { background: var(--chip); border-bottom: none; }
+            .burger { display: block; }
         }
-        @media (max-width: 600px) {
-            header { flex-wrap: nowrap; padding: 12px 15px; padding-top: calc(12px + env(safe-area-inset-top)); position: sticky; top: 0; }
-            h1 { font-size: 22px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-            button, select, input, textarea { min-height: 44px; font-size: 16px; }
-            .kpis { grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 12px; }
-            .kpi { padding: 10px; }
-            .kpi h3 { font-size: 11px; letter-spacing: 1px; }
-            .kpi .value { font-size: 18px; }
-            .container { gap: 10px; margin: 0 12px 20px; }
-            .two-col-cards { padding-inline: 12px; gap: 10px; }
-            .grid-4 { grid-template-columns: 1fr 1fr; gap: 8px; }
-            .nw-chart-wrap { height: 300px; }
-            .card .head { flex-wrap: wrap; gap: 8px; padding: 10px 12px; }
-            .card .head .tools { flex-wrap: wrap; }
-            .card .head .tools select, .card .head .tools button { font-size: 11px; padding: 5px 8px; }
-            .card .head .tools select { padding-right: 20px; background-position: right 5px center; }
-            .card .content { padding: 10px 12px; }
-            .card .title { font-size: 14px; }
-            .cat-monthly .chart-box { width: 100%; max-width: 280px; height: 280px; }
-            .list .row { padding: 8px; }
-            /* Drop the 15px side margins so the top-expenses list aligns with the
-               card padding instead of sitting inset (looked odd on phones). */
-            #monthlyListTitle, #topExpenses { margin-left: 0 !important; margin-right: 0 !important; }
-            .row .right { min-width: 100px; }
-            .row .amt { font-size: 16px; }
-            .badge_spe { width: 50px; height: 22px; font-size: 12px; margin-right: 8px; }
-            .dropdown .menu { min-width: 0; right: -10px; }
-            #excludeMenu { position: fixed; top: auto; right: 8px; left: 8px; max-height: 60vh; }
-            #excludeMenu .list { max-height: calc(60vh - 100px); }
-            .fab-container { bottom: 20px; right: 15px; gap: 10px; }
-            .fab-button { width: 60px; height: 60px; font-size: 28px; }
-            .title_te { font-size: 14px; padding-top: 20px; }
-            .footer { padding: 16px 10px 10px; }
+        @media (max-width: 640px) {
+            header { padding: 12px 16px; padding-top: calc(12px + env(safe-area-inset-top)); }
+            .brand .tag { display: none; }
+            .statstrip { grid-template-columns: 1fr 1fr !important; gap: 14px 0; }
+            .statstrip .stat:nth-child(odd) { padding-left: 0; border-left: none; }
+            button, select, input { min-height: 40px; }
+            .tools select, .tools button, .tools .chip-btn { height: 34px; font-size: 13px; }
+            .sec-title { font-size: 21px; }
+            .catspend-body { gap: 24px; justify-content: center; }
         }
     </style>
 </head>
 <body>
     <header>
-        <h1>🐬 Delfin · Dashboard</h1>
-        <div class="tools">
+        <div class="brand">
+            <span class="word">Delfin</span>
+            <span class="rule"></span>
+            <span class="tag">Personal Finance</span>
+        </div>
+        <div class="nav-right">
             <div class="dropdown" id="navDropdown">
-                <button class="btn" id="navBtn" onclick="toggleNav()">&#9776;</button>
-                <div class="menu" id="navMenu">
-                    <div class="list" style="padding: 6px;">
-                        <button class="navItem active">Dashboard</button>
-                        <button class="navItem" onclick="location.href='transactions.html'">Transactions</button>
-                        <button class="navItem" onclick="location.href='budget.html'">Budget</button>
-                        <button class="navItem" onclick="location.href='loans.html'">Loans</button>
-                        <button class="navItem" onclick="location.href='tools.html'">Tools</button>
-                        <hr style="border: none; border-top: 1px solid var(--border); margin: 6px 0;">
-                        <button class="navItem" id="btnRefresh">Refresh</button>
-                    </div>
-                </div>
+                <button class="burger" id="navBtn" aria-label="Menu" aria-expanded="false">☰</button>
+                <nav class="nav-links" id="navMenu">
+                    <a class="active" href="index.html">Dashboard</a>
+                    <a href="transactions.html">Transactions</a>
+                    <a href="budget.html">Budget</a>
+                    <a href="loans.html">Loans</a>
+                    <a href="tools.html">Tools</a>
+                </nav>
             </div>
+            <button class="chip-btn" id="btnRefresh">↻ Refresh</button>
+            <button class="icon-btn" id="btnLogout" title="Log out" aria-label="Log out">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5"/><path d="M15 12H5"/></svg>
+            </button>
         </div>
     </header>
 
-    <section class="kpis" id="kpis">
-        <div class="kpi"><h3>Total balance</h3><div class="value" id="kpiTotalBalance">—</div></div>
-        <div class="kpi"><h3>Without loans</h3><div class="value" id="kpiBalanceNoLoans">—</div></div>
-        <div class="kpi"><h3>Transactions</h3><div class="value" id="kpiTxCount">—</div></div>
-        <div class="kpi"><h3>Budget available</h3><div class="value" id="kpiBudgetAvail">—</div></div>
-    </section>
+    <div class="content">
 
-    <section class="container">
-        <div class="card full">
-            <div class="head">
-                <h2 class="title">Net Worth Evolution</h2>
+        <!-- KPI BAND -->
+        <div class="kpi-grid">
+            <div class="kpi-cell"><div class="kpi-label">Total Balance</div><div class="kpi-val" id="kpiTotalBalance">—</div></div>
+            <div class="kpi-cell"><div class="kpi-label">Without Loans</div><div class="kpi-val" id="kpiBalanceNoLoans">—</div></div>
+            <div class="kpi-cell"><div class="kpi-label">Transactions</div><div class="kpi-val" id="kpiTxCount">—</div></div>
+            <div class="kpi-cell"><div class="kpi-label">Budget Available</div><div class="kpi-val" id="kpiBudgetAvail">—</div></div>
+        </div>
+
+        <!-- NET WORTH -->
+        <section>
+            <div class="head-row">
+                <h2 class="sec-title">Net Worth Evolution</h2>
                 <div class="tools">
                     <select id="nwPeriod"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly" selected>Monthly</option></select>
                     <select id="nwRange"><option value="all">All time</option><option value="last60">5 years</option><option value="last24">2 years</option><option value="last12">Last year</option><option value="last6">Last 6 months</option><option value="last3">Last 3 months</option><option value="last1">Last month</option><option value="custom">Custom range…</option></select>
                     <span id="nwCustom" class="custom-range" style="display:none;"><input type="date" id="nwFrom" title="From"><input type="date" id="nwTo" title="To"></span>
                     <div class="dropdown" id="excludeDropdown">
-                        <button class="btn" id="excludeBtn" onclick="toggleExclude()">Exclude <span class="count" id="excludeCount" style="display:none">0</span>▾</button>
+                        <button class="chip-btn" id="excludeBtn">Exclude <span class="count" id="excludeCount" style="display:none">0</span> ▾</button>
                         <div class="menu" id="excludeMenu">
-                            <div class="actions"><button id="excludeSelectAll">Select all</button><button id="excludeLoansBtn">Loans</button><button id="excludeClear">Clear</button></div>
-                            <div class="list" id="excludeList"></div>
+                            <div class="menu-actions"><button id="excludeSelectAll">Select all</button><button id="excludeLoansBtn">Loans</button><button id="excludeClear">Clear</button></div>
+                            <div class="menu-list" id="excludeList"></div>
                         </div>
                     </div>
-                    <button id="applyNetworth" class="primary" style="display:none;">Apply</button>
+                    <button id="applyNetworth" class="chip-btn" style="display:none;">Apply</button>
                 </div>
             </div>
-            <div class="content">
-                <div class="nw-chart-wrap"><canvas id="networthChart"></canvas></div>
-                <div class="grid-4" style="margin-top: 12px;">
-                    <div class="kpi"><h3>Initial</h3><div class="value" id="nwInitial">—</div></div>
-                    <div class="kpi"><h3>Current</h3><div class="value" id="nwCurrent">—</div></div>
-                    <div class="kpi"><h3>Change</h3><div class="value" id="nwChange">—</div></div>
-                    <div class="kpi"><h3>Peak / Low</h3><div class="value" id="nwExtremes"><span id="nwPeak">—</span> / <span id="nwLow">—</span></div></div>
+            <div class="chart-box" style="height:340px;"><canvas id="networthChart"></canvas></div>
+            <div class="statstrip" style="grid-template-columns:repeat(4,1fr);">
+                <div class="stat"><div class="stat-label">Initial</div><div class="stat-val" id="nwInitial">—</div></div>
+                <div class="stat"><div class="stat-label">Current</div><div class="stat-val" id="nwCurrent">—</div></div>
+                <div class="stat"><div class="stat-label">Change</div><div class="stat-val" id="nwChange">—</div></div>
+                <div class="stat"><div class="stat-label">Peak / Low</div><div class="stat-val" style="font-size:18px;"><span id="nwPeak">—</span> <span class="muted">/</span> <span id="nwLow">—</span></div></div>
+            </div>
+        </section>
+
+        <!-- MONTHLY + YEARLY TREND -->
+        <div class="split">
+            <div>
+                <div class="head-row">
+                    <h2 class="sec-title">Monthly Trend</h2>
+                    <div class="tools">
+                        <button id="yearAxisToggle" style="display:none;" title="Toggle full / truncated Y axis">Full view</button>
+                        <select id="selectYear"></select>
+                    </div>
+                </div>
+                <div class="chart-box" style="height:250px;"><canvas id="yearChart"></canvas></div>
+                <div class="statstrip small" style="grid-template-columns:repeat(3,1fr);">
+                    <div class="stat"><div class="stat-label">Income</div><div class="stat-val" id="ysIncome" style="color:var(--green);">—</div></div>
+                    <div class="stat"><div class="stat-label">Expenses</div><div class="stat-val" id="ysExpenses">—</div></div>
+                    <div class="stat"><div class="stat-label">Net Savings</div><div class="stat-val" id="ysNet">—</div></div>
+                </div>
+            </div>
+            <div>
+                <div class="head-row">
+                    <h2 class="sec-title">Yearly Trend</h2>
+                    <div class="tools"><button id="yearlyAxisToggle" style="display:none;" title="Toggle full / truncated Y axis">Full view</button></div>
+                </div>
+                <div class="chart-box" style="height:250px;"><canvas id="yearlyTrendChart"></canvas></div>
+                <div class="statstrip small" style="grid-template-columns:repeat(3,1fr);">
+                    <div class="stat"><div class="stat-label">Total Income</div><div class="stat-val" id="totIncome" style="color:var(--green);">—</div></div>
+                    <div class="stat"><div class="stat-label">Total Expenses</div><div class="stat-val" id="totExpenses">—</div></div>
+                    <div class="stat"><div class="stat-label">Net Savings</div><div class="stat-val" id="totNet">—</div></div>
                 </div>
             </div>
         </div>
-    </section>
 
-    <section class="container cat-accounts">
-        <div class="card cat-monthly">
-            <div class="head">
-                <h2 class="title">Monthly category spend</h2>
+        <!-- MONTHLY CATEGORY SPEND -->
+        <section>
+            <div class="head-row">
+                <h2 class="sec-title">Monthly Category Spend</h2>
                 <div class="tools">
-                    <button id="btnPrevMonth">◀</button><select id="selectMonth"></select><button id="btnNextMonth">▶</button>
+                    <button id="btnPrevMonth" class="nav-mini">◀</button>
+                    <select id="selectMonth"></select>
+                    <button id="btnNextMonth" class="nav-mini">▶</button>
                     <select id="selectViewMode">
                         <option value="top">Top expenses</option>
                         <option value="category">By category</option>
@@ -306,92 +341,72 @@
                     </select>
                 </div>
             </div>
-            <div class="content">
-                <div class="chart-center"><div class="chart-box"><canvas id="catPie"></canvas></div></div>
-                <div><h3 class="title_te" id="monthlyListTitle" style="margin: 6px 15px 8px;">Top 10 expenses this month</h3><div id="topExpenses" class="list list--2col" style="margin: 6px 15px 8px;"></div></div>
-            </div>
-        </div>
-        <div class="card">
-            <div class="head"><h2 class="title">Balance by account</h2></div>
-            <div class="content"><div id="accountsList" class="list" style="margin-top: 10px;"></div></div>
-        </div>
-    </section>
-
-    <section class="two-col-cards">
-        <div class="card">
-            <div class="head"><h2 class="title">Monthly trend (year)</h2><div class="tools"><button id="yearAxisToggle" style="display:none;" title="Toggle full / truncated Y axis">Full view</button><select id="selectYear"></select></div></div>
-            <div class="content">
-                <canvas id="yearChart" height="400"></canvas>
-                <div class="kpis" style="grid-template-columns: repeat(3, 1fr); margin: 12px 0 0;">
-                    <div class="kpi"><h3>Total income</h3><div class="value" id="ysIncome">—</div></div>
-                    <div class="kpi"><h3>Total expenses</h3><div class="value" id="ysExpenses">—</div></div>
-                    <div class="kpi"><h3>Net savings</h3><div class="value" id="ysNet">—</div></div>
+            <div class="catspend-body">
+                <div class="pie-wrap">
+                    <canvas id="catPie"></canvas>
+                    <div class="pie-center"><div class="lbl">Total</div><div class="val" id="catPieTotal">—</div></div>
+                </div>
+                <div class="catspend-list">
+                    <h3 class="title_te" id="monthlyListTitle">Top 10 expenses this month</h3>
+                    <div id="topExpenses" class="list list--2col"></div>
                 </div>
             </div>
-        </div>
-        <div class="card">
-            <div class="head"><h2 class="title">Yearly trend</h2><div class="tools"><button id="yearlyAxisToggle" style="display:none;" title="Toggle full / truncated Y axis">Full view</button></div></div>
-            <div class="content">
-                <canvas id="yearlyTrendChart" height="400"></canvas>
-                <div class="kpis" style="grid-template-columns: repeat(3, 1fr); margin: 12px 0 0;">
-                    <div class="kpi"><h3>Total income</h3><div class="value" id="totIncome">—</div></div>
-                    <div class="kpi"><h3>Total expenses</h3><div class="value" id="totExpenses">—</div></div>
-                    <div class="kpi"><h3>Net savings</h3><div class="value" id="totNet">—</div></div>
-                </div>
-            </div>
-        </div>
-    </section>
+        </section>
 
-    <section class="container" style="margin-top: 50px;">
-        <div class="card full">
-            <div class="head">
-                <h2 class="title">Category spending trend</h2>
+        <!-- BALANCE BY ACCOUNT -->
+        <section>
+            <div class="head-row"><h2 class="sec-title">Balance by Account</h2></div>
+            <div id="accountsList" class="accts"></div>
+        </section>
+
+        <!-- CATEGORY SPENDING TREND -->
+        <section>
+            <div class="head-row">
+                <h2 class="sec-title">Category Spending Trend</h2>
                 <div class="tools">
                     <select id="catPeriod"><option value="monthly" selected>Monthly</option><option value="weekly">Weekly</option><option value="daily">Daily</option></select>
                     <select id="catRange"><option value="last12" selected>Last year</option><option value="last6">Last 6 months</option><option value="last3">Last 3 months</option><option value="last1">Last month</option><option value="all">All time</option><option value="custom">Custom range…</option></select>
                     <span id="catCustom" class="custom-range" style="display:none;"><input type="date" id="catFrom" title="From"><input type="date" id="catTo" title="To"></span>
                     <div class="dropdown" id="categoriesDropdown">
-                        <button class="btn" id="categoriesBtn" onclick="toggleCategories()">Select categories <span class="count" id="categoriesCount">0</span> ▾</button>
-                        <div class="menu" id="categoriesMenu" style="max-height: 400px;">
-                            <div class="search" style="margin-bottom: 6px;"><input type="text" id="categoriesSearch" placeholder="Search categories..."></div>
-                            <div class="actions" style="margin: 6px 0;"><button id="categoriesSelectAll">Select all</button><button id="categoriesClear">Clear</button></div>
-                            <div class="list" id="categoriesList" style="max-height: 300px; overflow: auto;"></div>
+                        <button class="chip-btn" id="categoriesBtn">Select categories <span class="count" id="categoriesCount">0</span> ▾</button>
+                        <div class="menu" id="categoriesMenu" style="min-width:260px;">
+                            <div class="search" style="margin-bottom:8px;"><input type="text" id="categoriesSearch" placeholder="Search categories..."></div>
+                            <div class="menu-actions"><button id="categoriesSelectAll">Select all</button><button id="categoriesClear">Clear</button></div>
+                            <div class="menu-list" id="categoriesList"></div>
                         </div>
                     </div>
-                    </div>
+                </div>
             </div>
-            <div class="content"><canvas id="categoriesChart" height="200"></canvas><div id="categoriesLegend" class="legend"></div></div>
-        </div>
-    </section>
+            <div id="categoriesLegend" class="legend"></div>
+            <div class="chart-box" style="height:240px;"><canvas id="categoriesChart"></canvas></div>
+        </section>
 
-    <section class="two-col-cards">
-        <div class="card">
-            <div class="head">
-                <h2 class="title" id="topPayeesTitle">Top 20 Payees</h2>
-                <div class="tools">
-                    <select id="payeeType">
-                        <option value="payees" selected>Payees</option>
-                        <option value="locations">Locations</option>
-                    </select>
-                    <select id="payeeRange"><option value="last12" selected>Last year</option><option value="last6">Last 6 months</option><option value="last3">Last 3 months</option><option value="last1">Last month</option><option value="all">All time</option></select>
+        <!-- TOP PAYEES + LARGEST EXPENSES -->
+        <div class="split">
+            <div>
+                <div class="head-row">
+                    <h2 class="sec-title" id="topPayeesTitle">Top Payees</h2>
+                    <div class="tools">
+                        <select id="payeeType"><option value="payees" selected>Payees</option><option value="locations">Locations</option></select>
+                        <select id="payeeRange"><option value="last12" selected>Last year</option><option value="last6">Last 6 months</option><option value="last3">Last 3 months</option><option value="last1">Last month</option><option value="all">All time</option></select>
+                    </div>
                 </div>
+                <div id="topPayees" class="list"></div>
             </div>
-            <div class="content"><div id="topPayees" class="list"></div></div>
-        </div>
-        <div class="card">
-            <div class="head">
-                <h2 class="title" id="topTxTitle">Top 20 individual expenses</h2>
-                <div class="tools">
-                    <select id="txType">
-                        <option value="expenses" selected>Expenses</option>
-                        <option value="income">Income</option>
-                    </select>
-                    <select id="txRange"><option value="last12" selected>Last year</option><option value="last6">Last 6 months</option><option value="last3">Last 3 months</option><option value="last1">Last month</option><option value="all">All time</option></select>
+            <div>
+                <div class="head-row">
+                    <h2 class="sec-title" id="topTxTitle">Largest Expenses</h2>
+                    <div class="tools">
+                        <select id="txType"><option value="expenses" selected>Expenses</option><option value="income">Income</option></select>
+                        <select id="txRange"><option value="last12" selected>Last year</option><option value="last6">Last 6 months</option><option value="last3">Last 3 months</option><option value="last1">Last month</option><option value="all">All time</option></select>
+                    </div>
                 </div>
+                <div id="topTx" class="list"></div>
             </div>
-            <div class="content"><div id="topTx" class="list"></div></div>
         </div>
-    </section>
+
+        <div class="footer">© Royal Bank of González. 2025</div>
+    </div>
 
     <div id="detailModal" class="modal" onclick="if(event.target===this)closeDetailModal()">
         <div class="modal-content">
@@ -403,18 +418,25 @@
         </div>
     </div>
 
-    <div class="footer">© Royal Bank of González. 2025</div>
+    <div class="fab-container">
+        <button class="fab-button" onclick="location.href='transactions.html#new-transfer'" title="New Transfer">⇄</button>
+        <button class="fab-button" onclick="location.href='transactions.html#new-transaction'" title="New Transaction">+</button>
+    </div>
 
 <script>
 // Configuration
 const API_BASE = (localStorage.getItem('delfin_api') || (location.pathname.startsWith('/app') ? location.origin : 'http://localhost:8422')).replace(/\/$/, '');
 const EPS = 0.005;
-const PALETTE = [
-    '#F5B700', '#386481', '#D52811', '#1B9F9A', '#525252', '#00689D',
-    '#C7437D', '#0E9530', '#C59A00', '#6C2FA2', '#F07F2F', '#006400',
-    '#4D9A4D', '#9B7BC9', '#7BA8C4', '#E87A6B', '#66C4C0', '#90C490',
-    '#E89BBF', '#5FBF5F', '#E6C266', '#F5B88C'
-];
+// Warm editorial palette (matches the flat "no cards" design).
+const PALETTE = ['#B0402E', '#C6893F', '#3C5A6E', '#7C7A4E', '#8A5A3C', '#5E7C6E', '#A88A5A', '#9C6E7A'];
+const CHART_RED = '#B0402E', CHART_INK = '#3C5A6E', CHART_GREEN = '#3C7A57';
+const CHART_HAIR = '#EFE4D3', CHART_AXIS = '#D8C6B0', CHART_PAPER = '#FFFDFA';
+
+if (window.Chart) {
+    Chart.defaults.font.family = "'IBM Plex Mono', monospace";
+    Chart.defaults.font.size = 10;
+    Chart.defaults.color = '#8A7D6C';
+}
 
 // Helpers
 const q = (sel) => document.querySelector(sel);
@@ -448,7 +470,7 @@ function cacheClearAll() {
 }
 
 // Application state
-const state = { baseCurrency: 'GBP', months: [], categories: [], accounts: [], excludedAccountIds: new Set(), selectedCategoryIds: new Set(), yearAxisFull: false, yearlyAxisFull: false };
+const state = { baseCurrency: 'GBP', months: [], categories: [], accounts: [], excludedAccountIds: new Set(), selectedCategoryIds: new Set(), yearAxisFull: false, yearlyAxisFull: false, totalBalanceConverted: null };
 
 // Chart rendering
 function renderChart(canvasId, config, globalVarName) {
@@ -479,7 +501,7 @@ function truncatedAxis(values) {
 // Wire a trend chart's "Full view / Truncate" button to its Y axis and return the
 // y-scale config. Hides the button when there is no outlier worth truncating.
 function configureAxisToggle(btnSelector, isFull, values) {
-    const yScale = { grid: { color: '#D4B5A0' } };
+    const yScale = { grid: { color: CHART_HAIR }, border: { display: false } };
     const axis = truncatedAxis(values);
     const hasOutlier = axis.max !== undefined;
     const btn = q(btnSelector);
@@ -569,7 +591,8 @@ async function loadBalanceKpis() {
 
     // Total balance (no exclusions)
     const total = cacheGet('cache_nw_kpi_total') || await api('/dashboard/networth/daily').then(d => { cacheSet('cache_nw_kpi_total', d); return d; });
-    setMoney('#kpiTotalBalance', total.summary?.current_balance ?? 0);
+    state.totalBalanceConverted = total.summary?.current_balance ?? 0;
+    setMoney('#kpiTotalBalance', state.totalBalanceConverted);
 
     // Without loans
     const res = cacheGet('cache_loan_ids') || await api('/loans/account-ids').then(d => { cacheSet('cache_loan_ids', d); return d; });
@@ -579,7 +602,17 @@ async function loadBalanceKpis() {
         const noLoans = cacheGet('cache_nw_kpi_noloans') || await api(`/dashboard/networth/daily?excluded_accounts=${excluded}`).then(d => { cacheSet('cache_nw_kpi_noloans', d); return d; });
         setMoney('#kpiBalanceNoLoans', noLoans.summary?.current_balance ?? 0);
     } else {
-        setMoney('#kpiBalanceNoLoans', total.summary?.current_balance ?? 0);
+        setMoney('#kpiBalanceNoLoans', state.totalBalanceConverted);
+    }
+    updateAcctNetTotal();
+}
+
+function updateAcctNetTotal() {
+    const el = q('#acctNetTotal');
+    if (el && state.totalBalanceConverted != null) {
+        const v = state.totalBalanceConverted;
+        el.textContent = fmtMoney(v, state.baseCurrency);
+        el.style.color = v < 0 ? 'var(--red)' : 'var(--green)';
     }
 }
 
@@ -593,11 +626,18 @@ async function loadAccounts() {
     state.accounts.filter(a => a.is_active !== false && a.is_active !== 0).forEach(a => {
         const amt = a.current_balance ?? a.initial_balance ?? 0;
         const row = document.createElement('div');
-        row.className = 'row';
+        row.className = 'acct-row';
         const color = amt > 0 ? 'var(--green)' : amt < 0 ? 'var(--red)' : 'var(--text)';
-        row.innerHTML = `<div class="name"><strong>${a.name}</strong></div><div class="amount" style="color:${color};font-weight:700;">${fmtMoney(Math.abs(amt), a.currency)}</div>`;
+        const sign = amt < 0 ? '−' : '';
+        row.innerHTML = `<div><div class="acct-name">${esc(a.name)}</div><div class="acct-sub">${esc(a.type || 'Account')} · ${esc(a.currency)}</div></div>`
+            + `<div class="acct-amt" style="color:${color};">${sign}${fmtMoney(Math.abs(amt), a.currency)}</div>`;
         list.appendChild(row);
     });
+    const totalRow = document.createElement('div');
+    totalRow.className = 'acct-total';
+    totalRow.innerHTML = `<span class="lbl">Net Total</span><span class="val" id="acctNetTotal">—</span>`;
+    list.appendChild(totalRow);
+    updateAcctNetTotal();
 }
 
 function updateExcludeCount() {
@@ -613,7 +653,7 @@ function renderExcludeList() {
     [...state.accounts].sort((a, b) => a.name.localeCompare(b.name)).forEach(a => {
         const label = document.createElement('label');
         const closed = a.is_active === false || a.is_active === 0;
-        label.innerHTML = `<input type="checkbox" value="${a.id}" ${state.excludedAccountIds.has(a.id) ? 'checked' : ''}><span${closed ? ' style="opacity:.5"' : ''}>${a.name}${closed ? ' (closed)' : ''}</span><span class="muted" style="margin-left:auto">${a.currency}</span>`;
+        label.innerHTML = `<input type="checkbox" value="${a.id}" ${state.excludedAccountIds.has(a.id) ? 'checked' : ''}><span${closed ? ' style="opacity:.5"' : ''}>${esc(a.name)}${closed ? ' (closed)' : ''}</span><span class="muted" style="margin-left:auto">${esc(a.currency)}</span>`;
         label.querySelector('input').onchange = (e) => {
             const val = parseInt(e.target.value);
             e.target.checked ? state.excludedAccountIds.add(val) : state.excludedAccountIds.delete(val);
@@ -669,22 +709,28 @@ async function loadNetworth() {
     // A newer request started while we were awaiting — drop this stale result.
     if (reqId !== _nwReqId) return;
 
+    const canvas = q('#networthChart');
+    const gctx = canvas.getContext('2d');
+    const grad = gctx.createLinearGradient(0, 0, 0, 320);
+    grad.addColorStop(0, 'rgba(60,90,110,0.24)');
+    grad.addColorStop(1, 'rgba(60,90,110,0)');
+
     renderChart('#networthChart', {
         type: 'line',
         data: {
             labels: data.data_points.map(p => p.date),
-            datasets: [{ label: `Net worth`, data: data.data_points.map(p => p.balance), borderColor: '#0e9530', backgroundColor: 'rgba(14, 159, 48, .15)', fill: true, tension: 0.5 }]
+            datasets: [{ label: `Net worth`, data: data.data_points.map(p => p.balance), borderColor: CHART_INK, backgroundColor: grad, fill: true, tension: 0.35, borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, pointBackgroundColor: CHART_RED }]
         },
         options: {
             maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
+            plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => fmtMoney(c.parsed.y, data.base_currency) } } },
             scales: {
-                x: { grid: { color: 'transparent' }, ticks: { maxTicksLimit: 6, autoSkipPadding: 3, callback: function(val, i) {
+                x: { grid: { display: false }, border: { color: CHART_AXIS }, ticks: { maxTicksLimit: 6, autoSkipPadding: 3, callback: function(val, i) {
                     const label = this.getLabelForValue(val);
                     const d = new Date(label);
                     return [d.toLocaleString('en', { month: 'short' }), d.getFullYear()];
                 } } },
-                y: { grid: { color: '#D4B5A0' }, ticks: { callback: v => Math.abs(v) >= 1000 ? (v/1000).toFixed(0) + 'k' : v } }
+                y: { grid: { color: CHART_HAIR }, border: { display: false }, ticks: { callback: v => Math.abs(v) >= 1000 ? '£' + (v/1000).toFixed(0) + 'k' : '£' + v } }
             }
         }
     }, '_nwChart');
@@ -699,7 +745,7 @@ async function loadNetworth() {
     updateKpi('#nwCurrent', s.current_balance);
     updateKpi('#nwPeak', s.peak_balance);
     updateKpi('#nwLow', s.lowest_balance);
-    
+
     const changeEl = q('#nwChange');
     changeEl.textContent = `${fmtMoney(s.total_change, data.base_currency)} (${s.percentage_change}%)`;
     changeEl.style.color = s.total_change >= 0 ? 'var(--green)' : 'var(--red)';
@@ -739,11 +785,13 @@ async function loadMonthlyBreakdown(ym) {
         pieTotal = pieData.reduce((s, v) => s + v, 0);
     }
 
+    q('#catPieTotal').textContent = fmtMoney(data.summary?.total_spent ?? pieTotal, data.base_currency);
+
     renderChart('#catPie', {
         type: 'doughnut',
-        data: { labels: pieLabels, datasets: [{ data: pieData, backgroundColor: pieColors }] },
+        data: { labels: pieLabels, datasets: [{ data: pieData, backgroundColor: pieColors, borderColor: CHART_PAPER, borderWidth: 2, hoverOffset: 6 }] },
         options: {
-            maintainAspectRatio: false, cutout: '60%',
+            maintainAspectRatio: false, cutout: '66%',
             plugins: {
                 legend: { display: false },
                 tooltip: { callbacks: { label: (ctx) => {
@@ -757,7 +805,7 @@ async function loadMonthlyBreakdown(ym) {
     const list = q('#topExpenses');
     const titleEl = q('#monthlyListTitle');
     list.innerHTML = '';
-    
+
     if (viewMode === 'top') {
         titleEl.textContent = 'Top 10 expenses this month';
         (data.top_expenses || []).forEach(tx => {
@@ -846,12 +894,13 @@ async function loadYearlySummary(year) {
         data: {
             labels: data.monthly_data.map(m => m.month),
             datasets: [
-                { type: 'line', label: 'Net', data: net, borderColor: '#00689d', tension: 0.1 },
-                { type: 'bar', label: 'In', data: income, backgroundColor: '#0e9530' },
-                { type: 'bar', label: 'Out', data: expenses, backgroundColor: '#d52811' }
+                { type: 'line', label: 'Net', data: net, borderColor: CHART_INK, backgroundColor: CHART_INK, tension: 0.1, borderWidth: 2, pointRadius: 0, pointHoverRadius: 4 },
+                { type: 'bar', label: 'In', data: income, backgroundColor: CHART_GREEN },
+                { type: 'bar', label: 'Out', data: expenses, backgroundColor: CHART_RED }
             ]
         },
-        options: { scales: { x: { grid: { color: 'transparent' } }, y: yAxis } }
+        options: { maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => `${c.dataset.label} ${fmtMoney(c.parsed.y, data.base_currency)}` } } },
+            scales: { x: { grid: { display: false }, border: { color: CHART_AXIS } }, y: yAxis } }
     }, '_yearChart');
 
     const setVal = (id, val) => { q(id).textContent = fmtMoney(val, data.base_currency); q(id).style.color = val >= 0 ? 'var(--green)' : 'var(--red)'; };
@@ -864,7 +913,7 @@ async function loadYearlySummary(year) {
 async function loadYearlyTrendAll() {
     const years = [...new Set(state.months.map(m => m.year))].sort((a, b) => a - b);
     if (!years.length) return;
-    
+
     const results = await Promise.all(years.map(y => {
         const cacheKey = `cache_yearly_${y}`;
         return cacheGet(cacheKey) || api(`/dashboard/yearly-summary?year=${y}`).then(d => { cacheSet(cacheKey, d); return d; });
@@ -878,12 +927,13 @@ async function loadYearlyTrendAll() {
         data: {
             labels: years,
             datasets: [
-                { type: 'line', label: 'Net', data: net, borderColor: '#00689d', tension: 0.1 },
-                { type: 'bar', label: 'In', data: income, backgroundColor: '#0e9530' },
-                { type: 'bar', label: 'Out', data: expenses, backgroundColor: '#d52811' }
+                { type: 'line', label: 'Net', data: net, borderColor: CHART_INK, backgroundColor: CHART_INK, tension: 0.1, borderWidth: 2, pointRadius: 0, pointHoverRadius: 4 },
+                { type: 'bar', label: 'In', data: income, backgroundColor: CHART_GREEN },
+                { type: 'bar', label: 'Out', data: expenses, backgroundColor: CHART_RED }
             ]
         },
-        options: { scales: { x: { grid: { color: 'transparent' } }, y: yAxis } }
+        options: { maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => `${c.dataset.label} ${fmtMoney(c.parsed.y, base)}` } } },
+            scales: { x: { grid: { display: false }, border: { color: CHART_AXIS } }, y: yAxis } }
     }, '_yearlyTrend');
 
     const sum = arr => arr.reduce((a, b) => a + (Number(b) || 0), 0);
@@ -898,15 +948,15 @@ function renderCategoriesList() {
     const list = q('#categoriesList');
     list.innerHTML = '';
     const term = q('#categoriesSearch').value.toLowerCase();
-    
+
     const grouped = {};
     const noParent = [];
-    
+
     state.categories.forEach(c => {
         if (term && !c.name.toLowerCase().includes(term) && !(c.parent && c.parent.toLowerCase().includes(term))) {
             return;
         }
-        
+
         if (c.parent) {
             if (!grouped[c.parent]) {
                 grouped[c.parent] = [];
@@ -916,41 +966,41 @@ function renderCategoriesList() {
             noParent.push(c);
         }
     });
-    
+
     const sortedParents = Object.keys(grouped).sort((a, b) => a.localeCompare(b));
-    
+
     sortedParents.forEach(parentName => {
         const children = grouped[parentName].sort((a, b) => a.name.localeCompare(b.name));
         const group = document.createElement('div');
         group.className = 'cat-group';
-        
+
         const anySelected = children.some(c => state.selectedCategoryIds.has(c.id));
         const allSelected = children.every(c => state.selectedCategoryIds.has(c.id));
-        
+
         group.innerHTML = `
             <div class="cat-group-header">
                 <span class="arrow">▶</span>
                 <input type="checkbox" class="parent-check" ${allSelected ? 'checked' : ''} ${anySelected && !allSelected ? 'indeterminate' : ''}>
-                <span>${parentName}</span>
+                <span>${esc(parentName)}</span>
                 <span class="muted" style="margin-left:auto;font-size:11px;">${children.length}</span>
             </div>
             <div class="cat-group-children"></div>
         `;
-        
+
         const header = group.querySelector('.cat-group-header');
         const childrenContainer = group.querySelector('.cat-group-children');
         const parentCheck = group.querySelector('.parent-check');
-        
+
         if (anySelected && !allSelected) {
             parentCheck.indeterminate = true;
         }
-        
+
         header.addEventListener('click', (e) => {
             if (e.target.type !== 'checkbox') {
                 group.classList.toggle('open');
             }
         });
-        
+
         parentCheck.addEventListener('change', (e) => {
             e.stopPropagation();
             children.forEach(c => {
@@ -966,15 +1016,15 @@ function renderCategoriesList() {
             q('#categoriesCount').textContent = state.selectedCategoryIds.size;
             loadCategoriesSeries();
         });
-        
+
         children.forEach(c => {
             const label = document.createElement('label');
-            label.innerHTML = `<input type="checkbox" value="${c.id}" ${state.selectedCategoryIds.has(c.id) ? 'checked' : ''}><span>${c.name}</span>`;
+            label.innerHTML = `<input type="checkbox" value="${c.id}" ${state.selectedCategoryIds.has(c.id) ? 'checked' : ''}><span>${esc(c.name)}</span>`;
             label.querySelector('input').onchange = (e) => {
                 const val = parseInt(e.target.value);
                 e.target.checked ? state.selectedCategoryIds.add(val) : state.selectedCategoryIds.delete(val);
                 q('#categoriesCount').textContent = state.selectedCategoryIds.size;
-                
+
                 const allNowSelected = children.every(ch => state.selectedCategoryIds.has(ch.id));
                 const anyNowSelected = children.some(ch => state.selectedCategoryIds.has(ch.id));
                 parentCheck.checked = allNowSelected;
@@ -983,14 +1033,14 @@ function renderCategoriesList() {
             };
             childrenContainer.appendChild(label);
         });
-        
+
         list.appendChild(group);
     });
-    
+
     if (noParent.length > 0) {
         noParent.sort((a, b) => a.name.localeCompare(b.name)).forEach(c => {
             const label = document.createElement('label');
-            label.innerHTML = `<input type="checkbox" value="${c.id}" ${state.selectedCategoryIds.has(c.id) ? 'checked' : ''}><span>${c.name}</span>`;
+            label.innerHTML = `<input type="checkbox" value="${c.id}" ${state.selectedCategoryIds.has(c.id) ? 'checked' : ''}><span>${esc(c.name)}</span>`;
             label.querySelector('input').onchange = (e) => {
                 const val = parseInt(e.target.value);
                 e.target.checked ? state.selectedCategoryIds.add(val) : state.selectedCategoryIds.delete(val);
@@ -1000,7 +1050,7 @@ function renderCategoriesList() {
             list.appendChild(label);
         });
     }
-    
+
     q('#categoriesCount').textContent = state.selectedCategoryIds.size;
 }
 
@@ -1021,7 +1071,7 @@ function restoreSelectedCategories() {
 async function loadCategoriesSeries() {
     persistSelectedCategories();
     if (!state.selectedCategoryIds.size) { if (window._catChart) window._catChart.destroy(); q('#categoriesLegend').innerHTML = ''; return; }
-    
+
     const period = q('#catPeriod').value;
     const { from, to } = resolveRange('#catRange', '#catFrom', '#catTo');
     const catIds = Array.from(state.selectedCategoryIds).sort().join(',');
@@ -1032,15 +1082,15 @@ async function loadCategoriesSeries() {
 
     const cacheKey = `cache_catseries_${period}_${from}_${to}_${catIds}`;
     const data = cacheGet(cacheKey) || await api(`/dashboard/categories/${period}?${ps}`).then(d => { cacheSet(cacheKey, d); return d; });
-    const datasets = Object.entries(data.categories).map(([name, vals], i) => ({ label: name, data: vals, borderColor: colour(i), tension: 0.1, fill: false }));
+    const datasets = Object.entries(data.categories).map(([name, vals], i) => ({ label: name, data: vals, borderColor: colour(i), backgroundColor: colour(i), tension: 0.3, borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, fill: false }));
 
     renderChart('#categoriesChart', {
         type: 'line',
         data: { labels: data.periods, datasets },
-        options: { plugins: { legend: { display: false } }, scales: { x: { grid: { color: 'transparent' } }, y: { grid: { color: '#D4B5A0' } } } }
+        options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, border: { color: CHART_AXIS } }, y: { grid: { color: CHART_HAIR }, border: { display: false } } } }
     }, '_catChart');
 
-    q('#categoriesLegend').innerHTML = datasets.map((ds) => `<div style="display:flex;align-items:center;gap:6px"><span class="dot" style="background:${ds.borderColor}"></span> ${ds.label}</div>`).join('');
+    q('#categoriesLegend').innerHTML = datasets.map((ds) => `<div><span class="dot" style="background:${ds.borderColor}"></span> ${esc(ds.label)}</div>`).join('');
 }
 
 // Load top payees/locations or transactions
@@ -1057,7 +1107,7 @@ async function loadTopList(url, listId, isTx = false) {
     }
 
     const actualUrl = !isTx && payeeType === 'locations' ? '/dashboard/top-locations' : url;
-    
+
     const cacheKey = `cache_${listId}_${from}_${to}_${isTx ? txType : payeeType}`;
     let data = cacheGet(cacheKey) || await api(`${actualUrl}?${ps}`).then(d => { cacheSet(cacheKey, d); return d; });
     const list = q(`#${listId}`);
@@ -1065,27 +1115,23 @@ async function loadTopList(url, listId, isTx = false) {
 
     if (isTx) {
         const count = (data.items || []).length;
-        q('#topTxTitle').textContent = txType === 'income' 
-            ? `Top ${count} individual income` 
-            : `Top ${count} individual expenses`;
+        q('#topTxTitle').textContent = txType === 'income' ? `Top ${count} Income` : `Top ${count} Expenses`;
     } else {
         const count = (data[payeeType] || []).length;
-        q('#topPayeesTitle').textContent = payeeType === 'locations'
-            ? `Top ${count} Locations`
-            : `Top ${count} Payees`;
+        q('#topPayeesTitle').textContent = payeeType === 'locations' ? `Top ${count} Locations` : `Top ${count} Payees`;
     }
 
     const isIncome = txType === 'income';
     const dataKey = isTx ? 'items' : payeeType;
-    (data[dataKey] || []).forEach(item => {
+    (data[dataKey] || []).forEach((item, i) => {
         const row = document.createElement('div');
-        row.className = 'row';
+        row.className = 'row ranked';
         if (isTx) {
-            row.innerHTML = `<div><strong>${item.payee}</strong><div class="muted">${item.category}</div></div><div class="right"><div class="amt" style="color: var(--${isIncome ? 'green' : 'red'})">${fmtMoney(item.amount, data.base_currency)}</div><div class="date">${new Date(item.date).toLocaleDateString('en-GB')}</div></div>`;
+            row.innerHTML = `<span class="rank">${i + 1}</span><div style="min-width:0;"><strong>${esc(item.payee)}</strong> <span class="muted">· ${esc(item.category || '—')} · ${new Date(item.date).toLocaleDateString('en-GB')}</span></div><div class="right"><span class="amt" style="color: var(--${isIncome ? 'green' : 'red'})">${fmtMoney(item.amount, data.base_currency)}</span></div>`;
         } else if (payeeType === 'locations') {
-            row.innerHTML = `<div><strong>${item.name}</strong></div><div class="right"><div class="amt">${fmtMoney(item.total_spent, data.base_currency)}</div><div class="date">${item.transaction_count} tx</div></div>`;
+            row.innerHTML = `<span class="rank">${i + 1}</span><div style="min-width:0;"><strong>${esc(item.name)}</strong></div><div class="right"><span class="amt">${fmtMoney(item.total_spent, data.base_currency)}</span> <span class="muted">· ${item.transaction_count}×</span></div>`;
         } else {
-            row.innerHTML = `<div><strong>${item.name}</strong><div class="muted">${item.most_common_category || '—'}</div></div><div class="right"><div class="amt">${fmtMoney(item.total_spent, data.base_currency)}</div><div class="date">${item.transaction_count} tx</div></div>`;
+            row.innerHTML = `<span class="rank">${i + 1}</span><div style="min-width:0;"><strong>${esc(item.name)}</strong> <span class="muted">· ${esc(item.most_common_category || '—')}</span></div><div class="right"><span class="amt">${fmtMoney(item.total_spent, data.base_currency)}</span> <span class="muted">· ${item.transaction_count}×</span></div>`;
         }
         list.appendChild(row);
     });
@@ -1098,7 +1144,8 @@ const toggleDropdown = (id, open) => {
     const btnId = id.replace('Dropdown', 'Btn');
     const menuId = id.replace('Dropdown', 'Menu');
     q(btnId).setAttribute('aria-expanded', el.classList.contains('open'));
-    q(menuId).setAttribute('aria-hidden', !el.classList.contains('open'));
+    const menu = q(menuId);
+    if (menu) menu.setAttribute('aria-hidden', !el.classList.contains('open'));
 };
 
 const setupDropdown = (btnId, dropId, searchId) => {
@@ -1121,11 +1168,11 @@ q('#btnRefresh').onclick = async () => {
     const orig = btn.textContent;
     btn.disabled = true;
     try {
-        btn.textContent = '⏳ Recalculating balances...';
+        btn.textContent = '⏳ Balances…';
         await fetch(`${API_BASE}/admin/initialise-balances`, { method: 'POST' });
-        btn.textContent = '⏳ Updating payee statistics...';
+        btn.textContent = '⏳ Payees…';
         await fetch(`${API_BASE}/payees/recalculate-all-stats`, { method: 'POST' });
-        btn.textContent = '⏳ Refreshing display...';
+        btn.textContent = '⏳ Refreshing…';
         cacheClearAll();
         await init();
     } catch (e) { alert('Error: ' + e.message); }
@@ -1133,12 +1180,6 @@ q('#btnRefresh').onclick = async () => {
     btn.disabled = false;
     toggleDropdown('#navDropdown', false);
 };
-// Close nav menu when clicking a navigation item
-q('#navMenu').addEventListener('click', (e) => {
-    if (e.target.matches('.navItem') && e.target !== q('#btnRefresh')) {
-        toggleDropdown('#navDropdown', false);
-    }
-});
 
 // Event bindings
 q('#nwPeriod').onchange = loadNetworth;
@@ -1202,13 +1243,9 @@ async function init() {
 
 document.addEventListener('DOMContentLoaded', init);
 </script>
-<div class="fab-container">
-    <button class="fab-button" onclick="location.href='transactions.html#new-transfer'" title="New Transfer">⇄</button>
-    <button class="fab-button" onclick="location.href='transactions.html#new-transaction'" title="New Transaction">+</button>
-</div>
 <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');</script>
 <script>
-/* Delfin auth: bounce to login on 401, and add a Log out item to the nav menu. */
+/* Delfin auth: bounce to login on 401, and wire the header Log out button. */
 (function(){
   const _fetch = window.fetch;
   window.fetch = async function(){
@@ -1217,14 +1254,8 @@ document.addEventListener('DOMContentLoaded', init);
     return res;
   };
   document.addEventListener('DOMContentLoaded', function(){
-    const list = document.querySelector('#navMenu .list');
-    if (!list || document.getElementById('navLogout')) return;
-    const hr = document.createElement('hr');
-    hr.style.cssText = 'border:none;border-top:1px solid var(--border);margin:6px 0;';
-    const btn = document.createElement('button');
-    btn.className = 'navItem'; btn.id = 'navLogout'; btn.textContent = 'Log out';
-    btn.onclick = async function(){ try { await fetch('/auth/logout', {method:'POST'}); } finally { location.href = '/login.html'; } };
-    list.appendChild(hr); list.appendChild(btn);
+    const btn = document.getElementById('btnLogout');
+    if (btn) btn.onclick = async function(){ try { await fetch('/auth/logout', {method:'POST'}); } finally { location.href = '/login.html'; } };
   });
 })();
 </script>
