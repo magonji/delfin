@@ -32,7 +32,7 @@
 
         /* ── Header ── */
         header { display:flex; align-items:center; justify-content:space-between; gap:16px;
-                padding:15px 30px; padding-top:calc(15px + env(safe-area-inset-top));
+                padding:8px 30px; padding-top:calc(15px + env(safe-area-inset-top));
                 position:sticky; top:0; z-index:50; backdrop-filter:blur(10px);
                 background:rgba(250,243,233,.86); border-bottom:1px solid var(--border); }
         h1 { font-size:25px; margin:0; font-family:'Playfair Display',serif; font-weight:800; letter-spacing:-.3px; }
@@ -66,7 +66,7 @@
         /* Tooltip showing the current refresh stage on hover while spinning */
         .tip-wrap { position:relative; display:inline-flex; }
         .refresh-tip { position:absolute; top:100%; right:0; margin-top:8px; white-space:nowrap;
-            background:var(--text); color:#fff; padding:6px 10px; border-radius:6px; font-size:12px;
+            background:#fff; color:var(--text); border:1px solid var(--border); padding:6px 10px; border-radius:6px; font-size:12px;
             font-family:'IBM Plex Sans', sans-serif; box-shadow:0 4px 12px rgba(0,0,0,.15);
             opacity:0; pointer-events:none; transform:translateY(-4px); transition:opacity .15s, transform .15s; z-index:1000; }
         .refresh-tip.show { opacity:1; transform:translateY(0); }
