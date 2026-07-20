@@ -52,15 +52,17 @@
             #navDropdown .navItem { width:auto; padding:6px 2px; font-family:'IBM Plex Sans',sans-serif !important; font-size:13px; font-weight:600; border-radius:0 !important; border-bottom:2px solid transparent; background:transparent !important; color:var(--muted) !important; }
             #navDropdown .navItem:hover { background:transparent !important; color:var(--ink) !important; border-bottom-color:var(--border) !important; }
             #navDropdown .navItem.active { background:transparent !important; color:var(--ink) !important; border-bottom:2px solid var(--accent) !important; pointer-events:none; }
-            #navDropdown .navItem#btnRefresh { margin-left:4px; padding:6px 12px !important; border-bottom:none !important; background:#F1E7D6 !important; border-radius:8px; font-family:'Playfair Display',serif !important; font-weight:500; color:#3A342C !important; }
-            #navDropdown .navItem#btnRefresh:hover { background:var(--field) !important; }
         }
 
-        /* Log-out icon (right of header, all breakpoints) — bare glyph, no capsule */
-        .logout-btn { background:none !important; border:none !important; border-radius:0; padding:0 !important; margin-left:8px; flex:0 0 auto;
+        /* Header icon buttons (Refresh + Log out) — bare glyph, no capsule */
+        .icon-btn { background:none !important; border:none !important; border-radius:0; padding:0 !important; margin-left:14px; flex:0 0 auto;
             cursor:pointer; color:var(--muted); display:flex; align-items:center; justify-content:center; transition:color .15s; }
-        .logout-btn:hover { background:none !important; color:var(--danger); transform:none; }
-        .logout-btn svg { width:16px; height:16px; }
+        .icon-btn:hover { background:none !important; color:var(--ink); transform:none; }
+        .icon-btn svg { width:16px; height:16px; display:block; }
+        #btnLogout:hover { color:var(--danger); }
+        /* Spinner while refreshing: add class "spinning" to #btnRefresh (or "spin" to its svg) */
+        @keyframes delfinspin { to { transform:rotate(360deg); } }
+        #btnRefresh.spinning svg, #btnRefresh svg.spin { animation:delfinspin .9s linear infinite; transform-origin:50% 50%; }
 
         /* ── Nav dropdown ── */
         .tools { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
@@ -277,12 +279,15 @@
                         <button class="navItem" onclick="location.href='budget.html'">Budget</button>
                         <button class="navItem" onclick="location.href='loans.html'">Loans</button>
                         <button class="navItem active">Tools</button>
-                        <hr style="border: none; border-top: 1px solid var(--border); margin: 6px 0;">
-                        <button class="navItem" id="btnRefresh">Refresh</button>
                     </div>
                 </div>
             </div>
-            <button class="logout-btn" id="btnLogout" title="Log out" aria-label="Log out">
+            <!-- Refresh: keep your existing handler on #btnRefresh. Add class "spinning" while it runs. -->
+            <button class="icon-btn" id="btnRefresh" title="Refresh" aria-label="Refresh">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+            </button>
+            <!-- Keep your existing logout handler on this button (e.g. onclick="logout()") -->
+            <button class="icon-btn" id="btnLogout" title="Log out" aria-label="Log out">
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5"/><path d="M15 12H5"/></svg>
             </button>
         </div>
