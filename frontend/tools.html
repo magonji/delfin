@@ -286,20 +286,20 @@
                         <button class="navItem" onclick="location.href='budget.html'">Budget</button>
                         <button class="navItem" onclick="location.href='loans.html'">Loans</button>
                         <button class="navItem active">Tools</button>
+                        <!-- Refresh: keep your existing handler on #btnRefresh. Add class "spinning" while it runs. -->
+                        <span class="tip-wrap">
+                            <button class="icon-btn" id="btnRefresh" title="Refresh" aria-label="Refresh">
+                                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+                            </button>
+                            <span class="refresh-tip" id="refreshTip" role="status"></span>
+                        </span>
+                        <!-- Keep your existing logout handler on this button (e.g. onclick="logout()") -->
+                        <button class="icon-btn" id="btnLogout" title="Log out" aria-label="Log out">
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5"/><path d="M15 12H5"/></svg>
+                        </button>
                     </div>
                 </div>
             </div>
-            <!-- Refresh: keep your existing handler on #btnRefresh. Add class "spinning" while it runs. -->
-            <span class="tip-wrap">
-                <button class="icon-btn" id="btnRefresh" title="Refresh" aria-label="Refresh">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
-                </button>
-                <span class="refresh-tip" id="refreshTip" role="status"></span>
-            </span>
-            <!-- Keep your existing logout handler on this button (e.g. onclick="logout()") -->
-            <button class="icon-btn" id="btnLogout" title="Log out" aria-label="Log out">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5"/><path d="M15 12H5"/></svg>
-            </button>
         </div>
     </header>
 
