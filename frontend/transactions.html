@@ -127,7 +127,14 @@
         .container { margin: 0 auto; max-width: 1280px; width: 100%; padding: 26px var(--page-gutter) 90px; }
         .card { background: transparent; padding: 0; margin: 0; overflow: visible; }
         .page-head { margin-bottom: 22px; }
+        .page-head-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
         .page-title { margin: 0; font-family: 'Playfair Display', serif; font-size: 34px; font-weight: 800; line-height: 1; padding-left: 18px; border-left: 3px solid var(--accent); }
+        .tx-summary { display: flex; }
+        .sum-cell { text-align: right; padding: 0 18px; border-left: 1px solid var(--hair); }
+        .sum-cell:first-child { border-left: none; padding-left: 0; }
+        .sum-cell:last-child { padding-right: 0; }
+        .sum-label { font-size: 10px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
+        .sum-val { font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 800; margin-top: 4px; font-variant-numeric: tabular-nums; }
 
         /* Transaction table layout and styling */
         .transactions-wrapper { border: none; border-radius: 0; overflow: visible; }
@@ -713,7 +720,16 @@
         <div id="errorMessage" class="error-message"></div>
         
         <div class="card">
-            <div class="page-head"><h1 class="page-title">Transactions</h1></div>
+            <div class="page-head">
+                <div class="page-head-row">
+                    <h1 class="page-title">Transactions</h1>
+                    <div class="tx-summary">
+                        <div class="sum-cell"><div class="sum-label">Total</div><div class="sum-val" id="sumCount">—</div></div>
+                        <div class="sum-cell"><div class="sum-label">Money in</div><div class="sum-val" id="sumIn" style="color:var(--green);">—</div></div>
+                        <div class="sum-cell"><div class="sum-label">Money out</div><div class="sum-val" id="sumOut" style="color:var(--red);">—</div></div>
+                    </div>
+                </div>
+            </div>
 
             <div id="filterToggle" onclick="document.getElementById('filters').classList.toggle('open')">Filters ▾</div>
             <div id="filters">
@@ -1632,11 +1648,35 @@
         }
 
         // --- Transactions ---
+        // Filter params shared by the transactions list and the summary strip.
+        function currentFilterParams() {
+            const params = new URLSearchParams();
+            if (filtersActive) {
+                if (activeFilters.startDate) params.append('start_date', activeFilters.startDate);
+                if (activeFilters.endDate) params.append('end_date', activeFilters.endDate);
+                if (activeFilters.accountId) params.append('account_id', activeFilters.accountId);
+                if (activeFilters.categoryId) params.append('category_id', activeFilters.categoryId);
+                if (activeFilters.searchText) params.append('search', activeFilters.searchText);
+            }
+            return params;
+        }
+
+        // Totals over the whole filtered set (converted to GBP, transfers excluded).
+        async function updateTransactionsSummary() {
+            try {
+                const s = await (await fetch(`${API_URL}/transactions/summary?${currentFilterParams().toString()}`)).json();
+                const cur = s.base_currency || 'GBP';
+                document.getElementById('sumCount').textContent = (s.count ?? 0).toLocaleString('en-GB');
+                document.getElementById('sumIn').textContent = formatMoneyWithSymbol(s.money_in ?? 0, cur);
+                document.getElementById('sumOut').textContent = formatMoneyWithSymbol(s.money_out ?? 0, cur);
+            } catch (e) { console.error('Summary load failed', e); }
+        }
+
         async function loadRecentTransactions(reset = false) {
             if (reset) localStorage.setItem('dirty_data', '1');
             if (isLoadingTransactions || (!hasMoreTransactions && !reset)) return;
             isLoadingTransactions = true;
-            if (reset) { transactionsSkip = 0; hasMoreTransactions = true; regularTransactions = []; transferTransactions = []; pendingTransferOuts = []; pendingTransferIns = []; }
+            if (reset) { transactionsSkip = 0; hasMoreTransactions = true; regularTransactions = []; transferTransactions = []; pendingTransferOuts = []; pendingTransferIns = []; updateTransactionsSummary(); }
             
             try {
                 const params = new URLSearchParams({ skip: transactionsSkip, limit: LIMIT });

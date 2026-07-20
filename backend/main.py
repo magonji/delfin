@@ -1195,6 +1195,87 @@ def get_transactions(
 
 
 
+@app.get("/transactions/summary")
+def get_transactions_summary(
+    account_id: Optional[int] = None,
+    category_id: Optional[int] = None,
+    payee_id: Optional[int] = None,
+    location_id: Optional[int] = None,
+    project_id: Optional[int] = None,
+    currency: Optional[str] = None,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    search: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Totals for the current filter set (same filters as GET /transactions): how many
+    transactions match, and money in / money out converted to the base currency
+    (GBP) at historical rates. Transfers are excluded so the in/out figures reflect
+    real income and spending, not money moved between own accounts.
+    """
+    base_currency = "GBP"
+
+    transfer_ids = [
+        r.id for r in db.query(models.Location.id)
+        .filter(models.Location.name.in_(["Transfer In", "Transfer Out"]))
+        .all()
+    ]
+
+    query = db.query(models.Transaction)
+    if account_id:
+        query = query.filter(models.Transaction.account_id == account_id)
+    if category_id:
+        query = query.filter(models.Transaction.category_id == category_id)
+    if payee_id:
+        query = query.filter(models.Transaction.payee_id == payee_id)
+    if location_id:
+        query = query.filter(models.Transaction.location_id == location_id)
+    if project_id:
+        query = query.filter(models.Transaction.project_id == project_id)
+    if currency:
+        query = query.filter(models.Transaction.currency == currency)
+    if start_date:
+        query = query.filter(models.Transaction.date >= datetime.combine(start_date, time.min))
+    if end_date:
+        query = query.filter(models.Transaction.date <= datetime.combine(end_date, time.max))
+    if transfer_ids:
+        query = query.filter(~models.Transaction.location_id.in_(transfer_ids))
+    if search:
+        pattern = f"%{search}%"
+        query = query.outerjoin(models.Payee).filter(
+            or_(models.Payee.name.ilike(pattern), models.Transaction.note.ilike(pattern))
+        )
+
+    transactions = query.all()
+    if not transactions:
+        return {"count": 0, "money_in": 0, "money_out": 0, "base_currency": base_currency}
+
+    # Convert every matched transaction to GBP at that day's historical rate.
+    dates = [_to_date(t.date) for t in transactions]
+    currencies = list({t.currency for t in transactions if t.currency})
+    historical_rates = get_rates_bulk(db, currencies, min(dates), max(dates))
+
+    money_in = 0.0
+    money_out = 0.0
+    for t in transactions:
+        rates = historical_rates.get(_to_date(t.date), {'GBP': 1.0})
+        trans_rate = rates.get(t.currency, 1.0)
+        base_rate = rates.get(base_currency, 1.0)
+        converted = t.amount * (base_rate / trans_rate)
+        if converted >= 0:
+            money_in += converted
+        else:
+            money_out += -converted
+
+    return {
+        "count": len(transactions),
+        "money_in": round(money_in, 2),
+        "money_out": round(money_out, 2),
+        "base_currency": base_currency,
+    }
+
+
 @app.get("/transactions/transfers")
 def get_transfers(
     skip: int = 0,

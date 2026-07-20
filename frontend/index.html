@@ -575,18 +575,17 @@ function setupCustomRange(selectId, wrapId, fromId, toId) {
     return true;
 }
 
-// ---- KPI "vs last month" deltas ----
-function prevMonthEndCutoff() {
+// ---- KPI "vs last year" deltas ----
+function oneYearAgoCutoff() {
     const d = new Date();
-    // Day 0 of the current month = the last day of the previous month (local time).
-    const p = new Date(d.getFullYear(), d.getMonth(), 0);
+    const p = new Date(d.getFullYear() - 1, d.getMonth(), d.getDate());
     return `${p.getFullYear()}-${String(p.getMonth() + 1).padStart(2, '0')}-${String(p.getDate()).padStart(2, '0')}`;
 }
-// Net-worth balance as of the end of last month, from the daily data points
-// (sorted ascending). null when there's no data before this month.
-function balanceAtPrevMonthEnd(dataPoints) {
+// Net-worth balance as of ~one year ago, from the daily data points (sorted
+// ascending). null when there's no data that far back.
+function balanceOneYearAgo(dataPoints) {
     if (!Array.isArray(dataPoints) || !dataPoints.length) return null;
-    const cutoff = prevMonthEndCutoff();
+    const cutoff = oneYearAgoCutoff();
     let bal = null;
     for (const p of dataPoints) { if (p.date <= cutoff) bal = p.balance; else break; }
     return bal;
@@ -597,7 +596,7 @@ function renderBalanceDelta(id, current, prev) {
     if (prev == null || !isFinite(prev) || prev === 0) { el.textContent = ''; el.className = 'kpi-delta'; return; }
     const diff = current - prev, pct = diff / Math.abs(prev) * 100, up = diff >= 0;
     el.className = 'kpi-delta ' + (up ? 'up' : 'down');
-    el.innerHTML = `${up ? '▲' : '▼'} ${Math.abs(pct).toFixed(1)}% <span class="muted">vs last month</span>`;
+    el.innerHTML = `${up ? '▲' : '▼'} ${Math.abs(pct).toFixed(1)}% <span class="muted">vs last year</span>`;
 }
 function renderBudgetDelta(pct) {
     const el = q('#deltaBudget');
@@ -611,15 +610,11 @@ function renderBudgetDelta(pct) {
 function renderTxDelta() {
     const el = q('#deltaTxCount');
     if (!el || !state.months.length) return;
-    const now = new Date();
-    const curYm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    const m = state.months.find(x => x.value === curYm) || state.months[0];
-    const cnt = m && m.count != null ? m.count : null;
-    if (cnt == null) { el.textContent = ''; return; }
+    const year = new Date().getFullYear();
+    const cnt = state.months.filter(m => m.year === year).reduce((s, m) => s + (m.count || 0), 0);
+    if (!cnt) { el.textContent = ''; return; }
     el.className = 'kpi-delta';
-    el.innerHTML = m.value === curYm
-        ? `+${cnt.toLocaleString('en-GB')} <span class="muted">this month</span>`
-        : `${cnt.toLocaleString('en-GB')} <span class="muted">in ${esc(m.label.split(' ')[0])}</span>`;
+    el.innerHTML = `+${cnt.toLocaleString('en-GB')} <span class="muted">this year</span>`;
 }
 
 async function loadSummary() {
@@ -658,7 +653,7 @@ async function loadBalanceKpis() {
     const total = cacheGet('cache_nw_kpi_total') || await api('/dashboard/networth/daily').then(d => { cacheSet('cache_nw_kpi_total', d); return d; });
     state.totalBalanceConverted = total.summary?.current_balance ?? 0;
     setMoney('#kpiTotalBalance', state.totalBalanceConverted);
-    renderBalanceDelta('#deltaTotalBalance', state.totalBalanceConverted, balanceAtPrevMonthEnd(total.data_points));
+    renderBalanceDelta('#deltaTotalBalance', state.totalBalanceConverted, balanceOneYearAgo(total.data_points));
 
     // Without loans
     const res = cacheGet('cache_loan_ids') || await api('/loans/account-ids').then(d => { cacheSet('cache_loan_ids', d); return d; });
@@ -668,10 +663,10 @@ async function loadBalanceKpis() {
         const noLoans = cacheGet('cache_nw_kpi_noloans') || await api(`/dashboard/networth/daily?excluded_accounts=${excluded}`).then(d => { cacheSet('cache_nw_kpi_noloans', d); return d; });
         const nlCur = noLoans.summary?.current_balance ?? 0;
         setMoney('#kpiBalanceNoLoans', nlCur);
-        renderBalanceDelta('#deltaBalanceNoLoans', nlCur, balanceAtPrevMonthEnd(noLoans.data_points));
+        renderBalanceDelta('#deltaBalanceNoLoans', nlCur, balanceOneYearAgo(noLoans.data_points));
     } else {
         setMoney('#kpiBalanceNoLoans', state.totalBalanceConverted);
-        renderBalanceDelta('#deltaBalanceNoLoans', state.totalBalanceConverted, balanceAtPrevMonthEnd(total.data_points));
+        renderBalanceDelta('#deltaBalanceNoLoans', state.totalBalanceConverted, balanceOneYearAgo(total.data_points));
     }
     updateAcctNetTotal();
 }
