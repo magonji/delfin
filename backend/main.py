@@ -2945,9 +2945,10 @@ def get_available_months(db: Session = Depends(get_db)):
     """
     from sqlalchemy import func as sql_func
 
-    # Query for unique year-month combinations
+    # Query for unique year-month combinations (with transaction counts)
     query = db.query(
-        sql_func.strftime('%Y-%m', Transaction.date).label('month')
+        sql_func.strftime('%Y-%m', Transaction.date).label('month'),
+        sql_func.count(Transaction.id).label('count')
     ).group_by(
         sql_func.strftime('%Y-%m', Transaction.date)
     ).order_by(
@@ -2964,7 +2965,8 @@ def get_available_months(db: Session = Depends(get_db)):
             "value": row.month,
             "label": f"{datetime(int(year), int(month), 1).strftime('%B %Y')}",
             "year": int(year),
-            "month": int(month)
+            "month": int(month),
+            "count": row.count
         })
 
     # Get summary statistics

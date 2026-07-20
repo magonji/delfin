@@ -53,6 +53,15 @@
         .chip-btn:hover { background: var(--chip2); }
         .icon-btn { background: transparent; border: none; padding: 4px; display: flex; align-items: center; justify-content: center; color: var(--muted); cursor: pointer; }
         .icon-btn:hover { color: var(--red); }
+        /* Refresh: spinning icon + hover tooltip showing the current stage */
+        @keyframes delfinspin { to { transform: rotate(360deg); } }
+        #btnRefresh.spinning svg { animation: delfinspin .9s linear infinite; transform-origin: 50% 50%; }
+        .tip-wrap { position: relative; display: inline-flex; }
+        .refresh-tip { position: absolute; top: 100%; right: 0; margin-top: 8px; white-space: nowrap;
+            background: var(--paper); color: var(--text); border: 1px solid var(--hair); padding: 6px 10px; border-radius: 8px;
+            font-family: 'IBM Plex Sans', sans-serif; font-size: 12px; box-shadow: 0 8px 20px rgba(40,28,14,.18);
+            opacity: 0; pointer-events: none; transform: translateY(-4px); transition: opacity .15s, transform .15s; z-index: 60; }
+        .refresh-tip.show { opacity: 1; transform: translateY(0); }
 
         /* ── Page frame & flat section separators (no cards) ── */
         .content { max-width: 1280px; margin: 0 auto; padding: 26px var(--page-gutter) 64px; }
@@ -111,6 +120,9 @@
         .kpi-cell + .kpi-cell { border-left: 1px solid var(--hair); }
         .kpi-label { font-size: 10.5px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
         .kpi-val { font-family: 'Playfair Display', serif; font-size: 31px; font-weight: 800; line-height: 1.1; margin-top: 8px; font-variant-numeric: tabular-nums; }
+        .kpi-delta { font-family: 'IBM Plex Mono', monospace; font-size: 11px; margin-top: 5px; min-height: 14px; color: var(--muted); }
+        .kpi-delta.up { color: var(--green); }
+        .kpi-delta.down { color: var(--red); }
 
         /* ── Chart boxes ── */
         .chart-box { position: relative; }
@@ -251,7 +263,12 @@
                     <a href="tools.html">Tools</a>
                 </nav>
             </div>
-            <button class="chip-btn" id="btnRefresh">↻ Refresh</button>
+            <span class="tip-wrap">
+                <button class="icon-btn" id="btnRefresh" title="Refresh" aria-label="Refresh">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+                </button>
+                <span class="refresh-tip" id="refreshTip" role="status"></span>
+            </span>
             <button class="icon-btn" id="btnLogout" title="Log out" aria-label="Log out">
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5"/><path d="M15 12H5"/></svg>
             </button>
@@ -262,10 +279,10 @@
 
         <!-- KPI BAND -->
         <div class="kpi-grid">
-            <div class="kpi-cell"><div class="kpi-label">Total Balance</div><div class="kpi-val" id="kpiTotalBalance">—</div></div>
-            <div class="kpi-cell"><div class="kpi-label">Without Loans</div><div class="kpi-val" id="kpiBalanceNoLoans">—</div></div>
-            <div class="kpi-cell"><div class="kpi-label">Transactions</div><div class="kpi-val" id="kpiTxCount">—</div></div>
-            <div class="kpi-cell"><div class="kpi-label">Budget Available</div><div class="kpi-val" id="kpiBudgetAvail">—</div></div>
+            <div class="kpi-cell"><div class="kpi-label">Total Balance</div><div class="kpi-val" id="kpiTotalBalance">—</div><div class="kpi-delta" id="deltaTotalBalance"></div></div>
+            <div class="kpi-cell"><div class="kpi-label">Without Loans</div><div class="kpi-val" id="kpiBalanceNoLoans">—</div><div class="kpi-delta" id="deltaBalanceNoLoans"></div></div>
+            <div class="kpi-cell"><div class="kpi-label">Transactions</div><div class="kpi-val" id="kpiTxCount">—</div><div class="kpi-delta" id="deltaTxCount"></div></div>
+            <div class="kpi-cell"><div class="kpi-label">Budget Available</div><div class="kpi-val" id="kpiBudgetAvail">—</div><div class="kpi-delta" id="deltaBudget"></div></div>
         </div>
 
         <!-- NET WORTH -->
@@ -558,6 +575,53 @@ function setupCustomRange(selectId, wrapId, fromId, toId) {
     return true;
 }
 
+// ---- KPI "vs last month" deltas ----
+function prevMonthEndCutoff() {
+    const d = new Date();
+    // Day 0 of the current month = the last day of the previous month (local time).
+    const p = new Date(d.getFullYear(), d.getMonth(), 0);
+    return `${p.getFullYear()}-${String(p.getMonth() + 1).padStart(2, '0')}-${String(p.getDate()).padStart(2, '0')}`;
+}
+// Net-worth balance as of the end of last month, from the daily data points
+// (sorted ascending). null when there's no data before this month.
+function balanceAtPrevMonthEnd(dataPoints) {
+    if (!Array.isArray(dataPoints) || !dataPoints.length) return null;
+    const cutoff = prevMonthEndCutoff();
+    let bal = null;
+    for (const p of dataPoints) { if (p.date <= cutoff) bal = p.balance; else break; }
+    return bal;
+}
+function renderBalanceDelta(id, current, prev) {
+    const el = q(id);
+    if (!el) return;
+    if (prev == null || !isFinite(prev) || prev === 0) { el.textContent = ''; el.className = 'kpi-delta'; return; }
+    const diff = current - prev, pct = diff / Math.abs(prev) * 100, up = diff >= 0;
+    el.className = 'kpi-delta ' + (up ? 'up' : 'down');
+    el.innerHTML = `${up ? '▲' : '▼'} ${Math.abs(pct).toFixed(1)}% <span class="muted">vs last month</span>`;
+}
+function renderBudgetDelta(pct) {
+    const el = q('#deltaBudget');
+    if (!el) return;
+    const monthName = new Date().toLocaleString('en-GB', { month: 'long' });
+    el.className = 'kpi-delta';
+    el.innerHTML = (pct != null && isFinite(pct))
+        ? `${pct.toFixed(0)}% spent <span class="muted">· ${monthName}</span>`
+        : `<span class="muted">${monthName}</span>`;
+}
+function renderTxDelta() {
+    const el = q('#deltaTxCount');
+    if (!el || !state.months.length) return;
+    const now = new Date();
+    const curYm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const m = state.months.find(x => x.value === curYm) || state.months[0];
+    const cnt = m && m.count != null ? m.count : null;
+    if (cnt == null) { el.textContent = ''; return; }
+    el.className = 'kpi-delta';
+    el.innerHTML = m.value === curYm
+        ? `+${cnt.toLocaleString('en-GB')} <span class="muted">this month</span>`
+        : `${cnt.toLocaleString('en-GB')} <span class="muted">in ${esc(m.label.split(' ')[0])}</span>`;
+}
+
 async function loadSummary() {
     let sum = cacheGet('cache_summary') || await api('/dashboard/summary').then(d => { cacheSet('cache_summary', d); return d; });
     state.baseCurrency = sum.base_currency || 'GBP';
@@ -578,7 +642,8 @@ async function loadSummary() {
     try {
         const bp = cacheGet('cache_budget_progress') || await api(`/budgets/${ym}/progress`).then(d => { cacheSet('cache_budget_progress', d); return d; });
         setKPI('#kpiBudgetAvail', bp.remaining, true);
-    } catch { q('#kpiBudgetAvail').textContent = '—'; }
+        renderBudgetDelta(bp.percentage);
+    } catch { q('#kpiBudgetAvail').textContent = '—'; renderBudgetDelta(null); }
 }
 
 async function loadBalanceKpis() {
@@ -593,6 +658,7 @@ async function loadBalanceKpis() {
     const total = cacheGet('cache_nw_kpi_total') || await api('/dashboard/networth/daily').then(d => { cacheSet('cache_nw_kpi_total', d); return d; });
     state.totalBalanceConverted = total.summary?.current_balance ?? 0;
     setMoney('#kpiTotalBalance', state.totalBalanceConverted);
+    renderBalanceDelta('#deltaTotalBalance', state.totalBalanceConverted, balanceAtPrevMonthEnd(total.data_points));
 
     // Without loans
     const res = cacheGet('cache_loan_ids') || await api('/loans/account-ids').then(d => { cacheSet('cache_loan_ids', d); return d; });
@@ -600,9 +666,12 @@ async function loadBalanceKpis() {
     if (loanIds.length) {
         const excluded = loanIds.join(',');
         const noLoans = cacheGet('cache_nw_kpi_noloans') || await api(`/dashboard/networth/daily?excluded_accounts=${excluded}`).then(d => { cacheSet('cache_nw_kpi_noloans', d); return d; });
-        setMoney('#kpiBalanceNoLoans', noLoans.summary?.current_balance ?? 0);
+        const nlCur = noLoans.summary?.current_balance ?? 0;
+        setMoney('#kpiBalanceNoLoans', nlCur);
+        renderBalanceDelta('#deltaBalanceNoLoans', nlCur, balanceAtPrevMonthEnd(noLoans.data_points));
     } else {
         setMoney('#kpiBalanceNoLoans', state.totalBalanceConverted);
+        renderBalanceDelta('#deltaBalanceNoLoans', state.totalBalanceConverted, balanceAtPrevMonthEnd(total.data_points));
     }
     updateAcctNetTotal();
 }
@@ -752,11 +821,13 @@ async function loadNetworth() {
 }
 
 async function loadAvailableMonths() {
-    const cacheKey = 'cache_available_months';
+    // v2: response now carries per-month transaction counts (for the KPI delta).
+    const cacheKey = 'cache_available_months_v2';
     const res = cacheGet(cacheKey) || await api('/dashboard/available-months').then(d => { cacheSet(cacheKey, d); return d; });
     state.months = res.months || [];
     const sel = q('#selectMonth');
     sel.innerHTML = state.months.map(m => `<option value="${m.value}">${m.label}</option>`).join('');
+    renderTxDelta();
     if (state.months.length) loadMonthlyBreakdown(state.months[0].value);
 }
 
@@ -1163,22 +1234,36 @@ document.addEventListener('click', (e) => {
     });
 });
 
+// Refresh: spin the icon (via CSS) and show the current stage in a tooltip on hover.
+const _refreshTip = q('#refreshTip');
+function setRefreshStage(text) { _refreshTip.textContent = text || ''; if (!text) _refreshTip.classList.remove('show'); }
+(() => {
+    const btn = q('#btnRefresh');
+    btn.addEventListener('mouseenter', () => { if (btn.classList.contains('spinning') && _refreshTip.textContent) _refreshTip.classList.add('show'); });
+    btn.addEventListener('mouseleave', () => _refreshTip.classList.remove('show'));
+})();
 q('#btnRefresh').onclick = async () => {
     const btn = q('#btnRefresh');
-    const orig = btn.textContent;
+    if (btn.classList.contains('spinning')) return;
     btn.disabled = true;
+    // Spin the icon via CSS instead of overwriting the button (which would wipe the <svg>).
+    btn.classList.add('spinning');
+    const wasHovered = btn.matches(':hover');
     try {
-        btn.textContent = '⏳ Balances…';
-        await fetch(`${API_BASE}/admin/initialise-balances`, { method: 'POST' });
-        btn.textContent = '⏳ Payees…';
-        await fetch(`${API_BASE}/payees/recalculate-all-stats`, { method: 'POST' });
-        btn.textContent = '⏳ Refreshing…';
         cacheClearAll();
-        await init();
-    } catch (e) { alert('Error: ' + e.message); }
-    btn.textContent = orig;
-    btn.disabled = false;
-    toggleDropdown('#navDropdown', false);
+        setRefreshStage('Recalculating balances…');
+        if (wasHovered) _refreshTip.classList.add('show');
+        await fetch(`${API_BASE}/admin/initialise-balances`, { method: 'POST' });
+        setRefreshStage('Updating payee statistics…');
+        await fetch(`${API_BASE}/payees/recalculate-all-stats`, { method: 'POST' });
+        setRefreshStage('Reloading…');
+        location.reload();
+    } catch (e) {
+        alert('Error: ' + e.message);
+        btn.classList.remove('spinning');
+        btn.disabled = false;
+        setRefreshStage('');
+    }
 };
 
 // Event bindings

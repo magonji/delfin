@@ -31,60 +31,51 @@
             padding-left:env(safe-area-inset-left); padding-right:env(safe-area-inset-right); padding-bottom:env(safe-area-inset-bottom); }
 
         /* ── Header ── */
-        header { display:flex; align-items:center; justify-content:space-between; gap:16px;
-                padding:8px 30px; padding-top:calc(15px + env(safe-area-inset-top));
-                position:sticky; top:0; z-index:50; backdrop-filter:blur(10px);
-                background:rgba(250,243,233,.86); border-bottom:1px solid var(--border); }
-        h1 { font-size:25px; margin:0; font-family:'Playfair Display',serif; font-weight:800; letter-spacing:-.3px; }
+        header { position:sticky; top:0; z-index:50; display:flex; align-items:center; justify-content:space-between;
+                gap:16px; padding:15px 30px; padding-top:calc(15px + env(safe-area-inset-top));
+                background:rgba(250,243,233,.86); backdrop-filter:blur(10px); border-bottom:1px solid var(--border); }
 
         /* Editorial brand wordmark (left of header) */
-        .brand-left { display: flex; align-items: center; gap: 14px; line-height: 1;}
-        .brand-left .wordmark { font-family:'Playfair Display',serif; font-size:25px; font-weight:800; letter-spacing:-.3px; color:var(--ink); }
-        .brand-left .sep { width:1px; height:20px; background:var(--border); }
-        .brand-left .tag { font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:2px; text-transform:uppercase; color:var(--muted); }
+        .brand { display:flex; align-items:center; gap:14px; min-width:0; }
+        .brand .word { font-family:'Playfair Display',serif; font-size:25px; font-weight:800; letter-spacing:-.3px; color:var(--ink); }
+        .brand .rule { width:1px; height:20px; background:var(--border); }
+        .brand .tag { font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:2px; text-transform:uppercase; color:var(--muted); white-space:nowrap; }
 
-        /* Desktop: turn the JS-wired dropdown into a horizontal nav bar (mobile keeps the burger) */
-        @media (min-width:821px) {
-            #navBtn { display:none; }
-            #navDropdown .menu { position:static; display:block; box-shadow:none; border:none; background:transparent; padding:0; min-width:0; }
-            #navDropdown .list { display:flex; align-items:center; gap:20px; padding:0 !important; }
-            #navDropdown .list hr { display:none; }
-            #navDropdown .navItem { width:auto; padding: 7px 12px 4px; font-family:'IBM Plex Sans',sans-serif !important; font-size:13px !important; font-weight:600; border-radius:0 !important; border-bottom:2px solid transparent; background:transparent !important; color:var(--muted) !important; }
-            #navDropdown .navItem:hover { background:transparent !important; color:var(--ink) !important; border-bottom-color:var(--border) !important; }
-            #navDropdown .navItem.active { background:transparent !important; color:var(--ink) !important; border-bottom:2px solid var(--accent) !important; pointer-events:none; }
-        }
+        /* Nav + header actions (right) */
+        .nav-right { display:flex; align-items:center; gap:8px; }
+        .dropdown { position:relative; display:inline-flex; }
+        .nav-links { display:flex; align-items:center; gap:4px; }
+        .nav-links a { font-size:13px; font-weight:600; color:var(--muted); padding:7px 12px; border-bottom:2px solid transparent; text-decoration:none; }
+        .nav-links a:hover { color:var(--ink); }
+        .nav-links a.active { color:var(--ink); border-bottom-color:var(--accent); pointer-events:none; }
+        .burger { display:none; background:transparent; border:none; font-size:22px; cursor:pointer; color:var(--ink); padding:0 4px; }
 
         /* Header icon buttons (Refresh + Log out) — bare glyph, no capsule */
-        .icon-btn { background:none !important; border:none !important; border-radius:0; padding:0 !important; margin-left:14px; flex:0 0 auto;
-            cursor:pointer; color:var(--muted); display:flex; align-items:center; justify-content:center; transition:color .15s; }
-        .icon-btn:hover { background:none !important; color:var(--ink); transform:none; }
+        .icon-btn { background:transparent; border:none; padding:4px; display:flex; align-items:center; justify-content:center; color:var(--muted); cursor:pointer; }
         .icon-btn svg { width:16px; height:16px; display:block; }
+        .icon-btn:hover { color:var(--ink); }
         #btnLogout:hover { color:var(--danger); }
-        /* Spinner while refreshing: add class "spinning" to #btnRefresh (or "spin" to its svg) */
+        /* Spinner while refreshing: add class "spinning" to #btnRefresh */
         @keyframes delfinspin { to { transform:rotate(360deg); } }
         #btnRefresh.spinning svg, #btnRefresh svg.spin { animation:delfinspin .9s linear infinite; transform-origin:50% 50%; }
         /* Tooltip showing the current refresh stage on hover while spinning */
         .tip-wrap { position:relative; display:inline-flex; }
         .refresh-tip { position:absolute; top:100%; right:0; margin-top:8px; white-space:nowrap;
-            background:#fff; color:var(--text); border:1px solid var(--border); padding:6px 10px; border-radius:6px; font-size:12px;
-            font-family:'IBM Plex Sans', sans-serif; box-shadow:0 4px 12px rgba(0,0,0,.15);
-            opacity:0; pointer-events:none; transform:translateY(-4px); transition:opacity .15s, transform .15s; z-index:1000; }
+            background:var(--paper); color:var(--ink); border:1px solid var(--hair); padding:6px 10px; border-radius:8px; font-size:12px;
+            font-family:'IBM Plex Sans', sans-serif; box-shadow:0 8px 20px rgba(40,28,14,.18);
+            opacity:0; pointer-events:none; transform:translateY(-4px); transition:opacity .15s, transform .15s; z-index:60; }
         .refresh-tip.show { opacity:1; transform:translateY(0); }
 
-        /* ── Nav dropdown ── */
-        .tools { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
-        .dropdown { position:relative; }
-        .dropdown .btn { display:flex; align-items:center; gap:8px; }
-        #navBtn { font-size:22px; padding:4px 8px; line-height:1; background:transparent; border:none; cursor:pointer; color:var(--ink); }
-        .dropdown .menu { position:absolute; top:calc(100% + 6px); right:0; min-width:190px;
-            background:var(--paper); border:1px solid var(--border); border-radius:12px;
-            box-shadow:0 14px 40px rgba(60,40,20,.22); display:none; padding:8px; z-index:100; }
-        .dropdown.open .menu { display:block; }
-        #navDropdown .navItem { width:100%; text-align:left; padding:9px 12px; background:transparent;
-            cursor:pointer; border:none !important; border-radius:8px; transition:background .2s;
-            font-size:14px; font-weight:600; font-family:'IBM Plex Sans',sans-serif; color:var(--ink); white-space:nowrap; }
-        #navDropdown .navItem:hover { background:var(--panel); }
-        #navDropdown .navItem.active { background:var(--field); color:var(--ink); pointer-events:none; }
+        /* Mobile: collapse the nav links into a burger dropdown */
+        @media (max-width:760px) {
+            .nav-links { position:absolute; top:calc(100% + 10px); right:0; flex-direction:column; align-items:stretch;
+                background:var(--paper); border:1px solid var(--hair); border-radius:12px; box-shadow:0 12px 30px rgba(40,28,14,.18);
+                padding:8px; min-width:190px; display:none; }
+            #navDropdown.open .nav-links { display:flex; }
+            .nav-links a { padding:10px 12px; border-bottom:none; border-radius:8px; }
+            .nav-links a.active { background:var(--field); border-bottom:none; }
+            .burger { display:block; }
+        }
 
         /* ── Container & page frame ── */
         .container { margin:26px auto 0; max-width:1080px; padding:0 30px 80px; width:100%; }
@@ -271,35 +262,31 @@
 </head>
 <body>
     <header>
-        <div class="brand-left">
-            <span class="wordmark">Delfin</span>
-            <span class="sep"></span>
+        <div class="brand">
+            <span class="word">Delfin</span>
+            <span class="rule"></span>
             <span class="tag">Personal Finance</span>
         </div>
-        <div class="tools">
+        <div class="nav-right">
             <div class="dropdown" id="navDropdown">
-                <button class="btn" id="navBtn" onclick="toggleNav()">&#9776;</button>
-                <div class="menu" id="navMenu">
-                    <div class="list" style="padding: 6px;">
-                        <button class="navItem" onclick="location.href='index.html'">Dashboard</button>
-                        <button class="navItem" onclick="location.href='transactions.html'">Transactions</button>
-                        <button class="navItem" onclick="location.href='budget.html'">Budget</button>
-                        <button class="navItem" onclick="location.href='loans.html'">Loans</button>
-                        <button class="navItem active">Tools</button>
-                        <!-- Refresh: keep your existing handler on #btnRefresh. Add class "spinning" while it runs. -->
-                        <span class="tip-wrap">
-                            <button class="icon-btn" id="btnRefresh" title="Refresh" aria-label="Refresh">
-                                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
-                            </button>
-                            <span class="refresh-tip" id="refreshTip" role="status"></span>
-                        </span>
-                        <!-- Keep your existing logout handler on this button (e.g. onclick="logout()") -->
-                        <button class="icon-btn" id="btnLogout" title="Log out" aria-label="Log out">
-                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5"/><path d="M15 12H5"/></svg>
-                        </button>
-                    </div>
-                </div>
+                <button class="burger" id="navBtn" onclick="toggleNav()" aria-label="Menu" aria-expanded="false">&#9776;</button>
+                <nav class="nav-links" id="navMenu">
+                    <a href="index.html">Dashboard</a>
+                    <a href="transactions.html">Transactions</a>
+                    <a href="budget.html">Budget</a>
+                    <a href="loans.html">Loans</a>
+                    <a class="active" href="tools.html">Tools</a>
+                </nav>
             </div>
+            <span class="tip-wrap">
+                <button class="icon-btn" id="btnRefresh" title="Refresh" aria-label="Refresh">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+                </button>
+                <span class="refresh-tip" id="refreshTip" role="status"></span>
+            </span>
+            <button class="icon-btn" id="btnLogout" title="Log out" aria-label="Log out">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5"/><path d="M15 12H5"/></svg>
+            </button>
         </div>
     </header>
 
