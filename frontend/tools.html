@@ -64,7 +64,7 @@
         .dropdown.open .menu { display:block; }
         #navDropdown .navItem { width:100%; text-align:left; padding:9px 12px; background:transparent;
             cursor:pointer; border:none !important; border-radius:8px; transition:background .2s;
-            font-size:14px; font-weight:600; font-family:'IBM Plex Sans',sans-serif; color:var(--ink); }
+            font-size:14px; font-weight:600; font-family:'IBM Plex Sans',sans-serif; color:var(--ink); white-space:nowrap; }
         #navDropdown .navItem:hover { background:var(--panel); }
         #navDropdown .navItem.active { background:var(--field); color:var(--ink); pointer-events:none; }
 
@@ -87,7 +87,7 @@
 
         /* ── Tools grid & tiles (editorial rows with SVG icons, no chunky cards) ── */
         .tools-grid { display:grid; grid-template-columns:1fr 1fr; gap:0 40px; padding-top:6px; }
-        .tool-card { display:grid; grid-template-columns:34px 1fr auto; gap:16px; align-items:center;
+        .tool-card { display:grid; grid-template-columns:34px 1fr auto; gap:0 16px; align-items:center;
             text-align:left; background:transparent; border:none; border-bottom:1px solid var(--hair);
             border-radius:0; padding:16px 10px; margin:0; cursor:pointer; transition:background .15s; }
         .tool-card:hover { transform:none; box-shadow:none; background:#F4EAD9; }
@@ -110,9 +110,9 @@
             display:flex; justify-content:space-between; align-items:center; }
         .modal-header h3 { margin:0; color:var(--ink); font-size:21px; font-weight:700;
             font-family:'Playfair Display',serif; padding-left:12px; border-left:3px solid var(--accent); }
-        .close-btn { background:#F1E7D6; border:none; border-radius:8px; width:32px; height:32px;
-            font-size:18px; line-height:1; color:#3A342C; cursor:pointer; }
-        .close-btn:hover { background:var(--field); }
+        .close-btn { background:#F1E7D6; border:none; border-radius:8px; width:34px; height:34px; flex:0 0 auto;
+            font-size:20px; line-height:1; color:#3A342C; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background .15s; }
+        .close-btn:hover { background:var(--field); color:var(--ink); }
 
         /* ── List items / entity rows ── */
         .item-list { padding:14px 24px 22px; }
@@ -262,6 +262,8 @@
                         <button class="navItem active">Tools</button>
                         <hr style="border: none; border-top: 1px solid var(--border); margin: 6px 0;">
                         <button class="navItem" id="btnRefresh">Refresh</button>
+                        <!-- Keep your existing logout handler here (e.g. onclick="logout()" or href) -->
+                        <button class="navItem" id="btnLogout">Log out</button>
                     </div>
                 </div>
             </div>
@@ -361,6 +363,7 @@
                     </div>
                 </div>
             </div>
+        </div>
     </div>
 
     <div id="categoriesModal" class="modal">
