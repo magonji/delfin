@@ -163,6 +163,8 @@
         /* Ledger cell styles (editorial ledger) */
         .ledger-date { font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; color: #5A4E3C; }
         .ledger-acct { color: #6E6250; font-size: 12.5px; }
+        .xfer-ico { display: flex; align-items: center; color: #3C5A6E; overflow: visible; }
+        .xfer-ico svg { width: 16px; height: 16px; }
         .payee-cell { min-width: 0; }
         .payee-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .cat-sub { position: relative; font-size: 10.5px; letter-spacing: .5px; text-transform: uppercase; color: #A2937E; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1961,10 +1963,10 @@
                     <span class="date-display">${dateStr}</span>
                     <span class="time-display">${timeStr}</span>
                 </div>
-                <div class="t-cell ledger-acct" style="color:#3C5A6E;font-weight:600;">⇄</div>
+                <div class="t-cell xfer-ico" title="Transfer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h13M14 6l3 3-3 3"/><path d="M20 15H7M10 12l-3 3 3 3"/></svg></div>
                 <div class="payee-cell" title="${t.from_account_name} → ${t.to_account_name}">
-                    <div class="payee-name" style="color:#3C5A6E;">${t.from_account_name} <span style="color:#A2937E;font-weight:400;">→</span> ${t.to_account_name}</div>
-                    <div class="cat-sub" style="color:#7C8A99;">Transfer</div>
+                    <div class="payee-name" style="color:#3C5A6E;">${t.from_account_name}</div>
+                    <div class="cat-sub" style="color:#5E7C8E;text-transform:none;letter-spacing:.2px;font-size:11px;"><span style="color:#A2937E;">→</span> ${t.to_account_name}</div>
                 </div>
                 <div class="t-cell ledger-note note-cell">
                     <span class="note-display" title="${t.note || ''}">${t.note || ''}</span>
