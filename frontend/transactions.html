@@ -138,7 +138,7 @@
 
         /* Transaction table layout and styling */
         .transactions-wrapper { border: none; border-radius: 0; overflow: visible; }
-        .grid-layout { display: grid; grid-template-columns: 25px 70px 190px 200px minmax(200px, 1fr) 100px 120px 120px 70px; gap: 10px; align-items: center; }
+        .grid-layout { display: grid; grid-template-columns: 25px 88px 148px minmax(150px, 1.1fr) minmax(170px, 1.5fr) 116px 116px 116px 58px; gap: 14px; align-items: center; }
         .transactions-list:not(.bulk-edit-mode) input[type="checkbox"] { visibility: hidden; }
         .transactions-header:not(.bulk-edit-mode) .t-cell:first-child { visibility: hidden; }
 
@@ -153,50 +153,57 @@
         .transaction-item:hover { background-color: #F4EAD9 !important; }
         .transaction-item.selected { background-color: #F3E3D0 !important; border-bottom: 1px solid var(--border); }
 
-        .t-cell { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+        .t-cell { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; min-width: 0; }
         .t-right { text-align: right; }
         .t-center { text-align: center; }
-        .t-amount { text-align: right; }
-        .balance-cell { font-size: 13px; }
+        .t-amount, .balance-cell, .balance-cell-transfer { text-align: right; font-family: 'IBM Plex Mono', monospace; font-variant-numeric: tabular-nums; }
+        .t-amount { font-weight: 600; }
+        .balance-cell, .balance-cell-transfer { font-size: 12.5px; }
 
-        /* Date/time cell hover effects */
+        /* Ledger cell styles (editorial ledger) */
+        .ledger-date { font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; color: #5A4E3C; }
+        .ledger-acct { color: #6E6250; font-size: 12.5px; }
+        .payee-cell { min-width: 0; }
+        .payee-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .cat-sub { position: relative; font-size: 10.5px; letter-spacing: .5px; text-transform: uppercase; color: #A2937E; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .loc-ico { width: 10px; height: 10px; vertical-align: -1px; flex: 0 0 auto; }
+        .ledger-note { color: var(--muted); font-size: 12px; }
+
+        /* Date → time on hover */
         .date-cell { position: relative; }
         .date-display, .time-display { transition: opacity 0.2s; }
-        .time-display { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); opacity: 0; pointer-events: none; }
+        .time-display { position: absolute; top: 50%; left: 0; transform: translateY(-50%); opacity: 0; pointer-events: none; color: var(--muted); }
         .transaction-item:hover .date-display { opacity: 0; }
         .transaction-item:hover .time-display { opacity: 1; }
 
-        .account-cell { position: relative; }
-        .account-display, .category-hover-display { transition: opacity 0.2s; }
-        .category-hover-display { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); opacity: 0; pointer-events: none; white-space: nowrap; }
-        .transaction-item:hover .account-display { opacity: 0; }
-        .transaction-item:hover .category-hover-display { opacity: 1; }
-
-        .category-cell { position: relative; }
+        /* Category → location on hover (only when a location exists) */
         .category-display, .location-display { transition: opacity 0.2s; }
-        .location-display { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); opacity: 0; pointer-events: none; white-space: nowrap; }
-        .transaction-item:hover .category-display { opacity: 0; }
-        .transaction-item:hover .location-display { opacity: 1; }
+        .location-display { position: absolute; left: 0; top: 0; opacity: 0; pointer-events: none; }
+        .transaction-item:hover .cat-sub.has-loc .category-display { opacity: 0; }
+        .transaction-item:hover .cat-sub.has-loc .location-display { opacity: 1; }
 
+        /* Note → FX rate on hover (transfers) */
         .note-cell { position: relative; }
         .note-display, .rate-display { transition: opacity 0.2s; }
-        .rate-display { position: absolute; top: 50%; right: 0; transform: translateY(-50%); opacity: 0; pointer-events: none; white-space: nowrap; }
+        .rate-display { position: absolute; top: 50%; left: 0; transform: translateY(-50%); opacity: 0; pointer-events: none; }
         .transaction-item:hover .note-cell:has(.rate-display) .note-display { opacity: 0; }
         .transaction-item:hover .rate-display { opacity: 1; }
 
+        /* Amount / balance primary → secondary on hover (FX transfers) */
         .amount-cell { position: relative; }
         .amount-primary, .amount-secondary { transition: opacity 0.2s; }
         .amount-secondary { position: absolute; top: 50%; right: 0; transform: translateY(-50%); opacity: 0; pointer-events: none; }
         .transaction-item:hover .amount-primary { opacity: 0; }
         .transaction-item:hover .amount-secondary { opacity: 1; }
 
-        .balance-cell-transfer { position: relative; }
+        .balance-cell-transfer { position: relative; line-height: 1.35; }
         .balance-primary, .balance-secondary { transition: opacity 0.2s; }
         .balance-secondary { position: absolute; top: 50%; right: 0; transform: translateY(-50%); opacity: 0; pointer-events: none; }
         .transaction-item:hover .balance-primary { opacity: 0; }
         .transaction-item:hover .balance-secondary { opacity: 1; }
 
-        .action-buttons { display: flex; gap: 1px; justify-content: flex-end; margin-left: 10px; }
+        .action-buttons { display: flex; gap: 1px; justify-content: flex-end; opacity: 0; transition: opacity 0.15s; }
+        .transaction-item:hover .action-buttons { opacity: 1; }
         .btn-xs { background: none; border: none; cursor: pointer; font-size: 16px; font-weight: 600; padding: 2px; line-height: 1; transition: transform 0.1s, opacity 0.2s; opacity: 0.7; color: var(--text); }
         .btn-xs:hover { opacity: 1; transform: scale(1.3); }
         
@@ -758,15 +765,15 @@
             
             <div class="transactions-wrapper">
                 <div class="transactions-header grid-layout" id="transactionsHeader">
-                    <div class="t-center transactions-header-bulk"> </div>
-                    <div class="t-center">Date</div>
-                    <div class="t-center">Account</div>
-                    <div class="t-center">Payee</div>
-                    <div class="t-right">Note</div>
+                    <div class="transactions-header-bulk"> </div>
+                    <div>Date</div>
+                    <div>Account</div>
+                    <div>Payee</div>
+                    <div>Note</div>
                     <div class="t-right">Amount</div>
-                    <div class="t-right">Account Bal.</div>
-                    <div class="t-right">Balance</div>
-                    <div class="t-right"> </div>
+                    <div class="t-right">Acct Bal.</div>
+                    <div class="t-right">Total Bal.</div>
+                    <div> </div>
                 </div>
 
                 <div class="transactions-list" id="transactionsList">
@@ -1876,22 +1883,22 @@
             return `
             <div class="transaction-item grid-layout ${isSel ? 'selected' : ''}" data-transaction-id="${t.id}" onclick="${bulkEditMode ? `toggleTransactionSelection(${t.id})` : 'toggleMobileDetail(this)'}">
                 <div class="checkbox-column"><input type="checkbox" ${isSel ? 'checked' : ''} onclick="event.stopPropagation(); toggleTransactionSelection(${t.id})"></div>
-                <div class="t-cell t-center date-cell">
+                <div class="t-cell date-cell ledger-date">
                     <span class="date-display">${dateStr}</span>
                     <span class="time-display">${timeStr}</span>
                 </div>
-                <div class="t-cell t-center account-cell" title="${t.account_name}">
-                    <span class="account-display">${t.account_name}</span>
-                    <span class="category-hover-display">🏷️ ${t.category_name || 'Uncategorised'}</span>
+                <div class="t-cell ledger-acct" title="${t.account_name || ''}">${t.account_name || ''}</div>
+                <div class="payee-cell" title="${t.payee_name || ''}">
+                    <div class="payee-name">${t.payee_name || '<span style="color:#bbb">—</span>'}</div>
+                    <div class="cat-sub ${t.location_name ? 'has-loc' : ''}">
+                        <span class="category-display">${t.category_name || 'Uncategorised'}</span>
+                        ${t.location_name ? `<span class="location-display"><svg class="loc-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg> ${t.location_name}</span>` : ''}
+                    </div>
                 </div>
-                <div class="t-cell t-center ${t.location_name ? 'category-cell' : ''}" title="${t.payee_name || ''}">
-                    <span class="category-display">${t.payee_name || '<span style="color:#ccc">-</span>'}</span>
-                    ${t.location_name ? `<span class="location-display">📍 ${t.location_name}</span>` : ''}
-                </div>
-                <div class="t-cell t-right" title="${t.note || ''}" style="color:#555">${t.note || ''}</div>
+                <div class="t-cell ledger-note" title="${t.note || ''}">${t.note || ''}</div>
                 <div class="t-cell t-amount ${t.amount < 0 ? 'amount-negative' : 'amount-positive'}">${formatMoneyWithSymbol(t.amount, t.currency)}</div>
-                <div class="t-cell t-amount balance-cell" style="color: ${balanceAccountColor}">${t.account_balance_after != null ? formatMoneyWithSymbol(t.account_balance_after, accountCurrency) : ''}</div>
-                <div class="t-cell t-amount balance-cell" style="color: ${balanceTotalColor}">${t.total_balance_after != null ? formatMoneyWithSymbol(t.total_balance_after, 'GBP') : ''}</div>
+                <div class="t-cell balance-cell" style="color: ${balanceAccountColor}">${t.account_balance_after != null ? formatMoneyWithSymbol(t.account_balance_after, accountCurrency) : ''}</div>
+                <div class="t-cell balance-cell" style="color: ${balanceTotalColor}">${t.total_balance_after != null ? formatMoneyWithSymbol(t.total_balance_after, 'GBP') : ''}</div>
                 <div class="action-buttons">
                     <button onclick="event.stopPropagation(); duplicateTransaction(${t.id})" class="btn-xs" title="Duplicate">⧉</button>
                     <button onclick="event.stopPropagation(); editTransaction(${t.id})" class="btn-xs" title="Edit">✎</button>
@@ -1922,11 +1929,11 @@
                 amountHtml = `<span class="amount-primary" style="color:#d97706">-${formatMoneyWithSymbol(t.from_amount, t.from_currency)}</span>`;
                 amountHtml += `<span class="amount-secondary" style="color:#059669">+${formatMoneyWithSymbol(t.to_amount, t.to_currency)}</span>`;
             } else {
-                amountHtml = `<span style="color:#333">${formatMoneyWithSymbol(t.from_amount, t.from_currency)}</span>`;
+                amountHtml = `<span style="color:#3C5A6E">${formatMoneyWithSymbol(t.from_amount, t.from_currency)}</span>`;
             }
             
             const rateDisplay = diffCurr ? `<span class="rate-display">💱 1 ${t.from_currency} = ${(t.to_amount / t.from_amount).toFixed(4)} ${t.to_currency}</span>` : '';
-            const balanceHtml = `<span class="balance-primary" style="color:${fromBalanceColor}">↗ ${formatMoneyWithSymbol(t.from_balance, t.from_currency)}</span><span class="balance-secondary" style="color:${toBalanceColor}">↘ ${formatMoneyWithSymbol(t.to_balance, t.to_currency)}</span>`;
+            const balanceHtml = `<div style="color:${fromBalanceColor}">↗ ${formatMoneyWithSymbol(t.from_balance, t.from_currency)}</div><div style="color:${toBalanceColor}">↘ ${formatMoneyWithSymbol(t.to_balance, t.to_currency)}</div>`;
 
             const tid = `${t.transfer_out_id}_${t.transfer_in_id}`;
             const isSel = selectedTransfers.includes(tid);
@@ -1942,21 +1949,24 @@
             const trDetailHtml = trDetails.map(([l, v]) => `<span class="md-label">${l}</span><span class="md-value">${v}</span>`).join('');
 
             return `
-            <div class="transaction-item grid-layout ${isSel ? 'selected' : ''}" style="background:#eaf7f3" data-transfer-id="${tid}" onclick="${bulkEditMode ? `toggleTransferSelection('${tid}')` : 'toggleMobileDetail(this)'}">
+            <div class="transaction-item grid-layout ${isSel ? 'selected' : ''}" data-transfer-id="${tid}" onclick="${bulkEditMode ? `toggleTransferSelection('${tid}')` : 'toggleMobileDetail(this)'}">
                 <div class="checkbox-column"><input type="checkbox" ${isSel ? 'checked' : ''} onclick="event.stopPropagation(); toggleTransferSelection('${tid}')"></div>
-                <div class="t-cell t-center date-cell">
+                <div class="t-cell date-cell ledger-date">
                     <span class="date-display">${dateStr}</span>
                     <span class="time-display">${timeStr}</span>
                 </div>
-                <div class="t-cell t-center" title="${t.from_account_name}" style="color:#d97706">↗ ${t.from_account_name}</div>
-                <div class="t-cell t-center" title="${t.to_account_name}" style="color:#059669">↘ ${t.to_account_name}</div>
-                <div class="t-cell t-right note-cell">
-                    <span class="note-display" title="${t.note || ''}" style="color:#555;font-style:italic">${t.note || ''}</span>
+                <div class="t-cell ledger-acct" style="color:#3C5A6E;font-weight:600;">⇄</div>
+                <div class="payee-cell" title="${t.from_account_name} → ${t.to_account_name}">
+                    <div class="payee-name" style="color:#3C5A6E;">${t.from_account_name} <span style="color:#A2937E;font-weight:400;">→</span> ${t.to_account_name}</div>
+                    <div class="cat-sub" style="color:#7C8A99;">Transfer</div>
+                </div>
+                <div class="t-cell ledger-note note-cell">
+                    <span class="note-display" title="${t.note || ''}">${t.note || ''}</span>
                     ${rateDisplay}
                 </div>
-                <div class="t-cell t-amount ${diffCurr ? 'amount-cell' : ''}">${amountHtml}</div>
-                <div class="t-cell t-amount balance-cell-transfer">${balanceHtml}</div>
-                <div class="t-cell t-center" style="color:#ccc">-</div>
+                <div class="t-cell t-amount ${diffCurr ? 'amount-cell' : ''}" style="color:#3C5A6E">${amountHtml}</div>
+                <div class="t-cell balance-cell-transfer">${balanceHtml}</div>
+                <div class="t-cell" style="text-align:right;color:#c9bda8">–</div>
                 <div class="action-buttons">
                     <button onclick="event.stopPropagation(); editTransfer(${t.transfer_out_id}, ${t.transfer_in_id})" class="btn-xs">✎</button>
                     <button onclick="event.stopPropagation(); deleteTransfer(${t.transfer_out_id}, ${t.transfer_in_id})" class="btn-xs">×</button>
