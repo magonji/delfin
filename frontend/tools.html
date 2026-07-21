@@ -389,7 +389,7 @@
     <div id="categoriesModal" class="modal">
         <div class="modal-content">
             <div class="modal-header"><h3>Manage Categories</h3><button class="close-btn" onclick="closeModal('categoriesModal')">&times;</button></div>
-            <div style="padding: 10px 25px;"><button onclick="detectDuplicateCategories()" style="width: 100%;">🔍 Detect &amp; Merge Duplicate Categories</button></div>
+            <div style="padding: 10px 25px;"><button onclick="detectDuplicateCategories()" style="width: 100%;">Detect &amp; Merge Duplicate Categories</button></div>
             <div class="search-box"><input type="text" id="categorySearch" placeholder="Search categories..." onkeyup="filterCategories()"></div>
             <div class="item-list" id="categoriesList"></div>
         </div>
@@ -406,7 +406,7 @@
     <div id="payeesModal" class="modal">
         <div class="modal-content">
             <div class="modal-header"><h3>Manage Payees</h3><button class="close-btn" onclick="closeModal('payeesModal')">&times;</button></div>
-            <div style="padding: 10px 25px;"><button onclick="detectDuplicatePayees()" style="width: 100%;">🔍 Detect Duplicate Payees</button></div>
+            <div style="padding: 10px 25px;"><button onclick="detectDuplicatePayees()" style="width: 100%;">Detect Duplicate Payees</button></div>
             <div class="search-box"><input type="text" id="payeeSearch" placeholder="Search payees..." onkeyup="filterPayees()"></div>
             <div class="item-list" id="payeesList"></div>
         </div>
@@ -448,7 +448,7 @@
 
     <div id="importModal" class="modal">
         <div class="modal-content" style="max-width: 95%;">
-            <div class="modal-header"><h3>📥 Import Statements</h3><button class="close-btn" onclick="closeModal('importModal')">&times;</button></div>
+            <div class="modal-header"><h3>Import Statements</h3><button class="close-btn" onclick="closeModal('importModal')">&times;</button></div>
             <div style="padding: 25px;">
                 <div id="importSuccessMessage" class="success-message"></div>
                 <div id="importErrorMessage" class="error-message"></div>
@@ -536,7 +536,7 @@
                     <div id="mapAmountWarning" style="display: none; margin-bottom: 16px; padding: 10px 14px; border-radius: 8px;
                         background: #fff6e5; border: 1px solid #f0c36d; color: #7a5200; font-size: 13px;
                         font-family: 'IBM Plex Sans', sans-serif; line-height: 1.4;">
-                        ⚠️ <strong>Debit and Credit point to the same column</strong>, so every amount comes out as
+                        <strong>Debit and Credit point to the same column</strong>, so every amount comes out as
                         <strong>0.00</strong>. If your file has one amount column plus a separate column that flags each row
                         as debit or credit, switch <em>Amount type</em> to <strong>“Amount + sign column”</strong>.
                     </div>
@@ -551,8 +551,8 @@
                     <div style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 16px;">
                         <div class="form-group" style="flex: 1;"><label>Profile name (to save / reuse)</label>
                             <input type="text" id="mapProfileName" placeholder="e.g. BBVA"></div>
-                        <button onclick="saveImportProfile()" class="secondary" style="height: 40px;">💾 Save profile</button>
-                        <button onclick="deleteImportProfile()" class="secondary" style="height: 40px;">🗑️ Delete</button>
+                        <button onclick="saveImportProfile()" class="secondary" style="height: 40px;">Save profile</button>
+                        <button onclick="deleteImportProfile()" class="secondary" style="height: 40px;">Delete</button>
                     </div>
                     <div style="display: flex; gap: 10px; padding-top: 16px; border-top: 1px solid var(--border);">
                         <button onclick="continueFromMapping()" style="flex: 1; height: 44px; font-size: 15px;">Continue →</button>
@@ -594,7 +594,7 @@
                     </div>
 
                     <div style="display: flex; gap: 10px; margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border);">
-                        <button onclick="importTransactions()" style="flex: 1; height: 44px; font-size: 15px;">✅ Import <span id="importCount">0</span> Items</button>
+                        <button onclick="importTransactions()" style="flex: 1; height: 44px; font-size: 15px;">Import <span id="importCount">0</span> Items</button>
                         <button onclick="cancelImport()" class="secondary" style="height: 44px;">Cancel</button>
                     </div>
                 </div>
@@ -604,7 +604,7 @@
 
     <div id="importHelpModal" class="modal" style="z-index: 1100;">
         <div class="modal-content" style="max-width: 720px;">
-            <div class="modal-header"><h3>❓ How to import a bank CSV</h3><button class="close-btn" onclick="closeModal('importHelpModal')">&times;</button></div>
+            <div class="modal-header"><h3>How to import a bank CSV</h3><button class="close-btn" onclick="closeModal('importHelpModal')">&times;</button></div>
             <div style="padding: 25px; font-size: 14px; line-height: 1.6; color: var(--text);">
                 <p style="margin-top: 0;">
                     Delfin imports <strong>any</strong> bank's CSV export. The first time you import from
@@ -662,7 +662,7 @@
 
     <div id="exportModal" class="modal">
         <div class="modal-content" style="max-width: 600px;">
-            <div class="modal-header"><h3>📤 Export to CSV</h3><button class="close-btn" onclick="closeModal('exportModal')">&times;</button></div>
+            <div class="modal-header"><h3>Export to CSV</h3><button class="close-btn" onclick="closeModal('exportModal')">&times;</button></div>
             <div style="padding: 20px 0;">
                 <div class="form-group"><label>From Date</label><input type="date" id="exportStartDate"></div>
                 <div class="form-group"><label>To Date</label><input type="date" id="exportEndDate"></div>
@@ -677,7 +677,7 @@
 
     <div id="backupModal" class="modal">
         <div class="modal-content" style="max-width: 500px;">
-            <div class="modal-header"><h3>💾 Backup Database</h3><button class="close-btn" onclick="closeModal('backupModal')">&times;</button></div>
+            <div class="modal-header"><h3>Backup Database</h3><button class="close-btn" onclick="closeModal('backupModal')">&times;</button></div>
             <div style="padding: 25px; text-align: center;">
                 <div id="backupStatus" style="padding: 15px; border-radius: 8px; margin-bottom: 15px; display: none;"></div>
                 <button onclick="downloadDatabaseBackup()" style="width: 100%;">Download Backup (.db)</button>
@@ -688,7 +688,7 @@
     <!-- Restore database -->
     <div id="restoreModal" class="modal">
         <div class="modal-content" style="max-width: 540px;">
-            <div class="modal-header"><h3>♻️ Restore Database</h3><button class="close-btn" onclick="closeModal('restoreModal')">&times;</button></div>
+            <div class="modal-header"><h3>Restore Database</h3><button class="close-btn" onclick="closeModal('restoreModal')">&times;</button></div>
             <div style="padding: 20px 25px;">
                 <p style="color: var(--muted); font-size: 14px; margin-top: 0;">
                     Restore a Delfin database backup — a <code>.db</code> file from the
@@ -700,12 +700,12 @@
                     <input type="file" id="restoreFile" accept=".db,.sqlite,.sqlite3,application/x-sqlite3,application/octet-stream">
                 </div>
                 <p style="color: var(--muted); font-size:13px; margin:12px 0 0;">
-                    🛡️ A safety backup of your current database is created automatically first.
+                    A safety backup of your current database is created automatically first.
                 </p>
 
                 <div id="restoreProgress" style="display:none; margin-top:14px;">
                     <div class="progress-track"><div class="bar"></div></div>
-                    <div id="restoreProgressMsg" style="font-size:13px; color: var(--muted);">⏳ Restoring…</div>
+                    <div id="restoreProgressMsg" style="font-size:13px; color: var(--muted);">Restoring…</div>
                 </div>
                 <div id="restoreStatus" style="display:none; padding: 12px; border-radius: 8px; margin: 12px 0;"></div>
 
@@ -720,7 +720,7 @@
     <!-- Change password -->
     <div id="passwordModal" class="modal">
         <div class="modal-content" style="max-width: 480px;">
-            <div class="modal-header"><h3>🔑 Change password</h3><button class="close-btn" onclick="closeModal('passwordModal')">&times;</button></div>
+            <div class="modal-header"><h3>Change password</h3><button class="close-btn" onclick="closeModal('passwordModal')">&times;</button></div>
             <div style="padding: 20px 25px;">
                 <p style="color: var(--muted); font-size: 14px; margin-top: 0;">
                     The data key is re-wrapped with the new password — the database itself is
@@ -731,21 +731,21 @@
                     <label for="pwOld">Current password</label>
                     <div class="pw-wrap">
                         <input type="password" id="pwOld" autocomplete="current-password">
-                        <button type="button" class="pw-toggle" onclick="togglePw(this)" title="Show password" aria-label="Show password">👁</button>
+                        <button type="button" class="pw-toggle" onclick="togglePw(this)" title="Show password" aria-label="Show password"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button>
                     </div>
                 </div>
                 <div class="form-group" style="padding:0;">
                     <label for="pwNew">New password</label>
                     <div class="pw-wrap">
                         <input type="password" id="pwNew" autocomplete="new-password">
-                        <button type="button" class="pw-toggle" onclick="togglePw(this)" title="Show password" aria-label="Show password">👁</button>
+                        <button type="button" class="pw-toggle" onclick="togglePw(this)" title="Show password" aria-label="Show password"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button>
                     </div>
                 </div>
                 <div class="form-group" style="padding:0;">
                     <label for="pwNew2">Confirm new password</label>
                     <div class="pw-wrap">
                         <input type="password" id="pwNew2" autocomplete="new-password">
-                        <button type="button" class="pw-toggle" onclick="togglePw(this)" title="Show password" aria-label="Show password">👁</button>
+                        <button type="button" class="pw-toggle" onclick="togglePw(this)" title="Show password" aria-label="Show password"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button>
                     </div>
                 </div>
                 <div id="pwStatus" style="display:none; padding: 12px; border-radius: 8px; margin: 12px 0;"></div>
@@ -760,7 +760,7 @@
     <!-- Maintenance settings -->
     <div id="maintenanceModal" class="modal">
         <div class="modal-content" style="max-width: 560px;">
-            <div class="modal-header"><h3>🛠️ Maintenance</h3><button class="close-btn" onclick="closeModal('maintenanceModal')">&times;</button></div>
+            <div class="modal-header"><h3>Maintenance</h3><button class="close-btn" onclick="closeModal('maintenanceModal')">&times;</button></div>
             <div style="padding: 20px 25px;">
                 <p style="color: var(--muted); font-size: 14px; margin-top: 0;">
                     Once a day the app refreshes exchange rates, recalculates balances and
@@ -800,7 +800,7 @@
 
                 <div id="mtProgress" style="display:none; margin: 6px 0 12px;">
                     <div class="progress-track"><div class="bar"></div></div>
-                    <div id="mtProgressMsg" style="font-size:13px; color: var(--muted);">⏳ Running maintenance…</div>
+                    <div id="mtProgressMsg" style="font-size:13px; color: var(--muted);">Running maintenance…</div>
                 </div>
 
                 <div id="maintenanceStatus" style="display:none; padding: 12px; border-radius: 8px; margin: 12px 0;"></div>
@@ -816,7 +816,7 @@
     <!-- Financisto import -->
     <div id="financistoImportModal" class="modal">
         <div class="modal-content" style="max-width: 640px;">
-            <div class="modal-header"><h3>🐬 Import Financisto</h3><button class="close-btn" onclick="closeModal('financistoImportModal')">&times;</button></div>
+            <div class="modal-header"><h3>Import Financisto</h3><button class="close-btn" onclick="closeModal('financistoImportModal')">&times;</button></div>
             <div style="padding: 20px 25px;">
                 <p style="color: var(--muted); font-size: 14px; margin-top: 0;">
                     Select a Financisto database backup (<code>.backup</code>) or a Financisto CSV export.
@@ -844,11 +844,11 @@
                             <span><strong>Replace</strong> — wipe accounts, categories, payees, locations, projects and transactions, then restore from this file.</span>
                         </label>
                         <p style="color: var(--muted); font-size:13px; margin:12px 0 0;">
-                            🛡️ A safety backup of your current database is created automatically before importing.
+                            A safety backup of your current database is created automatically before importing.
                         </p>
                         <div id="fzImportProgress" style="display:none; margin-top:14px;">
                             <div class="progress-track"><div class="bar"></div></div>
-                            <div id="fzImportProgressMsg" style="font-size:13px; color: var(--muted);">⏳ Importing… please don't close this window.</div>
+                            <div id="fzImportProgressMsg" style="font-size:13px; color: var(--muted);">Importing… please don't close this window.</div>
                         </div>
                         <div style="display:flex; gap:10px; margin-top:16px;">
                             <button id="fzImportBtn" onclick="fzImport()" style="flex:1; height:44px;">Import</button>
@@ -863,7 +863,7 @@
     <!-- Financisto export -->
     <div id="financistoExportModal" class="modal">
         <div class="modal-content" style="max-width: 560px;">
-            <div class="modal-header"><h3>📦 Export Financisto</h3><button class="close-btn" onclick="closeModal('financistoExportModal')">&times;</button></div>
+            <div class="modal-header"><h3>Export Financisto</h3><button class="close-btn" onclick="closeModal('financistoExportModal')">&times;</button></div>
             <div style="padding: 20px 25px;">
                 <p style="color: var(--muted); font-size: 14px; margin-top: 0;">
                     Export your entire Delfin database in a format Financisto can read.
@@ -1173,11 +1173,13 @@
         }
 
         // Show/hide toggle for password fields wrapped in .pw-wrap
+        const PW_EYE = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>`;
+        const PW_EYE_OFF = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18"/><path d="M10.6 10.6a3 3 0 0 0 4.2 4.2"/><path d="M9.9 5.1A9.5 9.5 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 3.9M6.3 6.3A17 17 0 0 0 2 12s3.5 7 10 7a9.3 9.3 0 0 0 3-.5"/></svg>`;
         function togglePw(btn) {
             const input = btn.parentElement.querySelector('input');
             const reveal = input.type === 'password';
             input.type = reveal ? 'text' : 'password';
-            btn.textContent = reveal ? '🙈' : '👁';
+            btn.innerHTML = reveal ? PW_EYE_OFF : PW_EYE;
             btn.title = reveal ? 'Hide password' : 'Show password';
             btn.setAttribute('aria-label', btn.title);
         }
@@ -1194,7 +1196,7 @@
             const toast = document.createElement('div');
             toast.className = `toast ${type}`;
             
-            const icon = type === 'success' ? '✅' : '⚠️';
+            const icon = type === 'success' ? '' : '';
             
             toast.innerHTML = `
                 <div style="display:flex; gap:10px; align-items:center;">
@@ -2818,7 +2820,7 @@
                             <select id="parentCategory_${index}" class="import-select" onchange="handleParentCategoryChange(${index})" ${trans.type === 'transfer' ? 'disabled' : ''}>
                                 <option value="">Parent...</option>
                                 ${getUniqueParents().map(p => `<option value="${p}">${p}</option>`).join('')}
-                                <option value="__NEW__" style="color:#667eea;font-weight:bold">➕ Add new...</option>
+                                <option value="__NEW__" style="color:#667eea;font-weight:bold">Add new...</option>
                             </select>
                             <select id="category_${index}" class="import-select" onchange="handleSubcategoryChange(${index})" disabled>
                                 <option value="">Subcategory...</option>
@@ -2830,7 +2832,7 @@
                             <select id="location_${index}" class="import-select" onchange="handleLocationChange(${index})" ${trans.type === 'transfer' ? 'disabled' : ''}>
                                 <option value="">Loc...</option>
                                 ${allLocations.map(l => `<option value="${l.id}">${l.name}</option>`).join('')}
-                                <option value="__NEW__" style="color:#667eea;font-weight:bold">➕ Add...</option>
+                                <option value="__NEW__" style="color:#667eea;font-weight:bold">Add...</option>
                             </select>
                             <select id="project_${index}" class="import-select" ${trans.type === 'transfer' ? 'disabled' : ''}>
                                 <option value="">Proj...</option>
@@ -3206,7 +3208,7 @@
             // Add "new subcategory" option
             const newOption = document.createElement('option');
             newOption.value = '__NEW__';
-            newOption.textContent = '➕ Add new...';
+            newOption.textContent = 'Add new...';
             newOption.style.color = '#667eea';
             newOption.style.fontWeight = 'bold';
             categorySelect.appendChild(newOption);
@@ -3335,7 +3337,7 @@
                     const currentValue = select.value;
                     select.innerHTML = '<option value="">Parent...</option>' +
                         parents.map(p => `<option value="${p}">${p}</option>`).join('') +
-                        '<option value="__NEW__" style="color:#667eea;font-weight:bold">➕ Add new...</option>';
+                        '<option value="__NEW__" style="color:#667eea;font-weight:bold">Add new...</option>';
                     select.value = currentValue;
                 }
             });
@@ -3348,7 +3350,7 @@
                     const currentValue = select.value;
                     select.innerHTML = '<option value="">Loc...</option>' +
                         allLocations.map(l => `<option value="${l.id}">${l.name}</option>`).join('') +
-                        '<option value="__NEW__" style="color:#667eea;font-weight:bold">➕ Add...</option>';
+                        '<option value="__NEW__" style="color:#667eea;font-weight:bold">Add...</option>';
                     select.value = currentValue;
                 }
             });
@@ -3393,7 +3395,7 @@
             if (!confirmed) return;
             
             // Show loading indicator
-            showToast('⏳ Importing transactions... please wait', 'success');
+            showToast('Importing transactions... please wait', 'success');
             
             // Disable button during import
             const importButton = document.querySelector('button[onclick*="importTransactions"]');
@@ -3567,7 +3569,7 @@
 
                 // ALWAYS recalculate balances if we imported any transactions
                 if (successCount > 0) {
-                    showToast('🔄 Recalculating all balances...', 'success');
+                    showToast('Recalculating all balances...', 'success');
                     
                     try {
                         const recalcRes = await fetch(`${API_URL}/admin/initialise-balances`, {
@@ -3576,25 +3578,25 @@
                         
                         if (recalcRes.ok) {
                             if (errorCount === 0) {
-                                showToast(`✅ Successfully imported ${successCount} transactions and updated balances!`, 'success');
+                                showToast(`Successfully imported ${successCount} transactions and updated balances!`, 'success');
                             } else {
-                                showToast(`⚠️ Imported ${successCount} transactions (${errorCount} failed). Balances updated.`, 'error');
+                                showToast(`Imported ${successCount} transactions (${errorCount} failed). Balances updated.`, 'error');
                             }
                             setTimeout(() => {
                                 closeModal('importModal');
                                 cancelImport();
                             }, 1500);
                         } else {
-                            showToast('⚠️ Imported transactions but failed to recalculate balances. Run "Recalculate Balances" manually.', 'error');
+                            showToast('Imported transactions but failed to recalculate balances. Run "Recalculate Balances" manually.', 'error');
                         }
                     } catch (err) {
                         console.error('Balance recalculation error:', err);
-                        showToast('⚠️ Error triggering balance recalculation. Run "Recalculate Balances" manually.', 'error');
+                        showToast('Error triggering balance recalculation. Run "Recalculate Balances" manually.', 'error');
                     }
                 } else if (errorCount > 0) {
-                    showToast(`❌ Import failed: ${errorCount} errors. Check console for details.`, 'error');
+                    showToast(`Import failed: ${errorCount} errors. Check console for details.`, 'error');
                 } else {
-                    showToast('⚠️ No transactions were imported.', 'error');
+                    showToast('No transactions were imported.', 'error');
                 }
 
             } catch (e) {
@@ -3798,7 +3800,7 @@
                 statusDiv.style.display = 'block';
                 statusDiv.style.background = '#e3f2fd';
                 statusDiv.style.color = '#1976d2';
-                statusDiv.innerHTML = '⏳ Creating backup...';
+                statusDiv.innerHTML = 'Creating backup...';
                 
                 // Call the backup endpoint
                 const response = await fetch(`${API_URL}/admin/backup-database`, {
@@ -3830,7 +3832,7 @@
                 // Show success message
                 statusDiv.style.background = '#d1f2eb';
                 statusDiv.style.color = '#0f5132';
-                statusDiv.innerHTML = `✅ Backup downloaded successfully!<br><small>${filename}</small>`;
+                statusDiv.innerHTML = `Backup downloaded successfully!<br><small>${filename}</small>`;
                 
                 showSuccess(`Database backup downloaded: ${filename}`);
                 
@@ -3843,7 +3845,7 @@
                 console.error('Error creating backup:', error);
                 statusDiv.style.background = '#f8d7da';
                 statusDiv.style.color = '#842029';
-                statusDiv.innerHTML = '❌ Failed to create backup. Please try again.';
+                statusDiv.innerHTML = 'Failed to create backup. Please try again.';
                 showError('Failed to create backup: ' + error.message);
             }
         }
@@ -3865,7 +3867,7 @@
             if (!oldPw || !newPw) { setStatus('Fill in both current and new password.', false); return; }
             if (newPw !== newPw2) { setStatus("New passwords don't match.", false); return; }
             const btn = document.getElementById('pwSaveBtn');
-            const orig = btn.textContent; btn.disabled = true; btn.textContent = '⏳ Saving…';
+            const orig = btn.textContent; btn.disabled = true; btn.textContent = 'Saving…';
             try {
                 const res = await fetch(`${API_URL}/auth/change-password`, {
                     method: 'POST',
@@ -3877,11 +3879,11 @@
                     throw new Error(err.detail || `HTTP ${res.status}`);
                 }
                 for (const id of ['pwOld','pwNew','pwNew2']) document.getElementById(id).value = '';
-                setStatus('✅ Password changed. Use the new one next time you log in.', true);
+                setStatus('Password changed. Use the new one next time you log in.', true);
                 showSuccess('Password changed');
                 setTimeout(() => closeModal('passwordModal'), 1800);
             } catch (e) {
-                setStatus('❌ ' + e.message, false);
+                setStatus('' + e.message, false);
             } finally {
                 btn.disabled = false; btn.textContent = orig;
             }
@@ -3908,7 +3910,7 @@
             const started = Date.now();
             const timer = setInterval(() => {
                 const s = Math.floor((Date.now() - started) / 1000);
-                progressMsg.textContent = `⏳ Restoring… ${s}s. Please don't close this window.`;
+                progressMsg.textContent = `Restoring… ${s}s. Please don't close this window.`;
             }, 1000);
             try {
                 const fd = new FormData();
@@ -3920,13 +3922,13 @@
                 localStorage.setItem('dirty_data', '1');
                 statusDiv.style.display = 'block';
                 statusDiv.style.background = '#d1f2eb'; statusDiv.style.color = '#0f5132';
-                statusDiv.innerHTML = `✅ Restored ${data.transactions} transactions, ${data.accounts} accounts.`
+                statusDiv.innerHTML = `Restored ${data.transactions} transactions, ${data.accounts} accounts.`
                     + (data.safety_backup ? `<br><small>Safety backup of previous data: ${data.safety_backup}</small>` : '');
                 showSuccess('Database restored');
             } catch (e) {
                 statusDiv.style.display = 'block';
                 statusDiv.style.background = '#f8d7da'; statusDiv.style.color = '#842029';
-                statusDiv.innerHTML = '❌ ' + e.message;
+                statusDiv.innerHTML = '' + e.message;
                 showError('Restore failed: ' + e.message);
             } finally {
                 clearInterval(timer);
@@ -3981,7 +3983,7 @@
                 ? `<button class="secondary" style="height:36px; margin-top:10px;" onclick="disableBackups()">Disable backups</button>`
                 : `<button style="height:36px; margin-top:10px;" onclick="enableBackups()">Enable backups on this disk</button>`;
             document.getElementById('mtStatusPanel').innerHTML = `
-                <div><strong>Backups:</strong> ${enabled ? '✅ Enabled' : '⚠️ Disabled'}</div>
+                <div><strong>Backups:</strong> ${enabled ? 'Enabled' : 'Disabled'}</div>
                 <div><strong>Folder:</strong> <code>${mtEsc(st.backup_dir)}</code>${dirNote}</div>
                 <div><strong>Last backup:</strong> ${st.last_backup ? mtEsc(st.last_backup) : '—'}</div>
                 <div><strong>Total backups:</strong> ${st.count}</div>
@@ -4014,8 +4016,8 @@
                 const res = await fetch(`${API_URL}/maintenance/enable-backups`, { method: 'POST' });
                 if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || 'Failed'); }
                 mtRenderStatus(await res.json());
-                mtStatus('✅ Backups enabled on this disk.');
-            } catch (e) { mtStatus('❌ ' + e.message, false); }
+                mtStatus('Backups enabled on this disk.');
+            } catch (e) { mtStatus('' + e.message, false); }
         }
 
         async function disableBackups() {
@@ -4024,7 +4026,7 @@
                 if (!res.ok) throw new Error('Failed');
                 mtRenderStatus(await res.json());
                 mtStatus('Backups disabled.');
-            } catch (e) { mtStatus('❌ ' + e.message, false); }
+            } catch (e) { mtStatus('' + e.message, false); }
         }
 
         async function saveMaintenanceSettings() {
@@ -4046,11 +4048,11 @@
                     throw new Error(err.detail || 'Failed to save');
                 }
                 const s = await res.json();
-                mtStatus(`✅ Saved. Maintenance runs daily at <strong>${mtEsc(s.maintenance_time)}</strong>; backups kept: <strong>${mtEsc(s.backup_retention)}</strong>.`);
+                mtStatus(`Saved. Maintenance runs daily at <strong>${mtEsc(s.maintenance_time)}</strong>; backups kept: <strong>${mtEsc(s.backup_retention)}</strong>.`);
                 showSuccess('Maintenance settings saved');
                 loadMaintenanceStatus();
             } catch (e) {
-                mtStatus('❌ ' + e.message, false);
+                mtStatus('' + e.message, false);
                 showError('Failed to save settings: ' + e.message);
             } finally {
                 btn.disabled = false;
@@ -4068,7 +4070,7 @@
             const started = Date.now();
             const tick = () => {
                 const s = Math.floor((Date.now() - started) / 1000);
-                progressMsg.textContent = `⏳ Running maintenance… ${s}s (rates, balances, payees, backup). Please don't close this window.`;
+                progressMsg.textContent = `Running maintenance… ${s}s (rates, balances, payees, backup). Please don't close this window.`;
             };
             tick();
             const timer = setInterval(tick, 1000);
@@ -4080,21 +4082,21 @@
                 const enabled = mtLastStatus && mtLastStatus.enabled;
                 let msg;
                 if (r.status === 'already_running') {
-                    msg = '⏳ Maintenance was already running — try again in a moment.';
+                    msg = 'Maintenance was already running — try again in a moment.';
                 } else {
                     const did = [];
                     if (r.rates_updated) did.push('rates updated');
                     if (r.balances) did.push('balances recalculated');
                     if (typeof r.payees === 'number') did.push(`${r.payees} payees`);
                     const didStr = did.length ? ` (${did.join(', ')})` : '';
-                    if (r.backup) msg = `✅ Done${didStr}. Backup created: <strong>${mtEsc(r.backup)}</strong>`;
-                    else if (!enabled) msg = `✅ Done${didStr}. No backup — backups are disabled. Use "Enable backups on this disk" above.`;
-                    else msg = `✅ Done${didStr}. No backup needed — no changes since the last one.`;
+                    if (r.backup) msg = `Done${didStr}. Backup created: <strong>${mtEsc(r.backup)}</strong>`;
+                    else if (!enabled) msg = `Done${didStr}. No backup — backups are disabled. Use "Enable backups on this disk" above.`;
+                    else msg = `Done${didStr}. No backup needed — no changes since the last one.`;
                 }
                 mtStatus(msg, r.status !== 'already_running');
                 localStorage.setItem('dirty_data', '1');
             } catch (e) {
-                mtStatus('❌ Maintenance failed: ' + e.message, false);
+                mtStatus('Maintenance failed: ' + e.message, false);
             } finally {
                 clearInterval(timer);
                 progress.style.display = 'none';
@@ -4114,10 +4116,10 @@
         }
 
         const FZ_SEVERITY = {
-            error:   { icon: '⛔', bg: '#f8d7da', color: '#842029', label: 'Error' },
-            skipped: { icon: '🚫', bg: '#fff3cd', color: '#7a5b00', label: 'Skipped' },
-            partial: { icon: '⚠️', bg: '#fff8e1', color: '#8a6d00', label: 'Partial' },
-            info:    { icon: 'ℹ️', bg: '#e3f2fd', color: '#1565c0', label: 'Info' },
+            error:   { icon: '', bg: '#f8d7da', color: '#842029', label: 'Error' },
+            skipped: { icon: '', bg: '#fff3cd', color: '#7a5b00', label: 'Skipped' },
+            partial: { icon: '', bg: '#fff8e1', color: '#8a6d00', label: 'Partial' },
+            info:    { icon: '', bg: '#e3f2fd', color: '#1565c0', label: 'Info' },
         };
 
         async function fzAnalyze() {
@@ -4130,7 +4132,7 @@
             status.style.display = 'block';
             status.style.background = '#e3f2fd';
             status.style.color = '#1976d2';
-            status.innerHTML = '⏳ Analysing file…';
+            status.innerHTML = 'Analysing file…';
 
             try {
                 const fd = new FormData();
@@ -4148,7 +4150,7 @@
             } catch (e) {
                 status.style.background = '#f8d7da';
                 status.style.color = '#842029';
-                status.innerHTML = '❌ ' + e.message;
+                status.innerHTML = '' + e.message;
             }
         }
 
@@ -4180,13 +4182,13 @@
             if (empty) {
                 document.getElementById('fzFindings').innerHTML =
                     `<div style="background:#f8d7da; color:#842029; border-radius:8px; padding:12px; font-size:14px;">
-                        ⛔ No Financisto data found in this file. Is it the right file? Expected a Financisto
+                        No Financisto data found in this file. Is it the right file? Expected a Financisto
                         <code>.backup</code> or CSV export.</div>`;
                 return;
             }
             if (findings.length === 0) {
                 html = `<div style="background:#d1f2eb; color:#0f5132; border-radius:8px; padding:12px; font-size:14px;">
-                    ✅ Everything maps cleanly — no data loss detected.</div>`;
+                    Everything maps cleanly — no data loss detected.</div>`;
             } else {
                 if (hasLoss) {
                     html += `<div style="font-size:13px; color:var(--muted); margin-bottom:8px;">
@@ -4222,7 +4224,7 @@
             const original = btn.textContent;
             btn.disabled = true;
             cancelBtn.disabled = true;
-            btn.textContent = '⏳ Importing…';
+            btn.textContent = 'Importing…';
 
             // Indeterminate progress + elapsed timer so a long import never looks frozen.
             progress.style.display = 'block';
@@ -4230,7 +4232,7 @@
             const noun = mode === 'replace' ? 'Replacing' : 'Importing';
             const tick = () => {
                 const s = Math.floor((Date.now() - started) / 1000);
-                progressMsg.textContent = `⏳ ${noun}… ${s}s elapsed. Large backups take a while — please don't close this window.`;
+                progressMsg.textContent = `${noun}… ${s}s elapsed. Large backups take a while — please don't close this window.`;
             };
             tick();
             const timer = setInterval(tick, 1000);
@@ -4265,7 +4267,7 @@
 
         async function fzLoadExportNotes() {
             const box = document.getElementById('fzExportNotes');
-            box.innerHTML = '⏳ Loading…';
+            box.innerHTML = 'Loading…';
             try {
                 const res = await fetch(`${API_URL}/tools/financisto/export/notes`);
                 const data = await res.json();
@@ -4273,7 +4275,7 @@
                 box.innerHTML = `<strong>What is not included:</strong><ul style="margin:6px 0 0; padding-left:18px;">`
                     + notes.map(n => `<li style="margin-bottom:4px;">${n}</li>`).join('') + '</ul>';
             } catch (e) {
-                box.innerHTML = '⚠️ Could not load export details.';
+                box.innerHTML = 'Could not load export details.';
             }
         }
 
