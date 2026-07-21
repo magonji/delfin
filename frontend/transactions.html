@@ -163,8 +163,8 @@
         /* Ledger cell styles (editorial ledger) */
         .ledger-date { font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; color: #5A4E3C; }
         .ledger-acct { color: #6E6250; font-size: 12.5px; }
-        .xfer-ico { display: flex; align-items: center; color: #3C5A6E; overflow: visible; }
-        .xfer-ico svg { width: 16px; height: 16px; }
+        .xfer-ico { display: flex; align-items: center; justify-content: center; color: #3C5A6E; overflow: visible; }
+        .xfer-ico svg { width: 24px; height: 24px; }
         .payee-cell { min-width: 0; }
         .payee-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .cat-sub { position: relative; font-size: 10.5px; letter-spacing: .5px; text-transform: uppercase; color: #A2937E; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1934,10 +1934,9 @@
             
             let amountHtml;
             if (diffCurr) {
-                amountHtml = `<span class="amount-primary" style="color:#d97706">-${formatMoneyWithSymbol(t.from_amount, t.from_currency)}</span>`;
-                amountHtml += `<span class="amount-secondary" style="color:#059669">+${formatMoneyWithSymbol(t.to_amount, t.to_currency)}</span>`;
+                amountHtml = `<div>↗ ${formatMoneyWithSymbol(t.from_amount, t.from_currency)}</div><div>↘ ${formatMoneyWithSymbol(t.to_amount, t.to_currency)}</div>`;
             } else {
-                amountHtml = `<span style="color:#3C5A6E">${formatMoneyWithSymbol(t.from_amount, t.from_currency)}</span>`;
+                amountHtml = `${formatMoneyWithSymbol(t.from_amount, t.from_currency)}`;
             }
             
             const rateDisplay = diffCurr ? `<span class="rate-display">💱 1 ${t.from_currency} = ${(t.to_amount / t.from_amount).toFixed(4)} ${t.to_currency}</span>` : '';
@@ -1966,13 +1965,13 @@
                 <div class="t-cell xfer-ico" title="Transfer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h13M14 6l3 3-3 3"/><path d="M20 15H7M10 12l-3 3 3 3"/></svg></div>
                 <div class="payee-cell" title="${t.from_account_name} → ${t.to_account_name}">
                     <div class="payee-name" style="color:#3C5A6E;">${t.from_account_name}</div>
-                    <div class="cat-sub" style="color:#5E7C8E;text-transform:none;letter-spacing:.2px;font-size:11px;"><span style="color:#A2937E;">→</span> ${t.to_account_name}</div>
+                    <div class="payee-name" style="color:#3C5A6E;margin-top:1px;"><span style="color:#A2937E;font-weight:400;">→</span> ${t.to_account_name}</div>
                 </div>
                 <div class="t-cell ledger-note note-cell">
                     <span class="note-display" title="${t.note || ''}">${t.note || ''}</span>
                     ${rateDisplay}
                 </div>
-                <div class="t-cell t-amount ${diffCurr ? 'amount-cell' : ''}" style="color:#3C5A6E">${amountHtml}</div>
+                <div class="t-cell t-amount" style="color:#3C5A6E;line-height:1.35">${amountHtml}</div>
                 <div class="t-cell balance-cell-transfer">${balanceHtml}</div>
                 <div class="t-cell" style="text-align:right;color:#c9bda8">–</div>
                 <div class="mobile-detail">
