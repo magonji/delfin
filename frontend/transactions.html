@@ -101,7 +101,7 @@
         
         /* Filters and toolbar section */
         #filters {
-            display: flex; gap: 10px; margin-bottom: 2px; flex-wrap: wrap; align-items: center;
+            display: flex; gap: 10px; margin-bottom: 2px; flex-wrap: nowrap; align-items: center;
             background: transparent; padding: 12px 0 16px; border-top: 1px solid var(--hair); border-bottom: 1px solid var(--hair);
         }
         #filters input, #filters select, #filters button {
@@ -109,18 +109,21 @@
             font-size: 13px; background: var(--paper); color: var(--text); font-family: 'IBM Plex Sans', sans-serif;
             -webkit-appearance: none; appearance: none;
         }
-        #filters select { width: auto; min-width: 120px; max-width: 250px; flex-grow: 1; background: var(--paper) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%238A7D6C'/%3E%3C/svg%3E") no-repeat right 10px center; padding-right: 26px; cursor: pointer; }
-        #filters input[type="text"] { min-width: 180px; flex-grow: 2; }
-        #filters input[type="date"] { width: auto; color: #5A4E3C; }
+        /* Flexible fields (search + selects) share the free space and shrink to make
+           room when the bulk-edit actions expand. Date pickers and buttons stay fixed. */
+        #filters input[type="text"] { flex: 2 1 0; min-width: 64px; }
+        #filters select { flex: 1 1 0; min-width: 64px; background: var(--paper) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%238A7D6C'/%3E%3C/svg%3E") no-repeat right 10px center; padding-right: 26px; cursor: pointer; }
+        #filters input[type="date"] { flex: 0 0 auto; width: auto; color: #5A4E3C; }
+        .filter-actions { display: flex; gap: 5px; flex: 0 0 auto; }
         .filter-actions button:first-child { background: var(--btn-primary); color: #F6EFE3; border-color: var(--btn-primary); }
         .filter-actions button:last-child { background: transparent; border-color: transparent; color: var(--muted); }
-        .filter-actions { display: flex; gap: 5px; margin-left: auto; }
         #filterToggle { display: none; }
-        
+
         /* Bulk edit mode controls */
-        .bulk-controls { display: flex; align-items: center; gap: 5px; padding-left: 10px; border-left: 1px solid var(--border); margin-left: 5px; }
-        .bulk-actions-inline { display: flex; gap: 5px; max-width: 0; overflow: hidden; opacity: 0; transition: all 0.3s ease; }
-        .bulk-controls.active .bulk-actions-inline { max-width: 300px; opacity: 1; }
+        .bulk-controls { display: flex; align-items: center; gap: 5px; padding-left: 10px; border-left: 1px solid var(--border); margin-left: 2px; flex: 0 0 auto; }
+        .bulk-actions-inline { display: flex; gap: 5px; max-width: 0; overflow: hidden; opacity: 0; transition: max-width 0.3s ease, opacity 0.3s ease; }
+        .bulk-controls.active .bulk-actions-inline { max-width: 220px; opacity: 1; }
+        .btn-bulk-main, .btn-bulk-action { flex: 0 0 auto; white-space: nowrap; }
         .btn-bulk-main { background: var(--btn-primary) !important; color: white !important; border: none !important; }
         .btn-bulk-action { font-size: 12px; padding: 6px 10px !important; }
 
@@ -138,17 +141,17 @@
 
         /* Transaction table layout and styling */
         .transactions-wrapper { border: none; border-radius: 0; overflow: visible; }
-        .grid-layout { display: grid; grid-template-columns: 25px 88px 150px minmax(160px, 1.15fr) minmax(190px, 1.6fr) 120px 122px 122px; gap: 14px; align-items: center; }
+        .grid-layout { display: grid; grid-template-columns: 16px 88px 150px minmax(160px, 1.15fr) minmax(190px, 1.6fr) 120px 122px 122px; gap: 14px; align-items: center; }
         .transactions-list:not(.bulk-edit-mode) input[type="checkbox"] { visibility: hidden; }
         .transactions-header:not(.bulk-edit-mode) .t-cell:first-child { visibility: hidden; }
 
         .transactions-header {
-            background: var(--bg); padding: 13px 14px; border-bottom: 1.5px solid var(--btn-primary);
+            background: var(--bg); padding: 13px 26px 13px 8px; border-bottom: 1.5px solid var(--btn-primary);
             font-weight: 700; font-size: 10px; color: #6E6250; letter-spacing: 1.5px; text-transform: uppercase; font-family: 'IBM Plex Sans', sans-serif;
             position: sticky; top: 0; z-index: 10;
         }
         .transactions-list { max-height: 720px; overflow-y: auto; border-bottom: 1px solid var(--hair); }
-        .transaction-item { padding: 11px 14px; border-bottom: 1px solid var(--hair); font-size: 13.5px; transition: background 0.12s; background: transparent; min-height: 38px; }
+        .transaction-item { padding: 11px 26px 11px 8px; border-bottom: 1px solid var(--hair); font-size: 13.5px; transition: background 0.12s; background: transparent; min-height: 38px; }
         .transaction-item:nth-child(even) { background: #FBF4EA; }
         .transaction-item:hover { background-color: #F4EAD9 !important; }
         .transaction-item.selected { background-color: #F3E3D0 !important; border-bottom: 1px solid var(--border); }
@@ -163,8 +166,6 @@
         /* Ledger cell styles (editorial ledger) */
         .ledger-date { font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; color: #5A4E3C; }
         .ledger-acct { color: #6E6250; font-size: 12.5px; }
-        .xfer-ico { display: flex; align-items: center; justify-content: center; color: #3C5A6E; overflow: visible; }
-        .xfer-ico svg { width: 24px; height: 24px; }
         .payee-cell { min-width: 0; }
         .payee-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .cat-sub { position: relative; font-size: 10.5px; letter-spacing: .5px; text-transform: uppercase; color: #A2937E; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -552,12 +553,12 @@
 
         /* ── Responsive: Tablet ── */
         @media (max-width: 1100px) {
-            .grid-layout { grid-template-columns: 25px 65px 140px 160px minmax(120px, 1fr) 90px 100px 100px 60px; gap: 6px; }
+            .grid-layout { grid-template-columns: 16px 65px 140px 160px minmax(120px, 1fr) 90px 100px 100px 60px; gap: 6px; }
         }
 
         /* ── Responsive: Small tablet ── */
         @media (max-width: 900px) {
-            .grid-layout { grid-template-columns: 25px 65px 130px 1fr 80px 60px; gap: 6px; }
+            .grid-layout { grid-template-columns: 16px 65px 130px 1fr 80px 60px; gap: 6px; }
             /* Hide note, account balance, total balance columns */
             .grid-layout > :nth-child(5),
             .grid-layout > :nth-child(7),
@@ -566,7 +567,7 @@
             .transactions-header > :nth-child(7),
             .transactions-header > :nth-child(8) { display: none; }
             #filters { gap: 6px; }
-            #filters select { min-width: 100px; }
+            #filters input[type="text"], #filters select { min-width: 52px; }
         }
 
         /* ── Responsive: Mobile ── */
@@ -581,7 +582,7 @@
             #filterToggle { display: block; padding: 10px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; text-align: center; font-size: 14px; font-weight: 600; cursor: pointer; margin-bottom: 8px; }
             #filters { flex-direction: column; padding: 0; gap: 0; max-height: 0; overflow: hidden; border: none; background: none; transition: max-height 0.3s ease, padding 0.3s ease; }
             #filters.open { max-height: 500px; padding: 8px; gap: 6px; border: 1px solid var(--border); background: var(--panel); }
-            #filters input, #filters select { width: 100%; min-width: 0; max-width: 100%; font-size: 14px; margin-top: 6px; }
+            #filters input, #filters select { flex: 0 0 auto; width: 100%; min-width: 0; max-width: 100%; font-size: 14px; margin-top: 6px; }
             #filters input[type="date"] { width: 100%; }
             .filter-actions { margin-left: 0; width: 100%; justify-content: stretch; margin-top: 6px; }
             .filter-actions button { flex: 1; }
@@ -1962,7 +1963,7 @@
                     <span class="date-display">${dateStr}</span>
                     <span class="time-display">${timeStr}</span>
                 </div>
-                <div class="t-cell xfer-ico" title="Transfer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h13M14 6l3 3-3 3"/><path d="M20 15H7M10 12l-3 3 3 3"/></svg></div>
+                <div class="t-cell"></div>
                 <div class="payee-cell" title="${t.from_account_name} → ${t.to_account_name}">
                     <div class="payee-name" style="color:#3C5A6E;">${t.from_account_name}</div>
                     <div class="payee-name" style="color:#3C5A6E;margin-top:1px;"><span style="color:#A2937E;font-weight:400;">→</span> ${t.to_account_name}</div>
