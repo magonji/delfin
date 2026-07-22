@@ -1072,6 +1072,13 @@ function renderCategoriesList() {
     const grouped = {};
     const noParent = [];
 
+    // Names of categories that act as a parent for some subcategory. These
+    // parent categories are shown as group headers (with a "select all
+    // children" checkbox); they hold no transactions of their own, so we must
+    // NOT also list them as standalone leaves — that just adds dead entries
+    // that never change the chart.
+    const parentNames = new Set(state.categories.filter(c => c.parent).map(c => c.parent));
+
     state.categories.forEach(c => {
         if (term && !c.name.toLowerCase().includes(term) && !(c.parent && c.parent.toLowerCase().includes(term))) {
             return;
@@ -1082,7 +1089,7 @@ function renderCategoriesList() {
                 grouped[c.parent] = [];
             }
             grouped[c.parent].push(c);
-        } else {
+        } else if (!parentNames.has(c.name)) {
             noParent.push(c);
         }
     });
@@ -1349,7 +1356,7 @@ q('#txTo').onchange = txRangeChanged;
 q('#categoriesSearch').oninput = renderCategoriesList;
 q('#excludeSelectAll').onclick = () => { state.accounts.forEach(a => state.excludedAccountIds.add(a.id)); updateExcludeCount(); renderExcludeList(); loadNetworth(); };
 q('#excludeClear').onclick = () => { state.excludedAccountIds.clear(); updateExcludeCount(); renderExcludeList(); loadNetworth(); };
-q('#categoriesSelectAll').onclick = () => { state.categories.forEach(c => state.selectedCategoryIds.add(c.id)); renderCategoriesList(); loadCategoriesSeries(); };
+q('#categoriesSelectAll').onclick = () => { const parents = new Set(state.categories.filter(c => c.parent).map(c => c.parent)); state.categories.forEach(c => { if (!parents.has(c.name)) state.selectedCategoryIds.add(c.id); }); renderCategoriesList(); loadCategoriesSeries(); };
 q('#categoriesClear').onclick = () => { state.selectedCategoryIds.clear(); renderCategoriesList(); loadCategoriesSeries(); };
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDetailModal(); });
 
