@@ -87,6 +87,8 @@
         .split > * { min-width: 0; }
         .split > *:first-child { padding-right: 44px; }
         .split > *:last-child { padding-left: 44px; border-left: 1px solid var(--border); }
+        /* Kept in the stylesheet rather than inline so the responsive rules below can override it. */
+        .hero-split { grid-template-columns: 1.15fr 1fr; padding-top: 24px; align-items: start; }
         .sec-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-bottom: 14px; border-bottom: 1px solid var(--hair); }
         .sechead { margin: 0; font-family: 'Playfair Display', serif; font-size: 25px; font-weight: 800; padding-left: 15px; border-left: 3px solid var(--accent); }
         .card, .card .head, .card .content { display: block; }
@@ -162,6 +164,40 @@
         .expense-item .category { font-size: 11px; color: #A2937E; }
         .expense-item .amount { font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 13.5px; white-space: nowrap; }
 
+        /* Spending calendar */
+        .cal-wrap { padding-top: 18px; }
+        .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+        .cal-dow { font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); text-align: center; padding-bottom: 4px; }
+        .cal-cell { position: relative; min-height: clamp(54px, 9vw, 78px); border: 1px solid var(--hair); border-radius: 10px; padding: 6px 7px;
+            display: flex; flex-direction: column; justify-content: space-between; gap: 3px; background: var(--paper); cursor: pointer; text-align: left;
+            font: inherit; color: inherit; transition: border-color .15s; }
+        .cal-cell:hover { border-color: var(--border); }
+        .cal-cell.empty { border: none; background: transparent; cursor: default; }
+        .cal-cell.outside { border-style: dashed; background: transparent; }
+        .cal-cell.today { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+        .cal-cell.selected { border-color: var(--ink); border-style: solid; box-shadow: inset 0 0 0 1px var(--ink); }
+        .cal-cell .d { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; font-weight: 500; color: var(--muted); line-height: 1; }
+        .cal-cell.today .d { color: var(--accent); font-weight: 700; }
+        .cal-cell .amt { font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1; }
+        .cal-cell .amt.due { color: var(--yellow); }
+        .cal-marks { display: flex; gap: 3px; align-items: center; min-height: 6px; }
+        .cal-marks i { width: 6px; height: 6px; border-radius: 50%; display: block; }
+        .cal-marks .more { font-family: 'IBM Plex Mono', monospace; font-size: 9px; color: var(--muted); line-height: 1; }
+        .cal-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--hair);
+            font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--muted); }
+        .cal-legend span { display: inline-flex; align-items: center; gap: 5px; }
+        .cal-legend i { width: 9px; height: 9px; border-radius: 3px; display: inline-block; }
+        .cal-legend i.round { border-radius: 50%; width: 6px; height: 6px; }
+        .cal-detail { margin-top: 16px; border-top: 1px solid var(--hair); padding-top: 12px; }
+        .cal-detail .dhead { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+        .cal-detail .dhead .dlabel { font-family: 'Playfair Display', serif; font-size: 17px; font-weight: 700; }
+        .cal-detail .dhead .dtotal { font-family: 'IBM Plex Mono', monospace; font-size: 14px; font-weight: 600; }
+        @media (max-width: 640px) {
+            .cal-grid { gap: 4px; }
+            .cal-cell { padding: 4px; border-radius: 8px; }
+            .cal-cell .amt { font-size: 10.5px; }
+        }
+
         /* History */
         .history-item { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; border: none; border-bottom: 1px solid var(--hair); border-radius: 0; margin: 0; }
         .history-item .month { font-weight: 600; font-size: 13.5px; }
@@ -230,12 +266,16 @@
             .split { grid-template-columns: 1fr; }
             .split > *:first-child { padding-right: 0; }
             .split > *:last-child { padding-left: 0; border-left: none; border-top: 1px solid var(--border); padding-top: 34px; margin-top: 34px; }
-            .hero-split { gap: 0 !important; }
+            .hero-split { grid-template-columns: 1fr; gap: 0; }
         }
         @media (max-width: 640px) {
             header { padding: 12px 16px; padding-top: calc(12px + env(safe-area-inset-top)); }
             .brand .tag { display: none; }
             button, select, input, textarea { min-height: 40px; }
+            /* Keep the month stepper (‹ | month | ›) whole: it drops below the
+               heading when the row is too narrow, instead of breaking apart. */
+            .sec-head { flex-wrap: wrap; }
+            .sec-head .tools { flex-wrap: nowrap; }
             .budget-amount { font-size: 40px; }
             .sechead { font-size: 21px; }
             .stats-row { grid-template-columns: 1fr 1fr 1fr; }
@@ -290,7 +330,7 @@
                     <button class="lbtn" id="btnNextMonth" aria-label="Next month" style="height:28px;width:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor"><path d="M9 5l7 7-7 7z"/></svg></button>
                 </div>
             </div>
-            <div class="split hero-split" style="grid-template-columns:1.15fr 1fr;padding-top:24px;align-items:start;">
+            <div class="split hero-split">
                 <div>
                     <div class="budget-amount">
                         <span id="budgetDisplay">No budget set</span>
@@ -323,6 +363,27 @@
                         <div class="tm-row" id="tmSavingsRow"><span class="k">Savings (income − spent)</span><span class="v" id="savingsValue">–</span></div>
                     </div>
                 </div>
+            </div>
+        </section>
+
+        <!-- Spending Calendar -->
+        <section>
+            <div class="sec-head">
+                <h2 class="sechead">Calendar</h2>
+                <div id="calSummary" class="other-summary" style="display:none;border:none;padding:0;margin:0;"></div>
+            </div>
+            <div class="cal-wrap">
+                <div class="cal-grid" id="calGrid"></div>
+                <div id="calNote" style="display:none;margin-top:10px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);"></div>
+                <div class="cal-legend">
+                    <span><i style="background:rgba(60,122,87,.35)"></i>On pace</span>
+                    <span><i style="background:rgba(198,137,63,.4)"></i>Up to 2× pace</span>
+                    <span><i style="background:rgba(176,64,46,.4)"></i>Over 2× pace</span>
+                    <span><i class="round" style="background:var(--green)"></i>Bill paid</span>
+                    <span><i class="round" style="background:var(--yellow)"></i>Bill due</span>
+                    <span>Colour tracks day-to-day spending only — bills are excluded.</span>
+                </div>
+                <div class="cal-detail" id="calDetail" style="display:none;"></div>
             </div>
         </section>
 
@@ -403,6 +464,12 @@
                 <div class="info-section">
                     <strong>Other expenses</strong>
                     <div class="info-row">All transactions this month that didn't match a recurring expense, grouped by week.</div>
+                </div>
+                <div class="info-section">
+                    <strong>Calendar</strong>
+                    <div class="info-row">Each cell shows what was spent that day. Future days show what's still due instead.</div>
+                    <div class="info-row" style="margin-top: 6px;">The <b>pace target</b> is your budget minus recurring and planned expenses, spread evenly across the month — what you can spend day to day. The colour of each past day compares its day-to-day spending against that target: green on pace, ochre up to twice the target, red beyond that. Bills are excluded from the colour, since they're already set aside.</div>
+                    <div class="info-row" style="margin-top: 6px;">Dots mark recurring bills falling on that day — green if paid, ochre if still due. Click any day to see its detail.</div>
                 </div>
             </div>
         </div>
@@ -555,7 +622,8 @@
             baseCurrency: 'GBP',
             payees: [],
             categories: [],
-            progress: null
+            progress: null,
+            selectedDay: null
         };
 
         // Helpers
@@ -564,6 +632,11 @@
 
         const fmtMoney = (n, c = 'GBP') => new Intl.NumberFormat('en-GB', {
             style: 'currency', currency: c, maximumFractionDigits: 2
+        }).format(n || 0);
+
+        // Rounded to the nearest unit — used where space is tight (calendar cells).
+        const fmtMoney0 = (n, c = 'GBP') => new Intl.NumberFormat('en-GB', {
+            style: 'currency', currency: c, maximumFractionDigits: 0
         }).format(n || 0);
 
         async function api(path, opts = {}) {
@@ -726,6 +799,7 @@
                 renderRecurringList(data.recurring_expenses);
                 renderPlannedList(data.planned_expenses);
                 renderOtherExpenses(data.other_expenses);
+                renderCalendar(data);
             } catch (e) {
                 console.error('Error loading progress:', e);
                 // Show empty state
@@ -743,6 +817,10 @@
                 q('#recurringList').innerHTML = '<div class="empty-state">No recurring expenses</div>';
                 q('#plannedList').innerHTML = '<div class="empty-state">No planned expenses</div>';
                 q('#otherExpensesList').innerHTML = '<div class="empty-state">No spending data</div>';
+                q('#calGrid').innerHTML = '';
+                q('#calNote').style.display = 'none';
+                q('#calSummary').style.display = 'none';
+                q('#calDetail').style.display = 'none';
             }
         }
 
@@ -976,6 +1054,213 @@
             q('#otherSummary').style.display = 'flex';
             q('#otherCount').textContent = expenses.length;
             q('#otherTotal').textContent = fmtMoney(total, state.baseCurrency);
+        }
+
+        // ── Spending calendar ──────────────────────────────────────────────
+        // Day-by-day view of the month: heat tint by how the day's discretionary
+        // spending compares to the pace target, bills placed on their due day.
+        const CAL_TONES = {
+            green: '60,122,87',
+            yellow: '198,137,63',
+            red: '176,64,46'
+        };
+
+        function buildCalendarModel(data) {
+            const [y, m] = state.currentMonth.split('-').map(Number);
+            const daysInMonth = new Date(y, m, 0).getDate();
+            const todayISO = new Date().toISOString().slice(0, 10);
+            const currency = data.base_currency || state.baseCurrency;
+
+            // Discretionary spending per day (recurring bills are matched away by the
+            // backend, so `other_expenses` is exactly the non-bill spending).
+            const days = {};
+            const dayKey = (d) => `${state.currentMonth}-${String(d).padStart(2, '0')}`;
+            for (let d = 1; d <= daysInMonth; d++) {
+                days[dayKey(d)] = { date: dayKey(d), variable: 0, bills: 0, expenses: [], recurring: [] };
+            }
+            for (const e of (data.other_expenses || [])) {
+                const day = days[e.date];
+                if (!day) continue;
+                day.variable += e.converted_amount || e.amount || 0;
+                day.expenses.push(e);
+            }
+
+            // Bills land on their day of the month; those without one are listed apart.
+            let billsTotal = 0, unscheduled = [];
+            for (const r of (data.recurring_expenses || [])) {
+                if (!r.applies_this_month || r.skipped_this_month) continue;
+                const amount = r.converted_amount || r.amount || 0;
+                billsTotal += amount;
+                const d = r.day_of_month;
+                if (!d) { unscheduled.push(r); continue; }
+                const day = days[dayKey(Math.min(d, daysInMonth))];
+                if (!day) continue;
+                day.recurring.push(r);
+                day.bills += amount;
+            }
+
+            // Pace target: what's left for day-to-day spending once bills and planned
+            // one-offs are set aside, spread evenly across the month.
+            const plannedTotal = (data.planned_expenses || [])
+                .reduce((s, p) => s + (p.converted_amount || p.amount || 0), 0);
+            const budget = data.budget?.amount || 0;
+            const dailyTarget = budget > 0
+                ? Math.max(0, budget - billsTotal - plannedTotal) / daysInMonth
+                : 0;
+
+            return { y, m, daysInMonth, todayISO, currency, days, dailyTarget, unscheduled };
+        }
+
+        // Tint tone + strength for a past day, from its spend relative to the pace target.
+        function calTone(variable, dailyTarget) {
+            if (variable <= 0) return null;
+            if (dailyTarget <= 0) return { tone: 'red', alpha: .3 };
+            const ratio = variable / dailyTarget;
+            const tone = ratio <= 1 ? 'green' : ratio <= 2 ? 'yellow' : 'red';
+            const alpha = Math.min(.5, .12 + Math.min(ratio, 3) / 3 * .38);
+            return { tone, alpha };
+        }
+
+        function renderCalendar(data) {
+            const grid = q('#calGrid');
+            const model = buildCalendarModel(data);
+            const { daysInMonth, todayISO, currency, days, dailyTarget } = model;
+
+            // A selection from another month is no longer meaningful.
+            if (state.selectedDay && !state.selectedDay.startsWith(state.currentMonth)) {
+                state.selectedDay = null;
+            }
+
+            const dows = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+            const firstDow = (new Date(model.y, model.m - 1, 1).getDay() + 6) % 7; // Monday-based
+            const cells = dows.map(d => `<div class="cal-dow">${d}</div>`);
+            for (let i = 0; i < firstDow; i++) cells.push('<div class="cal-cell empty"></div>');
+
+            let spentToDate = 0, elapsedDays = 0;
+
+            for (let d = 1; d <= daysInMonth; d++) {
+                const day = days[`${state.currentMonth}-${String(d).padStart(2, '0')}`];
+                const isToday = day.date === todayISO;
+                const isFuture = day.date > todayISO;
+                if (!isFuture) { spentToDate += day.variable; elapsedDays++; }
+
+                const classes = ['cal-cell'];
+                if (isFuture) classes.push('outside');
+                if (isToday) classes.push('today');
+                if (state.selectedDay === day.date) classes.push('selected');
+
+                let style = '';
+                if (!isFuture) {
+                    const t = calTone(day.variable, dailyTarget);
+                    if (t) style = `background:rgba(${CAL_TONES[t.tone]},${t.alpha.toFixed(2)})`;
+                }
+
+                // Past/today show what was actually spent; future days show what's due.
+                const dueAhead = day.recurring.filter(r => !r.paid_this_month)
+                    .reduce((s, r) => s + (r.converted_amount || r.amount || 0), 0);
+                let amountHtml = '';
+                if (!isFuture && (day.variable + day.bills) > 0) {
+                    amountHtml = `<span class="amt">${fmtMoney0(day.variable + day.bills, currency)}</span>`;
+                } else if (isFuture && dueAhead > 0) {
+                    amountHtml = `<span class="amt due">${fmtMoney0(dueAhead, currency)}</span>`;
+                }
+
+                const marks = day.recurring.slice(0, 3).map(r =>
+                    `<i style="background:var(--${r.paid_this_month ? 'green' : 'yellow'})"></i>`).join('');
+                const extra = day.recurring.length > 3 ? `<span class="more">+${day.recurring.length - 3}</span>` : '';
+
+                const titleBits = [];
+                if (day.variable > 0) titleBits.push(`Spending ${fmtMoney(day.variable, currency)}`);
+                for (const r of day.recurring) {
+                    titleBits.push(`${r.paid_this_month ? '✓' : '○'} ${r.name} ${fmtMoney(r.converted_amount || r.amount, currency)}`);
+                }
+                const title = titleBits.join(' · ').replace(/"/g, '&quot;');
+
+                cells.push(`
+                    <button type="button" class="${classes.join(' ')}" style="${style}"
+                            onclick="selectCalDay('${day.date}')" title="${title}">
+                        <span class="d">${d}</span>
+                        <span class="cal-marks">${marks}${extra}</span>
+                        ${amountHtml}
+                    </button>`);
+            }
+
+            grid.innerHTML = cells.join('');
+
+            // Bills without a day of the month can't be placed on the grid.
+            const note = q('#calNote');
+            if (model.unscheduled.length) {
+                note.style.display = 'block';
+                note.textContent = `Not on the calendar (no day set): ${model.unscheduled.map(r => r.name).join(', ')}`;
+            } else {
+                note.style.display = 'none';
+            }
+
+            // Pace summary: how the month is tracking against the even-spread target.
+            const summary = q('#calSummary');
+            if (dailyTarget > 0 && elapsedDays > 0) {
+                const expected = dailyTarget * elapsedDays;
+                const diff = expected - spentToDate;
+                const label = diff >= 0 ? 'under pace' : 'over pace';
+                summary.style.display = 'flex';
+                summary.innerHTML = `
+                    <span>Pace <strong>${fmtMoney(dailyTarget, currency)}/day</strong></span>
+                    <span style="color:var(--${diff >= 0 ? 'green' : 'red'})">
+                        <strong style="color:inherit">${fmtMoney(Math.abs(diff), currency)}</strong> ${label}
+                    </span>`;
+            } else if (dailyTarget > 0) {
+                summary.style.display = 'flex';
+                summary.innerHTML = `<span>Pace <strong>${fmtMoney(dailyTarget, currency)}/day</strong></span>`;
+            } else {
+                summary.style.display = 'none';
+            }
+
+            renderCalDetail(model);
+        }
+
+        function selectCalDay(date) {
+            state.selectedDay = state.selectedDay === date ? null : date;
+            if (state.progress) renderCalendar(state.progress);
+        }
+
+        function renderCalDetail(model) {
+            const box = q('#calDetail');
+            const day = state.selectedDay ? model.days[state.selectedDay] : null;
+            if (!day) { box.style.display = 'none'; box.innerHTML = ''; return; }
+
+            const currency = model.currency;
+            const label = new Date(day.date + 'T00:00:00')
+                .toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+            const total = day.variable + day.bills;
+
+            const bills = day.recurring.map(r => `
+                <div class="expense-item">
+                    <span class="date">${r.paid_this_month ? '✓ paid' : '○ due'}</span>
+                    <div class="info">
+                        <div class="name">${r.name}</div>
+                        <div class="category">${r.category_name || 'Recurring'}</div>
+                    </div>
+                    <span class="amount">${fmtMoney(r.converted_amount || r.amount, currency)}</span>
+                </div>`).join('');
+
+            const items = day.expenses.map(e => `
+                <div class="expense-item">
+                    <span class="date"></span>
+                    <div class="info">
+                        <div class="name">${e.payee_name || e.note || 'Unknown'}</div>
+                        ${e.category_name ? `<div class="category">${e.category_name}</div>` : ''}
+                    </div>
+                    <span class="amount">${fmtMoney(e.converted_amount || e.amount, currency)}</span>
+                </div>`).join('');
+
+            box.style.display = 'block';
+            box.innerHTML = `
+                <div class="dhead">
+                    <span class="dlabel">${label}</span>
+                    <span class="dtotal">${fmtMoney(total, currency)}</span>
+                </div>
+                ${bills}${items}
+                ${!bills && !items ? '<div class="empty-state" style="padding:16px">Nothing on this day</div>' : ''}`;
         }
 
         async function loadBudgetHistory() {
