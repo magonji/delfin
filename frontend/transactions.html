@@ -500,17 +500,12 @@
         .transactions-header.bulk-active .transactions-header-bulk { visibility: visible; }
         .transaction-item.disabled { opacity: 0.4; pointer-events: none; cursor: not-allowed; }
 
-        /* Floating Action Button */
-        .fab-container {
-            position: fixed; bottom: 30px; right: 30px;
-            display: flex; flex-direction: row; gap: 12px; z-index: 900;
-        }
-        .fab-button {
-            border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;
-            font-family: 'IBM Plex Sans', sans-serif; transition: transform 0.18s ease, box-shadow 0.18s ease;
-        }
-        .fab-container .fab-button:first-child { width: 54px; height: 54px; border-radius: 50%; background: var(--chip, #F1E7D6); color: #3A342C; font-size: 22px; box-shadow: 0 10px 24px rgba(40,28,14,.24); }
-        .fab-container .fab-button:last-child { width: 60px; height: 60px; border-radius: 50%; background: #2B2621; color: #fff; font-size: 30px; font-weight: 300; box-shadow: 0 12px 30px rgba(40,28,14,.4); }
+        /* Floating actions (unified with the dashboard) */
+        .fab-container { position: fixed; bottom: 28px; right: 28px; display: flex; gap: 12px; z-index: 60; }
+        .fab-button { border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;
+            transition: transform .18s ease, box-shadow .18s ease; }
+        .fab-button:first-child { width: 54px; height: 54px; border-radius: 50%; background: var(--chip, #F1E7D6); color: #3A342C; font-size: 22px; box-shadow: 0 10px 24px rgba(40,28,14,.24); }
+        .fab-button:last-child { width: 60px; height: 60px; border-radius: 50%; background: #2B2621; color: #fff; font-size: 30px; font-weight: 300; box-shadow: 0 12px 30px rgba(40,28,14,.4); }
         .fab-button:hover { transform: translateY(-3px) scale(1.05); }
 
         /* Badge for base currency display */
@@ -682,10 +677,6 @@
 
             /* Transaction list height */
             .transactions-list { max-height: calc(100vh - 250px); }
-
-            /* FAB buttons */
-            .fab-container { bottom: 20px; right: 15px; gap: 10px; }
-            .fab-button { width: 60px; height: 60px; font-size: 28px; }
 
             /* Bulk edit bar */
             .bulk-edit-header { flex-wrap: wrap; padding: 10px 15px; }
