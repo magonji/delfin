@@ -63,6 +63,8 @@
         .nav-links a { font-size: 13px; font-weight: 600; color: var(--muted); padding: 7px 12px; border-bottom: 2px solid transparent; text-decoration: none; }
         .nav-links a:hover { color: var(--ink); }
         .nav-links a.active { color: var(--ink); border-bottom-color: var(--accent); pointer-events: none; }
+        /* Action items shown only inside the burger menu on small screens. */
+        .nav-action { display: none; cursor: pointer; }
         .burger { display: none; background: transparent; border: none; font-size: 22px; cursor: pointer; color: var(--ink); padding: 0 4px; }
         .icon-btn { background: transparent; border: none; padding: 4px; display: flex; align-items: center; justify-content: center; color: var(--muted); cursor: pointer; }
         .icon-btn svg { width: 16px; height: 16px; display: block; }
@@ -85,6 +87,9 @@
             .nav-links a { padding: 10px 12px; border-bottom: none; border-radius: 8px; }
             .nav-links a.active { background: var(--field); border-bottom: none; }
             .burger { display: block; }
+            .nav-action { display: block; }
+            .nav-action.nav-div { margin-top: 6px; padding-top: 12px; border-top: 1px solid var(--hair); }
+            .nav-right > .help-icon, .nav-right .tip-wrap, .nav-right > #btnLogout { display: none; }
         }
     
         /* Header toolbar controls and buttons */
@@ -549,7 +554,7 @@
         /* Navigation (nav-links live in the header block above) */
         .dropdown { position: relative; display: inline-flex; }
 
-        .footer { opacity: 0.7; font-size: 12px; text-align: center; margin-top: auto; padding: 104px 0 10px; font-family: 'Playfair Display', serif; }
+        .footer { text-align: center; margin-top: auto; padding: 104px 0 10px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 1px; color: #A99A85; }
 
         /* ── Responsive: Tablet ── */
         @media (max-width: 1100px) {
@@ -716,6 +721,9 @@
                     <a href="budget.html">Budget</a>
                     <a href="loans.html">Loans</a>
                     <a href="tools.html">Tools</a>
+                    <a href="#" class="nav-action nav-div" onclick="this.closest('.dropdown').classList.remove('open'); document.getElementById('btnRefresh').click(); return false;">Refresh data</a>
+                    <a href="#" class="nav-action" onclick="this.closest('.dropdown').classList.remove('open'); openModal('shortcutsModal'); return false;">Keyboard shortcuts</a>
+                    <a href="#" class="nav-action" onclick="document.getElementById('btnLogout').click(); return false;">Log out</a>
                 </nav>
             </div>
             <span class="help-icon icon-btn" onclick="openModal('shortcutsModal')" title="Keyboard shortcuts" aria-label="Keyboard shortcuts">ⓘ</span>
@@ -1086,7 +1094,7 @@
         </div>
     </div>
 
-    <div class="footer">Delfin · balances shown in GBP at historical rates</div>
+    <div class="footer" id="footerNote">Delfin · balances shown in GBP at historical rates</div>
 
     <script>
         const API_URL = (localStorage.getItem('delfin_api') || (location.pathname.startsWith('/app') ? location.origin : 'http://localhost:8422')).replace(/\/$/, '');
@@ -1687,6 +1695,8 @@
             try {
                 const s = await (await fetch(`${API_URL}/transactions/summary?${currentFilterParams().toString()}`)).json();
                 const cur = s.base_currency || 'GBP';
+                const footer = document.getElementById('footerNote');
+                if (footer) footer.textContent = `Delfin · balances shown in ${cur} at historical rates`;
                 document.getElementById('sumCount').textContent = (s.count ?? 0).toLocaleString('en-GB');
                 document.getElementById('sumIn').textContent = formatMoneyWithSymbol(s.money_in ?? 0, cur);
                 document.getElementById('sumOut').textContent = formatMoneyWithSymbol(s.money_out ?? 0, cur);

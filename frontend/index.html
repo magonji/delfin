@@ -47,6 +47,8 @@
         .nav-links a { font-size: 13px; font-weight: 600; color: var(--muted); padding: 7px 12px; border-bottom: 2px solid transparent; }
         .nav-links a:hover { color: var(--text); text-decoration: none; }
         .nav-links a.active { color: var(--text); border-bottom-color: var(--red); }
+        /* Action items shown only inside the burger menu on small screens. */
+        .nav-action { display: none; cursor: pointer; }
         .burger { display: none; background: transparent; border: none; font-size: 22px; cursor: pointer; color: var(--text); padding: 0 4px; }
         .chip-btn { background: var(--chip); border: none; border-radius: 8px; height: 30px; padding: 0 12px;
             font-family: 'Playfair Display', serif; font-size: 13px; font-weight: 500; color: #3A342C; cursor: pointer; white-space: nowrap; }
@@ -148,8 +150,12 @@
         .list .row .rank { font-family: 'Playfair Display', serif; font-size: 15px; font-weight: 800; color: var(--red); width: 20px; }
         .list .row strong { font-weight: 600; font-size: 13.5px; }
         .list .row .muted { color: var(--muted); font-size: 11px; }
-        .row--clickable { cursor: pointer; border-radius: 8px; }
-        .row--clickable:hover { background: #F3E9DA; }
+        /* Horizontal padding + matching negative margin: the hover rectangle
+           gets breathing room around the text while the text stays aligned
+           with the wall (same as the non-clickable rows). */
+        .list .row--clickable { cursor: pointer; border-radius: 8px;
+            margin: 0 -10px; padding-left: 10px; padding-right: 10px; }
+        .list .row--clickable:hover { background: #F3E9DA; }
         .right { text-align: right; white-space: nowrap; }
         .amt { font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 14px; }
         .date { color: var(--muted); font-size: 10.5px; }
@@ -234,6 +240,9 @@
             .nav-links a { padding: 10px 12px; border-bottom: none; border-radius: 8px; }
             .nav-links a.active { background: var(--chip); border-bottom: none; }
             .burger { display: block; }
+            .nav-action { display: block; }
+            .nav-action.nav-div { margin-top: 6px; padding-top: 12px; border-top: 1px solid var(--hair); }
+            .nav-right .tip-wrap, .nav-right > #btnLogout { display: none; }
         }
         @media (max-width: 640px) {
             header { padding: 12px 16px; padding-top: calc(12px + env(safe-area-inset-top)); }
@@ -268,6 +277,8 @@
                     <a href="budget.html">Budget</a>
                     <a href="loans.html">Loans</a>
                     <a href="tools.html">Tools</a>
+                    <a href="#" class="nav-action nav-div" onclick="this.closest('.dropdown').classList.remove('open'); document.getElementById('btnRefresh').click(); return false;">Refresh data</a>
+                    <a href="#" class="nav-action" onclick="document.getElementById('btnLogout').click(); return false;">Log out</a>
                 </nav>
             </div>
             <span class="tip-wrap">
@@ -298,7 +309,7 @@
                 <h2 class="sec-title">Net Worth Evolution</h2>
                 <div class="tools">
                     <select id="nwPeriod"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly" selected>Monthly</option></select>
-                    <select id="nwRange"><option value="all">All time</option><option value="last60">5 years</option><option value="last24">2 years</option><option value="last12">Last year</option><option value="last6">Last 6 months</option><option value="last3">Last 3 months</option><option value="last1">Last month</option><option value="custom">Custom range…</option></select>
+                    <select id="nwRange"><option value="all">All time</option></select>
                     <span id="nwCustom" class="custom-range" style="display:none;"><input type="date" id="nwFrom" title="From"><input type="date" id="nwTo" title="To"></span>
                     <div class="dropdown" id="excludeDropdown">
                         <button class="chip-btn" id="excludeBtn">Exclude <span class="count" id="excludeCount" style="display:none">0</span> ▾</button>
@@ -355,9 +366,9 @@
             <div class="head-row">
                 <h2 class="sec-title">Monthly Category Spend</h2>
                 <div class="tools">
-                    <button id="btnPrevMonth" class="nav-mini" aria-label="Previous month"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+                    <button id="btnPrevMonth" class="nav-mini" aria-label="Previous month"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M15 5L8 12l7 7z"/></svg></button>
                     <select id="selectMonth"></select>
-                    <button id="btnNextMonth" class="nav-mini" aria-label="Next month"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></button>
+                    <button id="btnNextMonth" class="nav-mini" aria-label="Next month"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 5l7 7-7 7z"/></svg></button>
                     <select id="selectViewMode">
                         <option value="top">Top expenses</option>
                         <option value="category">By category</option>
@@ -389,7 +400,7 @@
                 <h2 class="sec-title">Category Spending Trend</h2>
                 <div class="tools tools-trend">
                     <select id="catPeriod"><option value="monthly" selected>Monthly</option><option value="weekly">Weekly</option><option value="daily">Daily</option></select>
-                    <select id="catRange"><option value="last12" selected>Last year</option><option value="last6">Last 6 months</option><option value="last3">Last 3 months</option><option value="last1">Last month</option><option value="all">All time</option><option value="custom">Custom range…</option></select>
+                    <select id="catRange"><option value="last12">Last year</option></select>
                     <span id="catCustom" class="custom-range" style="display:none;"><input type="date" id="catFrom" title="From"><input type="date" id="catTo" title="To"></span>
                     <div class="dropdown" id="categoriesDropdown">
                         <button class="chip-btn" id="categoriesBtn">Select categories <span class="count" id="categoriesCount">0</span> ▾</button>
@@ -412,7 +423,8 @@
                     <h2 class="sec-title" id="topPayeesTitle">Top Payees</h2>
                     <div class="tools">
                         <select id="payeeType"><option value="payees" selected>Payees</option><option value="locations">Locations</option></select>
-                        <select id="payeeRange"><option value="last12" selected>Last year</option><option value="last6">Last 6 months</option><option value="last3">Last 3 months</option><option value="last1">Last month</option><option value="all">All time</option></select>
+                        <select id="payeeRange"><option value="last12">Last year</option></select>
+                        <span id="payeeCustom" class="custom-range" style="display:none;"><input type="date" id="payeeFrom" title="From"><input type="date" id="payeeTo" title="To"></span>
                     </div>
                 </div>
                 <div id="topPayees" class="list"></div>
@@ -422,14 +434,15 @@
                     <h2 class="sec-title" id="topTxTitle">Largest Expenses</h2>
                     <div class="tools">
                         <select id="txType"><option value="expenses" selected>Expenses</option><option value="income">Income</option></select>
-                        <select id="txRange"><option value="last12" selected>Last year</option><option value="last6">Last 6 months</option><option value="last3">Last 3 months</option><option value="last1">Last month</option><option value="all">All time</option></select>
+                        <select id="txRange"><option value="last12">Last year</option></select>
+                        <span id="txCustom" class="custom-range" style="display:none;"><input type="date" id="txFrom" title="From"><input type="date" id="txTo" title="To"></span>
                     </div>
                 </div>
                 <div id="topTx" class="list"></div>
             </div>
         </div>
 
-        <div class="footer">Delfin · figures converted to GBP at historical rates</div>
+        <div class="footer" id="footerNote">Delfin · figures converted to GBP at historical rates</div>
     </div>
 
     <div id="detailModal" class="modal" onclick="if(event.target===this)closeDetailModal()">
@@ -537,16 +550,16 @@ function configureAxisToggle(btnSelector, isFull, values) {
     return yScale;
 }
 
-// Convert date range key to from/to dates
+// Convert date range key to from/to dates. Keys: 'all', 'ytd', or 'lastNN'
+// where NN is a number of months (e.g. last6, last12, last24, last60, last120).
 function rangeFor(key) {
     const today = new Date();
-    let from = null;
-    if (key !== 'all') {
-        from = new Date(today);
-        const months = parseInt(key.replace('last', ''));
-        from.setMonth(from.getMonth() - months);
-    }
-    return { from: from?.toISOString().slice(0, 10), to: key !== 'all' ? today.toISOString().slice(0, 10) : null };
+    const todayStr = today.toISOString().slice(0, 10);
+    if (key === 'all') return { from: null, to: null };
+    if (key === 'ytd') return { from: `${today.getFullYear()}-01-01`, to: todayStr };
+    const from = new Date(today);
+    from.setMonth(from.getMonth() - parseInt(key.replace('last', '')));
+    return { from: from.toISOString().slice(0, 10), to: todayStr };
 }
 
 // Earliest available date (first day of the oldest month with data) .. today.
@@ -580,6 +593,40 @@ function setupCustomRange(selectId, wrapId, fromId, toId) {
     if (f.value) t.min = f.value;
     if (t.value) f.max = t.value;
     return true;
+}
+
+// Years of history available (oldest month with data .. today).
+function dataYearsSpan() {
+    const b = dataDateBounds();
+    if (!b.min) return 0;
+    return (new Date(b.max) - new Date(b.min)) / (365.25 * 24 * 3600 * 1000);
+}
+
+// The unified <option> list shared by every date-range menu on the page.
+// Multi-year presets only appear when there's enough history for them.
+function rangeOptionsHtml() {
+    const years = dataYearsSpan();
+    const opts = [['all', 'All time']];
+    if (years >= 10) opts.push(['last120', 'Last 10 years']);
+    if (years >= 5)  opts.push(['last60', 'Last 5 years']);
+    if (years >= 2)  opts.push(['last24', 'Last 2 years']);
+    opts.push(['last12', 'Last year'], ['ytd', 'YTD'],
+              ['last6', 'Last 6 months'], ['last3', 'Last 3 months'],
+              ['last1', 'Last month'], ['custom', 'Custom range…']);
+    return opts.map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+}
+
+// Populate every range menu with the unified options, keeping each menu's
+// current selection when it's still valid (otherwise its default).
+function applyUnifiedRanges() {
+    const html = rangeOptionsHtml();
+    [['#nwRange', 'all'], ['#catRange', 'last12'], ['#payeeRange', 'last12'], ['#txRange', 'last12']].forEach(([sel, def]) => {
+        const el = q(sel);
+        if (!el) return;
+        const prev = el.value;
+        el.innerHTML = html;
+        el.value = [...el.options].some(o => o.value === prev) ? prev : def;
+    });
 }
 
 // ---- KPI "vs last year" deltas ----
@@ -627,6 +674,8 @@ function renderTxDelta() {
 async function loadSummary() {
     let sum = cacheGet('cache_summary') || await api('/dashboard/summary').then(d => { cacheSet('cache_summary', d); return d; });
     state.baseCurrency = sum.base_currency || 'GBP';
+    const footer = q('#footerNote');
+    if (footer) footer.textContent = `Delfin · figures converted to ${state.baseCurrency} at historical rates`;
 
     const setKPI = (id, val, isMoney = false) => {
         const el = q(id);
@@ -1153,12 +1202,12 @@ async function loadCategoriesSeries() {
 
     const cacheKey = `cache_catseries_${period}_${from}_${to}_${catIds}`;
     const data = cacheGet(cacheKey) || await api(`/dashboard/categories/${period}?${ps}`).then(d => { cacheSet(cacheKey, d); return d; });
-    const datasets = Object.entries(data.categories).map(([name, vals], i) => ({ label: name, data: vals, borderColor: colour(i), backgroundColor: colour(i), tension: 0.3, borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, fill: false }));
+    const datasets = Object.entries(data.categories).map(([name, vals], i) => ({ label: name, data: vals, backgroundColor: colour(i), borderColor: colour(i), borderWidth: 0, maxBarThickness: 46 }));
 
     renderChart('#categoriesChart', {
-        type: 'line',
+        type: 'bar',
         data: { labels: data.periods, datasets },
-        options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, border: { color: CHART_AXIS } }, y: { grid: { color: CHART_HAIR }, border: { display: false } } } }
+        options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { stacked: true, grid: { display: false }, border: { color: CHART_AXIS } }, y: { stacked: true, grid: { color: CHART_HAIR }, border: { display: false } } } }
     }, '_catChart');
 
     q('#categoriesLegend').innerHTML = datasets.map((ds) => `<div><span class="dot" style="background:${ds.borderColor}"></span> ${esc(ds.label)}</div>`).join('');
@@ -1166,7 +1215,9 @@ async function loadCategoriesSeries() {
 
 // Load top payees/locations or transactions
 async function loadTopList(url, listId, isTx = false) {
-    const { from, to } = rangeFor(q(isTx ? '#txRange' : '#payeeRange').value);
+    const { from, to } = isTx
+        ? resolveRange('#txRange', '#txFrom', '#txTo')
+        : resolveRange('#payeeRange', '#payeeFrom', '#payeeTo');
     const txType = isTx ? q('#txType').value : 'expenses';
     const payeeType = !isTx ? q('#payeeType').value : 'payees';
     const ps = new URLSearchParams({ limit: '20' });
@@ -1286,9 +1337,15 @@ q('#catRange').onchange = catRangeChanged;
 q('#catFrom').onchange = catRangeChanged;
 q('#catTo').onchange = catRangeChanged;
 q('#payeeType').onchange = () => loadTopList('/dashboard/top-payees', 'topPayees');
-q('#payeeRange').onchange = () => loadTopList('/dashboard/top-payees', 'topPayees');
+const payeeRangeChanged = () => { setupCustomRange('#payeeRange', '#payeeCustom', '#payeeFrom', '#payeeTo'); loadTopList('/dashboard/top-payees', 'topPayees'); };
+q('#payeeRange').onchange = payeeRangeChanged;
+q('#payeeFrom').onchange = payeeRangeChanged;
+q('#payeeTo').onchange = payeeRangeChanged;
 q('#txType').onchange = () => loadTopList('/dashboard/top-individual-expenses', 'topTx', true);
-q('#txRange').onchange = () => loadTopList('/dashboard/top-individual-expenses', 'topTx', true);
+const txRangeChanged = () => { setupCustomRange('#txRange', '#txCustom', '#txFrom', '#txTo'); loadTopList('/dashboard/top-individual-expenses', 'topTx', true); };
+q('#txRange').onchange = txRangeChanged;
+q('#txFrom').onchange = txRangeChanged;
+q('#txTo').onchange = txRangeChanged;
 q('#categoriesSearch').oninput = renderCategoriesList;
 q('#excludeSelectAll').onclick = () => { state.accounts.forEach(a => state.excludedAccountIds.add(a.id)); updateExcludeCount(); renderExcludeList(); loadNetworth(); };
 q('#excludeClear').onclick = () => { state.excludedAccountIds.clear(); updateExcludeCount(); renderExcludeList(); loadNetworth(); };
@@ -1308,6 +1365,10 @@ async function init() {
             loadAvailableMonths(),
             loadBalanceKpis()
         ]);
+
+        // state.months is now loaded, so we know how much history exists:
+        // rebuild every date-range menu with the unified option set.
+        applyUnifiedRanges();
 
         await loadYearlyTrendAll();
 

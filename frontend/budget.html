@@ -42,6 +42,8 @@
         .nav-links a { font-size: 13px; font-weight: 600; color: var(--muted); padding: 7px 12px; border-bottom: 2px solid transparent; text-decoration: none; }
         .nav-links a:hover { color: var(--ink); }
         .nav-links a.active { color: var(--ink); border-bottom-color: var(--accent); pointer-events: none; }
+        /* Action items shown only inside the burger menu on small screens. */
+        .nav-action { display: none; cursor: pointer; }
         .burger { display: none; background: transparent; border: none; font-size: 22px; cursor: pointer; color: var(--ink); padding: 0 4px; }
         .icon-btn { background: transparent; border: none; padding: 4px; display: flex; align-items: center; justify-content: center; color: var(--muted); cursor: pointer; }
         .icon-btn svg { width: 16px; height: 16px; display: block; }
@@ -65,6 +67,9 @@
             .nav-links a { padding: 10px 12px; border-bottom: none; border-radius: 8px; }
             .nav-links a.active { background: var(--field); border-bottom: none; }
             .burger { display: block; }
+            .nav-action { display: block; }
+            .nav-action.nav-div { margin-top: 6px; padding-top: 12px; border-top: 1px solid var(--hair); }
+            .nav-right .tip-wrap, .nav-right > #btnLogout { display: none; }
         }
 
         /* Chip buttons + toolbar */
@@ -211,7 +216,7 @@
         .info-section strong { display: block; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
         .info-row { padding: 5px 0; font-size: 13px; line-height: 1.5; }
         .info-row .symbol { display: inline-block; width: 22px; text-align: center; margin-right: 4px; }
-        .footer { opacity: 0.7; font-size: 12px; text-align: center; margin-top: auto; padding: 24px 10px 10px; font-family: 'Playfair Display', serif; }
+        .footer { text-align: center; margin-top: auto; padding: 24px 10px 10px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 1px; color: #A99A85; }
 
         /* Floating actions (shortcuts to add a transaction/transfer) */
         .fab-container { position: fixed; bottom: 28px; right: 28px; display: flex; gap: 12px; z-index: 60; }
@@ -257,6 +262,8 @@
                     <a class="active" href="budget.html">Budget</a>
                     <a href="loans.html">Loans</a>
                     <a href="tools.html">Tools</a>
+                    <a href="#" class="nav-action nav-div" onclick="this.closest('.dropdown').classList.remove('open'); document.getElementById('btnRefresh').click(); return false;">Refresh data</a>
+                    <a href="#" class="nav-action" onclick="document.getElementById('btnLogout').click(); return false;">Log out</a>
                 </nav>
             </div>
             <span class="help-icon" onclick="openModal('infoModal')" title="How this page works" aria-label="Help">ⓘ</span>
@@ -278,9 +285,9 @@
             <div class="sec-head">
                 <h1 class="sechead" style="font-size:30px;">Monthly Budget <span id="futureBadge" class="badge future" style="display:none;">Future</span></h1>
                 <div class="tools">
-                    <button class="lbtn" id="btnPrevMonth" aria-label="Previous month" style="height:28px;width:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+                    <button class="lbtn" id="btnPrevMonth" aria-label="Previous month" style="height:28px;width:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor"><path d="M15 5L8 12l7 7z"/></svg></button>
                     <select id="selectMonth"></select>
-                    <button class="lbtn" id="btnNextMonth" aria-label="Next month" style="height:28px;width:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></button>
+                    <button class="lbtn" id="btnNextMonth" aria-label="Next month" style="height:28px;width:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor"><path d="M9 5l7 7-7 7z"/></svg></button>
                 </div>
             </div>
             <div class="split hero-split" style="grid-template-columns:1.15fr 1fr;padding-top:24px;align-items:start;">
