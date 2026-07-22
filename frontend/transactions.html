@@ -146,12 +146,12 @@
         .transactions-header:not(.bulk-edit-mode) .t-cell:first-child { visibility: hidden; }
 
         .transactions-header {
-            background: var(--bg); padding: 13px 26px 13px 8px; border-bottom: 1.5px solid var(--btn-primary);
+            background: var(--bg); padding: 13px 38px 13px 8px; border-bottom: 1.5px solid var(--btn-primary);
             font-weight: 700; font-size: 10px; color: #6E6250; letter-spacing: 1.5px; text-transform: uppercase; font-family: 'IBM Plex Sans', sans-serif;
             position: sticky; top: 0; z-index: 10;
         }
         .transactions-list { max-height: 720px; overflow-y: auto; border-bottom: 1px solid var(--hair); }
-        .transaction-item { padding: 11px 26px 11px 8px; border-bottom: 1px solid var(--hair); font-size: 13.5px; transition: background 0.12s; background: transparent; min-height: 38px; }
+        .transaction-item { padding: 11px 38px 11px 8px; border-bottom: 1px solid var(--hair); font-size: 13.5px; transition: background 0.12s; background: transparent; min-height: 38px; }
         .transaction-item:nth-child(even) { background: #FBF4EA; }
         .transaction-item:hover { background-color: #F4EAD9 !important; }
         .transaction-item.selected { background-color: #F3E3D0 !important; border-bottom: 1px solid var(--border); }
@@ -1086,7 +1086,7 @@
         </div>
     </div>
 
-    <div class="footer">© Royal Bank of González. 2025</div>
+    <div class="footer">Delfin · balances shown in GBP at historical rates</div>
 
     <script>
         const API_URL = (localStorage.getItem('delfin_api') || (location.pathname.startsWith('/app') ? location.origin : 'http://localhost:8422')).replace(/\/$/, '');

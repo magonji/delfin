@@ -86,7 +86,9 @@
         .tools select { -webkit-appearance: none; appearance: none; padding-right: 24px;
             background: var(--chip) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%238A7D6C'/%3E%3C/svg%3E") no-repeat right 9px center; }
         .tools button:hover, .tools select:hover { background: var(--chip2); }
-        .tools .nav-mini { width: 24px; padding: 0; font-size: 10px; }
+        .tools .nav-mini { width: 24px; padding: 0; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); }
+        .tools .nav-mini svg { width: 12px; height: 12px; }
+        .tools .nav-mini:hover { color: var(--text); }
         .month-label { font-family: 'Playfair Display', serif; font-size: 13px; font-weight: 500; min-width: 60px; text-align: center; }
         .count { background: var(--chip2); border-radius: 99px; padding: 1px 6px; font-size: 10px; color: #5A4E3C; font-family: 'IBM Plex Sans', sans-serif; }
         .custom-range { display: inline-flex; gap: 6px; align-items: center; }
@@ -141,12 +143,12 @@
         .list { display: flex; flex-direction: column; }
         .list.list--2col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 32px; }
         .list .row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: baseline;
-            padding: 10px 0; border-bottom: 1px solid var(--hair); }
+            padding: 11px 0; border-bottom: 1px solid var(--hair); }
         .list .row.ranked { grid-template-columns: auto 1fr auto; }
         .list .row .rank { font-family: 'Playfair Display', serif; font-size: 15px; font-weight: 800; color: var(--red); width: 20px; }
         .list .row strong { font-weight: 600; font-size: 13.5px; }
         .list .row .muted { color: var(--muted); font-size: 11px; }
-        .row--clickable { cursor: pointer; margin: 0 -8px; padding-left: 8px; padding-right: 8px; border-radius: 8px; }
+        .row--clickable { cursor: pointer; border-radius: 8px; }
         .row--clickable:hover { background: #F3E9DA; }
         .right { text-align: right; white-space: nowrap; }
         .amt { font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 14px; }
@@ -242,6 +244,11 @@
             .tools select, .tools button, .tools .chip-btn { height: 34px; font-size: 13px; }
             .sec-title { font-size: 21px; }
             .catspend-body { gap: 24px; justify-content: center; }
+            /* Keep the Category Spending Trend controls on a single line: the two
+               selects shrink to make room for the "Select categories" button. */
+            .tools-trend { flex-wrap: nowrap; width: 100%; }
+            .tools-trend select { flex: 1 1 0; min-width: 0; }
+            .tools-trend #categoriesBtn { flex: 0 0 auto; white-space: nowrap; }
         }
     </style>
 </head>
@@ -348,9 +355,9 @@
             <div class="head-row">
                 <h2 class="sec-title">Monthly Category Spend</h2>
                 <div class="tools">
-                    <button id="btnPrevMonth" class="nav-mini">◀</button>
+                    <button id="btnPrevMonth" class="nav-mini" aria-label="Previous month"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
                     <select id="selectMonth"></select>
-                    <button id="btnNextMonth" class="nav-mini">▶</button>
+                    <button id="btnNextMonth" class="nav-mini" aria-label="Next month"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></button>
                     <select id="selectViewMode">
                         <option value="top">Top expenses</option>
                         <option value="category">By category</option>
@@ -380,7 +387,7 @@
         <section>
             <div class="head-row">
                 <h2 class="sec-title">Category Spending Trend</h2>
-                <div class="tools">
+                <div class="tools tools-trend">
                     <select id="catPeriod"><option value="monthly" selected>Monthly</option><option value="weekly">Weekly</option><option value="daily">Daily</option></select>
                     <select id="catRange"><option value="last12" selected>Last year</option><option value="last6">Last 6 months</option><option value="last3">Last 3 months</option><option value="last1">Last month</option><option value="all">All time</option><option value="custom">Custom range…</option></select>
                     <span id="catCustom" class="custom-range" style="display:none;"><input type="date" id="catFrom" title="From"><input type="date" id="catTo" title="To"></span>
@@ -422,7 +429,7 @@
             </div>
         </div>
 
-        <div class="footer">© Royal Bank of González. 2025</div>
+        <div class="footer">Delfin · figures converted to GBP at historical rates</div>
     </div>
 
     <div id="detailModal" class="modal" onclick="if(event.target===this)closeDetailModal()">
@@ -954,14 +961,13 @@ async function showCategoryModal(name, viewMode, ym, baseCurrency) {
 async function loadYearlySummary(year) {
     const cacheKey = `cache_yearly_${year}`;
     const data = cacheGet(cacheKey) || await api(`/dashboard/yearly-summary?year=${year}`).then(d => { cacheSet(cacheKey, d); return d; });
-    const net = data.monthly_data.map(m => m.net), income = data.monthly_data.map(m => m.income), expenses = data.monthly_data.map(m => m.expenses);
-    const yAxis = configureAxisToggle('#yearAxisToggle', state.yearAxisFull, [...net, ...income, ...expenses]);
+    const income = data.monthly_data.map(m => m.income), expenses = data.monthly_data.map(m => m.expenses);
+    const yAxis = configureAxisToggle('#yearAxisToggle', state.yearAxisFull, [...income, ...expenses]);
     renderChart('#yearChart', {
         data: {
             labels: data.monthly_data.map(m => m.month),
             datasets: [
-                { type: 'line', label: 'Net', data: net, borderColor: CHART_INK, backgroundColor: CHART_INK, tension: 0.1, borderWidth: 2, pointRadius: 0, pointHoverRadius: 4 },
-                { type: 'bar', label: 'In', data: income, backgroundColor: CHART_GREEN },
+                { type: 'bar', label: 'In', data: income, backgroundColor: CHART_INK },
                 { type: 'bar', label: 'Out', data: expenses, backgroundColor: CHART_RED }
             ]
         },
@@ -986,15 +992,14 @@ async function loadYearlyTrendAll() {
     }));
     const base = results[0]?.base_currency || 'GBP';
     const totals = (prop) => results.map(r => r.summary[prop]);
-    const net = totals('net_savings'), income = totals('total_income'), expenses = totals('total_expenses');
-    const yAxis = configureAxisToggle('#yearlyAxisToggle', state.yearlyAxisFull, [...net, ...income, ...expenses]);
+    const income = totals('total_income'), expenses = totals('total_expenses');
+    const yAxis = configureAxisToggle('#yearlyAxisToggle', state.yearlyAxisFull, [...income, ...expenses]);
 
     renderChart('#yearlyTrendChart', {
         data: {
             labels: years,
             datasets: [
-                { type: 'line', label: 'Net', data: net, borderColor: CHART_INK, backgroundColor: CHART_INK, tension: 0.1, borderWidth: 2, pointRadius: 0, pointHoverRadius: 4 },
-                { type: 'bar', label: 'In', data: income, backgroundColor: CHART_GREEN },
+                { type: 'bar', label: 'In', data: income, backgroundColor: CHART_INK },
                 { type: 'bar', label: 'Out', data: expenses, backgroundColor: CHART_RED }
             ]
         },
