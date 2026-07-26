@@ -19,6 +19,7 @@
             --bg: #FAF3E9; --paper: #FFFDFA; --panel: #F3E9DA; --card: #E4D5C1; --border: #D8C6B0;
             --hair: #EFE4D3; --field: #E4D5C1; --muted: #8A7D6C; --text: #23201C; --ink: #23201C; --accent: #B0402E;
             --green: #3C7A57; --red: #B0402E; --yellow: #C6893F; --ink-blue: #3C5A6E; --danger: #B0402E;
+            --yellow-ink: #8F5D18;
             --page-gutter: clamp(16px, 4vw, 30px);
         }
 
@@ -184,7 +185,6 @@
         .cal-cell.empty { border: none; background: transparent; cursor: default; }
         .cal-cell.outside { border-style: dashed; background: transparent; }
         .cal-cell.today { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
-        .cal-cell.selected { border-color: var(--ink); border-style: solid; box-shadow: inset 0 0 0 1px var(--ink); }
         .cal-cell .d { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; font-weight: 500; color: var(--muted); line-height: 1; }
         .cal-cell.today .d { color: var(--accent); font-weight: 700; }
         .cal-cell .amt { font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1; }
@@ -213,11 +213,9 @@
         .cal-legend span { display: inline-flex; align-items: center; gap: 5px; }
         .cal-legend i { width: 9px; height: 9px; border-radius: 3px; display: inline-block; }
         .cal-legend i.round { border-radius: 50%; width: 6px; height: 6px; }
+        .cal-legend i.pace { width: auto; min-width: 13px; height: auto; padding: 1px 3px; text-align: center;
+            font-family: 'IBM Plex Mono', monospace; font-size: 9px; font-weight: 700; font-style: normal; line-height: 1.3; }
         .cal-legend .warnmap { color: var(--accent); cursor: pointer; text-decoration: underline; }
-        .cal-detail { margin-top: 16px; border-top: 1px solid var(--hair); padding-top: 12px; }
-        .cal-detail .dhead { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
-        .cal-detail .dhead .dlabel { font-family: 'Playfair Display', serif; font-size: 17px; font-weight: 700; }
-        .cal-detail .dhead .dtotal { font-family: 'IBM Plex Mono', monospace; font-size: 14px; font-weight: 600; }
         @media (max-width: 640px) {
             .cal-grid { gap: 4px; }
             .cal-cell { padding: 4px; border-radius: 8px; }
@@ -450,14 +448,13 @@
                     <span><i style="background:#008C66"></i>Culture</span>
                     <span><i style="background:#B8730A"></i>Unexpected</span>
                     <span><i style="background:var(--muted)"></i>Unclassified</span>
-                    <span><i style="background:rgba(60,122,87,.35)"></i>On pace</span>
-                    <span><i style="background:rgba(198,137,63,.4)"></i>Up to 2× pace</span>
-                    <span><i style="background:rgba(176,64,46,.4)"></i>Over 2× pace</span>
+                    <span><i class="pace" style="background:rgba(60,122,87,.35);color:var(--green)">7</i>On pace</span>
+                    <span><i class="pace" style="background:rgba(198,137,63,.4);color:var(--yellow-ink)">8</i>Up to 2× pace</span>
+                    <span><i class="pace" style="background:rgba(176,64,46,.4);color:var(--red)">9</i>Over 2× pace</span>
                     <span><i class="round" style="background:var(--green)"></i>Bill paid</span>
                     <span><i class="round" style="background:var(--yellow)"></i>Bill due</span>
                     <span id="calMapNote">Figures split each day by kakeibo bucket, always in the same four positions. Pace tracks day-to-day spending only — bills are excluded.</span>
                 </div>
-                <div class="cal-detail" id="calDetail" style="display:none;"></div>
             </div>
         </section>
 
@@ -877,7 +874,6 @@
             categories: [],
             accounts: [],
             data: null,
-            selectedDay: null,
             suggestKind: 'fixed',
             buckets: null,
             candidates: []
@@ -1287,6 +1283,9 @@
 
         // ── Kakeibo calendar ───────────────────────────────────────────────
         const PACE_TONES = { green: '60,122,87', yellow: '198,137,63', red: '176,64,46' };
+        // The tint hue and the ink are not the same: ochre needs darkening to be
+        // legible at the size of a date.
+        const PACE_INK = { green: 'var(--green)', yellow: 'var(--yellow-ink)', red: 'var(--red)' };
 
         // Tone for a past day, from its day-to-day spending against the pace target.
         function calTone(variable, dailyTarget) {
@@ -1298,7 +1297,7 @@
             const tone = ratio <= 1 ? 'green' : ratio <= 2 ? 'yellow' : 'red';
             // Ceiling checked against the four bucket colours: any stronger and
             // the figures drop below 3:1 on the tinted cell.
-            const alpha = Math.min(.13, .05 + Math.min(ratio, 3) / 3 * .08);
+            const alpha = Math.min(.13, .07 + Math.min(ratio, 3) / 3 * .06);
             return { tone, alpha };
         }
 
@@ -1308,10 +1307,6 @@
             const cur = d.base_currency;
             const todayISO = new Date().toISOString().slice(0, 10);
             const dailyTarget = d.daily_target || 0;
-
-            if (state.selectedDay && !state.selectedDay.startsWith(state.currentMonth)) {
-                state.selectedDay = null;
-            }
 
             const dows = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
             const [y, m] = state.currentMonth.split('-').map(Number);
@@ -1331,12 +1326,14 @@
                 const classes = ['cal-cell'];
                 if (isFuture) classes.push('outside');
                 if (isToday) classes.push('today');
-                if (state.selectedDay === day.date) classes.push('selected');
 
-                let style = '';
+                let style = '', dayStyle = '';
                 if (!isFuture) {
                     const t = calTone(day.variable, dailyTarget);
-                    if (t) style = `background:rgba(${PACE_TONES[t.tone]},${t.alpha.toFixed(2)})`;
+                    if (t) {
+                        style = `background:rgba(${PACE_TONES[t.tone]},${t.alpha.toFixed(2)})`;
+                        dayStyle = ` style="color:${PACE_INK[t.tone]};font-weight:700"`;
+                    }
                 }
 
                 // Four fixed slots, so position identifies the bucket as much as colour.
@@ -1358,8 +1355,8 @@
 
                 cells.push(`
                     <button type="button" class="${classes.join(' ')}" style="${style}"
-                            onclick="selectCalDay('${day.date}')">
-                        <span class="cal-top"><span class="d">${dayNum}</span>${unmapped}</span>
+                            onclick="openDayModal('${day.date}')">
+                        <span class="cal-top"><span class="d"${dayStyle}>${dayNum}</span>${unmapped}</span>
                         <span class="cal-marks">${marks}${more}</span>
                         <span class="cal-buckets">${figures}</span>
                     </button>`);
@@ -1404,37 +1401,52 @@
                 summary.innerHTML = '<span class="muted">No pace yet — add a planned expense to set one</span>';
             }
 
-            renderCalDetail();
-        }
-
-        function selectCalDay(date) {
-            state.selectedDay = state.selectedDay === date ? null : date;
-            if (state.data) renderCalendar(state.data);
         }
 
         function dayOf(date) {
             return (state.data?.calendar || []).find(d => d.date === date);
         }
 
-        function renderCalDetail() {
-            const box = q('#calDetail');
-            const day = state.selectedDay ? dayOf(state.selectedDay) : null;
-            if (!day) { box.style.display = 'none'; box.innerHTML = ''; return; }
-
+        // One modal serves both the whole day and a single bucket of it.
+        function openDayModal(date, bucket = null) {
+            const day = dayOf(date);
+            if (!day) return;
             const cur = state.data.base_currency;
-            const label = new Date(day.date + 'T00:00:00')
+            const label = new Date(date + 'T00:00:00')
                 .toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
 
-            const bills = day.bills.map(b => `
+            const rows = bucket ? day.transactions.filter(t => t.bucket === bucket) : day.transactions;
+            const bills = bucket ? [] : day.bills;
+            const total = bucket ? rows.reduce((s, t) => s + t.amount, 0) : day.total;
+
+            q('#dayModalTitle').textContent = bucket ? `${BUCKET_LABELS[bucket]} · ${label}` : label;
+
+            // For the whole day, recap the split the calendar cell was showing.
+            let split = '';
+            if (!bucket) {
+                const parts = BUCKETS.filter(b => day.buckets[b] > 0)
+                    .map(b => `<span class="kb-${b}" style="font-weight:600">${BUCKET_LABELS[b]} ${fmtMoney(day.buckets[b], cur)}</span>`);
+                if (day.unmapped > 0) {
+                    parts.push(`<span class="muted" style="font-weight:600">${BUCKET_LABELS.unmapped} ${fmtMoney(day.unmapped, cur)}</span>`);
+                }
+                if (parts.length) {
+                    split = `<div style="display:flex;flex-wrap:wrap;gap:4px 14px;font-family:'IBM Plex Mono',monospace;
+                                         font-size:11.5px;padding-bottom:10px;margin-bottom:4px;border-bottom:1px solid var(--hair);">
+                                ${parts.join('')}</div>`;
+                }
+            }
+
+            const billRows = bills.map(b => `
                 <div class="expense-item">
                     <span class="date">${b.paid ? '✓ paid' : '○ due'}</span>
                     <div class="info"><div class="name">${esc(b.name)}</div><div class="category">Fixed expense</div></div>
                     <span class="amount">${fmtMoney(b.amount, cur)}</span>
                 </div>`).join('');
 
-            const items = day.transactions.map(t => `
+            const txRows = rows.map(t => `
                 <div class="expense-item">
-                    <span class="date" style="color:var(--muted)">${BUCKET_LABELS[t.bucket] || ''}</span>
+                    <span class="date"${bucket ? '' : ' style="color:var(--muted)"'}>${
+                        bucket ? (t.is_bill ? 'bill' : '') : (BUCKET_LABELS[t.bucket] || '')}</span>
                     <div class="info">
                         <div class="name">${esc(t.payee_name || t.note || 'Unknown')}</div>
                         ${t.category_name ? `<div class="category">${esc(t.category_name)}</div>` : ''}
@@ -1442,40 +1454,13 @@
                     <span class="amount">${fmtMoney(t.amount, cur)}</span>
                 </div>`).join('');
 
-            box.style.display = 'block';
-            box.innerHTML = `
-                <div class="dhead">
-                    <span class="dlabel">${label}</span>
-                    <span class="dtotal">${fmtMoney(day.total, cur)}</span>
-                </div>
-                ${bills}${items}
-                ${!bills && !items ? '<div class="empty-state" style="padding:16px">Nothing on this day</div>' : ''}`;
-        }
-
-        function openDayModal(date, bucket) {
-            const day = dayOf(date);
-            if (!day) return;
-            const cur = state.data.base_currency;
-            const rows = day.transactions.filter(t => t.bucket === bucket);
-            const total = rows.reduce((s, t) => s + t.amount, 0);
-            const label = new Date(date + 'T00:00:00')
-                .toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
-
-            q('#dayModalTitle').textContent = `${BUCKET_LABELS[bucket]} · ${label}`;
             q('#dayModalBody').innerHTML = `
-                <div class="dhead" style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
+                <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:8px;">
                     <span class="muted" style="font-size:12px;">${rows.length} transaction${rows.length === 1 ? '' : 's'}</span>
                     <span style="font-family:'IBM Plex Mono',monospace;font-weight:600;">${fmtMoney(total, cur)}</span>
                 </div>
-                ${rows.map(t => `
-                    <div class="expense-item">
-                        <span class="date">${t.is_bill ? 'bill' : ''}</span>
-                        <div class="info">
-                            <div class="name">${esc(t.payee_name || t.note || 'Unknown')}</div>
-                            ${t.category_name ? `<div class="category">${esc(t.category_name)}</div>` : ''}
-                        </div>
-                        <span class="amount">${fmtMoney(t.amount, cur)}</span>
-                    </div>`).join('')}
+                ${split}${billRows}${txRows}
+                ${!billRows && !txRows ? '<div class="empty-state" style="padding:16px">Nothing on this day</div>' : ''}
                 ${bucket === 'unmapped' ? `<p class="muted" style="font-size:12.5px;line-height:1.5;margin-top:14px;">
                     These categories aren't sorted into a kakeibo bucket yet.
                     <span class="warnmap" style="color:var(--accent);cursor:pointer;text-decoration:underline;"
