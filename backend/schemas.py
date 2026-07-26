@@ -316,6 +316,80 @@ class PlannedExpenseWithDetails(PlannedExpenseResponse):
     category_name: Optional[str] = None
 
 
+# --- Budget item schemas (the budgeting/auditing model) ---
+
+class BudgetItemBase(BaseModel):
+    """A budget definition: a fixed expense, an expected income or a planned expense."""
+    kind: str                       # fixed | income | planned
+    name: str
+    amount: float = 0.0
+    currency: Optional[str] = None  # defaults to the app's display currency
+    is_estimated: bool = False
+
+    first_date: Optional[datetime] = None
+    interval_count: int = 1
+    interval_unit: str = "month"    # once | day | week | month | year
+
+    payee_id: Optional[int] = None
+    set_aside_account_id: Optional[int] = None
+    account_ids: List[int] = []
+    category_ids: List[int] = []
+    starts_ym: Optional[str] = None  # defaults to the current month
+
+    @field_validator('amount')
+    @classmethod
+    def round_amount(cls, v):
+        return round(v or 0, 2)
+
+    @field_validator('kind')
+    @classmethod
+    def check_kind(cls, v):
+        if v not in ("fixed", "income", "planned"):
+            raise ValueError("kind must be fixed, income or planned")
+        return v
+
+    @field_validator('interval_unit')
+    @classmethod
+    def check_unit(cls, v):
+        if v not in ("once", "day", "week", "month", "year"):
+            raise ValueError("interval_unit must be once, day, week, month or year")
+        return v
+
+    @field_validator('interval_count')
+    @classmethod
+    def check_count(cls, v):
+        return max(1, int(v or 1))
+
+
+class BudgetItemCreate(BudgetItemBase):
+    pass
+
+
+class BudgetLineUpdate(BaseModel):
+    """
+    Correct a single month's line. `paid` set to None returns the line to
+    automatic detection.
+    """
+    name: Optional[str] = None
+    amount: Optional[float] = None
+    paid: Optional[bool] = None
+    clear_paid_override: bool = False
+
+    @field_validator('amount')
+    @classmethod
+    def round_amount(cls, v):
+        return round(v, 2) if v is not None else None
+
+
+class CategoryBucketEntry(BaseModel):
+    category_id: int
+    bucket: Optional[str] = None  # essentials | indulgences | culture | unexpected
+
+
+class CategoryBucketUpdate(BaseModel):
+    mappings: List[CategoryBucketEntry] = []
+
+
 # --- Utility schemas ---
 
 class DuplicateCheck(BaseModel):

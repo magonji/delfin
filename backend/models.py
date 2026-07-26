@@ -225,6 +225,139 @@ class PlannedExpense(Base):
     category = relationship("Category")
 
 
+class BudgetItem(Base):
+    """
+    A budget definition: a fixed expense, an expected income, or a planned
+    (budgetable) expense. These are templates — each month is materialised from
+    them into ``BudgetMonthLine`` rows, which is what makes past months immutable.
+    """
+    __tablename__ = "budget_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    kind = Column(String, nullable=False, index=True)  # fixed | income | planned
+    name = Column(String, nullable=False)
+    amount = Column(Float, nullable=False, default=0.0)
+    currency = Column(String, default="GBP")
+    is_estimated = Column(Integer, default=0)  # 1 = amount is a guess (e.g. an MOT)
+
+    # Recurrence: every `interval_count` `interval_unit`, starting at `first_date`.
+    first_date = Column(DateTime, nullable=True)
+    interval_count = Column(Integer, default=1)
+    interval_unit = Column(String, default="month")  # once | day | week | month | year
+
+    # Used to detect whether the expense has been paid this month.
+    payee_id = Column(Integer, ForeignKey("payees.id"), nullable=True, index=True)
+    # Savings account a prorated expense sets money aside in, or the debt/savings
+    # account a fixed transfer feeds.
+    set_aside_account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True, index=True)
+
+    starts_ym = Column(String, nullable=False, index=True)  # first month it applies to
+    ends_ym = Column(String, nullable=True, index=True)     # last month, NULL = open-ended
+    is_active = Column(Integer, default=1, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    payee = relationship("Payee")
+    set_aside_account = relationship("Account")
+    accounts = relationship("BudgetItemAccount", cascade="all, delete-orphan", back_populates="item")
+    categories = relationship("BudgetItemCategory", cascade="all, delete-orphan", back_populates="item")
+
+    __table_args__ = (
+        Index('idx_budget_item_kind_active', 'kind', 'is_active'),
+    )
+
+
+class BudgetItemAccount(Base):
+    """Accounts whose spending counts towards a planned expense."""
+    __tablename__ = "budget_item_accounts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    item_id = Column(Integer, ForeignKey("budget_items.id"), nullable=False, index=True)
+    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=False, index=True)
+
+    item = relationship("BudgetItem", back_populates="accounts")
+    account = relationship("Account")
+
+    __table_args__ = (
+        Index('idx_budget_item_account', 'item_id', 'account_id', unique=True),
+    )
+
+
+class BudgetItemCategory(Base):
+    """Categories (or subcategories) whose spending counts towards a planned expense."""
+    __tablename__ = "budget_item_categories"
+
+    id = Column(Integer, primary_key=True, index=True)
+    item_id = Column(Integer, ForeignKey("budget_items.id"), nullable=False, index=True)
+    category_id = Column(Integer, ForeignKey("categories.id"), nullable=False, index=True)
+
+    item = relationship("BudgetItem", back_populates="categories")
+    category = relationship("Category")
+
+    __table_args__ = (
+        Index('idx_budget_item_category', 'item_id', 'category_id', unique=True),
+    )
+
+
+class BudgetMonthLine(Base):
+    """
+    One budget line materialised for one month — the auditable record of what was
+    budgeted at the time. Lines of past months are frozen and never regenerated,
+    so editing an item changes the present and the future but never the past.
+    """
+    __tablename__ = "budget_month_lines"
+
+    id = Column(Integer, primary_key=True, index=True)
+    year_month = Column(String, nullable=False, index=True)  # Format: "2026-07"
+    # NULL once the defining item is deleted — the line still stands on its own.
+    item_id = Column(Integer, ForeignKey("budget_items.id"), nullable=True, index=True)
+    kind = Column(String, nullable=False, index=True)
+
+    name = Column(String, nullable=False)
+    amount = Column(Float, nullable=False, default=0.0)   # budgeted for this month
+    full_amount = Column(Float, nullable=True)            # the charge itself, when prorated
+    occurrences = Column(Integer, default=1)              # times it lands this month
+    is_prorated = Column(Integer, default=0)
+    period_months = Column(Float, nullable=True)          # for "£600 over 6 months"
+    is_estimated = Column(Integer, default=0)
+    currency = Column(String, default="GBP")
+
+    payee_id = Column(Integer, ForeignKey("payees.id"), nullable=True, index=True)
+    set_aside_account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True, index=True)
+    account_ids = Column(Text)   # JSON list, snapshot for planned expenses
+    category_ids = Column(Text)  # JSON list, snapshot for planned expenses
+    due_days = Column(Text)      # JSON list of days of the month it falls on
+
+    # NULL = decide from transactions, 0 = forced pending, 1 = forced paid.
+    paid_override = Column(Integer, nullable=True)
+    is_frozen = Column(Integer, default=0, index=True)
+    source = Column(String, default="template")  # template | manual
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    item = relationship("BudgetItem")
+    payee = relationship("Payee")
+    set_aside_account = relationship("Account")
+
+    __table_args__ = (
+        Index('idx_budget_line_month_item', 'year_month', 'item_id'),
+        Index('idx_budget_line_month_kind', 'year_month', 'kind'),
+    )
+
+
+class CategoryBucket(Base):
+    """Maps one of the user's categories to a kakeibo bucket."""
+    __tablename__ = "category_buckets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    category_id = Column(Integer, ForeignKey("categories.id"), nullable=False, unique=True, index=True)
+    # essentials | indulgences | culture | unexpected
+    bucket = Column(String, nullable=False, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    category = relationship("Category")
+
+
 # --- Event listeners to round monetary amounts before saving ---
 
 @event.listens_for(Transaction, 'before_insert')
@@ -286,3 +419,21 @@ def round_planned_amount(mapper, connection, target):
     """Round planned expense amount to 2 decimal places."""
     if target.amount is not None:
         target.amount = round(target.amount, 2)
+
+
+@event.listens_for(BudgetItem, 'before_insert')
+@event.listens_for(BudgetItem, 'before_update')
+def round_budget_item_amount(mapper, connection, target):
+    """Round budget item amount to 2 decimal places."""
+    if target.amount is not None:
+        target.amount = round(target.amount, 2)
+
+
+@event.listens_for(BudgetMonthLine, 'before_insert')
+@event.listens_for(BudgetMonthLine, 'before_update')
+def round_budget_line_amounts(mapper, connection, target):
+    """Round budget line amounts to 2 decimal places."""
+    if target.amount is not None:
+        target.amount = round(target.amount, 2)
+    if target.full_amount is not None:
+        target.full_amount = round(target.full_amount, 2)

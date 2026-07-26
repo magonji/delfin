@@ -23,8 +23,10 @@ from backend.helpers import (
     recalculate_balances_from_transaction,
     initialise_all_balances,
     get_rates_bulk,
-    get_latest_rates
+    get_latest_rates,
+    get_base_currency
 )
+from backend import budget_engine
 
 # The database is encrypted; tables are created on unlock() after login,
 # not at import time (there is no engine until the app is unlocked).
@@ -4342,288 +4344,232 @@ def delete_budget(year_month: str, db: Session = Depends(get_db)):
 @app.get("/budgets/{year_month}/progress")
 def get_budget_progress(year_month: str, db: Session = Depends(get_db)):
     """
-    Get budget progress with spending breakdown and recurring expenses status.
+    The whole budget month: headline figures, the three card lists, the sinking
+    funds and the day-by-day calendar.
+
+    The monthly target is no longer a number the user types — it is the sum of
+    the fixed and planned lines materialised for that month.
     """
-    # Parse year_month
     try:
-        year, month = map(int, year_month.split('-'))
-        start_date = date(year, month, 1)
-        if month == 12:
-            end_date = date(year + 1, 1, 1) - timedelta(days=1)
-        else:
-            end_date = date(year, month + 1, 1) - timedelta(days=1)
+        return budget_engine.month_snapshot(db, year_month)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid year_month format. Use YYYY-MM")
 
-    # Get budget (may not exist)
-    budget = db.query(Budget).filter(Budget.year_month == year_month).first()
 
-    # Get transfer location IDs to exclude
-    transfer_ids = [
-        r.id for r in db.query(Location.id)
-        .filter(Location.name.in_(["Transfer In", "Transfer Out"]))
-        .all()
-    ]
+# ============================================
+# BUDGET ITEMS (definitions behind each month)
+# ============================================
 
-    # Get all expense transactions for the month (negative amounts, excluding transfers)
-    filters = [
-        Transaction.date >= datetime.combine(start_date, time.min),
-        Transaction.date <= datetime.combine(end_date, time.max),
-        Transaction.amount < 0  # Only expenses
-    ]
-    if transfer_ids:
-        filters.append(~Transaction.location_id.in_(transfer_ids))
-
-    transactions = db.query(Transaction).filter(and_(*filters)).all()
-
-    # Get historical exchange rates for currency conversion
-    currencies = list(set([t.currency for t in transactions if t.currency]))
-    historical_rates = get_rates_bulk(db, currencies, start_date, end_date)
-    base_currency = budget.currency if budget else "GBP"
-
-    # Calculate total spent
-    total_spent = 0
-
-    for trans in transactions:
-        trans_date = trans.date.date() if isinstance(trans.date, datetime) else trans.date
-        rates_for_day = historical_rates.get(trans_date, {'GBP': 1.0})
-
-        trans_rate = rates_for_day.get(trans.currency, 1.0)
-        base_rate = rates_for_day.get(base_currency, 1.0)
-        converted = abs(trans.amount) * (base_rate / trans_rate)
-
-        total_spent += converted
-
-    # Get income transactions for the month (positive amounts, excluding transfers)
-    income_filters = [
-        Transaction.date >= datetime.combine(start_date, time.min),
-        Transaction.date <= datetime.combine(end_date, time.max),
-        Transaction.amount > 0  # Only income
-    ]
-    if transfer_ids:
-        income_filters.append(~Transaction.location_id.in_(transfer_ids))
-
-    income_transactions = db.query(Transaction).filter(and_(*income_filters)).all()
-
-    # Add income currencies to rates if needed
-    income_currencies = list(set([t.currency for t in income_transactions if t.currency]))
-    for curr in income_currencies:
-        if curr not in currencies:
-            currencies.append(curr)
-    if income_currencies:
-        historical_rates = get_rates_bulk(db, currencies, start_date, end_date)
-
-    # Calculate total income
-    total_income = 0
-    for trans in income_transactions:
-        trans_date = trans.date.date() if isinstance(trans.date, datetime) else trans.date
-        rates_for_day = historical_rates.get(trans_date, {'GBP': 1.0})
-        trans_rate = rates_for_day.get(trans.currency, 1.0)
-        base_rate = rates_for_day.get(base_currency, 1.0)
-        converted = trans.amount * (base_rate / trans_rate)
-        total_income += converted
-
-    # Get recurring expenses
-    recurring_list = db.query(RecurringExpense).filter(RecurringExpense.is_active == 1).all()
-
-    # Helper function to check if a recurring expense applies to a given month
-    def expense_applies_to_month(rec, target_month):
-        freq = rec.frequency or "monthly"
-        if freq == "monthly":
-            return True
-
-        start_m = rec.start_month or target_month  # Default to current month if not set
-
-        if freq == "quarterly":
-            # Applies every 3 months starting from start_month
-            return (target_month - start_m) % 3 == 0
-        elif freq == "biannual":
-            # Applies every 6 months starting from start_month
-            return (target_month - start_m) % 6 == 0
-        elif freq == "annual":
-            # Applies only in start_month
-            return target_month == start_m
-
-        return True  # Default to monthly if unknown frequency
-
-    # Check which recurring expenses have been paid this month
-    recurring_with_status = []
-    committed = 0
-    matched_tx_ids = set()
-
-    # Load manually skipped recurring expenses for this month ("won't pay this month")
-    skipped_ids = set(
-        r.recurring_expense_id for r in db.query(RecurringExpensePayment.recurring_expense_id)
-        .filter(RecurringExpensePayment.year_month == year_month)
-        .all()
-    )
-
-    # Helper function to get historical amount for a recurring expense at a given date
-    def get_historical_amount(rec_id, target_date):
-        """Get the amount that was effective for this recurring expense at the target date."""
-        history = db.query(RecurringExpenseHistory).filter(
-            RecurringExpenseHistory.recurring_expense_id == rec_id,
-            RecurringExpenseHistory.effective_from <= datetime.combine(target_date, time.max)
-        ).order_by(RecurringExpenseHistory.effective_from.desc()).first()
-        return history
-
-    for rec in recurring_list:
-        applies_this_month = expense_applies_to_month(rec, month)
-
-        # Get historical amount for this month
-        history_record = get_historical_amount(rec.id, end_date)
-        if history_record:
-            effective_amount = history_record.amount
-            effective_currency = history_record.currency
-        else:
-            effective_amount = rec.amount
-            effective_currency = rec.currency
-
-        skipped = rec.id in skipped_ids
-        paid_this_month = False
-        matching_tx = None
-
-        # Auto-detect payment from transactions (only if applicable and not skipped)
-        if applies_this_month and not skipped:
-            rec_filters = [
-                Transaction.date >= datetime.combine(start_date, time.min),
-                Transaction.date <= datetime.combine(end_date, time.max),
-            ]
-            if rec.payee_id:
-                rec_filters.append(Transaction.payee_id == rec.payee_id)
-            amount_tolerance = effective_amount * 0.2
-            rec_filters.append(Transaction.amount <= -(effective_amount - amount_tolerance))
-            rec_filters.append(Transaction.amount >= -(effective_amount + amount_tolerance))
-
-            matching_tx = db.query(Transaction).filter(and_(*rec_filters)).first()
-            if matching_tx:
-                paid_this_month = True
-                matched_tx_ids.add(matching_tx.id)
-
-        # Convert recurring amount to base currency
-        latest_rates = get_latest_rates(db)
-        rec_rate = latest_rates.get(effective_currency, 1.0)
-        base_rate = latest_rates.get(base_currency, 1.0)
-        converted_amount = effective_amount * (base_rate / rec_rate)
-
-        # Committed = applies this month, not paid, not skipped
-        if applies_this_month and not paid_this_month and not skipped:
-            committed += converted_amount
-
-        # If paid via transfer, add to spent (transfers are excluded from general spent calc)
-        if paid_this_month and matching_tx and transfer_ids and matching_tx.location_id in transfer_ids:
-            tx_date = matching_tx.date.date() if isinstance(matching_tx.date, datetime) else matching_tx.date
-            rates_for_day = historical_rates.get(tx_date, {'GBP': 1.0})
-            tx_rate = rates_for_day.get(matching_tx.currency, 1.0)
-            base_r = rates_for_day.get(base_currency, 1.0)
-            total_spent += abs(matching_tx.amount) * (base_r / tx_rate)
-
-        recurring_with_status.append({
-            "id": rec.id,
-            "name": rec.name,
-            "payee_id": rec.payee_id,
-            "payee_name": rec.payee.name if rec.payee else None,
-            "category_id": rec.category_id,
-            "category_name": rec.category.name if rec.category else None,
-            "amount": effective_amount,
-            "current_amount": rec.amount,
-            "converted_amount": round(converted_amount, 2),
-            "currency": effective_currency,
-            "day_of_month": rec.day_of_month,
-            "frequency": rec.frequency or "monthly",
-            "start_month": rec.start_month,
-            "is_active": rec.is_active,
-            "paid_this_month": paid_this_month,
-            "skipped_this_month": skipped,
-            "applies_this_month": applies_this_month
-        })
-
-    # Build list of other expenses (transactions not matched to recurring expenses)
-    other_expenses = []
-    for trans in transactions:
-        if trans.id in matched_tx_ids:
-            continue
-        trans_date = trans.date.date() if isinstance(trans.date, datetime) else trans.date
-        rates_for_day = historical_rates.get(trans_date, {'GBP': 1.0})
-        trans_rate = rates_for_day.get(trans.currency, 1.0)
-        base_r = rates_for_day.get(base_currency, 1.0)
-        converted = abs(trans.amount) * (base_r / trans_rate)
-        other_expenses.append({
-            "id": trans.id,
-            "date": trans_date.isoformat(),
-            "payee_name": trans.payee.name if trans.payee else None,
-            "note": trans.note,
-            "category_name": trans.category.name if trans.category else None,
-            "amount": abs(trans.amount),
-            "converted_amount": round(converted, 2),
-            "currency": trans.currency,
-        })
-    other_expenses.sort(key=lambda x: x["date"], reverse=True)
-
-    # Get planned expenses for this month
-    planned_list = db.query(PlannedExpense).filter(PlannedExpense.year_month == year_month).all()
-    planned_with_status = []
-
-    for plan in planned_list:
-        # Convert to base currency
-        latest_rates = get_latest_rates(db)
-        plan_rate = latest_rates.get(plan.currency, 1.0)
-        base_rate = latest_rates.get(base_currency, 1.0)
-        converted_amount = plan.amount * (base_rate / plan_rate)
-
-        # Add to committed if not paid
-        if plan.is_paid == 0:
-            committed += converted_amount
-
-        planned_with_status.append({
-            "id": plan.id,
-            "name": plan.name,
-            "amount": plan.amount,
-            "converted_amount": round(converted_amount, 2),
-            "currency": plan.currency,
-            "category_id": plan.category_id,
-            "category_name": plan.category.name if plan.category else None,
-            "is_paid": plan.is_paid
-        })
-
-    # Calculate remaining and daily available
-    budget_amount = budget.amount if budget else 0
-    remaining = budget_amount - total_spent - committed
-
-    # Calculate days remaining in month
-    today = date.today()
-    if today.year == year and today.month == month:
-        days_remaining = (end_date - today).days + 1
-    elif today < start_date:
-        days_remaining = (end_date - start_date).days + 1
-    else:
-        days_remaining = 0
-
-    daily_available = remaining / days_remaining if days_remaining > 0 else 0
-
-    # Calculate savings (income - spent)
-    savings = total_income - total_spent
-
+def _item_payload(item: models.BudgetItem) -> dict:
     return {
-        "budget": {
-            "id": budget.id if budget else None,
-            "year_month": year_month,
-            "amount": budget_amount,
-            "currency": base_currency
-        },
-        "spent": round(total_spent, 2),
-        "committed": round(committed, 2),
-        "remaining": round(remaining, 2),
-        "percentage": round((total_spent / budget_amount * 100) if budget_amount > 0 else 0, 1),
-        "days_remaining": days_remaining,
-        "daily_available": round(daily_available, 2),
-        "income": round(total_income, 2),
-        "savings": round(savings, 2),
-        "recurring_expenses": recurring_with_status,
-        "planned_expenses": planned_with_status,
-        "other_expenses": other_expenses,
-        "base_currency": base_currency
+        "id": item.id,
+        "kind": item.kind,
+        "name": item.name,
+        "amount": item.amount,
+        "currency": item.currency,
+        "is_estimated": bool(item.is_estimated),
+        "first_date": item.first_date.date().isoformat() if item.first_date else None,
+        "interval_count": item.interval_count,
+        "interval_unit": item.interval_unit,
+        "payee_id": item.payee_id,
+        "payee_name": item.payee.name if item.payee else None,
+        "set_aside_account_id": item.set_aside_account_id,
+        "set_aside_account_name": item.set_aside_account.name if item.set_aside_account else None,
+        "account_ids": [a.account_id for a in item.accounts],
+        "category_ids": [c.category_id for c in item.categories],
+        "starts_ym": item.starts_ym,
+        "ends_ym": item.ends_ym,
+        "is_active": item.is_active,
+        "period_months": budget_engine.period_months(item.interval_count, item.interval_unit),
     }
+
+
+def _apply_item_payload(db: Session, item: models.BudgetItem, data: schemas.BudgetItemCreate) -> None:
+    """Write a create/update payload onto an item, including its links."""
+    item.kind = data.kind
+    item.name = data.name.strip()
+    item.amount = data.amount
+    item.currency = data.currency or get_base_currency(db)
+    item.is_estimated = 1 if data.is_estimated else 0
+    item.interval_count = data.interval_count
+    item.interval_unit = data.interval_unit
+    item.payee_id = data.payee_id
+    item.set_aside_account_id = data.set_aside_account_id
+
+    # A definition never starts in a month that is already closed, and editing one
+    # never moves the month it started in.
+    current = budget_engine.current_ym()
+    if item.starts_ym is None:
+        item.starts_ym = max(data.starts_ym or current, current)
+
+    # Without a first date, the item starts on the first day of its first month.
+    if data.first_date:
+        item.first_date = data.first_date
+    elif item.first_date is None:
+        year, month = budget_engine.parse_ym(item.starts_ym)
+        item.first_date = datetime(year, month, 1)
+
+    if item.id is not None:
+        # Rebuild the links, flushing the removals so the unique indexes free up.
+        item.accounts.clear()
+        item.categories.clear()
+        db.flush()
+    for account_id in dict.fromkeys(data.account_ids or []):
+        item.accounts.append(models.BudgetItemAccount(account_id=account_id))
+    for category_id in dict.fromkeys(data.category_ids or []):
+        item.categories.append(models.BudgetItemCategory(category_id=category_id))
+
+
+@app.get("/budget/items")
+def list_budget_items(
+    kind: Optional[str] = Query(None, description="fixed | income | planned"),
+    include_inactive: bool = False,
+    db: Session = Depends(get_db)
+):
+    """The budget definitions themselves, for editing."""
+    query = db.query(models.BudgetItem)
+    if kind:
+        query = query.filter(models.BudgetItem.kind == kind)
+    if not include_inactive:
+        query = query.filter(models.BudgetItem.is_active == 1)
+    items = query.order_by(models.BudgetItem.amount.desc()).all()
+    return [_item_payload(i) for i in items]
+
+
+@app.post("/budget/items")
+def create_budget_item(data: schemas.BudgetItemCreate, db: Session = Depends(get_db)):
+    """Create a definition and materialise it into the current month."""
+    item = models.BudgetItem()
+    _apply_item_payload(db, item, data)
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    budget_engine.apply_item_change(db, item)
+    return _item_payload(item)
+
+
+@app.put("/budget/items/{item_id}")
+def update_budget_item(item_id: int, data: schemas.BudgetItemCreate, db: Session = Depends(get_db)):
+    """
+    Edit a definition. The change reaches this month and every month ahead;
+    months already closed keep the values they were budgeted with.
+    """
+    item = db.query(models.BudgetItem).filter(models.BudgetItem.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Budget item not found")
+    _apply_item_payload(db, item, data)
+    db.commit()
+    db.refresh(item)
+    budget_engine.apply_item_change(db, item)
+    return _item_payload(item)
+
+
+@app.delete("/budget/items/{item_id}")
+def delete_budget_item(item_id: int, db: Session = Depends(get_db)):
+    """
+    Stop a definition from this month on. Past months keep their lines, so the
+    history of what was budgeted stays intact.
+    """
+    item = db.query(models.BudgetItem).filter(models.BudgetItem.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Budget item not found")
+    budget_engine.retire_item(db, item)
+    return {"message": "Budget item retired from this month on"}
+
+
+@app.patch("/budget/lines/{line_id}")
+def update_budget_line(line_id: int, data: schemas.BudgetLineUpdate, db: Session = Depends(get_db)):
+    """
+    Correct one month's line without touching its definition — used to override
+    payment detection, and to fix a figure in a month that is already closed.
+    """
+    line = db.query(models.BudgetMonthLine).filter(models.BudgetMonthLine.id == line_id).first()
+    if not line:
+        raise HTTPException(status_code=404, detail="Budget line not found")
+
+    if data.name is not None:
+        line.name = data.name.strip()
+    if data.amount is not None:
+        line.amount = data.amount
+    if data.clear_paid_override:
+        line.paid_override = None
+    elif data.paid is not None:
+        line.paid_override = 1 if data.paid else 0
+    line.source = "manual"
+    db.commit()
+    return {"message": "Budget line updated"}
+
+
+@app.get("/budget/history")
+def get_budget_history(months: int = Query(12, ge=1, le=36), db: Session = Depends(get_db)):
+    """Budgeted vs actual for recent months, most recent first."""
+    return {"months": budget_engine.month_history(db, months)}
+
+
+@app.get("/budget/detect")
+def detect_budget_items(
+    min_occurrences: int = 3,
+    max_variance: float = 0.3,
+    months_to_look_back: int = 12,
+    db: Session = Depends(get_db)
+):
+    """
+    Suggest fixed expenses from the transaction history: repeat charges to the
+    same payee, and repeat transfers into the same account (loans, savings).
+    """
+    return budget_engine.detect_candidates(db, min_occurrences, max_variance, months_to_look_back)
+
+
+# ============================================
+# KAKEIBO BUCKETS
+# ============================================
+
+@app.get("/budget/buckets")
+def get_category_buckets(db: Session = Depends(get_db)):
+    """Every category with the kakeibo bucket it is mapped to (null if unmapped)."""
+    mapped = {row.category_id: row.bucket for row in db.query(models.CategoryBucket).all()}
+    categories = db.query(Category).order_by(Category.parent, Category.name).all()
+
+    # Only spending categories are worth classifying.
+    result = []
+    for category in categories:
+        if category.type and category.type.lower() in ("income", "ingreso"):
+            continue
+        result.append({
+            "category_id": category.id,
+            "name": category.name,
+            "parent": category.parent,
+            "bucket": mapped.get(category.id),
+        })
+    return {
+        "buckets": list(budget_engine.BUCKETS),
+        "categories": result,
+        "unmapped_count": sum(1 for c in result if not c["bucket"]),
+    }
+
+
+@app.put("/budget/buckets")
+def update_category_buckets(data: schemas.CategoryBucketUpdate, db: Session = Depends(get_db)):
+    """Map categories to kakeibo buckets. A null bucket clears the mapping."""
+    existing = {row.category_id: row for row in db.query(models.CategoryBucket).all()}
+    for entry in data.mappings:
+        if entry.bucket is None:
+            row = existing.get(entry.category_id)
+            if row:
+                db.delete(row)
+            continue
+        if entry.bucket not in budget_engine.BUCKETS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"bucket must be one of {list(budget_engine.BUCKETS)}"
+            )
+        row = existing.get(entry.category_id)
+        if row:
+            row.bucket = entry.bucket
+        else:
+            db.add(models.CategoryBucket(category_id=entry.category_id, bucket=entry.bucket))
+    db.commit()
+    return {"message": "Buckets updated"}
 
 
 # ============================================

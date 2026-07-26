@@ -147,16 +147,25 @@
         .recurring-summary, .other-summary { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: var(--muted); border-top: 1px solid var(--hair); padding-top: 12px; margin-top: 6px; }
         .recurring-summary strong, .other-summary strong { color: var(--text); }
 
-        /* Other expenses (weeks) */
-        .week-group { border: none; border-bottom: 1px solid var(--hair); border-radius: 0; margin: 0; overflow: visible; }
-        .week-header { display: flex; align-items: center; justify-content: space-between; padding: 13px 0; cursor: pointer; user-select: none; background: transparent; }
-        .week-header:hover { opacity: 1; }
-        .week-header .week-label { font-weight: 600; font-size: 14px; }
-        .week-header .week-total { font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 14px; }
-        .week-header .chevron { font-size: 11px; color: #A2937E; transition: transform 0.2s; margin-right: 8px; }
-        .week-group.collapsed .chevron { transform: rotate(-90deg); }
-        .week-group.collapsed .week-body { display: none; }
-        .week-body { padding: 0 0 10px 21px; }
+        /* Budget line extras: proration note, estimate mark, spending bar */
+        .recurring-item .name .est { font-family: 'IBM Plex Mono', monospace; font-size: 9.5px; letter-spacing: .5px; text-transform: uppercase;
+            color: var(--muted); border: 1px solid var(--hair); border-radius: 4px; padding: 1px 4px; margin-left: 6px; vertical-align: middle; }
+        .recurring-item .amount .full { display: block; font-size: 10.5px; font-weight: 500; color: var(--muted); text-align: right; }
+        .recurring-item .amount { text-align: right; }
+        .plan-bar { height: 5px; background: #EDE0CD; border-radius: 99px; overflow: hidden; margin-top: 6px; }
+        .plan-bar > i { display: block; height: 100%; border-radius: 99px; background: var(--green); }
+        .plan-bar > i.warn { background: var(--yellow); }
+        .plan-bar > i.over { background: var(--red); }
+        .card-block { padding-top: 6px; }
+        .card-block + .card-block { margin-top: 34px; padding-top: 0; border-top: 1px solid var(--border); }
+        .card-block + .card-block > .sec-head { padding-top: 34px; }
+        .fund-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 7px 0; font-size: 12.5px; }
+        .fund-row .k { color: #4C463E; min-width: 0; }
+        .fund-row .k small { color: var(--muted); font-size: 11px; display: block; }
+        .fund-row .v { font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 12.5px; white-space: nowrap; }
+        .fund-row .v.short { color: var(--yellow); }
+        .fund-row .v.done { color: var(--green); }
+
         .expense-item { display: flex; align-items: baseline; padding: 8px 0; border-top: 1px solid #F3E9DA; border-bottom: none; gap: 12px; }
         .expense-item .date { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--muted); min-width: 56px; flex: 0 0 auto; }
         .expense-item .info { flex: 1; min-width: 0; }
@@ -180,14 +189,36 @@
         .cal-cell.today .d { color: var(--accent); font-weight: 700; }
         .cal-cell .amt { font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1; }
         .cal-cell .amt.due { color: var(--yellow); }
+        .cal-top { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
         .cal-marks { display: flex; gap: 3px; align-items: center; min-height: 6px; }
         .cal-marks i { width: 6px; height: 6px; border-radius: 50%; display: block; }
         .cal-marks .more { font-family: 'IBM Plex Mono', monospace; font-size: 9px; color: var(--muted); line-height: 1; }
+
+        /* Kakeibo buckets. Each bucket keeps a fixed slot in the 2×2 grid, so the
+           position identifies it as much as the colour does. */
+        .kb-essentials { color: #0072B2; }
+        .kb-indulgences { color: #C26896; }
+        .kb-culture { color: #008C66; }
+        .kb-unexpected { color: #B8730A; }
+        .cal-buckets { display: grid; grid-template-columns: 1fr 1fr; gap: 1px 6px; margin-top: auto; }
+        .cal-buckets span { font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums;
+            line-height: 1.25; min-height: 13px; text-align: right; cursor: pointer; border-radius: 3px; }
+        .cal-buckets span:nth-child(odd) { text-align: left; }
+        .cal-buckets span:hover:not(:empty) { background: rgba(35,32,28,.07); }
+        .cal-unmapped { font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 600; color: var(--muted);
+            font-variant-numeric: tabular-nums; cursor: pointer; }
+        .cal-unmapped::after { content: '?'; font-size: 8px; vertical-align: super; margin-left: 1px; }
+        /* Pace reads as a strip along the foot of the cell, leaving the tint faint
+           enough that the bucket figures keep their contrast. */
+        .cal-pace { position: absolute; left: 7px; right: 7px; bottom: 3px; height: 2px; border-radius: 99px; }
+
         .cal-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--hair);
             font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--muted); }
         .cal-legend span { display: inline-flex; align-items: center; gap: 5px; }
         .cal-legend i { width: 9px; height: 9px; border-radius: 3px; display: inline-block; }
         .cal-legend i.round { border-radius: 50%; width: 6px; height: 6px; }
+        .cal-legend i.bar { width: 14px; height: 3px; border-radius: 99px; }
+        .cal-legend .warnmap { color: var(--accent); cursor: pointer; text-decoration: underline; }
         .cal-detail { margin-top: 16px; border-top: 1px solid var(--hair); padding-top: 12px; }
         .cal-detail .dhead { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
         .cal-detail .dhead .dlabel { font-family: 'Playfair Display', serif; font-size: 17px; font-weight: 700; }
@@ -196,9 +227,12 @@
             .cal-grid { gap: 4px; }
             .cal-cell { padding: 4px; border-radius: 8px; }
             .cal-cell .amt { font-size: 10.5px; }
+            .cal-buckets span { font-size: 9.5px; min-height: 11px; }
+            .cal-buckets { gap: 0 3px; }
+            .cal-pace { left: 4px; right: 4px; }
         }
 
-        /* History */
+        /* History / audit */
         .history-item { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; border: none; border-bottom: 1px solid var(--hair); border-radius: 0; margin: 0; }
         .history-item .month { font-weight: 600; font-size: 13.5px; }
         .history-item .budget { font-family: 'IBM Plex Mono', monospace; color: var(--muted); font-size: 10.5px; }
@@ -206,6 +240,24 @@
         .history-item .bar { height: 100%; border-radius: 99px; }
         .history-item .percent { min-width: 52px; text-align: right; font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 13.5px; }
         .history-item .percent.over { color: var(--red); }
+        .history-item .variance { min-width: 128px; text-align: right; font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 12.5px; }
+        .history-item .variance.under { color: var(--green); }
+        .history-item .variance.over { color: var(--red); }
+
+        /* Multi-select pickers (accounts / categories on a planned expense) */
+        .form-group select[multiple] { height: auto; min-height: 132px; padding: 6px; background-image: none; }
+        .form-group select[multiple] option { padding: 5px 7px; border-radius: 6px; }
+        .form-hint { font-size: 11.5px; color: var(--muted); margin-top: -10px; margin-bottom: 16px; line-height: 1.45; }
+        .form-row { display: grid; grid-template-columns: 90px 1fr; gap: 10px; }
+        .form-check { display: flex; align-items: center; gap: 9px; margin-bottom: 16px; font-size: 13.5px; }
+        .form-check input { width: 18px; height: 18px; accent-color: var(--green); flex: 0 0 auto; }
+
+        /* Bucket mapping */
+        .bucket-row { display: grid; grid-template-columns: 1fr 132px; gap: 10px; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--hair); }
+        .bucket-row .cat { font-size: 13.5px; min-width: 0; }
+        .bucket-row .cat small { display: block; color: var(--muted); font-size: 11px; }
+        .bucket-row select { width: 100%; padding: 7px 24px 7px 9px; border: 1px solid var(--field); border-radius: 8px; font-size: 12.5px; background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%238A7D6C'/%3E%3C/svg%3E") no-repeat right 9px center; -webkit-appearance: none; appearance: none; }
+        .bucket-row.unmapped .cat { font-weight: 600; }
 
         /* Navigation (nav-links live in the header block above) */
         .dropdown { position: relative; display: inline-flex; }
@@ -330,13 +382,13 @@
                     <button class="lbtn" id="btnNextMonth" aria-label="Next month" style="height:28px;width:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor"><path d="M9 5l7 7-7 7z"/></svg></button>
                 </div>
             </div>
+            <div id="pastNote" style="display:none;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--muted);padding-top:12px;">This month is closed — its figures are the record of what was budgeted at the time. Editing a line here corrects that record only.</div>
             <div class="split hero-split">
                 <div>
                     <div class="budget-amount">
-                        <span id="budgetDisplay">No budget set</span>
-                        <span class="edit-btn" onclick="openBudgetModal()">✎ Edit</span>
+                        <span id="budgetDisplay">–</span>
                     </div>
-                    <div class="budget-sub">Monthly target</div>
+                    <div class="budget-sub" id="budgetSub">Monthly target</div>
                     <div class="progress-container">
                         <div class="progress-bar">
                             <div class="seg-spent" id="segSpent" style="width:0%"></div>
@@ -359,14 +411,14 @@
                     <div class="tm-list">
                         <div class="tm-row"><span class="k">Days remaining</span><span class="v playfair" id="tmDays">–</span></div>
                         <div class="tm-row"><span class="k">Safe to spend / day</span><span class="v" id="tmDaily">–</span></div>
-                        <div class="tm-row" id="tmIncomeRow"><span class="k">Income this month</span><span class="v" id="incomeValue">–</span></div>
-                        <div class="tm-row" id="tmSavingsRow"><span class="k">Savings (income − spent)</span><span class="v" id="savingsValue">–</span></div>
+                        <div class="tm-row"><span class="k">Income · received / expected</span><span class="v" id="incomeValue">–</span></div>
+                        <div class="tm-row"><span class="k">Savings · so far / expected</span><span class="v" id="savingsValue">–</span></div>
                     </div>
                 </div>
             </div>
         </section>
 
-        <!-- Spending Calendar -->
+        <!-- Kakeibo calendar -->
         <section>
             <div class="sec-head">
                 <h2 class="sechead">Calendar</h2>
@@ -376,52 +428,74 @@
                 <div class="cal-grid" id="calGrid"></div>
                 <div id="calNote" style="display:none;margin-top:10px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);"></div>
                 <div class="cal-legend">
-                    <span><i style="background:rgba(60,122,87,.35)"></i>On pace</span>
-                    <span><i style="background:rgba(198,137,63,.4)"></i>Up to 2× pace</span>
-                    <span><i style="background:rgba(176,64,46,.4)"></i>Over 2× pace</span>
+                    <span><i style="background:#0072B2"></i>Essentials</span>
+                    <span><i style="background:#C26896"></i>Indulgences</span>
+                    <span><i style="background:#008C66"></i>Culture</span>
+                    <span><i style="background:#B8730A"></i>Unexpected</span>
+                    <span><i style="background:var(--muted)"></i>Unclassified</span>
+                    <span><i class="bar" style="background:var(--green)"></i>On pace</span>
+                    <span><i class="bar" style="background:var(--yellow)"></i>Up to 2× pace</span>
+                    <span><i class="bar" style="background:var(--red)"></i>Over 2× pace</span>
                     <span><i class="round" style="background:var(--green)"></i>Bill paid</span>
                     <span><i class="round" style="background:var(--yellow)"></i>Bill due</span>
-                    <span>Colour tracks day-to-day spending only — bills are excluded.</span>
+                    <span id="calMapNote">Figures split each day by kakeibo bucket, always in the same four positions. Pace tracks day-to-day spending only — bills are excluded.</span>
                 </div>
                 <div class="cal-detail" id="calDetail" style="display:none;"></div>
             </div>
         </section>
 
-        <!-- Recurring + Planned -->
+        <!-- Fixed | Income + Planned -->
         <section class="split">
             <div>
-                <div class="sec-head"><h2 class="sechead">Recurring Expenses</h2><button class="lbtn" onclick="openRecurringModal()">+ Add</button></div>
-                <div id="recurringList" style="padding-top:6px;"></div>
-                <div class="recurring-summary" id="recurringSummary" style="display: none;">
-                    <span>Total <strong id="recurringTotal">-</strong></span>
-                    <span>Paid <strong id="recurringPaid">-</strong></span>
-                    <span>Pending <strong id="recurringPending">-</strong></span>
+                <div class="sec-head">
+                    <h2 class="sechead">Fixed Expenses</h2>
+                    <button class="lbtn add-btn" onclick="openItemModal('fixed')">+ Add</button>
                 </div>
-                <button class="lbtn" style="width:100%;margin-top:14px;height:34px;" onclick="openDetectModal()">⌕ Detect from history</button>
+                <div id="fixedList" style="padding-top:6px;"></div>
+                <div class="recurring-summary" id="fixedSummary" style="display:none;">
+                    <span>Total <strong id="fixedTotal">-</strong></span>
+                    <span>Paid <strong id="fixedPaid">-</strong></span>
+                    <span>Pending <strong id="fixedPending">-</strong></span>
+                </div>
+                <div id="fundsBlock" style="display:none;margin-top:16px;padding-top:12px;border-top:1px solid var(--hair);">
+                    <div class="thismonth-label">Set aside for future bills</div>
+                    <div id="fundsList"></div>
+                </div>
+                <button class="lbtn add-btn" style="width:100%;margin-top:14px;height:34px;" onclick="openDetectModal()">⌕ Detect from history</button>
             </div>
             <div>
-                <div class="sec-head"><h2 class="sechead">Planned This Month</h2><button class="lbtn" onclick="openPlannedModal()">+ Add</button></div>
-                <div id="plannedList" style="padding-top:6px;"></div>
-                <div class="recurring-summary" id="plannedSummary" style="display: none;">
-                    <span>Total <strong id="plannedTotal">-</strong></span>
-                    <span>Paid <strong id="plannedPaid">-</strong></span>
-                    <span>Pending <strong id="plannedPending">-</strong></span>
+                <div class="card-block">
+                    <div class="sec-head">
+                        <h2 class="sechead">Expected Income</h2>
+                        <button class="lbtn add-btn" onclick="openItemModal('income')">+ Add</button>
+                    </div>
+                    <div id="incomeList" style="padding-top:6px;"></div>
+                    <div class="recurring-summary" id="incomeSummary" style="display:none;">
+                        <span>Expected <strong id="incomeTotal">-</strong></span>
+                        <span>Received <strong id="incomeReceived">-</strong></span>
+                    </div>
+                </div>
+                <div class="card-block">
+                    <div class="sec-head">
+                        <h2 class="sechead">Planned Expenses</h2>
+                        <button class="lbtn add-btn" onclick="openItemModal('planned')">+ Add</button>
+                    </div>
+                    <div id="plannedList" style="padding-top:6px;"></div>
+                    <div class="recurring-summary" id="plannedSummary" style="display:none;">
+                        <span>Budgeted <strong id="plannedTotal">-</strong></span>
+                        <span>Spent <strong id="plannedSpent">-</strong></span>
+                        <span>Left <strong id="plannedLeft">-</strong></span>
+                    </div>
                 </div>
             </div>
-        </section>
-
-        <!-- Other Expenses -->
-        <section>
-            <div class="sec-head">
-                <h2 class="sechead">Other Expenses</h2>
-                <div id="otherSummary" class="other-summary" style="display:none;border:none;padding:0;margin:0;"><span><strong id="otherCount">0</strong> expenses</span><span>Total <strong id="otherTotal">-</strong></span></div>
-            </div>
-            <div id="otherExpensesList" style="padding-top:10px;"></div>
         </section>
 
         <!-- Budget History -->
         <section>
-            <div class="sec-head"><h2 class="sechead">Budget History</h2></div>
+            <div class="sec-head">
+                <h2 class="sechead">Budget History</h2>
+                <div class="other-summary" style="display:flex;border:none;padding:0;margin:0;">budgeted vs actual</div>
+            </div>
             <div id="historyList" style="padding-top:14px;"></div>
         </section>
 
@@ -430,7 +504,7 @@
 
     <!-- Info Modal -->
     <div id="infoModal" class="modal">
-        <div class="modal-content" style="max-width: 460px;">
+        <div class="modal-content" style="max-width: 480px;">
             <div class="modal-header">
                 <h3>How the Budget works</h3>
                 <button class="modal-close" onclick="closeModal('infoModal')">&times;</button>
@@ -438,172 +512,190 @@
             <div class="modal-body" style="padding: 20px 25px;">
                 <div class="info-section">
                     <strong>Overview</strong>
-                    <div class="info-row">Set a monthly budget and track your spending against it. The progress bar shows how much of your budget you've used.</div>
+                    <div class="info-row">You don't type a monthly target — you build it. The target is the sum of your fixed expenses and your planned expenses for the month, and the page then measures the real spending against it.</div>
                 </div>
                 <div class="info-section">
                     <strong>Key figures</strong>
-                    <div class="info-row"><b>Spent</b> — Total from actual transactions this month (excluding transfers).</div>
-                    <div class="info-row"><b>Committed</b> — Recurring and planned expenses still pending payment.</div>
-                    <div class="info-row"><b>Available</b> — Budget minus spent minus committed.</div>
+                    <div class="info-row"><b>Target</b> — fixed expenses plus planned expenses for this month.</div>
+                    <div class="info-row"><b>Spent</b> — actual transactions this month, plus money moved into a savings pot for a future bill.</div>
+                    <div class="info-row"><b>Committed</b> — fixed expenses still unpaid, planned budgets not yet spent, and any shortfall in the month's savings pots.</div>
+                    <div class="info-row"><b>Available</b> — target minus spent minus committed.</div>
                 </div>
                 <div class="info-section">
-                    <strong>Recurring expenses</strong>
-                    <div class="info-row">Recurring expenses are automatically detected as paid when a matching transaction is found (same payee, similar amount).</div>
-                    <div class="info-row" style="margin-top: 6px;">
-                        <span class="symbol">✓</span> Paid — matching transaction found<br>
-                        <span class="symbol">○</span> Pending — not yet paid, counts as committed<br>
-                        <span class="symbol">✕</span> Skipped — manually marked as "won't pay this month"<br>
-                        <span class="symbol">—</span> N/A — doesn't apply this month (quarterly, annual, etc.)
+                    <strong>Fixed expenses</strong>
+                    <div class="info-row">Anything with a set amount and a rhythm: rent, insurance, a subscription, a transfer to a loan or savings account. Give it a first date and how often it repeats, and a payee so payment can be detected. A one-off you only expect this month goes here too — set it to repeat "once".</div>
+                    <div class="info-row" style="margin-top:6px;">Anything repeating less often than monthly is <b>prorated</b>: a £600 bill every six months is budgeted at £100 a month, starting straight away even if the first charge is still in the future. That is what the month's target uses.</div>
+                    <div class="info-row" style="margin-top:6px;">Mark an amount as <b>estimated</b> when you don't know it yet — an MOT, say.</div>
+                    <div class="info-row" style="margin-top:6px;">
+                        <span class="symbol">✓</span> Paid — a matching transaction was found<br>
+                        <span class="symbol">○</span> Pending — counts as committed<br>
+                        <span class="symbol">≡</span> Prorated — tracked by its savings pot, not one by one
                     </div>
-                    <div class="info-row" style="margin-top: 6px;">Click <b>○</b> to skip an expense this month (removes it from committed). Click <b>✕</b> to undo.</div>
+                    <div class="info-row" style="margin-top:6px;">Click the status to set it by hand when the detector gets it wrong; click again to hand it back.</div>
+                </div>
+                <div class="info-section">
+                    <strong>Set aside for future bills</strong>
+                    <div class="info-row">Prorated expenses pointing at the same savings account are grouped into one pot, and the pot is compared against what you actually transferred there this month. Checking it per account rather than per bill is what makes a single lump-sum transfer work.</div>
+                </div>
+                <div class="info-section">
+                    <strong>Expected income</strong>
+                    <div class="info-row">What you expect to earn this month. Its total is what expected savings is measured against.</div>
                 </div>
                 <div class="info-section">
                     <strong>Planned expenses</strong>
-                    <div class="info-row">One-time expenses expected this month. Click the status icon to toggle between paid and pending.</div>
+                    <div class="info-row">The variable spending you budget for: groceries, eating out, fuel. Give each one the accounts and categories that represent it, and the bar fills as the month's transactions land. Subcategories of a chosen category count too.</div>
                 </div>
                 <div class="info-section">
-                    <strong>Other expenses</strong>
-                    <div class="info-row">All transactions this month that didn't match a recurring expense, grouped by week.</div>
+                    <strong>Repeating and editing</strong>
+                    <div class="info-row">Everything repeats by its own rhythm, so next month is already laid out. Editing an amount changes this month and every month ahead — <b>months already closed keep the figures they were budgeted with</b>, which is what makes the history worth auditing.</div>
                 </div>
                 <div class="info-section">
                     <strong>Calendar</strong>
-                    <div class="info-row">Each cell shows what was spent that day. Future days show what's still due instead.</div>
-                    <div class="info-row" style="margin-top: 6px;">The <b>pace target</b> is your budget minus recurring and planned expenses, spread evenly across the month — what you can spend day to day. The colour of each past day compares its day-to-day spending against that target: green on pace, ochre up to twice the target, red beyond that. Bills are excluded from the colour, since they're already set aside.</div>
-                    <div class="info-row" style="margin-top: 6px;">Dots mark recurring bills falling on that day — green if paid, ochre if still due. Click any day to see its detail.</div>
+                    <div class="info-row">Each day splits its spending into the four kakeibo buckets — Essentials, Indulgences, Culture, Unexpected — each in a fixed position within the cell. Nothing is drawn for a bucket with no spending. Click a figure for that day's transactions in that bucket.</div>
+                    <div class="info-row" style="margin-top:6px;">Spending in a category you haven't classified shows as a grey figure with a <b>?</b>. <span class="warnmap" onclick="closeModal('infoModal'); openBucketsModal();" style="color:var(--accent);cursor:pointer;text-decoration:underline;">Map your categories</span> to clear it.</div>
+                    <div class="info-row" style="margin-top:6px;">The strip along the foot of each cell is the <b>pace</b>: your planned expenses spread evenly across the month. Green means on pace, ochre up to twice it, red beyond. Bills are excluded — they're already set aside. Dots mark bills falling that day, green if paid.</div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Budget Edit Modal -->
-    <div id="budgetModal" class="modal">
+    <!-- Budget item modal (fixed / income / planned) -->
+    <div id="itemModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>Set Budget</h3>
-                <button class="modal-close" onclick="closeModal('budgetModal')">&times;</button>
+                <h3 id="itemModalTitle">Add</h3>
+                <button class="modal-close" onclick="closeModal('itemModal')">&times;</button>
             </div>
             <div class="modal-body">
-                <div class="form-group">
-                    <label>Monthly Budget Amount</label>
-                    <input type="number" id="budgetAmount" step="0.01" min="0" placeholder="e.g., 2000">
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeModal('budgetModal')">Cancel</button>
-                <button class="btn btn-primary" onclick="saveBudget()">Save</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Recurring Expense Modal -->
-    <div id="recurringModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 id="recurringModalTitle">Add Recurring Expense</h3>
-                <button class="modal-close" onclick="closeModal('recurringModal')">&times;</button>
-            </div>
-            <div class="modal-body">
-                <input type="hidden" id="recurringId">
+                <input type="hidden" id="itemId">
+                <input type="hidden" id="itemKind">
                 <div class="form-group">
                     <label>Name</label>
-                    <input type="text" id="recurringName" placeholder="e.g., Netflix, Rent">
+                    <input type="text" id="itemName" placeholder="e.g., Rent, Salary, Groceries">
                 </div>
                 <div class="form-group">
-                    <label>Amount</label>
-                    <input type="number" id="recurringAmount" step="0.01" min="0">
+                    <label id="itemAmountLabel">Amount</label>
+                    <input type="number" id="itemAmount" step="0.01" min="0">
+                </div>
+                <label class="form-check" id="itemEstimatedRow">
+                    <input type="checkbox" id="itemEstimated">
+                    <span>Estimated — I don't know the exact amount yet</span>
+                </label>
+                <div class="form-group">
+                    <label id="itemDateLabel">First payment date</label>
+                    <input type="date" id="itemFirstDate">
                 </div>
                 <div class="form-group">
-                    <label>Payee (optional)</label>
-                    <select id="recurringPayee">
-                        <option value="">-- Select --</option>
-                    </select>
+                    <label>Repeats</label>
+                    <div class="form-row">
+                        <input type="number" id="itemIntervalCount" min="1" step="1" value="1">
+                        <select id="itemIntervalUnit" onchange="onIntervalChange()">
+                            <option value="day">days</option>
+                            <option value="week">weeks</option>
+                            <option value="month" selected>months</option>
+                            <option value="year">years</option>
+                            <option value="once">— only once</option>
+                        </select>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label>Category (optional)</label>
-                    <select id="recurringCategory">
-                        <option value="">-- Select --</option>
-                    </select>
+                <div class="form-hint" id="itemProrateHint" style="display:none;"></div>
+                <div class="form-group" id="itemPayeeGroup">
+                    <label>Payee — used to spot the payment</label>
+                    <select id="itemPayee"><option value="">-- None --</option></select>
                 </div>
-                <div class="form-group">
-                    <label>Day of Month (optional)</label>
-                    <input type="number" id="recurringDay" min="1" max="31" placeholder="e.g., 15">
+                <div class="form-group" id="itemAccountGroup">
+                    <label id="itemAccountLabel">Savings or debt account it is paid into</label>
+                    <select id="itemAccount"><option value="">-- None --</option></select>
                 </div>
-                <div class="form-group">
-                    <label>Frequency</label>
-                    <select id="recurringFrequency" onchange="toggleStartMonth()">
-                        <option value="monthly">Monthly</option>
-                        <option value="quarterly">Quarterly</option>
-                        <option value="biannual">Biannual (every 6 months)</option>
-                        <option value="annual">Annual</option>
-                    </select>
+                <div class="form-group" id="itemAccountsGroup">
+                    <label>Accounts that count towards it</label>
+                    <select id="itemAccounts" multiple></select>
                 </div>
-                <div class="form-group" id="startMonthGroup" style="display: none;">
-                    <label>Start Month (when first charged)</label>
-                    <select id="recurringStartMonth">
-                        <option value="1">January</option>
-                        <option value="2">February</option>
-                        <option value="3">March</option>
-                        <option value="4">April</option>
-                        <option value="5">May</option>
-                        <option value="6">June</option>
-                        <option value="7">July</option>
-                        <option value="8">August</option>
-                        <option value="9">September</option>
-                        <option value="10">October</option>
-                        <option value="11">November</option>
-                        <option value="12">December</option>
-                    </select>
+                <div class="form-hint" id="itemAccountsHint">Leave empty to count every account.</div>
+                <div class="form-group" id="itemCategoriesGroup">
+                    <label>Categories that count towards it</label>
+                    <select id="itemCategories" multiple></select>
                 </div>
+                <div class="form-hint" id="itemCategoriesHint">Choosing a parent category includes its subcategories.</div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-danger" id="deleteRecurringBtn" onclick="deleteRecurring()" style="display: none;">Delete</button>
-                <button class="btn btn-secondary" onclick="closeModal('recurringModal')">Cancel</button>
-                <button class="btn btn-primary" onclick="saveRecurring()">Save</button>
+                <button class="btn btn-danger" id="deleteItemBtn" onclick="deleteItem()" style="display:none;">Delete</button>
+                <button class="btn btn-secondary" onclick="closeModal('itemModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="saveItem()">Save</button>
             </div>
         </div>
     </div>
 
-    <!-- Planned Expense Modal -->
-    <div id="plannedModal" class="modal">
+    <!-- Correct a single line of a month already closed -->
+    <div id="lineModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3 id="plannedModalTitle">Add Planned Expense</h3>
-                <button class="modal-close" onclick="closeModal('plannedModal')">&times;</button>
+                <h3>Correct this month</h3>
+                <button class="modal-close" onclick="closeModal('lineModal')">&times;</button>
             </div>
             <div class="modal-body">
-                <input type="hidden" id="plannedId">
+                <input type="hidden" id="lineId">
+                <p class="muted" style="margin-top:0;font-size:12.5px;line-height:1.5;">
+                    This month is closed. Changes here fix the record for <strong id="lineMonthLabel"></strong>
+                    only — they don't touch the definition or any other month.
+                </p>
                 <div class="form-group">
                     <label>Name</label>
-                    <input type="text" id="plannedName" placeholder="e.g., Dentist, Car repair">
+                    <input type="text" id="lineName">
                 </div>
                 <div class="form-group">
-                    <label>Amount</label>
-                    <input type="number" id="plannedAmount" step="0.01" min="0">
-                </div>
-                <div class="form-group">
-                    <label>Category (optional)</label>
-                    <select id="plannedCategory">
-                        <option value="">-- Select --</option>
-                    </select>
+                    <label>Amount budgeted</label>
+                    <input type="number" id="lineAmount" step="0.01">
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-danger" id="deletePlannedBtn" onclick="deletePlanned()" style="display: none;">Delete</button>
-                <button class="btn btn-secondary" onclick="closeModal('plannedModal')">Cancel</button>
-                <button class="btn btn-primary" onclick="savePlanned()">Save</button>
+                <button class="btn btn-secondary" onclick="closeModal('lineModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="saveLine()">Save</button>
             </div>
         </div>
     </div>
 
-    <!-- Detect Candidates Modal -->
+    <!-- Day + bucket detail -->
+    <div id="dayModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="dayModalTitle">Day</h3>
+                <button class="modal-close" onclick="closeModal('dayModal')">&times;</button>
+            </div>
+            <div class="modal-body" id="dayModalBody"></div>
+        </div>
+    </div>
+
+    <!-- Kakeibo mapping -->
+    <div id="bucketsModal" class="modal">
+        <div class="modal-content" style="max-width: 560px;">
+            <div class="modal-header">
+                <h3>Kakeibo buckets</h3>
+                <button class="modal-close" onclick="closeModal('bucketsModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="muted" style="margin-top:0;font-size:13px;line-height:1.5;">
+                    Sort your spending categories into the four kakeibo buckets. Unclassified ones are listed first
+                    and show up on the calendar as a grey figure.
+                </p>
+                <div id="bucketsList"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('bucketsModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="saveBuckets()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detect candidates -->
     <div id="detectModal" class="modal">
-        <div class="modal-content" style="max-width: 550px;">
+        <div class="modal-content" style="max-width: 560px;">
             <div class="modal-header">
-                <h3>Detected Recurring Expenses</h3>
+                <h3>Detected Fixed Expenses</h3>
                 <button class="modal-close" onclick="closeModal('detectModal')">&times;</button>
             </div>
             <div class="modal-body">
-                <p class="muted" style="margin-top: 0;">Select expenses to add to your recurring list:</p>
+                <p class="muted" style="margin-top: 0;">Regular payments found in your history. Pick the ones to add:</p>
                 <div id="candidatesList"></div>
             </div>
             <div class="modal-footer">
@@ -616,28 +708,48 @@
     <script>
         const API_BASE = (localStorage.getItem('delfin_api') || (location.pathname.startsWith('/app') ? location.origin : 'http://localhost:8422')).replace(/\/$/, '');
 
+        // Kakeibo buckets, in the order they occupy the four slots of a calendar cell.
+        const BUCKETS = ['essentials', 'indulgences', 'culture', 'unexpected'];
+        const BUCKET_LABELS = {
+            essentials: 'Essentials', indulgences: 'Indulgences',
+            culture: 'Culture', unexpected: 'Unexpected', unmapped: 'Unclassified'
+        };
+
         let state = {
             currentMonth: new Date().toISOString().slice(0, 7),
             availableMonths: [],
             baseCurrency: 'GBP',
             payees: [],
             categories: [],
-            progress: null,
-            selectedDay: null
+            accounts: [],
+            data: null,
+            selectedDay: null,
+            buckets: null,
+            candidates: []
         };
 
         // Helpers
         const q = (sel) => document.querySelector(sel);
         const qa = (sel) => Array.from(document.querySelectorAll(sel));
+        const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c =>
+            ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-        const fmtMoney = (n, c = 'GBP') => new Intl.NumberFormat('en-GB', {
-            style: 'currency', currency: c, maximumFractionDigits: 2
+        const fmtMoney = (n, c) => new Intl.NumberFormat('en-GB', {
+            style: 'currency', currency: c || state.baseCurrency, maximumFractionDigits: 2
         }).format(n || 0);
 
         // Rounded to the nearest unit — used where space is tight (calendar cells).
-        const fmtMoney0 = (n, c = 'GBP') => new Intl.NumberFormat('en-GB', {
-            style: 'currency', currency: c, maximumFractionDigits: 0
+        const fmtMoney0 = (n, c) => new Intl.NumberFormat('en-GB', {
+            style: 'currency', currency: c || state.baseCurrency, maximumFractionDigits: 0
         }).format(n || 0);
+
+        // Bare number, for the four figures crammed into a calendar cell.
+        const fmtBare = (n) => Math.round(n || 0).toLocaleString('en-GB');
+
+        const monthLabel = (ym) => {
+            const [y, m] = ym.split('-');
+            return new Date(y, m - 1).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
+        };
 
         async function api(path, opts = {}) {
             const res = await fetch(`${API_BASE}${path}`, { headers: { 'Content-Type': 'application/json' }, ...opts });
@@ -719,24 +831,19 @@
         // Initialize
         async function init() {
             try {
-                // Load payees and categories for dropdowns
-                [state.payees, state.categories] = await Promise.all([
+                [state.payees, state.categories, state.accounts] = await Promise.all([
                     api('/payees'),
-                    api('/categories')
+                    api('/categories'),
+                    api('/accounts')
                 ]);
+                populatePickers();
 
-                // Populate dropdowns
-                populatePayeeDropdown();
-                populateCategoryDropdown();
-
-                // Load available months (extract just the value strings from objects)
                 const months = await api('/dashboard/available-months');
                 state.availableMonths = (months.months || []).map(m => typeof m === 'string' ? m : m.value);
                 populateMonthSelector();
 
-                // Load current month data
-                await loadBudgetProgress();
-                await loadBudgetHistory();
+                await loadMonth();
+                await loadHistory();
             } catch (e) {
                 console.error('Init error:', e);
             }
@@ -744,857 +851,800 @@
 
         function populateMonthSelector() {
             const select = q('#selectMonth');
-
-            // Ensure current month is in the list
             if (!state.availableMonths.includes(state.currentMonth)) {
                 state.availableMonths.unshift(state.currentMonth);
             }
-
-            // Add future months (12 months ahead)
             const today = new Date();
             for (let i = 1; i <= 12; i++) {
                 const futureDate = new Date(today.getFullYear(), today.getMonth() + i, 1);
-                const futureMonth = futureDate.toISOString().slice(0, 7);
-                if (!state.availableMonths.includes(futureMonth)) {
-                    state.availableMonths.push(futureMonth);
-                }
+                const futureMonth = `${futureDate.getFullYear()}-${String(futureDate.getMonth() + 1).padStart(2, '0')}`;
+                if (!state.availableMonths.includes(futureMonth)) state.availableMonths.push(futureMonth);
             }
-
-            // Sort descending
             state.availableMonths.sort((a, b) => b.localeCompare(a));
 
             const todayMonth = new Date().toISOString().slice(0, 7);
-            select.innerHTML = state.availableMonths.map(m => {
-                const [y, mo] = m.split('-');
-                const label = new Date(y, mo - 1).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
-                const isFuture = m > todayMonth ? ' ○' : '';
-                return `<option value="${m}" ${m === state.currentMonth ? 'selected' : ''}>${label}${isFuture}</option>`;
-            }).join('');
+            select.innerHTML = state.availableMonths.map(m =>
+                `<option value="${m}" ${m === state.currentMonth ? 'selected' : ''}>${monthLabel(m)}${m > todayMonth ? ' ○' : ''}</option>`
+            ).join('');
         }
 
-        function populatePayeeDropdown() {
-            const select = q('#recurringPayee');
-            const sorted = [...state.payees].sort((a, b) => a.name.localeCompare(b.name));
-            select.innerHTML = '<option value="">-- Select --</option>' +
-                sorted.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+        const categoryLabel = (c) => (c.parent ? c.parent + ' › ' : '') + c.name;
+        const sortedCategories = () => [...state.categories]
+            .sort((a, b) => categoryLabel(a).localeCompare(categoryLabel(b)));
+
+        function populatePickers() {
+            q('#itemPayee').innerHTML = '<option value="">-- None --</option>' +
+                [...state.payees].sort((a, b) => a.name.localeCompare(b.name))
+                    .map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+
+            const accountOptions = [...state.accounts].sort((a, b) => a.name.localeCompare(b.name))
+                .map(a => `<option value="${a.id}">${esc(a.name)}</option>`).join('');
+            q('#itemAccount').innerHTML = '<option value="">-- None --</option>' + accountOptions;
+            q('#itemAccounts').innerHTML = accountOptions;
+
+            q('#itemCategories').innerHTML = sortedCategories()
+                .map(c => `<option value="${c.id}">${esc(categoryLabel(c))}</option>`).join('');
         }
 
-        function populateCategoryDropdown() {
-            const select = q('#recurringCategory');
-            const sorted = [...state.categories].sort((a, b) => {
-                const aLabel = (a.parent ? a.parent + ' > ' : '') + a.name;
-                const bLabel = (b.parent ? b.parent + ' > ' : '') + b.name;
-                return aLabel.localeCompare(bLabel);
-            });
-            select.innerHTML = '<option value="">-- Select --</option>' +
-                sorted.map(c => `<option value="${c.id}">${c.parent ? c.parent + ' > ' : ''}${c.name}</option>`).join('');
-        }
-
-        async function loadBudgetProgress() {
+        async function loadMonth() {
             try {
                 const data = await api(`/budgets/${state.currentMonth}/progress`);
-                state.progress = data;
+                state.data = data;
                 state.baseCurrency = data.base_currency || 'GBP';
-                renderBudgetProgress(data);
-                renderRecurringList(data.recurring_expenses);
-                renderPlannedList(data.planned_expenses);
-                renderOtherExpenses(data.other_expenses);
+                renderHero(data);
+                renderFixed(data);
+                renderIncome(data);
+                renderPlanned(data);
                 renderCalendar(data);
             } catch (e) {
-                console.error('Error loading progress:', e);
-                // Show empty state
-                q('#budgetDisplay').textContent = 'No budget set';
-                q('#segSpent').style.width = '0%';
-                q('#segCommitted').style.width = '0%';
-                q('#legSpent').textContent = '0%';
-                q('#legCommitted').textContent = '0%';
-                q('#legAvailable').textContent = '0%';
-                q('#statSpent').textContent = '-';
-                q('#statCommitted').textContent = '-';
-                q('#statAvailable').textContent = '-';
-                q('#tmDays').textContent = '–';
-                q('#tmDaily').textContent = '–';
-                q('#recurringList').innerHTML = '<div class="empty-state">No recurring expenses</div>';
-                q('#plannedList').innerHTML = '<div class="empty-state">No planned expenses</div>';
-                q('#otherExpensesList').innerHTML = '<div class="empty-state">No spending data</div>';
+                console.error('Error loading month:', e);
+                q('#budgetDisplay').textContent = '–';
+                q('#fixedList').innerHTML = '<div class="empty-state">Could not load this month</div>';
                 q('#calGrid').innerHTML = '';
-                q('#calNote').style.display = 'none';
-                q('#calSummary').style.display = 'none';
-                q('#calDetail').style.display = 'none';
             }
         }
 
-        function renderBudgetProgress(data) {
-            const { budget, spent, committed, remaining, percentage, days_remaining, daily_available, income, savings } = data;
+        function renderHero(d) {
+            const cur = d.base_currency;
+            q('#budgetDisplay').textContent = d.target > 0 ? fmtMoney(d.target, cur) : 'No budget yet';
+            q('#budgetSub').textContent = d.target > 0
+                ? `Monthly target · ${fmtMoney(d.target_fixed, cur)} fixed + ${fmtMoney(d.target_planned, cur)} planned`
+                : 'Monthly target — add fixed and planned expenses to build it';
 
-            // Budget display
-            if (budget.amount > 0) {
-                q('#budgetDisplay').textContent = fmtMoney(budget.amount, budget.currency);
-            } else {
-                q('#budgetDisplay').textContent = 'No budget set';
-            }
-
-            // Two-segment progress (spent red + committed ochre) over the budget
-            const b = budget.amount || 0;
-            const spentPct = b > 0 ? (spent / b) * 100 : 0;
-            const committedPct = b > 0 ? (committed / b) * 100 : 0;
-            const availPct = b > 0 ? (remaining / b) * 100 : 0;
+            const target = d.target || 0;
+            const spentPct = target > 0 ? (d.spent / target) * 100 : 0;
+            const committedPct = target > 0 ? (d.committed / target) * 100 : 0;
+            const availPct = target > 0 ? (d.remaining / target) * 100 : 0;
             const segSpentW = Math.max(0, Math.min(spentPct, 100));
-            const segCommittedW = Math.max(0, Math.min(committedPct, 100 - segSpentW));
             q('#segSpent').style.width = `${segSpentW}%`;
-            q('#segCommitted').style.width = `${segCommittedW}%`;
+            q('#segCommitted').style.width = `${Math.max(0, Math.min(committedPct, 100 - segSpentW))}%`;
             q('#legSpent').textContent = `${Math.round(spentPct)}%`;
             q('#legCommitted').textContent = `${Math.round(committedPct)}%`;
             const availEl = q('#legAvailable');
             availEl.textContent = `${Math.round(availPct)}%`;
             availEl.parentElement.classList.toggle('over', availPct < 0);
 
-            // Stats
-            q('#statSpent').textContent = fmtMoney(spent, budget.currency);
-            q('#statCommitted').textContent = fmtMoney(committed, budget.currency);
-            q('#statAvailable').textContent = fmtMoney(remaining, budget.currency);
-            q('#statAvailable').className = 'stat-value ' + (remaining >= 0 ? 'available' : 'spent');
+            q('#statSpent').textContent = fmtMoney(d.spent, cur);
+            q('#statCommitted').textContent = fmtMoney(d.committed, cur);
+            q('#statAvailable').textContent = fmtMoney(d.remaining, cur);
+            q('#statAvailable').className = 'stat-value ' + (d.remaining >= 0 ? 'available' : 'spent');
 
-            // This-month panel
-            const today = new Date().toISOString().slice(0, 7);
-            const isFutureMonth = state.currentMonth > today;
-            q('#futureBadge').style.display = isFutureMonth ? 'inline-block' : 'none';
+            const isFuture = state.currentMonth > new Date().toISOString().slice(0, 7);
+            q('#futureBadge').style.display = isFuture ? 'inline-block' : 'none';
 
-            q('#tmDays').textContent = days_remaining;
+            // A closed month takes no new entries — they would land in the current
+            // month instead, which is not what clicking "+ Add" back there means.
+            qa('.add-btn').forEach(b => {
+                b.disabled = !!d.is_past;
+                b.style.opacity = d.is_past ? '.4' : '';
+                b.style.cursor = d.is_past ? 'not-allowed' : '';
+                b.title = d.is_past ? 'This month is closed' : '';
+            });
+            q('#pastNote').style.display = d.is_past ? 'block' : 'none';
+
+            q('#tmDays').textContent = d.days_remaining;
             const dailyEl = q('#tmDaily');
-            dailyEl.textContent = fmtMoney(daily_available, budget.currency);
-            dailyEl.className = 'v ' + (daily_available >= 0 ? 'positive' : 'negative');
+            dailyEl.textContent = fmtMoney(d.daily_available, cur);
+            dailyEl.className = 'v ' + (d.daily_available >= 0 ? 'positive' : 'negative');
 
-            const incomeRow = q('#tmIncomeRow'), savingsRow = q('#tmSavingsRow');
-            if (isFutureMonth) {
-                incomeRow.style.display = 'none';
-                savingsRow.style.display = 'none';
-            } else {
-                incomeRow.style.display = '';
-                savingsRow.style.display = '';
-                q('#incomeValue').textContent = fmtMoney(income, budget.currency);
-                const savingsEl = q('#savingsValue');
-                savingsEl.textContent = fmtMoney(savings, budget.currency);
-                savingsEl.className = 'v ' + (savings >= 0 ? 'positive' : 'negative');
-            }
+            // Actual against expected, side by side.
+            q('#incomeValue').innerHTML = isFuture
+                ? `<span class="muted">—</span> / ${fmtMoney(d.income.expected, cur)}`
+                : `${fmtMoney(d.income.actual, cur)} / <span class="muted">${fmtMoney(d.income.expected, cur)}</span>`;
+
+            const savings = q('#savingsValue');
+            const expectedSavings = `<span class="muted">${fmtMoney(d.savings.expected, cur)}</span>`;
+            savings.innerHTML = isFuture
+                ? `<span class="muted">—</span> / ${fmtMoney(d.savings.expected, cur)}`
+                : `<span style="color:var(--${d.savings.actual >= 0 ? 'green' : 'red'})">${fmtMoney(d.savings.actual, cur)}</span> / ${expectedSavings}`;
         }
 
-        function renderRecurringList(recurring) {
-            const list = q('#recurringList');
+        // ── Fixed expenses ─────────────────────────────────────────────────
+        const UNIT_LABELS = { day: 'day', week: 'week', month: 'month', year: 'year' };
 
-            if (!recurring || recurring.length === 0) {
-                list.innerHTML = '<div class="empty-state">No recurring expenses<br><small>Click "Detect from history" to find them automatically</small></div>';
-                q('#recurringSummary').style.display = 'none';
+        function frequencyLabel(line) {
+            if (line.is_prorated) {
+                const months = Math.round(line.period_months);
+                return `${fmtMoney(line.full_amount, line.currency)} every ${months} months`;
+            }
+            if (line.occurrences > 1) return `${line.occurrences}× this month`;
+            return '';
+        }
+
+        function renderFixed(d) {
+            const list = q('#fixedList');
+            const lines = d.fixed_expenses || [];
+
+            if (!lines.length) {
+                list.innerHTML = '<div class="empty-state">No fixed expenses<br><small>Add rent, insurance, subscriptions — or detect them from your history</small></div>';
+                q('#fixedSummary').style.display = 'none';
+                q('#fundsBlock').style.display = 'none';
                 return;
             }
 
-            // Sort by amount descending
-            const sorted = [...recurring].sort((a, b) => (b.converted_amount || b.amount) - (a.converted_amount || a.amount));
+            let total = 0, paid = 0, prorated = 0;
+            list.innerHTML = lines.map(l => {
+                total += l.converted_amount;
+                if (l.paid) paid += l.converted_amount;
+                if (l.is_prorated) prorated += l.converted_amount;
 
-            let totalAmount = 0;
-            let paidAmount = 0;
+                // Prorated lines answer to their savings pot, so they get their own mark.
+                const status = l.is_prorated ? '≡' : l.paid ? '✓' : '○';
+                const cls = l.paid ? 'paid' : l.is_prorated ? 'not-applicable' : '';
+                const canToggle = !l.is_prorated;
+                const clickAttr = canToggle
+                    ? `onclick="event.stopPropagation(); toggleLinePaid(${l.id}, ${l.paid})" style="cursor:pointer" title="Set by hand"`
+                    : 'title="Tracked by its savings pot"';
 
-            const freqLabels = { monthly: '', quarterly: 'Quarterly', biannual: 'Biannual', annual: 'Annual' };
+                const who = l.payee_name || (l.set_aside_account_name ? 'to ' + l.set_aside_account_name : null);
+                const bits = [who, frequencyLabel(l)].filter(Boolean);
+                const sub = bits.join(' · ') || 'No payee — payment can’t be detected';
+                const full = l.is_prorated
+                    ? `<span class="full">of ${fmtMoney(l.full_amount, l.currency)}</span>` : '';
+                const est = l.is_estimated ? '<span class="est">est</span>' : '';
 
-            list.innerHTML = sorted.map(r => {
-                const amount = r.converted_amount || r.amount;
-                totalAmount += amount;
-                if (r.paid_this_month) paidAmount += amount;
-                const freqLabel = freqLabels[r.frequency] || '';
-                const catText = r.category_name || 'No category';
-                const subtitle = freqLabel ? `${catText} · ${freqLabel}` : catText;
-
-                // ✓ = paid (auto-detected), ○ = pending, ✕ = skipped by user, — = not applicable
-                const statusIcon = r.paid_this_month ? '✓' : r.skipped_this_month ? '✕' : r.applies_this_month ? '○' : '—';
-                const itemClass = r.paid_this_month ? 'paid' : r.skipped_this_month ? 'not-applicable' : !r.applies_this_month ? 'not-applicable' : '';
-                // Toggle skip: only on pending (○) and skipped (✕), not on paid (✓) or n/a (—)
-                const canToggle = r.applies_this_month && !r.paid_this_month;
-                const clickAttr = canToggle ? `onclick="event.stopPropagation(); toggleRecurringSkip(${r.id})" style="cursor:pointer"` : '';
                 return `
-                    <div class="recurring-item ${itemClass}" onclick="editRecurring(${r.id})">
-                        <span class="status" ${clickAttr}>${statusIcon}</span>
+                    <div class="recurring-item ${cls}" onclick="openLine(${l.id}, ${l.item_id})">
+                        <span class="status" ${clickAttr}>${status}</span>
                         <div class="info">
-                            <div class="name">${r.name}</div>
-                            <div class="category">${subtitle}</div>
+                            <div class="name">${esc(l.name)}${est}</div>
+                            <div class="category">${esc(sub)}</div>
                         </div>
-                        <span class="amount">${fmtMoney(r.amount, r.currency)}</span>
-                    </div>
-                `;
+                        <span class="amount">${fmtMoney(l.converted_amount, d.base_currency)}${full}</span>
+                    </div>`;
             }).join('');
 
-            // Summary
-            q('#recurringSummary').style.display = 'flex';
-            q('#recurringTotal').textContent = fmtMoney(totalAmount, state.baseCurrency);
-            q('#recurringPaid').textContent = fmtMoney(paidAmount, state.baseCurrency);
-            q('#recurringPending').textContent = fmtMoney(totalAmount - paidAmount, state.baseCurrency);
+            q('#fixedSummary').style.display = 'flex';
+            q('#fixedTotal').textContent = fmtMoney(total, d.base_currency);
+            q('#fixedPaid').textContent = fmtMoney(paid, d.base_currency);
+            q('#fixedPending').textContent = fmtMoney(total - paid, d.base_currency);
+
+            renderFunds(d, prorated);
         }
 
-        async function toggleRecurringSkip(id) {
+        function renderFunds(d, proratedTotal) {
+            const funds = d.sinking_funds || [];
+            const block = q('#fundsBlock');
+            if (!funds.length) { block.style.display = 'none'; return; }
+
+            block.style.display = 'block';
+            q('#fundsList').innerHTML = funds.map(f => {
+                const done = f.shortfall <= 0.005;
+                const where = f.account_name
+                    ? esc(f.account_name)
+                    : 'No account set — can’t be checked';
+                return `
+                    <div class="fund-row">
+                        <span class="k">${where}<small>${esc(f.items.join(', '))}</small></span>
+                        <span class="v ${done ? 'done' : 'short'}">${fmtMoney(f.actual, d.base_currency)} / ${fmtMoney(f.expected, d.base_currency)}</span>
+                    </div>`;
+            }).join('') + `
+                <div class="fund-row" style="border-top:1px solid var(--hair);margin-top:4px;padding-top:9px;">
+                    <span class="k"><strong>Prorated this month</strong></span>
+                    <span class="v">${fmtMoney(proratedTotal, d.base_currency)}</span>
+                </div>`;
+        }
+
+        async function toggleLinePaid(lineId, currentlyPaid) {
             try {
-                await api(`/recurring/${id}/toggle-paid/${state.currentMonth}`, { method: 'PATCH' });
-                await loadBudgetProgress();
+                await api(`/budget/lines/${lineId}`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ paid: !currentlyPaid })
+                });
+                await loadMonth();
             } catch (e) {
-                console.error('Error toggling recurring skip:', e);
+                alert('Error updating: ' + e.message);
             }
         }
 
-        function renderPlannedList(planned) {
-            const list = q('#plannedList');
+        // ── Expected income ────────────────────────────────────────────────
+        function renderIncome(d) {
+            const list = q('#incomeList');
+            const lines = d.income_items || [];
 
-            if (!planned || planned.length === 0) {
-                list.innerHTML = '<div class="empty-state">No planned expenses<br><small>Add one-time expenses you expect this month</small></div>';
+            if (!lines.length) {
+                list.innerHTML = '<div class="empty-state">No income planned<br><small>Add what you expect to earn this month</small></div>';
+                q('#incomeSummary').style.display = 'none';
+                return;
+            }
+
+            list.innerHTML = lines.map(l => `
+                <div class="recurring-item" onclick="openLine(${l.id}, ${l.item_id})">
+                    <span class="status">＋</span>
+                    <div class="info">
+                        <div class="name">${esc(l.name)}${l.is_estimated ? '<span class="est">est</span>' : ''}</div>
+                    </div>
+                    <span class="amount">${fmtMoney(l.converted_amount, d.base_currency)}</span>
+                </div>`).join('');
+
+            q('#incomeSummary').style.display = 'flex';
+            q('#incomeTotal').textContent = fmtMoney(d.income.expected, d.base_currency);
+            q('#incomeReceived').textContent = fmtMoney(d.income.actual, d.base_currency);
+        }
+
+        // ── Planned expenses ───────────────────────────────────────────────
+        function renderPlanned(d) {
+            const list = q('#plannedList');
+            const lines = d.planned_expenses || [];
+
+            if (!lines.length) {
+                list.innerHTML = '<div class="empty-state">Nothing planned<br><small>Budget your variable spending: groceries, eating out, fuel…</small></div>';
                 q('#plannedSummary').style.display = 'none';
                 return;
             }
 
-            // Sort by amount descending
-            const sorted = [...planned].sort((a, b) => (b.converted_amount || b.amount) - (a.converted_amount || a.amount));
-
-            let totalAmount = 0;
-            let paidAmount = 0;
-
-            list.innerHTML = sorted.map(p => {
-                const amount = p.converted_amount || p.amount;
-                totalAmount += amount;
-                if (p.is_paid === 1) paidAmount += amount;
+            let budgeted = 0, spent = 0;
+            list.innerHTML = lines.map(l => {
+                budgeted += l.converted_amount;
+                spent += l.spent;
+                const pct = Math.min(100, l.percentage);
+                const tone = l.percentage > 100 ? 'over' : l.percentage > 80 ? 'warn' : '';
+                const tracked = (l.account_ids.length || l.category_ids.length);
 
                 return `
-                    <div class="recurring-item ${p.is_paid === 1 ? 'paid' : ''}" onclick="editPlanned(${p.id})">
-                        <span class="status" onclick="event.stopPropagation(); togglePlannedPaid(${p.id})">${p.is_paid === 1 ? '✓' : '○'}</span>
-                        <div class="info">
-                            <div class="name">${p.name}</div>
-                            <div class="category">${p.category_name || 'No category'}</div>
-                        </div>
-                        <span class="amount">${fmtMoney(p.amount, p.currency)}</span>
-                    </div>
-                `;
-            }).join('');
-
-            // Summary
-            q('#plannedSummary').style.display = 'flex';
-            q('#plannedTotal').textContent = fmtMoney(totalAmount, state.baseCurrency);
-            q('#plannedPaid').textContent = fmtMoney(paidAmount, state.baseCurrency);
-            q('#plannedPending').textContent = fmtMoney(totalAmount - paidAmount, state.baseCurrency);
-        }
-
-        function renderOtherExpenses(expenses) {
-            const list = q('#otherExpensesList');
-
-            if (!expenses || expenses.length === 0) {
-                list.innerHTML = '<div class="empty-state">No other expenses this month</div>';
-                q('#otherSummary').style.display = 'none';
-                return;
-            }
-
-            const fmtDate = d => {
-                const dt = new Date(d + 'T00:00:00');
-                return dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-            };
-
-            // Group expenses by ISO week
-            const weeks = {};
-            let total = 0;
-            for (const e of expenses) {
-                const dt = new Date(e.date + 'T00:00:00');
-                // Monday-based week: get the Monday of this week
-                const day = dt.getDay();
-                const monday = new Date(dt);
-                monday.setDate(dt.getDate() - ((day + 6) % 7));
-                const key = monday.toISOString().slice(0, 10);
-                if (!weeks[key]) weeks[key] = { monday, expenses: [], total: 0 };
-                const amount = e.converted_amount || e.amount;
-                weeks[key].expenses.push(e);
-                weeks[key].total += amount;
-                total += amount;
-            }
-
-            // Sort weeks descending (most recent first)
-            const sortedWeeks = Object.values(weeks).sort((a, b) => b.monday - a.monday);
-
-            // Determine which week is "current" (contains today)
-            const today = new Date();
-            const todayDay = today.getDay();
-            const currentMonday = new Date(today);
-            currentMonday.setDate(today.getDate() - ((todayDay + 6) % 7));
-            const currentWeekKey = currentMonday.toISOString().slice(0, 10);
-
-            list.innerHTML = sortedWeeks.map((week, i) => {
-                const weekKey = week.monday.toISOString().slice(0, 10);
-                const sunday = new Date(week.monday);
-                sunday.setDate(week.monday.getDate() + 6);
-                const label = `${fmtDate(weekKey)} – ${fmtDate(sunday.toISOString().slice(0, 10))}`;
-                const isCurrentWeek = weekKey === currentWeekKey;
-                const collapsed = !isCurrentWeek && i > 0 ? 'collapsed' : '';
-
-                const items = week.expenses.map(e => {
-                    const amount = e.converted_amount || e.amount;
-                    const elLabel = e.payee_name || e.note || 'Unknown';
-                    const subtitle = e.category_name || '';
-                    return `
-                        <div class="expense-item">
-                            <span class="date">${fmtDate(e.date)}</span>
-                            <div class="info">
-                                <div class="name">${elLabel}</div>
-                                ${subtitle ? `<div class="category">${subtitle}</div>` : ''}
+                    <div class="recurring-item" onclick="openLine(${l.id}, ${l.item_id})" style="display:block;">
+                        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;">
+                            <div class="info" style="margin:0;">
+                                <div class="name">${esc(l.name)}</div>
+                                <div class="category">${tracked
+                                    ? `${fmtMoney(l.spent, d.base_currency)} spent · ${l.remaining >= 0
+                                        ? fmtMoney(l.remaining, d.base_currency) + ' left'
+                                        : fmtMoney(-l.remaining, d.base_currency) + ' over'}`
+                                    : 'No accounts or categories set — progress can’t be tracked'}</div>
                             </div>
-                            <span class="amount">${fmtMoney(amount, state.baseCurrency)}</span>
-                        </div>`;
-                }).join('');
-
-                return `
-                    <div class="week-group ${collapsed}">
-                        <div class="week-header" onclick="this.parentElement.classList.toggle('collapsed')">
-                            <span><span class="chevron">▼</span><span class="week-label">${label}</span></span>
-                            <span class="week-total">${fmtMoney(week.total, state.baseCurrency)}</span>
+                            <span class="amount">${fmtMoney(l.converted_amount, d.base_currency)}</span>
                         </div>
-                        <div class="week-body">${items}</div>
+                        ${tracked ? `<div class="plan-bar"><i class="${tone}" style="width:${pct}%"></i></div>` : ''}
                     </div>`;
             }).join('');
 
-            q('#otherSummary').style.display = 'flex';
-            q('#otherCount').textContent = expenses.length;
-            q('#otherTotal').textContent = fmtMoney(total, state.baseCurrency);
+            q('#plannedSummary').style.display = 'flex';
+            q('#plannedTotal').textContent = fmtMoney(budgeted, d.base_currency);
+            q('#plannedSpent').textContent = fmtMoney(spent, d.base_currency);
+            q('#plannedLeft').textContent = fmtMoney(budgeted - spent, d.base_currency);
         }
 
-        // ── Spending calendar ──────────────────────────────────────────────
-        // Day-by-day view of the month: heat tint by how the day's discretionary
-        // spending compares to the pace target, bills placed on their due day.
-        const CAL_TONES = {
-            green: '60,122,87',
-            yellow: '198,137,63',
-            red: '176,64,46'
-        };
+        // ── Kakeibo calendar ───────────────────────────────────────────────
+        const PACE_TONES = { green: '60,122,87', yellow: '198,137,63', red: '176,64,46' };
 
-        function buildCalendarModel(data) {
-            const [y, m] = state.currentMonth.split('-').map(Number);
-            const daysInMonth = new Date(y, m, 0).getDate();
-            const todayISO = new Date().toISOString().slice(0, 10);
-            const currency = data.base_currency || state.baseCurrency;
-
-            // Discretionary spending per day (recurring bills are matched away by the
-            // backend, so `other_expenses` is exactly the non-bill spending).
-            const days = {};
-            const dayKey = (d) => `${state.currentMonth}-${String(d).padStart(2, '0')}`;
-            for (let d = 1; d <= daysInMonth; d++) {
-                days[dayKey(d)] = { date: dayKey(d), variable: 0, bills: 0, expenses: [], recurring: [] };
-            }
-            for (const e of (data.other_expenses || [])) {
-                const day = days[e.date];
-                if (!day) continue;
-                day.variable += e.converted_amount || e.amount || 0;
-                day.expenses.push(e);
-            }
-
-            // Bills land on their day of the month; those without one are listed apart.
-            let billsTotal = 0, unscheduled = [];
-            for (const r of (data.recurring_expenses || [])) {
-                if (!r.applies_this_month || r.skipped_this_month) continue;
-                const amount = r.converted_amount || r.amount || 0;
-                billsTotal += amount;
-                const d = r.day_of_month;
-                if (!d) { unscheduled.push(r); continue; }
-                const day = days[dayKey(Math.min(d, daysInMonth))];
-                if (!day) continue;
-                day.recurring.push(r);
-                day.bills += amount;
-            }
-
-            // Pace target: what's left for day-to-day spending once bills and planned
-            // one-offs are set aside, spread evenly across the month.
-            const plannedTotal = (data.planned_expenses || [])
-                .reduce((s, p) => s + (p.converted_amount || p.amount || 0), 0);
-            const budget = data.budget?.amount || 0;
-            const dailyTarget = budget > 0
-                ? Math.max(0, budget - billsTotal - plannedTotal) / daysInMonth
-                : 0;
-
-            return { y, m, daysInMonth, todayISO, currency, days, dailyTarget, unscheduled };
-        }
-
-        // Tint tone + strength for a past day, from its spend relative to the pace target.
+        // Tone for a past day, from its day-to-day spending against the pace target.
         function calTone(variable, dailyTarget) {
             if (variable <= 0) return null;
-            if (dailyTarget <= 0) return { tone: 'red', alpha: .3 };
+            if (dailyTarget <= 0) return { tone: 'red', alpha: .12 };
             const ratio = variable / dailyTarget;
             const tone = ratio <= 1 ? 'green' : ratio <= 2 ? 'yellow' : 'red';
-            const alpha = Math.min(.5, .12 + Math.min(ratio, 3) / 3 * .38);
+            // Kept faint: the four bucket figures sit on top and need their contrast.
+            const alpha = Math.min(.12, .04 + Math.min(ratio, 3) / 3 * .08);
             return { tone, alpha };
         }
 
-        function renderCalendar(data) {
+        function renderCalendar(d) {
             const grid = q('#calGrid');
-            const model = buildCalendarModel(data);
-            const { daysInMonth, todayISO, currency, days, dailyTarget } = model;
+            const days = d.calendar || [];
+            const cur = d.base_currency;
+            const todayISO = new Date().toISOString().slice(0, 10);
+            const dailyTarget = d.daily_target || 0;
 
-            // A selection from another month is no longer meaningful.
             if (state.selectedDay && !state.selectedDay.startsWith(state.currentMonth)) {
                 state.selectedDay = null;
             }
 
             const dows = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-            const firstDow = (new Date(model.y, model.m - 1, 1).getDay() + 6) % 7; // Monday-based
-            const cells = dows.map(d => `<div class="cal-dow">${d}</div>`);
+            const [y, m] = state.currentMonth.split('-').map(Number);
+            const firstDow = (new Date(y, m - 1, 1).getDay() + 6) % 7; // Monday-based
+            const cells = dows.map(x => `<div class="cal-dow">${x}</div>`);
             for (let i = 0; i < firstDow; i++) cells.push('<div class="cal-cell empty"></div>');
 
-            let spentToDate = 0, elapsedDays = 0;
+            let spentToDate = 0, elapsedDays = 0, unmappedTotal = 0;
 
-            for (let d = 1; d <= daysInMonth; d++) {
-                const day = days[`${state.currentMonth}-${String(d).padStart(2, '0')}`];
+            for (const day of days) {
+                const dayNum = Number(day.date.slice(8));
                 const isToday = day.date === todayISO;
                 const isFuture = day.date > todayISO;
                 if (!isFuture) { spentToDate += day.variable; elapsedDays++; }
+                unmappedTotal += day.unmapped;
 
                 const classes = ['cal-cell'];
                 if (isFuture) classes.push('outside');
                 if (isToday) classes.push('today');
                 if (state.selectedDay === day.date) classes.push('selected');
 
-                let style = '';
+                let style = '', pace = '';
                 if (!isFuture) {
                     const t = calTone(day.variable, dailyTarget);
-                    if (t) style = `background:rgba(${CAL_TONES[t.tone]},${t.alpha.toFixed(2)})`;
+                    if (t) {
+                        style = `background:rgba(${PACE_TONES[t.tone]},${t.alpha.toFixed(2)})`;
+                        pace = `<i class="cal-pace" style="background:var(--${t.tone === 'yellow' ? 'yellow' : t.tone})"></i>`;
+                    }
                 }
 
-                // Past/today show what was actually spent; future days show what's due.
-                const dueAhead = day.recurring.filter(r => !r.paid_this_month)
-                    .reduce((s, r) => s + (r.converted_amount || r.amount || 0), 0);
-                let amountHtml = '';
-                if (!isFuture && (day.variable + day.bills) > 0) {
-                    amountHtml = `<span class="amt">${fmtMoney0(day.variable + day.bills, currency)}</span>`;
-                } else if (isFuture && dueAhead > 0) {
-                    amountHtml = `<span class="amt due">${fmtMoney0(dueAhead, currency)}</span>`;
-                }
+                // Four fixed slots, so position identifies the bucket as much as colour.
+                const figures = BUCKETS.map(b => {
+                    const value = day.buckets[b] || 0;
+                    if (value <= 0) return '<span class="kb-' + b + '"></span>';
+                    return `<span class="kb-${b}" title="${BUCKET_LABELS[b]} ${fmtMoney(value, cur)}"
+                                  onclick="event.stopPropagation(); openDayModal('${day.date}','${b}')">${fmtBare(value)}</span>`;
+                }).join('');
 
-                const marks = day.recurring.slice(0, 3).map(r =>
-                    `<i style="background:var(--${r.paid_this_month ? 'green' : 'yellow'})"></i>`).join('');
-                const extra = day.recurring.length > 3 ? `<span class="more">+${day.recurring.length - 3}</span>` : '';
+                const unmapped = day.unmapped > 0
+                    ? `<span class="cal-unmapped" title="Unclassified ${fmtMoney(day.unmapped, cur)}"
+                             onclick="event.stopPropagation(); openDayModal('${day.date}','unmapped')">${fmtBare(day.unmapped)}</span>`
+                    : '';
 
-                const titleBits = [];
-                if (day.variable > 0) titleBits.push(`Spending ${fmtMoney(day.variable, currency)}`);
-                for (const r of day.recurring) {
-                    titleBits.push(`${r.paid_this_month ? '✓' : '○'} ${r.name} ${fmtMoney(r.converted_amount || r.amount, currency)}`);
-                }
-                const title = titleBits.join(' · ').replace(/"/g, '&quot;');
+                const marks = day.bills.slice(0, 3).map(b =>
+                    `<i style="background:var(--${b.paid ? 'green' : 'yellow'})" title="${esc(b.name)}"></i>`).join('');
+                const more = day.bills.length > 3 ? `<span class="more">+${day.bills.length - 3}</span>` : '';
 
                 cells.push(`
                     <button type="button" class="${classes.join(' ')}" style="${style}"
-                            onclick="selectCalDay('${day.date}')" title="${title}">
-                        <span class="d">${d}</span>
-                        <span class="cal-marks">${marks}${extra}</span>
-                        ${amountHtml}
+                            onclick="selectCalDay('${day.date}')">
+                        <span class="cal-top"><span class="d">${dayNum}</span>${unmapped}</span>
+                        <span class="cal-marks">${marks}${more}</span>
+                        <span class="cal-buckets">${figures}</span>
+                        ${pace}
                     </button>`);
             }
 
             grid.innerHTML = cells.join('');
 
-            // Bills without a day of the month can't be placed on the grid.
+            // Bills with no day of the month can't be placed on the grid.
+            const unplaced = (d.fixed_expenses || []).filter(f => !f.due_days.length && !f.is_prorated);
             const note = q('#calNote');
-            if (model.unscheduled.length) {
+            if (unplaced.length) {
                 note.style.display = 'block';
-                note.textContent = `Not on the calendar (no day set): ${model.unscheduled.map(r => r.name).join(', ')}`;
+                note.textContent = `Not on the calendar (no date set): ${unplaced.map(f => f.name).join(', ')}`;
             } else {
                 note.style.display = 'none';
             }
 
-            // Pace summary: how the month is tracking against the even-spread target.
+            // Nudge towards the mapping while anything is still unclassified.
+            const mapNote = q('#calMapNote');
+            const base = 'Figures split each day by kakeibo bucket, always in the same four positions. ' +
+                'Pace tracks day-to-day spending only — bills are excluded.';
+            mapNote.innerHTML = unmappedTotal > 0
+                ? `${base} <span class="warnmap" onclick="openBucketsModal()">${fmtMoney(unmappedTotal, cur)} unclassified — map your categories</span>`
+                : base;
+
+            // Pace summary
             const summary = q('#calSummary');
             if (dailyTarget > 0 && elapsedDays > 0) {
-                const expected = dailyTarget * elapsedDays;
-                const diff = expected - spentToDate;
-                const label = diff >= 0 ? 'under pace' : 'over pace';
+                const diff = dailyTarget * elapsedDays - spentToDate;
                 summary.style.display = 'flex';
                 summary.innerHTML = `
-                    <span>Pace <strong>${fmtMoney(dailyTarget, currency)}/day</strong></span>
+                    <span>Pace <strong>${fmtMoney(dailyTarget, cur)}/day</strong></span>
                     <span style="color:var(--${diff >= 0 ? 'green' : 'red'})">
-                        <strong style="color:inherit">${fmtMoney(Math.abs(diff), currency)}</strong> ${label}
+                        <strong style="color:inherit">${fmtMoney(Math.abs(diff), cur)}</strong> ${diff >= 0 ? 'under pace' : 'over pace'}
                     </span>`;
             } else if (dailyTarget > 0) {
                 summary.style.display = 'flex';
-                summary.innerHTML = `<span>Pace <strong>${fmtMoney(dailyTarget, currency)}/day</strong></span>`;
+                summary.innerHTML = `<span>Pace <strong>${fmtMoney(dailyTarget, cur)}/day</strong></span>`;
             } else {
                 summary.style.display = 'none';
             }
 
-            renderCalDetail(model);
+            renderCalDetail();
         }
 
         function selectCalDay(date) {
             state.selectedDay = state.selectedDay === date ? null : date;
-            if (state.progress) renderCalendar(state.progress);
+            if (state.data) renderCalendar(state.data);
         }
 
-        function renderCalDetail(model) {
+        function dayOf(date) {
+            return (state.data?.calendar || []).find(d => d.date === date);
+        }
+
+        function renderCalDetail() {
             const box = q('#calDetail');
-            const day = state.selectedDay ? model.days[state.selectedDay] : null;
+            const day = state.selectedDay ? dayOf(state.selectedDay) : null;
             if (!day) { box.style.display = 'none'; box.innerHTML = ''; return; }
 
-            const currency = model.currency;
+            const cur = state.data.base_currency;
             const label = new Date(day.date + 'T00:00:00')
                 .toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
-            const total = day.variable + day.bills;
 
-            const bills = day.recurring.map(r => `
+            const bills = day.bills.map(b => `
                 <div class="expense-item">
-                    <span class="date">${r.paid_this_month ? '✓ paid' : '○ due'}</span>
-                    <div class="info">
-                        <div class="name">${r.name}</div>
-                        <div class="category">${r.category_name || 'Recurring'}</div>
-                    </div>
-                    <span class="amount">${fmtMoney(r.converted_amount || r.amount, currency)}</span>
+                    <span class="date">${b.paid ? '✓ paid' : '○ due'}</span>
+                    <div class="info"><div class="name">${esc(b.name)}</div><div class="category">Fixed expense</div></div>
+                    <span class="amount">${fmtMoney(b.amount, cur)}</span>
                 </div>`).join('');
 
-            const items = day.expenses.map(e => `
+            const items = day.transactions.map(t => `
                 <div class="expense-item">
-                    <span class="date"></span>
+                    <span class="date" style="color:var(--muted)">${BUCKET_LABELS[t.bucket] || ''}</span>
                     <div class="info">
-                        <div class="name">${e.payee_name || e.note || 'Unknown'}</div>
-                        ${e.category_name ? `<div class="category">${e.category_name}</div>` : ''}
+                        <div class="name">${esc(t.payee_name || t.note || 'Unknown')}</div>
+                        ${t.category_name ? `<div class="category">${esc(t.category_name)}</div>` : ''}
                     </div>
-                    <span class="amount">${fmtMoney(e.converted_amount || e.amount, currency)}</span>
+                    <span class="amount">${fmtMoney(t.amount, cur)}</span>
                 </div>`).join('');
 
             box.style.display = 'block';
             box.innerHTML = `
                 <div class="dhead">
                     <span class="dlabel">${label}</span>
-                    <span class="dtotal">${fmtMoney(total, currency)}</span>
+                    <span class="dtotal">${fmtMoney(day.total, cur)}</span>
                 </div>
                 ${bills}${items}
                 ${!bills && !items ? '<div class="empty-state" style="padding:16px">Nothing on this day</div>' : ''}`;
         }
 
-        async function loadBudgetHistory() {
-            try {
-                const budgets = await api('/budgets?limit=12');
-                const list = q('#historyList');
+        function openDayModal(date, bucket) {
+            const day = dayOf(date);
+            if (!day) return;
+            const cur = state.data.base_currency;
+            const rows = day.transactions.filter(t => t.bucket === bucket);
+            const total = rows.reduce((s, t) => s + t.amount, 0);
+            const label = new Date(date + 'T00:00:00')
+                .toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
 
-                if (!budgets || budgets.length === 0) {
-                    list.innerHTML = '<div class="empty-state">No budget history</div>';
+            q('#dayModalTitle').textContent = `${BUCKET_LABELS[bucket]} · ${label}`;
+            q('#dayModalBody').innerHTML = `
+                <div class="dhead" style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
+                    <span class="muted" style="font-size:12px;">${rows.length} transaction${rows.length === 1 ? '' : 's'}</span>
+                    <span style="font-family:'IBM Plex Mono',monospace;font-weight:600;">${fmtMoney(total, cur)}</span>
+                </div>
+                ${rows.map(t => `
+                    <div class="expense-item">
+                        <span class="date">${t.is_bill ? 'bill' : ''}</span>
+                        <div class="info">
+                            <div class="name">${esc(t.payee_name || t.note || 'Unknown')}</div>
+                            ${t.category_name ? `<div class="category">${esc(t.category_name)}</div>` : ''}
+                        </div>
+                        <span class="amount">${fmtMoney(t.amount, cur)}</span>
+                    </div>`).join('')}
+                ${bucket === 'unmapped' ? `<p class="muted" style="font-size:12.5px;line-height:1.5;margin-top:14px;">
+                    These categories aren't sorted into a kakeibo bucket yet.
+                    <span class="warnmap" style="color:var(--accent);cursor:pointer;text-decoration:underline;"
+                          onclick="closeModal('dayModal'); openBucketsModal();">Map them now</span>.</p>` : ''}`;
+            openModal('dayModal');
+        }
+
+        // ── Budget item modal ──────────────────────────────────────────────
+        const KIND_TITLES = { fixed: 'Fixed Expense', income: 'Expected Income', planned: 'Planned Expense' };
+
+        function applyKindToForm(kind) {
+            const show = (id, on) => q(id).style.display = on ? '' : 'none';
+            show('#itemPayeeGroup', kind === 'fixed');
+            show('#itemAccountGroup', kind === 'fixed');
+            show('#itemAccountsGroup', kind === 'planned');
+            show('#itemAccountsHint', kind === 'planned');
+            show('#itemCategoriesGroup', kind === 'planned');
+            show('#itemCategoriesHint', kind === 'planned');
+            show('#itemEstimatedRow', kind !== 'planned');
+            q('#itemDateLabel').textContent = kind === 'fixed' ? 'First payment date'
+                : kind === 'income' ? 'Expected on' : 'Starts on';
+            q('#itemAmountLabel').textContent = kind === 'planned' ? 'Amount to budget' : 'Amount';
+            onIntervalChange();
+        }
+
+        function onIntervalChange() {
+            const unit = q('#itemIntervalUnit').value;
+            const count = parseInt(q('#itemIntervalCount').value) || 1;
+            q('#itemIntervalCount').style.display = unit === 'once' ? 'none' : '';
+
+            // Spell out the proration, since it is what the monthly target will use.
+            const months = unit === 'month' ? count : unit === 'year' ? count * 12
+                : unit === 'week' ? count * 7 / 30.436875 : unit === 'day' ? count / 30.436875 : 0;
+            const amount = parseFloat(q('#itemAmount').value);
+            const hint = q('#itemProrateHint');
+            if (months > 1.0001 && q('#itemKind').value === 'fixed') {
+                const share = amount ? fmtMoney(amount / months, state.baseCurrency) : 'its monthly share';
+                hint.style.display = 'block';
+                hint.textContent = `Longer than a month, so it is prorated: ${share} a month goes into the budget, starting this month even if the first charge is later.`;
+            } else {
+                hint.style.display = 'none';
+            }
+        }
+        document.addEventListener('input', (e) => {
+            if (e.target.matches('#itemAmount, #itemIntervalCount')) onIntervalChange();
+        });
+
+        function openItemModal(kind) {
+            q('#itemModalTitle').textContent = 'Add ' + KIND_TITLES[kind];
+            q('#itemId').value = '';
+            q('#itemKind').value = kind;
+            q('#itemName').value = '';
+            q('#itemAmount').value = '';
+            q('#itemEstimated').checked = false;
+            q('#itemIntervalCount').value = 1;
+            q('#itemIntervalUnit').value = 'month';
+            q('#itemPayee').value = '';
+            q('#itemAccount').value = '';
+            qa('#itemAccounts option').forEach(o => o.selected = false);
+            qa('#itemCategories option').forEach(o => o.selected = false);
+
+            // Default to the first of the month being viewed.
+            const [y, m] = state.currentMonth.split('-');
+            q('#itemFirstDate').value = `${y}-${m}-01`;
+            q('#deleteItemBtn').style.display = 'none';
+            applyKindToForm(kind);
+            openModal('itemModal');
+        }
+
+        // In a closed month a row edits the record itself, not the definition —
+        // otherwise a correction to March would quietly rewrite today's budget.
+        function editLine(lineId) {
+            const all = [...(state.data.fixed_expenses || []), ...(state.data.income_items || []),
+                         ...(state.data.planned_expenses || [])];
+            const line = all.find(l => l.id === lineId);
+            if (!line) return;
+            q('#lineId').value = line.id;
+            q('#lineName').value = line.name;
+            q('#lineAmount').value = line.amount;
+            q('#lineMonthLabel').textContent = monthLabel(state.currentMonth);
+            openModal('lineModal');
+        }
+
+        async function saveLine() {
+            const amount = parseFloat(q('#lineAmount').value);
+            if (isNaN(amount)) { alert('Please enter an amount'); return; }
+            try {
+                await api(`/budget/lines/${q('#lineId').value}`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ name: q('#lineName').value.trim(), amount })
+                });
+                closeModal('lineModal');
+                await loadMonth();
+                await loadHistory();
+            } catch (e) {
+                alert('Error saving: ' + e.message);
+            }
+        }
+
+        // A row opens its definition, or the month's own record once the month is closed.
+        function openLine(lineId, itemId) {
+            if (state.data?.is_past) editLine(lineId);
+            else editItem(itemId);
+        }
+
+        async function editItem(itemId) {
+            if (!itemId) {
+                alert('This line no longer has a definition behind it — it was kept for the record.');
+                return;
+            }
+            let item;
+            try {
+                const items = await api('/budget/items?include_inactive=true');
+                item = items.find(i => i.id === itemId);
+            } catch (e) { alert('Error loading: ' + e.message); return; }
+            if (!item) return;
+
+            q('#itemModalTitle').textContent = 'Edit ' + KIND_TITLES[item.kind];
+            q('#itemId').value = item.id;
+            q('#itemKind').value = item.kind;
+            q('#itemName').value = item.name;
+            q('#itemAmount').value = item.amount;
+            q('#itemEstimated').checked = !!item.is_estimated;
+            q('#itemFirstDate').value = item.first_date || '';
+            q('#itemIntervalCount').value = item.interval_count || 1;
+            q('#itemIntervalUnit').value = item.interval_unit || 'month';
+            q('#itemPayee').value = item.payee_id || '';
+            q('#itemAccount').value = item.set_aside_account_id || '';
+            const accounts = new Set(item.account_ids || []);
+            qa('#itemAccounts option').forEach(o => o.selected = accounts.has(parseInt(o.value)));
+            const categories = new Set(item.category_ids || []);
+            qa('#itemCategories option').forEach(o => o.selected = categories.has(parseInt(o.value)));
+
+            q('#deleteItemBtn').style.display = 'block';
+            applyKindToForm(item.kind);
+            openModal('itemModal');
+        }
+
+        async function saveItem() {
+            const id = q('#itemId').value;
+            const kind = q('#itemKind').value;
+            const unit = q('#itemIntervalUnit').value;
+            const selected = (sel) => qa(sel + ' option').filter(o => o.selected).map(o => parseInt(o.value));
+
+            const payload = {
+                kind,
+                name: q('#itemName').value.trim(),
+                amount: parseFloat(q('#itemAmount').value),
+                is_estimated: kind !== 'planned' && q('#itemEstimated').checked,
+                first_date: q('#itemFirstDate').value ? q('#itemFirstDate').value + 'T00:00:00' : null,
+                interval_count: unit === 'once' ? 1 : (parseInt(q('#itemIntervalCount').value) || 1),
+                interval_unit: unit,
+                payee_id: kind === 'fixed' && q('#itemPayee').value ? parseInt(q('#itemPayee').value) : null,
+                set_aside_account_id: kind === 'fixed' && q('#itemAccount').value ? parseInt(q('#itemAccount').value) : null,
+                account_ids: kind === 'planned' ? selected('#itemAccounts') : [],
+                category_ids: kind === 'planned' ? selected('#itemCategories') : [],
+                starts_ym: state.currentMonth,
+                currency: state.baseCurrency
+            };
+
+            if (!payload.name || isNaN(payload.amount)) {
+                alert('Please enter a name and an amount');
+                return;
+            }
+
+            try {
+                if (id) {
+                    await api(`/budget/items/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+                } else {
+                    await api('/budget/items', { method: 'POST', body: JSON.stringify(payload) });
+                }
+                closeModal('itemModal');
+                await loadMonth();
+                await loadHistory();
+            } catch (e) {
+                alert('Error saving: ' + e.message);
+            }
+        }
+
+        async function deleteItem() {
+            const id = q('#itemId').value;
+            if (!id) return;
+            if (!confirm('Remove this from this month on? Months already closed keep it.')) return;
+            try {
+                await api(`/budget/items/${id}`, { method: 'DELETE' });
+                closeModal('itemModal');
+                await loadMonth();
+                await loadHistory();
+            } catch (e) {
+                alert('Error deleting: ' + e.message);
+            }
+        }
+
+        // ── Kakeibo mapping ────────────────────────────────────────────────
+        async function openBucketsModal() {
+            openModal('bucketsModal');
+            q('#bucketsList').innerHTML = '<div class="empty-state">Loading…</div>';
+            try {
+                state.buckets = await api('/budget/buckets');
+            } catch (e) {
+                q('#bucketsList').innerHTML = '<div class="empty-state">Error: ' + esc(e.message) + '</div>';
+                return;
+            }
+            // Unclassified first — those are the ones showing up grey on the calendar.
+            const rows = [...state.buckets.categories].sort((a, b) => {
+                if (!a.bucket !== !b.bucket) return a.bucket ? 1 : -1;
+                const al = (a.parent ? a.parent + ' › ' : '') + a.name;
+                const bl = (b.parent ? b.parent + ' › ' : '') + b.name;
+                return al.localeCompare(bl);
+            });
+            q('#bucketsList').innerHTML = rows.map(c => `
+                <div class="bucket-row ${c.bucket ? '' : 'unmapped'}">
+                    <span class="cat">${esc(c.name)}${c.parent ? `<small>${esc(c.parent)}</small>` : ''}</span>
+                    <select data-category="${c.category_id}">
+                        <option value="">— unclassified</option>
+                        ${BUCKETS.map(b => `<option value="${b}" ${c.bucket === b ? 'selected' : ''}>${BUCKET_LABELS[b]}</option>`).join('')}
+                    </select>
+                </div>`).join('');
+        }
+
+        async function saveBuckets() {
+            const mappings = qa('#bucketsList select').map(s => ({
+                category_id: parseInt(s.dataset.category),
+                bucket: s.value || null
+            }));
+            try {
+                await api('/budget/buckets', { method: 'PUT', body: JSON.stringify({ mappings }) });
+                closeModal('bucketsModal');
+                await loadMonth();
+            } catch (e) {
+                alert('Error saving: ' + e.message);
+            }
+        }
+
+        // ── History / audit ────────────────────────────────────────────────
+        async function loadHistory() {
+            try {
+                const { months } = await api('/budget/history?months=12');
+                const list = q('#historyList');
+                if (!months || !months.length) {
+                    list.innerHTML = '<div class="empty-state">No budget history yet</div>';
                     return;
                 }
-
-                // For each budget, we need to calculate spent percentage
-                const historyItems = await Promise.all(budgets.map(async (b) => {
-                    try {
-                        const progress = await api(`/budgets/${b.year_month}/progress`);
-                        return { ...b, spent: progress.spent, percentage: progress.percentage };
-                    } catch {
-                        return { ...b, spent: 0, percentage: 0 };
-                    }
-                }));
-
-                list.innerHTML = historyItems.map(h => {
-                    const [y, mo] = h.year_month.split('-');
-                    const label = new Date(y, mo - 1).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
+                list.innerHTML = months.map(h => {
                     const barPct = Math.min(h.percentage, 100);
                     const barColor = h.percentage > 100 ? 'var(--red)' : h.percentage > 80 ? 'var(--yellow)' : 'var(--green)';
-
+                    const variance = h.target - h.spent;
                     return `
                         <div class="history-item">
                             <div>
-                                <div class="month">${label}</div>
-                                <div class="budget">${fmtMoney(h.amount, h.currency)}</div>
+                                <div class="month">${monthLabel(h.year_month)}</div>
+                                <div class="budget">${fmtMoney(h.spent, h.base_currency)} of ${fmtMoney(h.target, h.base_currency)}</div>
                             </div>
                             <div class="bar-container">
-                                <div class="bar" style="width: ${barPct}%; background: ${barColor}"></div>
+                                <div class="bar" style="width:${barPct}%;background:${barColor}"></div>
                             </div>
+                            <span class="variance ${variance >= 0 ? 'under' : 'over'}">${fmtMoney(Math.abs(variance), h.base_currency)} ${variance >= 0 ? 'under' : 'over'}</span>
                             <span class="percent ${h.percentage > 100 ? 'over' : ''}">${Math.round(h.percentage)}%</span>
-                        </div>
-                    `;
+                        </div>`;
                 }).join('');
             } catch (e) {
                 console.error('Error loading history:', e);
             }
         }
 
-        // Budget Modal
-        function openBudgetModal() {
-            const budget = state.progress?.budget;
-            q('#budgetAmount').value = budget?.amount || '';
-            openModal('budgetModal');
-        }
-
-        async function saveBudget() {
-            const amount = parseFloat(q('#budgetAmount').value);
-            if (isNaN(amount) || amount < 0) {
-                alert('Please enter a valid amount');
-                return;
-            }
-
-            try {
-                await api('/budgets', {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        year_month: state.currentMonth,
-                        amount: amount,
-                        currency: state.baseCurrency
-                    })
-                });
-                closeModal('budgetModal');
-                await loadBudgetProgress();
-                await loadBudgetHistory();
-            } catch (e) {
-                alert('Error saving budget: ' + e.message);
-            }
-        }
-
-        // Recurring Modal
-        function toggleStartMonth() {
-            const freq = q('#recurringFrequency').value;
-            q('#startMonthGroup').style.display = freq === 'monthly' ? 'none' : 'block';
-        }
-
-        function openRecurringModal() {
-            q('#recurringModalTitle').textContent = 'Add Recurring Expense';
-            q('#recurringId').value = '';
-            q('#recurringName').value = '';
-            q('#recurringAmount').value = '';
-            q('#recurringPayee').value = '';
-            q('#recurringCategory').value = '';
-            q('#recurringDay').value = '';
-            q('#recurringFrequency').value = 'monthly';
-            q('#recurringStartMonth').value = new Date().getMonth() + 1;
-            q('#startMonthGroup').style.display = 'none';
-            q('#deleteRecurringBtn').style.display = 'none';
-            openModal('recurringModal');
-        }
-
-        async function editRecurring(id) {
-            const recurring = state.progress?.recurring_expenses?.find(r => r.id === id);
-            if (!recurring) return;
-
-            q('#recurringModalTitle').textContent = 'Edit Recurring Expense';
-            q('#recurringId').value = recurring.id;
-            q('#recurringName').value = recurring.name;
-            q('#recurringAmount').value = recurring.amount;
-            q('#recurringPayee').value = recurring.payee_id || '';
-            q('#recurringCategory').value = recurring.category_id || '';
-            q('#recurringDay').value = recurring.day_of_month || '';
-            q('#recurringFrequency').value = recurring.frequency || 'monthly';
-            q('#recurringStartMonth').value = recurring.start_month || new Date().getMonth() + 1;
-            toggleStartMonth();
-            q('#deleteRecurringBtn').style.display = 'block';
-            openModal('recurringModal');
-        }
-
-        async function saveRecurring() {
-            const id = q('#recurringId').value;
-            const freq = q('#recurringFrequency').value;
-            const data = {
-                name: q('#recurringName').value,
-                amount: parseFloat(q('#recurringAmount').value),
-                payee_id: q('#recurringPayee').value ? parseInt(q('#recurringPayee').value) : null,
-                category_id: q('#recurringCategory').value ? parseInt(q('#recurringCategory').value) : null,
-                day_of_month: q('#recurringDay').value ? parseInt(q('#recurringDay').value) : null,
-                frequency: freq,
-                start_month: freq !== 'monthly' ? parseInt(q('#recurringStartMonth').value) : null,
-                currency: state.baseCurrency
-            };
-
-            if (!data.name || isNaN(data.amount)) {
-                alert('Please enter a name and amount');
-                return;
-            }
-
-            try {
-                if (id) {
-                    await api(`/recurring/${id}`, { method: 'PUT', body: JSON.stringify(data) });
-                } else {
-                    await api('/recurring', { method: 'POST', body: JSON.stringify(data) });
-                }
-                closeModal('recurringModal');
-                await loadBudgetProgress();
-            } catch (e) {
-                alert('Error saving: ' + e.message);
-            }
-        }
-
-        async function deleteRecurring() {
-            const id = q('#recurringId').value;
-            if (!id) return;
-
-            if (!confirm('Delete this recurring expense?')) return;
-
-            try {
-                await api(`/recurring/${id}`, { method: 'DELETE' });
-                closeModal('recurringModal');
-                await loadBudgetProgress();
-            } catch (e) {
-                alert('Error deleting: ' + e.message);
-            }
-        }
-
-        // Planned Expense Modal
-        function openPlannedModal() {
-            q('#plannedModalTitle').textContent = 'Add Planned Expense';
-            q('#plannedId').value = '';
-            q('#plannedName').value = '';
-            q('#plannedAmount').value = '';
-            q('#plannedCategory').value = '';
-            q('#deletePlannedBtn').style.display = 'none';
-            populatePlannedCategoryDropdown();
-            openModal('plannedModal');
-        }
-
-        function populatePlannedCategoryDropdown() {
-            const select = q('#plannedCategory');
-            const sorted = [...state.categories].sort((a, b) => {
-                const aLabel = (a.parent ? a.parent + ' > ' : '') + a.name;
-                const bLabel = (b.parent ? b.parent + ' > ' : '') + b.name;
-                return aLabel.localeCompare(bLabel);
-            });
-            select.innerHTML = '<option value="">-- Select --</option>' +
-                sorted.map(c => `<option value="${c.id}">${c.parent ? c.parent + ' > ' : ''}${c.name}</option>`).join('');
-        }
-
-        function editPlanned(id) {
-            const planned = state.progress?.planned_expenses?.find(p => p.id === id);
-            if (!planned) return;
-
-            q('#plannedModalTitle').textContent = 'Edit Planned Expense';
-            q('#plannedId').value = planned.id;
-            q('#plannedName').value = planned.name;
-            q('#plannedAmount').value = planned.amount;
-            populatePlannedCategoryDropdown();
-            q('#plannedCategory').value = planned.category_id || '';
-            q('#deletePlannedBtn').style.display = 'block';
-            openModal('plannedModal');
-        }
-
-        async function savePlanned() {
-            const id = q('#plannedId').value;
-            const data = {
-                year_month: state.currentMonth,
-                name: q('#plannedName').value,
-                amount: parseFloat(q('#plannedAmount').value),
-                category_id: q('#plannedCategory').value ? parseInt(q('#plannedCategory').value) : null,
-                currency: state.baseCurrency
-            };
-
-            if (!data.name || isNaN(data.amount)) {
-                alert('Please enter a name and amount');
-                return;
-            }
-
-            try {
-                if (id) {
-                    await api(`/planned/${id}`, { method: 'PUT', body: JSON.stringify(data) });
-                } else {
-                    await api('/planned', { method: 'POST', body: JSON.stringify(data) });
-                }
-                closeModal('plannedModal');
-                await loadBudgetProgress();
-            } catch (e) {
-                alert('Error saving: ' + e.message);
-            }
-        }
-
-        async function deletePlanned() {
-            const id = q('#plannedId').value;
-            if (!id) return;
-
-            if (!confirm('Delete this planned expense?')) return;
-
-            try {
-                await api(`/planned/${id}`, { method: 'DELETE' });
-                closeModal('plannedModal');
-                await loadBudgetProgress();
-            } catch (e) {
-                alert('Error deleting: ' + e.message);
-            }
-        }
-
-        async function togglePlannedPaid(id) {
-            try {
-                await api(`/planned/${id}/toggle-paid`, { method: 'PATCH' });
-                await loadBudgetProgress();
-            } catch (e) {
-                alert('Error toggling: ' + e.message);
-            }
-        }
-
-        // Detect Modal
+        // ── Detect from history ────────────────────────────────────────────
         async function openDetectModal() {
             openModal('detectModal');
-            q('#candidatesList').innerHTML = '<div class="empty-state">Loading...</div>';
-
+            q('#candidatesList').innerHTML = '<div class="empty-state">Loading…</div>';
             try {
-                const candidates = await api('/recurring/detect');
-
-                if (!candidates || candidates.length === 0) {
-                    q('#candidatesList').innerHTML = '<div class="empty-state">No recurring expenses detected<br><small>Try lowering the criteria or add them manually</small></div>';
+                const candidates = await api('/budget/detect');
+                if (!candidates || !candidates.length) {
+                    q('#candidatesList').innerHTML = '<div class="empty-state">Nothing regular found<br><small>Add your fixed expenses by hand</small></div>';
                     return;
                 }
-
+                state.candidates = candidates;
                 q('#candidatesList').innerHTML = candidates.map((c, i) => `
                     <div class="candidate-item">
                         <input type="checkbox" id="candidate_${i}" data-index="${i}">
                         <div class="info">
-                            <div class="payee">${c.payee_name}</div>
-                            <div class="details">${c.occurrences} months · Day ~${c.average_day} · ${c.category_name || 'No category'}</div>
+                            <div class="payee">${esc(c.suggested_name)}</div>
+                            <div class="details">${esc(c.detail)}</div>
                         </div>
-                        <span class="amount">${fmtMoney(c.average_amount, c.currency)}</span>
-                    </div>
-                `).join('');
-
-                // Store candidates for later
-                state.candidates = candidates;
+                        <span class="amount">${fmtMoney(c.amount, c.currency)}</span>
+                    </div>`).join('');
             } catch (e) {
-                q('#candidatesList').innerHTML = '<div class="empty-state">Error detecting: ' + e.message + '</div>';
+                q('#candidatesList').innerHTML = '<div class="empty-state">Error detecting: ' + esc(e.message) + '</div>';
             }
         }
 
         async function addSelectedCandidates() {
             const checkboxes = qa('#candidatesList input[type="checkbox"]:checked');
-            if (checkboxes.length === 0) {
-                alert('Please select at least one expense');
-                return;
-            }
-
+            if (!checkboxes.length) { alert('Please select at least one'); return; }
             try {
                 for (const cb of checkboxes) {
-                    const idx = parseInt(cb.dataset.index);
-                    const c = state.candidates[idx];
-                    await api('/recurring', {
+                    const c = state.candidates[parseInt(cb.dataset.index)];
+                    await api('/budget/items', {
                         method: 'POST',
                         body: JSON.stringify({
+                            kind: 'fixed',
                             name: c.suggested_name,
-                            payee_id: c.payee_id,
-                            category_id: c.category_id,
-                            amount: c.average_amount,
+                            amount: c.amount,
                             currency: c.currency,
-                            day_of_month: c.average_day
+                            payee_id: c.payee_id || null,
+                            set_aside_account_id: c.account_id || null,
+                            first_date: c.first_date,
+                            interval_count: c.interval_count,
+                            interval_unit: c.interval_unit,
+                            starts_ym: state.currentMonth
                         })
                     });
                 }
                 closeModal('detectModal');
-                await loadBudgetProgress();
+                await loadMonth();
             } catch (e) {
                 alert('Error adding: ' + e.message);
             }
         }
 
         // Month navigation
-        q('#selectMonth').onchange = (e) => {
-            state.currentMonth = e.target.value;
-            loadBudgetProgress();
-        };
-
+        q('#selectMonth').onchange = (e) => { state.currentMonth = e.target.value; loadMonth(); };
         q('#btnPrevMonth').onclick = () => {
             const s = q('#selectMonth');
             if (s.selectedIndex < s.options.length - 1) {
-                s.selectedIndex++;
-                state.currentMonth = s.value;
-                loadBudgetProgress();
+                s.selectedIndex++; state.currentMonth = s.value; loadMonth();
             }
         };
-
         q('#btnNextMonth').onclick = () => {
             const s = q('#selectMonth');
             if (s.selectedIndex > 0) {
-                s.selectedIndex--;
-                state.currentMonth = s.value;
-                loadBudgetProgress();
+                s.selectedIndex--; state.currentMonth = s.value; loadMonth();
             }
         };
 
