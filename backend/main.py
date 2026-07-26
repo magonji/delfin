@@ -4526,25 +4526,49 @@ def detect_budget_items(
 
 @app.get("/budget/buckets")
 def get_category_buckets(db: Session = Depends(get_db)):
-    """Every category with the kakeibo bucket it is mapped to (null if unmapped)."""
-    mapped = {row.category_id: row.bucket for row in db.query(models.CategoryBucket).all()}
-    categories = db.query(Category).order_by(Category.parent, Category.name).all()
+    """
+    The category tree with its kakeibo mapping, grouped so that classifying a
+    parent covers its subcategories. Each entry carries the bucket set on it
+    (``bucket``, null when it just inherits) and the one that actually applies
+    (``effective``).
+    """
+    own = budget_engine.explicit_buckets(db)
+    effective = budget_engine.bucket_map(db)
+    categories = db.query(Category).order_by(Category.name).all()
 
     # Only spending categories are worth classifying.
-    result = []
-    for category in categories:
-        if category.type and category.type.lower() in ("income", "ingreso"):
-            continue
-        result.append({
+    spending = [c for c in categories
+                if not (c.type and c.type.lower() in ("income", "ingreso"))]
+    known_names = {c.name for c in categories}
+
+    def entry(category):
+        return {
             "category_id": category.id,
             "name": category.name,
-            "parent": category.parent,
-            "bucket": mapped.get(category.id),
-        })
+            "bucket": own.get(category.id),
+            "effective": effective.get(category.id),
+        }
+
+    children_by_parent = {}
+    for category in spending:
+        if category.parent:
+            children_by_parent.setdefault(category.parent, []).append(category)
+
+    groups = []
+    for category in spending:
+        # A category is a group head when nothing above it can pass a bucket down.
+        if category.parent and category.parent in known_names:
+            continue
+        group = entry(category)
+        group["children"] = [entry(c) for c in
+                             sorted(children_by_parent.get(category.name, []), key=lambda c: c.name)]
+        groups.append(group)
+    groups.sort(key=lambda g: g["name"])
+
     return {
         "buckets": list(budget_engine.BUCKETS),
-        "categories": result,
-        "unmapped_count": sum(1 for c in result if not c["bucket"]),
+        "groups": groups,
+        "unmapped_count": sum(1 for c in spending if c.id not in effective),
     }
 
 

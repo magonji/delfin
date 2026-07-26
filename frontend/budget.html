@@ -252,12 +252,21 @@
         .form-check { display: flex; align-items: center; gap: 9px; margin-bottom: 16px; font-size: 13.5px; }
         .form-check input { width: 18px; height: 18px; accent-color: var(--green); flex: 0 0 auto; }
 
-        /* Bucket mapping */
-        .bucket-row { display: grid; grid-template-columns: 1fr 132px; gap: 10px; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--hair); }
-        .bucket-row .cat { font-size: 13.5px; min-width: 0; }
-        .bucket-row .cat small { display: block; color: var(--muted); font-size: 11px; }
+        /* Bucket mapping — a tree, so a parent classifies everything under it */
+        .bucket-row { display: grid; grid-template-columns: 1fr 148px; gap: 10px; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--hair); }
+        .bucket-row .cat { font-size: 13.5px; min-width: 0; display: flex; align-items: baseline; gap: 7px; }
+        .bucket-row .cat small { color: var(--muted); font-size: 11px; font-family: 'IBM Plex Mono', monospace; }
         .bucket-row select { width: 100%; padding: 7px 24px 7px 9px; border: 1px solid var(--field); border-radius: 8px; font-size: 12.5px; background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%238A7D6C'/%3E%3C/svg%3E") no-repeat right 9px center; -webkit-appearance: none; appearance: none; }
-        .bucket-row.unmapped .cat { font-weight: 600; }
+        .bucket-row.parent > .cat { font-weight: 600; }
+        .bucket-row.child { padding-left: 26px; border-bottom: 1px solid #F7F0E4; }
+        .bucket-row.child .cat { font-size: 12.5px; }
+        .bucket-row.child.inherited select { color: var(--muted); background-color: #FCF8F1; }
+        .bucket-group.collapsed .bucket-row.child { display: none; }
+        .bucket-toggle { background: transparent; border: none; padding: 0; margin: 0; cursor: pointer; color: var(--muted); font-size: 10px; width: 14px; flex: 0 0 auto; }
+        .bucket-group.collapsed .bucket-toggle { transform: rotate(-90deg); }
+        .bucket-search { width: 100%; padding: 10px 12px; border: 1px solid var(--field); border-radius: 9px; font-size: 13.5px; background: #fff; margin-bottom: 12px; }
+        .bucket-search:focus { outline: none; border-color: var(--accent); }
+        .bucket-group.hidden, .bucket-row.hidden { display: none; }
 
         /* Navigation (nav-links live in the header block above) */
         .dropdown { position: relative; display: inline-flex; }
@@ -300,6 +309,17 @@
         /* Help icon & info modal */
         .help-icon { color: var(--muted); font-size: 16px; cursor: pointer; }
         .help-icon:hover { color: var(--text); }
+        /* Help mark sitting next to a section heading rather than in the header bar */
+        .sechead-help { display: inline; font-size: 14px; margin-left: 7px; vertical-align: middle; }
+
+        /* Kakeibo primer */
+        .kb-bucket { display: flex; gap: 11px; padding: 12px 0; border-bottom: 1px solid var(--hair); }
+        .kb-bucket:last-child { border-bottom: none; }
+        .kb-swatch { width: 10px; height: 10px; border-radius: 3px; flex: 0 0 auto; margin-top: 5px; }
+        .kb-bucket h4 { margin: 0 0 3px; font-family: 'Playfair Display', serif; font-size: 16px; font-weight: 700; }
+        .kb-bucket p { margin: 0 0 5px; font-size: 13px; line-height: 1.5; }
+        .kb-bucket .eg { font-size: 12px; line-height: 1.55; color: var(--muted); }
+        .kb-bucket .eg b { color: #4C463E; font-weight: 600; }
         .info-section { margin-bottom: 16px; }
         .info-section strong { display: block; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
         .info-row { padding: 5px 0; font-size: 13px; line-height: 1.5; }
@@ -421,7 +441,10 @@
         <!-- Kakeibo calendar -->
         <section>
             <div class="sec-head">
-                <h2 class="sechead">Calendar</h2>
+                <h2 class="sechead">Calendar
+                    <span class="help-icon sechead-help" onclick="openModal('kakeiboModal')"
+                          title="What the kakeibo method is" aria-label="About kakeibo">ⓘ</span>
+                </h2>
                 <div id="calSummary" class="other-summary" style="display:none;border:none;padding:0;margin:0;"></div>
             </div>
             <div class="cal-wrap">
@@ -551,7 +574,7 @@
                 </div>
                 <div class="info-section">
                     <strong>Calendar</strong>
-                    <div class="info-row">Each day splits its spending into the four kakeibo buckets — Essentials, Indulgences, Culture, Unexpected — each in a fixed position within the cell. Nothing is drawn for a bucket with no spending. Click a figure for that day's transactions in that bucket.</div>
+                    <div class="info-row">Each day splits its spending into the four kakeibo buckets — Essentials, Indulgences, Culture, Unexpected — each in a fixed position within the cell. Nothing is drawn for a bucket with no spending. Click a figure for that day's transactions in that bucket. <span class="warnmap" onclick="closeModal('infoModal'); openModal('kakeiboModal');" style="color:var(--accent);cursor:pointer;text-decoration:underline;">What the method is</span>.</div>
                     <div class="info-row" style="margin-top:6px;">Spending in a category you haven't classified shows as a grey figure with a <b>?</b>. <span class="warnmap" onclick="closeModal('infoModal'); openBucketsModal();" style="color:var(--accent);cursor:pointer;text-decoration:underline;">Map your categories</span> to clear it.</div>
                     <div class="info-row" style="margin-top:6px;">The strip along the foot of each cell is the <b>pace</b>: your planned expenses spread evenly across the month. Green means on pace, ochre up to twice it, red beyond. Bills are excluded — they're already set aside. Dots mark bills falling that day, green if paid.</div>
                 </div>
@@ -626,6 +649,118 @@
         </div>
     </div>
 
+    <!-- What kakeibo is, and what belongs in each bucket -->
+    <div id="kakeiboModal" class="modal">
+        <div class="modal-content" style="max-width: 540px;">
+            <div class="modal-header">
+                <h3>The kakeibo method</h3>
+                <button class="modal-close" onclick="closeModal('kakeiboModal')">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 20px 25px;">
+                <div class="info-section">
+                    <div class="info-row" style="padding-top:0;">
+                        <em>Kakeibo</em> (家計簿, "household account book") is a Japanese method from 1904:
+                        you write down what you spend, day by day, and sort it into four kinds of spending.
+                        The point isn't the arithmetic — your bank already does that — it's the question you
+                        answer as you write each entry: <b>what kind of want was this?</b>
+                    </div>
+                    <div class="info-row" style="margin-top:6px;">
+                        Fixed costs and savings come off the top; the four buckets are for the money that
+                        passes through your hands day to day, and that's where the pattern shows.
+                    </div>
+                </div>
+
+                <div class="info-section">
+                    <strong>The four buckets</strong>
+                    <div class="kb-bucket">
+                        <span class="kb-swatch" style="background:#0072B2"></span>
+                        <div>
+                            <h4>Essentials</h4>
+                            <p>Routine, unavoidable spending — living costs you'd struggle to go without.</p>
+                            <div class="eg">
+                                <b>Everyday food:</b> butcher, fishmonger, greengrocer, the weekly shop ·
+                                <b>Chemist:</b> medicines, toiletries ·
+                                <b>Transport:</b> fuel, taxis, tolls, train, bus and metro fares ·
+                                <b>Children and parents:</b> school supplies, special diets ·
+                                <b>Pets:</b> vet, food, grooming
+                            </div>
+                        </div>
+                    </div>
+                    <div class="kb-bucket">
+                        <span class="kb-swatch" style="background:#C26896"></span>
+                        <div>
+                            <h4>Indulgences</h4>
+                            <p>Things you don't need to live, bought because they're a pleasure.</p>
+                            <div class="eg">
+                                <b>Bars and cafés:</b> coffee, beer, soft drinks ·
+                                <b>Restaurants:</b> meals out with friends, work or family ·
+                                <b>Takeaways and fast food</b> ·
+                                <b>Nightlife</b> ·
+                                <b>Clothes:</b> garments, bags, shoes, accessories ·
+                                <b>Cosmetics:</b> make-up, creams, perfume
+                            </div>
+                        </div>
+                    </div>
+                    <div class="kb-bucket">
+                        <span class="kb-swatch" style="background:#008C66"></span>
+                        <div>
+                            <h4>Culture</h4>
+                            <p>Leisure that also leaves you with something — it enriches rather than just entertains.</p>
+                            <div class="eg">
+                                <b>Books and music</b> ·
+                                <b>Live events:</b> concerts, theatre, festivals ·
+                                <b>Film:</b> cinema, streaming subscriptions ·
+                                <b>Press:</b> newspapers, magazines
+                            </div>
+                        </div>
+                    </div>
+                    <div class="kb-bucket">
+                        <span class="kb-swatch" style="background:#B8730A"></span>
+                        <div>
+                            <h4>Unexpected</h4>
+                            <p>What fits nowhere else: exceptional events calling for a one-off outlay.</p>
+                            <div class="eg">
+                                <b>Travel:</b> transport, hotels ·
+                                <b>Gifts:</b> birthdays, Christmas, anniversaries ·
+                                <b>Repairs:</b> home or car ·
+                                <b>Household goods:</b> furniture, kitchenware, tools ·
+                                <b>Electronics:</b> computers, cameras, phones
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="info-section">
+                    <strong>Where the line falls</strong>
+                    <div class="info-row">The same purchase can sit in different buckets depending on why you
+                        bought it — the weekly shop is <b>Essentials</b>, the bottle of wine for a dinner party
+                        is an <b>Indulgence</b>. Decide once, be consistent, and the monthly totals become
+                        comparable.</div>
+                    <div class="info-row" style="margin-top:6px;">A cinema subscription is <b>Culture</b>; a night
+                        out at the cinema bar is not. Clothes are an <b>Indulgence</b> even when you needed them,
+                        unless they're workwear or a child's uniform.</div>
+                </div>
+
+                <div class="info-section">
+                    <strong>How it works on this page</strong>
+                    <div class="info-row">Delfin already has your transactions, so instead of writing entries by
+                        hand you classify your <b>categories</b> once and every day sorts itself. Set a bucket on a
+                        top-level category and its subcategories follow;
+                        <span class="warnmap" style="color:var(--accent);cursor:pointer;text-decoration:underline;"
+                              onclick="closeModal('kakeiboModal'); openBucketsModal();">open the mapping</span>
+                        to give one of them a bucket of its own.</div>
+                    <div class="info-row" style="margin-top:6px;">Each calendar cell shows the day split four ways,
+                        each bucket always in the same corner. Click a figure to see the transactions behind it.</div>
+                    <div class="info-row" style="margin-top:6px;">Your fixed expenses appear in the day figures too —
+                        rent and insurance usually belong in <b>Essentials</b>. They're left out of the pace colour,
+                        which watches only day-to-day spending.</div>
+                    <div class="info-row" style="margin-top:6px;">The method's own advice, worth keeping: look at the
+                        week while it's still running, not once it's over.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Correct a single line of a month already closed -->
     <div id="lineModal" class="modal">
         <div class="modal-content">
@@ -675,9 +810,13 @@
             </div>
             <div class="modal-body">
                 <p class="muted" style="margin-top:0;font-size:13px;line-height:1.5;">
-                    Sort your spending categories into the four kakeibo buckets. Unclassified ones are listed first
-                    and show up on the calendar as a grey figure.
+                    Sort your spending into the four kakeibo buckets. Setting a category covers all its
+                    subcategories — open one to give a subcategory a bucket of its own. Anything left
+                    unclassified shows on the calendar as a grey figure.
+                    <span class="warnmap" style="color:var(--accent);cursor:pointer;text-decoration:underline;"
+                          onclick="openModal('kakeiboModal')">What goes in each bucket?</span>
                 </p>
+                <input type="text" id="bucketSearch" class="bucket-search" placeholder="Search categories…" oninput="filterBuckets()">
                 <div id="bucketsList"></div>
             </div>
             <div class="modal-footer">
@@ -1508,8 +1647,11 @@
         }
 
         // ── Kakeibo mapping ────────────────────────────────────────────────
+        // A tree: setting a parent classifies every subcategory under it, and a
+        // subcategory only needs its own value when it should differ.
         async function openBucketsModal() {
             openModal('bucketsModal');
+            q('#bucketSearch').value = '';
             q('#bucketsList').innerHTML = '<div class="empty-state">Loading…</div>';
             try {
                 state.buckets = await api('/budget/buckets');
@@ -1517,21 +1659,92 @@
                 q('#bucketsList').innerHTML = '<div class="empty-state">Error: ' + esc(e.message) + '</div>';
                 return;
             }
-            // Unclassified first — those are the ones showing up grey on the calendar.
-            const rows = [...state.buckets.categories].sort((a, b) => {
-                if (!a.bucket !== !b.bucket) return a.bucket ? 1 : -1;
-                const al = (a.parent ? a.parent + ' › ' : '') + a.name;
-                const bl = (b.parent ? b.parent + ' › ' : '') + b.name;
-                return al.localeCompare(bl);
+
+            // Groups still needing attention come first.
+            const groups = [...state.buckets.groups].sort((a, b) => {
+                const aDone = a.effective ? 1 : 0, bDone = b.effective ? 1 : 0;
+                return aDone - bDone || a.name.localeCompare(b.name);
             });
-            q('#bucketsList').innerHTML = rows.map(c => `
-                <div class="bucket-row ${c.bucket ? '' : 'unmapped'}">
-                    <span class="cat">${esc(c.name)}${c.parent ? `<small>${esc(c.parent)}</small>` : ''}</span>
-                    <select data-category="${c.category_id}">
-                        <option value="">— unclassified</option>
-                        ${BUCKETS.map(b => `<option value="${b}" ${c.bucket === b ? 'selected' : ''}>${BUCKET_LABELS[b]}</option>`).join('')}
-                    </select>
-                </div>`).join('');
+
+            const options = (selected) => BUCKETS
+                .map(b => `<option value="${b}" ${selected === b ? 'selected' : ''}>${BUCKET_LABELS[b]}</option>`).join('');
+
+            q('#bucketsList').innerHTML = groups.map(g => {
+                const overrides = g.children.filter(c => c.bucket).length;
+                const notes = [];
+                if (g.children.length) notes.push(`${g.children.length} sub`);
+                if (overrides) notes.push(`${overrides} on its own`);
+
+                const children = g.children.map(c => `
+                    <div class="bucket-row child ${c.bucket ? '' : 'inherited'}" data-name="${esc(c.name.toLowerCase())}">
+                        <span class="cat">${esc(c.name)}</span>
+                        <select data-category="${c.category_id}" data-parent-of="${g.category_id}" onchange="onChildBucketChange(this)">
+                            <option value="">↳ same as parent</option>
+                            ${options(c.bucket)}
+                        </select>
+                    </div>`).join('');
+
+                return `
+                    <div class="bucket-group ${g.children.length ? 'collapsed' : ''}" data-name="${esc(g.name.toLowerCase())}">
+                        <div class="bucket-row parent">
+                            <span class="cat">
+                                ${g.children.length
+                                    ? `<button type="button" class="bucket-toggle" onclick="toggleBucketGroup(this)" aria-label="Show subcategories">▼</button>`
+                                    : '<span class="bucket-toggle"></span>'}
+                                ${esc(g.name)}${notes.length ? `<small>${notes.join(' · ')}</small>` : ''}
+                            </span>
+                            <select data-category="${g.category_id}" data-group="${g.category_id}" onchange="onParentBucketChange(this)">
+                                <option value="">— unclassified</option>
+                                ${options(g.bucket)}
+                            </select>
+                        </div>
+                        ${children}
+                    </div>`;
+            }).join('');
+
+            qa('#bucketsList select[data-group]').forEach(refreshInheritLabels);
+        }
+
+        // Children that follow their parent should say so, and say what they follow.
+        function refreshInheritLabels(parentSelect) {
+            const groupId = parentSelect.dataset.group;
+            const label = parentSelect.value ? BUCKET_LABELS[parentSelect.value] : 'unclassified';
+            qa(`#bucketsList select[data-parent-of="${groupId}"]`).forEach(child => {
+                child.options[0].textContent = `↳ same as parent (${label})`;
+                child.closest('.bucket-row').classList.toggle('inherited', !child.value);
+            });
+        }
+
+        function onParentBucketChange(select) { refreshInheritLabels(select); }
+        function onChildBucketChange(select) {
+            select.closest('.bucket-row').classList.toggle('inherited', !select.value);
+        }
+
+        function toggleBucketGroup(btn) {
+            btn.closest('.bucket-group').classList.toggle('collapsed');
+        }
+
+        function filterBuckets() {
+            const term = q('#bucketSearch').value.trim().toLowerCase();
+            qa('#bucketsList .bucket-group').forEach(group => {
+                const children = Array.from(group.querySelectorAll('.bucket-row.child'));
+                if (!term) {
+                    group.classList.remove('hidden', 'expanded');
+                    if (children.length) group.classList.add('collapsed');
+                    children.forEach(c => c.classList.remove('hidden'));
+                    return;
+                }
+                const groupHit = group.dataset.name.includes(term);
+                let childHits = 0;
+                children.forEach(row => {
+                    const hit = groupHit || row.dataset.name.includes(term);
+                    row.classList.toggle('hidden', !hit);
+                    if (hit) childHits++;
+                });
+                group.classList.toggle('hidden', !groupHit && !childHits);
+                // Open the group when the match is inside it, so the hit is visible.
+                group.classList.toggle('collapsed', !childHits);
+            });
         }
 
         async function saveBuckets() {

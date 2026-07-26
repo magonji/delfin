@@ -322,13 +322,37 @@ def _category_children(db: Session) -> Dict[int, List[int]]:
     return {c.id: by_name.get(c.name, []) for c in cats}
 
 
-def bucket_map(db: Session) -> Dict[int, str]:
-    """category id -> kakeibo bucket, for the categories the user has classified."""
+def explicit_buckets(db: Session) -> Dict[int, str]:
+    """category id -> the bucket set on that category itself."""
     return {
         row.category_id: row.bucket
         for row in db.query(CategoryBucket).all()
         if row.bucket in BUCKETS
     }
+
+
+def bucket_map(db: Session) -> Dict[int, str]:
+    """
+    category id -> the bucket that applies to it.
+
+    A subcategory with no bucket of its own inherits its parent's, so classifying
+    a top-level category covers everything beneath it — including subcategories
+    added later — while an explicit one on the child still wins.
+    """
+    own = explicit_buckets(db)
+    categories = db.query(Category).all()
+    by_name = {c.name: c for c in categories}
+
+    resolved: Dict[int, str] = {}
+    for category in categories:
+        bucket = own.get(category.id)
+        if bucket is None and category.parent:
+            parent = by_name.get(category.parent)
+            if parent is not None:
+                bucket = own.get(parent.id)
+        if bucket:
+            resolved[category.id] = bucket
+    return resolved
 
 
 def month_snapshot(db: Session, ym: str) -> Dict:
