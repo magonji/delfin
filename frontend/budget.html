@@ -208,16 +208,11 @@
         .cal-unmapped { font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 600; color: var(--muted);
             font-variant-numeric: tabular-nums; cursor: pointer; }
         .cal-unmapped::after { content: '?'; font-size: 8px; vertical-align: super; margin-left: 1px; }
-        /* Pace reads as a strip along the foot of the cell, leaving the tint faint
-           enough that the bucket figures keep their contrast. */
-        .cal-pace { position: absolute; left: 7px; right: 7px; bottom: 3px; height: 2px; border-radius: 99px; }
-
         .cal-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--hair);
             font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--muted); }
         .cal-legend span { display: inline-flex; align-items: center; gap: 5px; }
         .cal-legend i { width: 9px; height: 9px; border-radius: 3px; display: inline-block; }
         .cal-legend i.round { border-radius: 50%; width: 6px; height: 6px; }
-        .cal-legend i.bar { width: 14px; height: 3px; border-radius: 99px; }
         .cal-legend .warnmap { color: var(--accent); cursor: pointer; text-decoration: underline; }
         .cal-detail { margin-top: 16px; border-top: 1px solid var(--hair); padding-top: 12px; }
         .cal-detail .dhead { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
@@ -229,7 +224,6 @@
             .cal-cell .amt { font-size: 10.5px; }
             .cal-buckets span { font-size: 9.5px; min-height: 11px; }
             .cal-buckets { gap: 0 3px; }
-            .cal-pace { left: 4px; right: 4px; }
         }
 
         /* History / audit */
@@ -456,9 +450,9 @@
                     <span><i style="background:#008C66"></i>Culture</span>
                     <span><i style="background:#B8730A"></i>Unexpected</span>
                     <span><i style="background:var(--muted)"></i>Unclassified</span>
-                    <span><i class="bar" style="background:var(--green)"></i>On pace</span>
-                    <span><i class="bar" style="background:var(--yellow)"></i>Up to 2× pace</span>
-                    <span><i class="bar" style="background:var(--red)"></i>Over 2× pace</span>
+                    <span><i style="background:rgba(60,122,87,.35)"></i>On pace</span>
+                    <span><i style="background:rgba(198,137,63,.4)"></i>Up to 2× pace</span>
+                    <span><i style="background:rgba(176,64,46,.4)"></i>Over 2× pace</span>
                     <span><i class="round" style="background:var(--green)"></i>Bill paid</span>
                     <span><i class="round" style="background:var(--yellow)"></i>Bill due</span>
                     <span id="calMapNote">Figures split each day by kakeibo bucket, always in the same four positions. Pace tracks day-to-day spending only — bills are excluded.</span>
@@ -484,7 +478,7 @@
                     <div class="thismonth-label">Set aside for future bills</div>
                     <div id="fundsList"></div>
                 </div>
-                <button class="lbtn add-btn" style="width:100%;margin-top:14px;height:34px;" onclick="openDetectModal()">⌕ Detect from history</button>
+                <button class="lbtn add-btn" style="width:100%;margin-top:14px;height:34px;" onclick="openSuggestModal('fixed')">⌕ Suggest from history</button>
             </div>
             <div>
                 <div class="card-block">
@@ -497,6 +491,7 @@
                         <span>Expected <strong id="incomeTotal">-</strong></span>
                         <span>Received <strong id="incomeReceived">-</strong></span>
                     </div>
+                    <button class="lbtn add-btn" style="width:100%;margin-top:14px;height:34px;" onclick="openSuggestModal('income')">⌕ Suggest from history</button>
                 </div>
                 <div class="card-block">
                     <div class="sec-head">
@@ -549,6 +544,7 @@
                     <div class="info-row">Anything with a set amount and a rhythm: rent, insurance, a subscription, a transfer to a loan or savings account. Give it a first date and how often it repeats, and a payee so payment can be detected. A one-off you only expect this month goes here too — set it to repeat "once".</div>
                     <div class="info-row" style="margin-top:6px;">Anything repeating less often than monthly is <b>prorated</b>: a £600 bill every six months is budgeted at £100 a month, starting straight away even if the first charge is still in the future. That is what the month's target uses.</div>
                     <div class="info-row" style="margin-top:6px;">Mark an amount as <b>estimated</b> when you don't know it yet — an MOT, say.</div>
+                    <div class="info-row" style="margin-top:6px;">For a monthly or yearly rhythm, <b>Falls on</b> decides the day. Keep the same day of the month, or count working days from either end — a loan taken on the first working day, wages on the second-to-last. Working means Monday to Friday; bank holidays aren't known, so a real payment may shift by a day. That only moves the marker on the calendar, never whether the bill counts as paid.</div>
                     <div class="info-row" style="margin-top:6px;">
                         <span class="symbol">✓</span> Paid — a matching transaction was found<br>
                         <span class="symbol">○</span> Pending — counts as committed<br>
@@ -621,9 +617,28 @@
                         </select>
                     </div>
                 </div>
+                <div class="form-group" id="itemDayRuleGroup">
+                    <label>Falls on</label>
+                    <select id="itemDayRule" onchange="onDayRuleChange()">
+                        <option value="exact">the same day of the month</option>
+                        <option value="working_from_start">a working day counted from the 1st</option>
+                        <option value="working_from_end">a working day counted from the end</option>
+                    </select>
+                </div>
+                <div class="form-group" id="itemDayOrdinalGroup" style="display:none;">
+                    <label id="itemDayOrdinalLabel">Which working day</label>
+                    <select id="itemDayOrdinal" onchange="onDayRuleChange()">
+                        <option value="1">1st</option>
+                        <option value="2">2nd</option>
+                        <option value="3">3rd</option>
+                        <option value="4">4th</option>
+                        <option value="5">5th</option>
+                    </select>
+                </div>
+                <div class="form-hint" id="itemDayHint" style="display:none;"></div>
                 <div class="form-hint" id="itemProrateHint" style="display:none;"></div>
                 <div class="form-group" id="itemPayeeGroup">
-                    <label>Payee — used to spot the payment</label>
+                    <label id="itemPayeeLabel">Payee — used to spot the payment</label>
                     <select id="itemPayee"><option value="">-- None --</option></select>
                 </div>
                 <div class="form-group" id="itemAccountGroup">
@@ -826,19 +841,19 @@
         </div>
     </div>
 
-    <!-- Detect candidates -->
-    <div id="detectModal" class="modal">
+    <!-- Suggestions from history -->
+    <div id="suggestModal" class="modal">
         <div class="modal-content" style="max-width: 560px;">
             <div class="modal-header">
-                <h3>Detected Fixed Expenses</h3>
-                <button class="modal-close" onclick="closeModal('detectModal')">&times;</button>
+                <h3 id="suggestModalTitle">Suggestions</h3>
+                <button class="modal-close" onclick="closeModal('suggestModal')">&times;</button>
             </div>
             <div class="modal-body">
-                <p class="muted" style="margin-top: 0;">Regular payments found in your history. Pick the ones to add:</p>
+                <p class="muted" style="margin-top: 0;" id="suggestModalIntro"></p>
                 <div id="candidatesList"></div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeModal('detectModal')">Cancel</button>
+                <button class="btn btn-secondary" onclick="closeModal('suggestModal')">Cancel</button>
                 <button class="btn btn-primary" onclick="addSelectedCandidates()">Add Selected</button>
             </div>
         </div>
@@ -863,6 +878,7 @@
             accounts: [],
             data: null,
             selectedDay: null,
+            suggestKind: 'fixed',
             buckets: null,
             candidates: []
         };
@@ -966,6 +982,12 @@
                 });
             }
         }
+        // Clicking the backdrop dismisses the modal. The target is only the overlay
+        // itself when the click landed outside the panel, and with modals stacked it
+        // is the top one, so this closes them one at a time.
+        window.addEventListener('click', (e) => {
+            if (e.target.classList.contains('modal')) closeModal(e.target.id);
+        });
 
         // Initialize
         async function init() {
@@ -1115,7 +1137,7 @@
             const lines = d.fixed_expenses || [];
 
             if (!lines.length) {
-                list.innerHTML = '<div class="empty-state">No fixed expenses<br><small>Add rent, insurance, subscriptions — or detect them from your history</small></div>';
+                list.innerHTML = '<div class="empty-state">No fixed expenses<br><small>Add rent, insurance, subscriptions — or take a suggestion from your history</small></div>';
                 q('#fixedSummary').style.display = 'none';
                 q('#fundsBlock').style.display = 'none';
                 return;
@@ -1269,11 +1291,14 @@
         // Tone for a past day, from its day-to-day spending against the pace target.
         function calTone(variable, dailyTarget) {
             if (variable <= 0) return null;
-            if (dailyTarget <= 0) return { tone: 'red', alpha: .12 };
+            // With nothing budgeted for day-to-day spending there is no pace to be
+            // on or off, so the day stays uncoloured rather than being called bad.
+            if (dailyTarget <= 0) return null;
             const ratio = variable / dailyTarget;
             const tone = ratio <= 1 ? 'green' : ratio <= 2 ? 'yellow' : 'red';
-            // Kept faint: the four bucket figures sit on top and need their contrast.
-            const alpha = Math.min(.12, .04 + Math.min(ratio, 3) / 3 * .08);
+            // Ceiling checked against the four bucket colours: any stronger and
+            // the figures drop below 3:1 on the tinted cell.
+            const alpha = Math.min(.13, .05 + Math.min(ratio, 3) / 3 * .08);
             return { tone, alpha };
         }
 
@@ -1308,13 +1333,10 @@
                 if (isToday) classes.push('today');
                 if (state.selectedDay === day.date) classes.push('selected');
 
-                let style = '', pace = '';
+                let style = '';
                 if (!isFuture) {
                     const t = calTone(day.variable, dailyTarget);
-                    if (t) {
-                        style = `background:rgba(${PACE_TONES[t.tone]},${t.alpha.toFixed(2)})`;
-                        pace = `<i class="cal-pace" style="background:var(--${t.tone === 'yellow' ? 'yellow' : t.tone})"></i>`;
-                    }
+                    if (t) style = `background:rgba(${PACE_TONES[t.tone]},${t.alpha.toFixed(2)})`;
                 }
 
                 // Four fixed slots, so position identifies the bucket as much as colour.
@@ -1340,7 +1362,6 @@
                         <span class="cal-top"><span class="d">${dayNum}</span>${unmapped}</span>
                         <span class="cal-marks">${marks}${more}</span>
                         <span class="cal-buckets">${figures}</span>
-                        ${pace}
                     </button>`);
             }
 
@@ -1378,7 +1399,9 @@
                 summary.style.display = 'flex';
                 summary.innerHTML = `<span>Pace <strong>${fmtMoney(dailyTarget, cur)}/day</strong></span>`;
             } else {
-                summary.style.display = 'none';
+                // Say why the days are uncoloured instead of leaving it a mystery.
+                summary.style.display = 'flex';
+                summary.innerHTML = '<span class="muted">No pace yet — add a planned expense to set one</span>';
             }
 
             renderCalDetail();
@@ -1465,7 +1488,9 @@
 
         function applyKindToForm(kind) {
             const show = (id, on) => q(id).style.display = on ? '' : 'none';
-            show('#itemPayeeGroup', kind === 'fixed');
+            show('#itemPayeeGroup', kind !== 'planned');
+            q('#itemPayeeLabel').textContent = kind === 'income'
+                ? 'Payer (optional)' : 'Payee — used to spot the payment';
             show('#itemAccountGroup', kind === 'fixed');
             show('#itemAccountsGroup', kind === 'planned');
             show('#itemAccountsHint', kind === 'planned');
@@ -1478,10 +1503,55 @@
             onIntervalChange();
         }
 
+        // Which working day (Mon–Fri) of a month a rule resolves to — mirrors the
+        // server so the form can name the actual date before you save.
+        function resolveWorkingDay(year, month, ordinal, fromEnd) {
+            const days = [];
+            const last = new Date(year, month, 0).getDate();
+            for (let d = 1; d <= last; d++) {
+                const dow = new Date(year, month - 1, d).getDay();
+                if (dow !== 0 && dow !== 6) days.push(d);
+            }
+            if (!days.length) return 1;
+            const n = Math.max(1, ordinal || 1);
+            const index = fromEnd ? days.length - n : n - 1;
+            return days[Math.min(Math.max(index, 0), days.length - 1)];
+        }
+
+        function onDayRuleChange() {
+            const rule = q('#itemDayRule').value;
+            const isWorking = rule !== 'exact';
+            q('#itemDayOrdinalGroup').style.display = isWorking ? '' : 'none';
+            q('#itemDayOrdinalLabel').textContent = rule === 'working_from_end'
+                ? 'Which working day, counting back' : 'Which working day';
+
+            const hint = q('#itemDayHint');
+            if (!isWorking) { hint.style.display = 'none'; return; }
+
+            const [y, m] = state.currentMonth.split('-').map(Number);
+            const day = resolveWorkingDay(y, m, parseInt(q('#itemDayOrdinal').value),
+                                          rule === 'working_from_end');
+            const when = new Date(y, m - 1, day)
+                .toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+            hint.style.display = 'block';
+            hint.textContent = `In ${monthLabel(state.currentMonth)} that lands on ${when}. ` +
+                `Working days are Monday to Friday — bank holidays aren’t known, so a real payment may shift by a day.`;
+        }
+
         function onIntervalChange() {
             const unit = q('#itemIntervalUnit').value;
             const count = parseInt(q('#itemIntervalCount').value) || 1;
             q('#itemIntervalCount').style.display = unit === 'once' ? 'none' : '';
+
+            // A day rule only means something for monthly and yearly rhythms.
+            const monthly = unit === 'month' || unit === 'year';
+            q('#itemDayRuleGroup').style.display = monthly ? '' : 'none';
+            if (!monthly) {
+                q('#itemDayOrdinalGroup').style.display = 'none';
+                q('#itemDayHint').style.display = 'none';
+            } else {
+                onDayRuleChange();
+            }
 
             // Spell out the proration, since it is what the monthly target will use.
             const months = unit === 'month' ? count : unit === 'year' ? count * 12
@@ -1509,6 +1579,8 @@
             q('#itemEstimated').checked = false;
             q('#itemIntervalCount').value = 1;
             q('#itemIntervalUnit').value = 'month';
+            q('#itemDayRule').value = 'exact';
+            q('#itemDayOrdinal').value = '1';
             q('#itemPayee').value = '';
             q('#itemAccount').value = '';
             qa('#itemAccounts option').forEach(o => o.selected = false);
@@ -1579,6 +1651,8 @@
             q('#itemFirstDate').value = item.first_date || '';
             q('#itemIntervalCount').value = item.interval_count || 1;
             q('#itemIntervalUnit').value = item.interval_unit || 'month';
+            q('#itemDayRule').value = item.day_rule || 'exact';
+            q('#itemDayOrdinal').value = item.day_ordinal || 1;
             q('#itemPayee').value = item.payee_id || '';
             q('#itemAccount').value = item.set_aside_account_id || '';
             const accounts = new Set(item.account_ids || []);
@@ -1605,7 +1679,9 @@
                 first_date: q('#itemFirstDate').value ? q('#itemFirstDate').value + 'T00:00:00' : null,
                 interval_count: unit === 'once' ? 1 : (parseInt(q('#itemIntervalCount').value) || 1),
                 interval_unit: unit,
-                payee_id: kind === 'fixed' && q('#itemPayee').value ? parseInt(q('#itemPayee').value) : null,
+                day_rule: (unit === 'month' || unit === 'year') ? q('#itemDayRule').value : 'exact',
+                day_ordinal: parseInt(q('#itemDayOrdinal').value) || 1,
+                payee_id: kind !== 'planned' && q('#itemPayee').value ? parseInt(q('#itemPayee').value) : null,
                 set_aside_account_id: kind === 'fixed' && q('#itemAccount').value ? parseInt(q('#itemAccount').value) : null,
                 account_ids: kind === 'planned' ? selected('#itemAccounts') : [],
                 category_ids: kind === 'planned' ? selected('#itemCategories') : [],
@@ -1669,20 +1745,33 @@
             const options = (selected) => BUCKETS
                 .map(b => `<option value="${b}" ${selected === b ? 'selected' : ''}>${BUCKET_LABELS[b]}</option>`).join('');
 
-            q('#bucketsList').innerHTML = groups.map(g => {
+            q('#bucketsList').innerHTML = groups.map((g, gi) => {
                 const overrides = g.children.filter(c => c.bucket).length;
                 const notes = [];
                 if (g.children.length) notes.push(`${g.children.length} sub`);
-                if (overrides) notes.push(`${overrides} on its own`);
+                // Only a group backed by a real category can pass its bucket down;
+                // otherwise the head just applies itself to all of its children.
+                if (g.inherits && overrides) notes.push(`${overrides} on its own`);
+                if (!g.inherits && g.children.length) notes.push('sets all');
 
                 const children = g.children.map(c => `
-                    <div class="bucket-row child ${c.bucket ? '' : 'inherited'}" data-name="${esc(c.name.toLowerCase())}">
+                    <div class="bucket-row child ${g.inherits && !c.bucket ? 'inherited' : ''}" data-name="${esc(c.name.toLowerCase())}">
                         <span class="cat">${esc(c.name)}</span>
-                        <select data-category="${c.category_id}" data-parent-of="${g.category_id}" onchange="onChildBucketChange(this)">
-                            <option value="">↳ same as parent</option>
+                        <select data-category="${c.category_id}" data-parent-of="${gi}" onchange="onChildBucketChange(this)">
+                            <option value="">${g.inherits ? '↳ same as parent' : '— unclassified'}</option>
                             ${options(c.bucket)}
                         </select>
                     </div>`).join('');
+
+                const headSelect = g.category_id
+                    ? `<select data-category="${g.category_id}" data-group="${gi}" data-inherits="${g.inherits ? 1 : 0}" onchange="onParentBucketChange(this)">
+                            <option value="">— unclassified</option>
+                            ${options(g.bucket)}
+                       </select>`
+                    : `<select data-group="${gi}" data-inherits="0" onchange="onParentBucketChange(this)" title="Applies to every subcategory">
+                            <option value="">— set all…</option>
+                            ${options(null)}
+                       </select>`;
 
                 return `
                     <div class="bucket-group ${g.children.length ? 'collapsed' : ''}" data-name="${esc(g.name.toLowerCase())}">
@@ -1693,29 +1782,35 @@
                                     : '<span class="bucket-toggle"></span>'}
                                 ${esc(g.name)}${notes.length ? `<small>${notes.join(' · ')}</small>` : ''}
                             </span>
-                            <select data-category="${g.category_id}" data-group="${g.category_id}" onchange="onParentBucketChange(this)">
-                                <option value="">— unclassified</option>
-                                ${options(g.bucket)}
-                            </select>
+                            ${headSelect}
                         </div>
                         ${children}
                     </div>`;
             }).join('');
 
-            qa('#bucketsList select[data-group]').forEach(refreshInheritLabels);
+            qa('#bucketsList select[data-group][data-inherits="1"]').forEach(refreshInheritLabels);
         }
 
         // Children that follow their parent should say so, and say what they follow.
         function refreshInheritLabels(parentSelect) {
-            const groupId = parentSelect.dataset.group;
+            const group = parentSelect.dataset.group;
             const label = parentSelect.value ? BUCKET_LABELS[parentSelect.value] : 'unclassified';
-            qa(`#bucketsList select[data-parent-of="${groupId}"]`).forEach(child => {
+            qa(`#bucketsList select[data-parent-of="${group}"]`).forEach(child => {
                 child.options[0].textContent = `↳ same as parent (${label})`;
                 child.closest('.bucket-row').classList.toggle('inherited', !child.value);
             });
         }
 
-        function onParentBucketChange(select) { refreshInheritLabels(select); }
+        function onParentBucketChange(select) {
+            if (select.dataset.inherits === '1') { refreshInheritLabels(select); return; }
+            // No category behind this head, so nothing can be inherited from it —
+            // stamp the choice onto each subcategory instead.
+            if (!select.value) return;
+            qa(`#bucketsList select[data-parent-of="${select.dataset.group}"]`).forEach(child => {
+                child.value = select.value;
+                child.closest('.bucket-row').classList.remove('inherited');
+            });
+        }
         function onChildBucketChange(select) {
             select.closest('.bucket-row').classList.toggle('inherited', !select.value);
         }
@@ -1748,7 +1843,9 @@
         }
 
         async function saveBuckets() {
-            const mappings = qa('#bucketsList select').map(s => ({
+            // A "set all" head has no category of its own — it has already written
+            // its choice into the children, so there is nothing to send for it.
+            const mappings = qa('#bucketsList select[data-category]').map(s => ({
                 category_id: parseInt(s.dataset.category),
                 bucket: s.value || null
             }));
@@ -1792,14 +1889,30 @@
             }
         }
 
-        // ── Detect from history ────────────────────────────────────────────
-        async function openDetectModal() {
-            openModal('detectModal');
+        // ── Suggestions from history ───────────────────────────────────────
+        const SUGGEST_COPY = {
+            fixed: {
+                title: 'Suggested Fixed Expenses',
+                intro: 'Regular charges and transfers found in your history. Pick the ones to add:',
+                empty: 'Nothing regular found<br><small>Add your fixed expenses by hand</small>'
+            },
+            income: {
+                title: 'Suggested Income',
+                intro: 'Money that keeps arriving from the same payer. Pick the ones to add:',
+                empty: 'No regular income found<br><small>Add what you expect to earn by hand</small>'
+            }
+        };
+
+        async function openSuggestModal(kind) {
+            state.suggestKind = kind;
+            q('#suggestModalTitle').textContent = SUGGEST_COPY[kind].title;
+            q('#suggestModalIntro').textContent = SUGGEST_COPY[kind].intro;
+            openModal('suggestModal');
             q('#candidatesList').innerHTML = '<div class="empty-state">Loading…</div>';
             try {
-                const candidates = await api('/budget/detect');
+                const candidates = await api(`/budget/suggestions?kind=${kind}`);
                 if (!candidates || !candidates.length) {
-                    q('#candidatesList').innerHTML = '<div class="empty-state">Nothing regular found<br><small>Add your fixed expenses by hand</small></div>';
+                    q('#candidatesList').innerHTML = `<div class="empty-state">${SUGGEST_COPY[kind].empty}</div>`;
                     return;
                 }
                 state.candidates = candidates;
@@ -1813,25 +1926,26 @@
                         <span class="amount">${fmtMoney(c.amount, c.currency)}</span>
                     </div>`).join('');
             } catch (e) {
-                q('#candidatesList').innerHTML = '<div class="empty-state">Error detecting: ' + esc(e.message) + '</div>';
+                q('#candidatesList').innerHTML = '<div class="empty-state">Error: ' + esc(e.message) + '</div>';
             }
         }
 
         async function addSelectedCandidates() {
             const checkboxes = qa('#candidatesList input[type="checkbox"]:checked');
             if (!checkboxes.length) { alert('Please select at least one'); return; }
+            const kind = state.suggestKind || 'fixed';
             try {
                 for (const cb of checkboxes) {
                     const c = state.candidates[parseInt(cb.dataset.index)];
                     await api('/budget/items', {
                         method: 'POST',
                         body: JSON.stringify({
-                            kind: 'fixed',
+                            kind,
                             name: c.suggested_name,
                             amount: c.amount,
                             currency: c.currency,
                             payee_id: c.payee_id || null,
-                            set_aside_account_id: c.account_id || null,
+                            set_aside_account_id: kind === 'fixed' ? (c.account_id || null) : null,
                             first_date: c.first_date,
                             interval_count: c.interval_count,
                             interval_unit: c.interval_unit,
@@ -1839,7 +1953,7 @@
                         })
                     });
                 }
-                closeModal('detectModal');
+                closeModal('suggestModal');
                 await loadMonth();
             } catch (e) {
                 alert('Error adding: ' + e.message);

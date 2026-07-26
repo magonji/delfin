@@ -329,6 +329,9 @@ class BudgetItemBase(BaseModel):
     first_date: Optional[datetime] = None
     interval_count: int = 1
     interval_unit: str = "month"    # once | day | week | month | year
+    # Which day of the month it lands on (monthly and yearly rhythms only).
+    day_rule: str = "exact"         # exact | working_from_start | working_from_end
+    day_ordinal: Optional[int] = None
 
     payee_id: Optional[int] = None
     set_aside_account_id: Optional[int] = None
@@ -359,6 +362,13 @@ class BudgetItemBase(BaseModel):
     @classmethod
     def check_count(cls, v):
         return max(1, int(v or 1))
+
+    @field_validator('day_rule')
+    @classmethod
+    def check_day_rule(cls, v):
+        if v not in ("exact", "working_from_start", "working_from_end"):
+            raise ValueError("day_rule must be exact, working_from_start or working_from_end")
+        return v
 
 
 class BudgetItemCreate(BudgetItemBase):

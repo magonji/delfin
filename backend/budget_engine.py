@@ -98,19 +98,52 @@ def period_months(interval_count: Optional[int], interval_unit: Optional[str]) -
     return float(n)  # months, and the fallback
 
 
-def occurrences_in_month(first: date, interval_count: Optional[int], interval_unit: str,
-                         start: date, end: date) -> List[date]:
+def month_index(d: date) -> int:
+    """Months since year zero — lets two dates be compared by month alone."""
+    return d.year * 12 + (d.month - 1)
+
+
+def working_day(year: int, month: int, ordinal: Optional[int], from_end: bool = False) -> int:
+    """
+    Day of the month of the nth working day, counting from the start or the end.
+
+    Working means Monday to Friday: the app has no holiday calendar, so a bank
+    holiday can still push the real payment by a day. That only shifts where the
+    marker sits on the calendar — whether a bill counts as paid is decided by the
+    matching transaction anywhere in the month, not by the date.
+    """
+    days = [d for d in range(1, monthrange(year, month)[1] + 1)
+            if date(year, month, d).weekday() < 5]
+    if not days:
+        return 1
+    n = max(1, int(ordinal or 1))
+    index = len(days) - n if from_end else n - 1
+    return days[max(0, min(index, len(days) - 1))]
+
+
+def day_of_month_for(item, year: int, month: int, fallback: int) -> int:
+    """The day `item` lands on in the given month, honouring its day rule."""
+    rule = getattr(item, "day_rule", None) or "exact"
+    if rule == "working_from_start":
+        return working_day(year, month, getattr(item, "day_ordinal", None), from_end=False)
+    if rule == "working_from_end":
+        return working_day(year, month, getattr(item, "day_ordinal", None), from_end=True)
+    return min(fallback, monthrange(year, month)[1])
+
+
+def occurrences_in_month(item, start: date, end: date) -> List[date]:
     """
     Dates on which an item lands inside [start, end]. Only meaningful for cycles
     of a month or less — longer ones are prorated instead of enumerated, so a
     fortnightly expense correctly falls two or three times depending on the month.
     """
+    first = as_date(item.first_date)
     if not first or first > end:
         return []
-    n = max(1, int(interval_count or 1))
+    n = max(1, int(item.interval_count or 1))
 
-    if interval_unit in ("day", "week"):
-        step = n * (7 if interval_unit == "week" else 1)
+    if item.interval_unit in ("day", "week"):
+        step = n * (7 if item.interval_unit == "week" else 1)
         behind = (start - first).days
         skipped = max(0, -(-behind // step))  # ceil division, clamped at zero
         cursor = first + timedelta(days=skipped * step)
@@ -121,12 +154,44 @@ def occurrences_in_month(first: date, interval_count: Optional[int], interval_un
             cursor += timedelta(days=step)
         return out
 
-    if interval_unit == "month" and n == 1:
-        day = min(first.day, monthrange(start.year, start.month)[1])
-        landing = date(start.year, start.month, day)
+    if item.interval_unit == "month" and n == 1:
+        # With a day rule the day of `first_date` no longer means anything — only
+        # the month it starts in does.
+        if (getattr(item, "day_rule", None) or "exact") != "exact":
+            if month_index(start) < month_index(first):
+                return []
+            return [date(start.year, start.month, day_of_month_for(item, start.year, start.month, first.day))]
+        landing = date(start.year, start.month, day_of_month_for(item, start.year, start.month, first.day))
         return [landing] if landing >= first else []
 
     return []
+
+
+def charge_days_in_month(item, start: date, end: date) -> List[int]:
+    """
+    Days a prorated item is actually charged on this month, if any. Every cycle
+    counts, not just the first — a six-monthly bill marks the calendar each time
+    it comes round.
+    """
+    first = as_date(item.first_date)
+    if not first:
+        return []
+    n = max(1, int(item.interval_count or 1))
+
+    if item.interval_unit in ("month", "year"):
+        step = n * (12 if item.interval_unit == "year" else 1)
+        gap = month_index(start) - month_index(first)
+        if gap < 0 or gap % step:
+            return []
+        return [day_of_month_for(item, start.year, start.month, first.day)]
+
+    # Day/week cycles longer than a month drift, so walk them forward.
+    step_days = n * (7 if item.interval_unit == "week" else 1)
+    cursor = first
+    if cursor < start:
+        behind = (start - cursor).days
+        cursor += timedelta(days=(-(-behind // step_days)) * step_days)
+    return [cursor.day] if start <= cursor <= end else []
 
 
 def line_values_for_month(item: BudgetItem, ym: str) -> Optional[Dict]:
@@ -153,11 +218,11 @@ def line_values_for_month(item: BudgetItem, ym: str) -> Optional[Dict]:
     # Longer than a month: a monthly share accrues from the item's first month,
     # even while the first real charge is still in the future.
     if cycle > 1 + 1e-9:
-        due = [first.day] if first and start <= first <= end else []
         return {"amount": amount / cycle, "full_amount": amount, "occurrences": 0,
-                "is_prorated": 1, "period_months": cycle, "due_days": due}
+                "is_prorated": 1, "period_months": cycle,
+                "due_days": charge_days_in_month(item, start, end)}
 
-    occurrences = occurrences_in_month(first, item.interval_count, item.interval_unit, start, end)
+    occurrences = occurrences_in_month(item, start, end)
     if not occurrences:
         return None
     return {"amount": amount * len(occurrences), "full_amount": amount,
@@ -312,14 +377,23 @@ def _transfer_location_ids(db: Session) -> List[int]:
     ]
 
 
+def normalise_name(name: Optional[str]) -> str:
+    """
+    Key a category name for matching. Subcategories point at their parent by
+    name, and those strings come from imports, so casing and stray spacing
+    should not be what breaks the link.
+    """
+    return " ".join((name or "").split()).casefold()
+
+
 def _category_children(db: Session) -> Dict[int, List[int]]:
     """category id -> ids of its subcategories (categories are linked by parent name)."""
     cats = db.query(Category).all()
     by_name: Dict[str, List[int]] = {}
     for c in cats:
         if c.parent:
-            by_name.setdefault(c.parent, []).append(c.id)
-    return {c.id: by_name.get(c.name, []) for c in cats}
+            by_name.setdefault(normalise_name(c.parent), []).append(c.id)
+    return {c.id: by_name.get(normalise_name(c.name), []) for c in cats}
 
 
 def explicit_buckets(db: Session) -> Dict[int, str]:
@@ -341,13 +415,13 @@ def bucket_map(db: Session) -> Dict[int, str]:
     """
     own = explicit_buckets(db)
     categories = db.query(Category).all()
-    by_name = {c.name: c for c in categories}
+    by_name = {normalise_name(c.name): c for c in categories}
 
     resolved: Dict[int, str] = {}
     for category in categories:
         bucket = own.get(category.id)
         if bucket is None and category.parent:
-            parent = by_name.get(category.parent)
+            parent = by_name.get(normalise_name(category.parent))
             if parent is not None:
                 bucket = own.get(parent.id)
         if bucket:
@@ -691,7 +765,7 @@ def _calendar(db: Session, ym: str, expenses: List[Transaction], fixed_out: List
 
 
 # =============================================================================
-# DETECTION — a hand in filling the fixed expenses, never the last word
+# SUGGESTIONS — a hand in filling the cards, never the last word
 # =============================================================================
 
 # Gap between charges (days) -> the recurrence it suggests.
@@ -728,26 +802,32 @@ def _consistent(amounts: List[float], max_variance: float) -> Optional[float]:
     return mean
 
 
-def detect_candidates(db: Session, min_occurrences: int = 3, max_variance: float = 0.3,
-                      months_to_look_back: int = 12) -> List[Dict]:
+def suggest_candidates(db: Session, kind: str = "fixed", min_occurrences: int = 3,
+                       max_variance: float = 0.3, months_to_look_back: int = 12) -> List[Dict]:
     """
-    Regular payments worth turning into fixed expenses: charges that keep coming
-    back to the same payee, and transfers that keep landing in the same account
-    (loan repayments, savings). Anything already budgeted is left out.
+    Regularities in the history worth turning into budget items.
+
+    For ``fixed``: charges that keep coming back to the same payee, and transfers
+    that keep landing in the same account (loan repayments, savings). For
+    ``income``: money that keeps arriving from the same payer. Whatever is already
+    budgeted under that kind is left out.
     """
     today = date.today()
     cutoff = today - timedelta(days=months_to_look_back * 31)
     recent_cutoff = today - timedelta(days=75)  # must still be alive
+    wants_income = kind == "income"
 
     taken_payees = {
         row[0] for row in
         db.query(BudgetItem.payee_id).filter(
-            BudgetItem.is_active == 1, BudgetItem.payee_id.isnot(None)).all()
+            BudgetItem.is_active == 1, BudgetItem.kind == kind,
+            BudgetItem.payee_id.isnot(None)).all()
     }
     taken_accounts = {
         row[0] for row in
         db.query(BudgetItem.set_aside_account_id).filter(
-            BudgetItem.is_active == 1, BudgetItem.set_aside_account_id.isnot(None)).all()
+            BudgetItem.is_active == 1, BudgetItem.kind == kind,
+            BudgetItem.set_aside_account_id.isnot(None)).all()
     }
 
     transfer_ids = _transfer_location_ids(db)
@@ -760,9 +840,10 @@ def detect_candidates(db: Session, min_occurrences: int = 3, max_variance: float
     for tx in transactions:
         is_transfer = bool(transfer_ids) and tx.location_id in transfer_ids
         if is_transfer:
-            if tx.amount > 0 and tx.account_id:
+            # Money moved between your own accounts is never income.
+            if tx.amount > 0 and tx.account_id and not wants_income:
                 by_account.setdefault(tx.account_id, []).append(tx)
-        elif tx.amount < 0 and tx.payee_id:
+        elif tx.payee_id and ((tx.amount > 0) if wants_income else (tx.amount < 0)):
             by_payee.setdefault(tx.payee_id, []).append(tx)
 
     candidates = []
@@ -809,7 +890,9 @@ def detect_candidates(db: Session, min_occurrences: int = 3, max_variance: float
             "account_id": None,
             "suggested_name": payee.name if payee else "Unknown",
             "detail": " · ".join(filter(None, [
-                found["every"], f"{found['occurrences']} charges", category_name])),
+                found["every"],
+                f"{found['occurrences']} {'payments' if wants_income else 'charges'}",
+                category_name])),
         })
         candidates.append(found)
 

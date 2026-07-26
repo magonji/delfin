@@ -4371,6 +4371,8 @@ def _item_payload(item: models.BudgetItem) -> dict:
         "first_date": item.first_date.date().isoformat() if item.first_date else None,
         "interval_count": item.interval_count,
         "interval_unit": item.interval_unit,
+        "day_rule": item.day_rule or "exact",
+        "day_ordinal": item.day_ordinal,
         "payee_id": item.payee_id,
         "payee_name": item.payee.name if item.payee else None,
         "set_aside_account_id": item.set_aside_account_id,
@@ -4393,6 +4395,8 @@ def _apply_item_payload(db: Session, item: models.BudgetItem, data: schemas.Budg
     item.is_estimated = 1 if data.is_estimated else 0
     item.interval_count = data.interval_count
     item.interval_unit = data.interval_unit
+    item.day_rule = data.day_rule
+    item.day_ordinal = data.day_ordinal
     item.payee_id = data.payee_id
     item.set_aside_account_id = data.set_aside_account_id
 
@@ -4506,18 +4510,23 @@ def get_budget_history(months: int = Query(12, ge=1, le=36), db: Session = Depen
     return {"months": budget_engine.month_history(db, months)}
 
 
-@app.get("/budget/detect")
-def detect_budget_items(
+@app.get("/budget/suggestions")
+def suggest_budget_items(
+    kind: str = Query("fixed", description="fixed | income"),
     min_occurrences: int = 3,
     max_variance: float = 0.3,
     months_to_look_back: int = 12,
     db: Session = Depends(get_db)
 ):
     """
-    Suggest fixed expenses from the transaction history: repeat charges to the
-    same payee, and repeat transfers into the same account (loans, savings).
+    Suggest budget items from the transaction history: for fixed expenses, repeat
+    charges to the same payee and repeat transfers into the same account (loans,
+    savings); for income, money arriving regularly from the same payer.
     """
-    return budget_engine.detect_candidates(db, min_occurrences, max_variance, months_to_look_back)
+    if kind not in ("fixed", "income"):
+        raise HTTPException(status_code=400, detail="kind must be fixed or income")
+    return budget_engine.suggest_candidates(
+        db, kind, min_occurrences, max_variance, months_to_look_back)
 
 
 # ============================================
@@ -4539,7 +4548,6 @@ def get_category_buckets(db: Session = Depends(get_db)):
     # Only spending categories are worth classifying.
     spending = [c for c in categories
                 if not (c.type and c.type.lower() in ("income", "ingreso"))]
-    known_names = {c.name for c in categories}
 
     def entry(category):
         return {
@@ -4549,21 +4557,38 @@ def get_category_buckets(db: Session = Depends(get_db)):
             "effective": effective.get(category.id),
         }
 
-    children_by_parent = {}
+    # Group by parent name. A CSV import records the parent as a plain string
+    # without ever creating a row for it, so the group head may not exist as a
+    # category — it still gets a group, just one that cannot own a bucket and so
+    # sets its children's instead.
+    norm = budget_engine.normalise_name
+    rows_by_key = {norm(c.name): c for c in categories}
+    children_of = {}
     for category in spending:
         if category.parent:
-            children_by_parent.setdefault(category.parent, []).append(category)
+            children_of.setdefault(norm(category.parent), []).append(category)
 
+    head_keys = set(children_of)
     groups = []
+
+    for key, children in children_of.items():
+        row = rows_by_key.get(key)
+        head = entry(row) if row is not None else {
+            "category_id": None, "name": children[0].parent, "bucket": None, "effective": None,
+        }
+        head["inherits"] = row is not None
+        head["children"] = [entry(c) for c in
+                            sorted(children, key=lambda c: c.name)
+                            if norm(c.name) not in head_keys]
+        groups.append(head)
+
+    # Categories that are neither a child nor already a head stand on their own.
     for category in spending:
-        # A category is a group head when nothing above it can pass a bucket down.
-        if category.parent and category.parent in known_names:
+        if category.parent or norm(category.name) in head_keys:
             continue
-        group = entry(category)
-        group["children"] = [entry(c) for c in
-                             sorted(children_by_parent.get(category.name, []), key=lambda c: c.name)]
-        groups.append(group)
-    groups.sort(key=lambda g: g["name"])
+        groups.append({**entry(category), "inherits": True, "children": []})
+
+    groups.sort(key=lambda g: g["name"].lower())
 
     return {
         "buckets": list(budget_engine.BUCKETS),

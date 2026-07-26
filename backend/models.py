@@ -245,6 +245,12 @@ class BudgetItem(Base):
     interval_count = Column(Integer, default=1)
     interval_unit = Column(String, default="month")  # once | day | week | month | year
 
+    # Which day of the month it lands on, for monthly and yearly rhythms:
+    # exact = the day of `first_date`; the others count working days (Mon–Fri)
+    # from the start or the end of the month, e.g. wages on the second-to-last.
+    day_rule = Column(String, default="exact")  # exact | working_from_start | working_from_end
+    day_ordinal = Column(Integer, nullable=True)  # 1 = first/last working day
+
     # Used to detect whether the expense has been paid this month.
     payee_id = Column(Integer, ForeignKey("payees.id"), nullable=True, index=True)
     # Savings account a prorated expense sets money aside in, or the debt/savings

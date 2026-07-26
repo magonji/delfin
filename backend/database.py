@@ -45,6 +45,30 @@ def _apply_pragmas(dbapi_connection):
     cur.close()
 
 
+# Columns added to a table after it first shipped. ``create_all`` builds missing
+# tables but never alters existing ones, so a database created by an older build
+# would quietly lack these. Appending a column is all SQLite needs to do here.
+_ADDED_COLUMNS = {
+    "budget_items": {
+        "day_rule": "VARCHAR DEFAULT 'exact'",
+        "day_ordinal": "INTEGER",
+    },
+}
+
+
+def _ensure_columns(eng) -> None:
+    """Append any column a newer build expects on an already-created table."""
+    with eng.connect() as c:
+        for table, columns in _ADDED_COLUMNS.items():
+            present = {row[1] for row in c.exec_driver_sql(f'PRAGMA table_info("{table}")')}
+            if not present:
+                continue  # table doesn't exist yet — create_all builds it complete
+            for name, ddl in columns.items():
+                if name not in present:
+                    c.exec_driver_sql(f'ALTER TABLE "{table}" ADD COLUMN {name} {ddl}')
+        c.commit()
+
+
 def unlock(dek_hex: str) -> None:
     """Open the encrypted DB with the given key and ensure the schema exists.
     Raises if the key cannot open the file. No-op if already unlocked."""
@@ -69,6 +93,7 @@ def unlock(dek_hex: str) -> None:
         raise
     # First open of a brand-new DB file creates an empty encrypted DB; build tables.
     Base.metadata.create_all(bind=eng)
+    _ensure_columns(eng)
     engine = eng
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=eng)
 
