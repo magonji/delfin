@@ -275,6 +275,22 @@
         .bucket-search:focus { outline: none; border-color: var(--accent); }
         .bucket-group.hidden, .bucket-row.hidden { display: none; }
 
+        /* Category picker for planned expenses: parents first, subcategories folded in. */
+        .cat-tree { max-height: 240px; overflow-y: auto; border: 1px solid var(--field); border-radius: 9px; background: #fff; padding: 2px 12px; }
+        .cat-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
+        .cat-row + .cat-row { border-top: 1px solid #F7F0E4; }
+        .cat-tree .cat-row label { display: flex; align-items: center; gap: 8px; margin: 0; min-width: 0;
+            font-size: 13.5px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--ink); cursor: pointer; }
+        .cat-tree .cat-row.parent label { font-weight: 600; }
+        .cat-row input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--green); flex: 0 0 auto; margin: 0; }
+        .cat-row small { color: var(--muted); font-size: 11px; font-family: 'IBM Plex Mono', monospace; margin-left: auto; flex: 0 0 auto; }
+        .cat-row.child { padding-left: 22px; }
+        .cat-toggle { background: transparent; border: none; padding: 0; margin: 0; cursor: pointer; color: var(--muted); font-size: 10px; width: 14px; flex: 0 0 auto; }
+        .cat-group.collapsed .cat-row.child { display: none; }
+        .cat-group.collapsed .cat-toggle { transform: rotate(-90deg); }
+        /* A checked parent already covers its subcategories, so they stop being choices. */
+        .cat-group.covered .cat-row.child label { color: var(--muted); cursor: default; }
+
         /* Navigation (nav-links live in the header block above) */
         .dropdown { position: relative; display: inline-flex; }
 
@@ -653,6 +669,8 @@
                 <div class="form-hint" id="itemProrateHint" style="display:none;"></div>
                 <div class="form-group" id="itemPayeeGroup">
                     <label id="itemPayeeLabel">Payee — used to spot the payment</label>
+                    <input type="text" id="itemPayeeSearch" class="bucket-search" style="margin-bottom:8px;"
+                           placeholder="Search payees…" autocomplete="off" oninput="filterItemPayees()">
                     <select id="itemPayee"><option value="">-- None --</option></select>
                 </div>
                 <div class="form-group" id="itemAccountGroup">
@@ -666,9 +684,9 @@
                 <div class="form-hint" id="itemAccountsHint">Leave empty to count every account.</div>
                 <div class="form-group" id="itemCategoriesGroup">
                     <label>Categories that count towards it</label>
-                    <select id="itemCategories" multiple></select>
+                    <div id="itemCategories" class="cat-tree"></div>
                 </div>
-                <div class="form-hint" id="itemCategoriesHint">Choosing a parent category includes its subcategories.</div>
+                <div class="form-hint" id="itemCategoriesHint">Ticking a parent category includes every subcategory under it — open one to pick subcategories on their own.</div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-danger" id="deleteItemBtn" onclick="deleteItem()" style="display:none;">Delete</button>
@@ -1069,22 +1087,133 @@
             ).join('');
         }
 
-        const categoryLabel = (c) => (c.parent ? c.parent + ' › ' : '') + c.name;
-        const sortedCategories = () => [...state.categories]
-            .sort((a, b) => categoryLabel(a).localeCompare(categoryLabel(b)));
+
+        // The payee list runs long, so the select is rebuilt from a search box
+        // rather than scrolled. Whatever is already chosen stays in the list even
+        // when it doesn't match, or typing would quietly drop the selection.
+        function renderItemPayees(query = '') {
+            const select = q('#itemPayee');
+            const chosen = select.value;
+            const needle = query.trim().toLowerCase();
+            const matches = [...state.payees]
+                .filter(p => !needle
+                          || String(p.id) === chosen
+                          || p.name.toLowerCase().includes(needle))
+                .sort((a, b) => a.name.localeCompare(b.name));
+
+            select.innerHTML = '<option value="">-- None --</option>'
+                + matches.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')
+                + (needle && !matches.length
+                    ? `<option value="" disabled>No payee matches “${esc(query.trim())}”</option>` : '');
+            select.value = chosen;
+        }
+
+        function filterItemPayees() {
+            renderItemPayees(q('#itemPayeeSearch').value);
+        }
+
+        // Clear the filter so the full list is back and a selection can be applied.
+        function resetItemPayeeSearch() {
+            q('#itemPayeeSearch').value = '';
+            renderItemPayees('');
+        }
 
         function populatePickers() {
-            q('#itemPayee').innerHTML = '<option value="">-- None --</option>' +
-                [...state.payees].sort((a, b) => a.name.localeCompare(b.name))
-                    .map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+            renderItemPayees(q('#itemPayeeSearch').value);
 
             const accountOptions = [...state.accounts].sort((a, b) => a.name.localeCompare(b.name))
                 .map(a => `<option value="${a.id}">${esc(a.name)}</option>`).join('');
             q('#itemAccount').innerHTML = '<option value="">-- None --</option>' + accountOptions;
             q('#itemAccounts').innerHTML = accountOptions;
 
-            q('#itemCategories').innerHTML = sortedCategories()
-                .map(c => `<option value="${c.id}">${esc(categoryLabel(c))}</option>`).join('');
+            renderItemCategories(selectedCategoryIds());
+        }
+
+        // ── Category picker ────────────────────────────────────────────────
+        // Categories are linked to their parent by name, and a parent may not
+        // exist as a category of its own — the same shape the kakeibo mapping
+        // deals with. Groups come back collapsed so a long list stays readable.
+        const normName = (s) => (s || '').trim().replace(/\s+/g, ' ').toLowerCase();
+
+        function categoryGroups() {
+            const heads = new Map();
+            const head = (name) => {
+                const key = normName(name);
+                if (!heads.has(key)) {
+                    // Parent names come from imports, so tidy the spacing before
+                    // showing one. A real category row's own spelling wins below.
+                    heads.set(key, { name: (name || '').trim().replace(/\s+/g, ' '),
+                                     id: null, children: [] });
+                }
+                return heads.get(key);
+            };
+            for (const c of state.categories) {
+                if (c.parent) {
+                    head(c.parent).children.push(c);
+                } else {
+                    const g = head(c.name);
+                    g.id = c.id;
+                    g.name = c.name;  // prefer the real category's spelling
+                }
+            }
+            const groups = [...heads.values()];
+            groups.forEach(g => g.children.sort((a, b) => a.name.localeCompare(b.name)));
+            return groups.sort((a, b) => a.name.localeCompare(b.name));
+        }
+
+        function renderItemCategories(selectedIds = []) {
+            const chosen = new Set((selectedIds || []).map(Number));
+            q('#itemCategories').innerHTML = categoryGroups().map(g => {
+                const parentChecked = g.id != null && chosen.has(g.id);
+                const childChecked = g.children.some(c => chosen.has(c.id));
+                const children = g.children.map(c => `
+                    <div class="cat-row child">
+                        <label>
+                            <input type="checkbox" data-cat="${c.id}"
+                                   ${chosen.has(c.id) && !parentChecked ? 'checked' : ''}
+                                   ${parentChecked ? 'disabled' : ''}>
+                            <span>${esc(c.name)}</span>
+                        </label>
+                    </div>`).join('');
+                const box = g.id != null
+                    ? `<input type="checkbox" data-cat="${g.id}" ${parentChecked ? 'checked' : ''}
+                              onchange="onParentCategoryToggle(this)">`
+                    : '';
+                // A group holding a selection opens, so nothing chosen is out of sight.
+                const collapsed = g.children.length && !(childChecked && !parentChecked);
+                return `
+                    <div class="cat-group ${collapsed ? 'collapsed' : ''} ${parentChecked ? 'covered' : ''}">
+                        <div class="cat-row parent">
+                            ${g.children.length
+                                ? `<button type="button" class="cat-toggle" onclick="toggleCategoryGroup(this)" aria-label="Show subcategories">▼</button>`
+                                : '<span class="cat-toggle"></span>'}
+                            <label>${box}<span>${esc(g.name)}</span></label>
+                            ${g.children.length ? `<small>${g.children.length} sub</small>` : ''}
+                        </div>
+                        ${children}
+                    </div>`;
+            }).join('');
+        }
+
+        function toggleCategoryGroup(btn) {
+            btn.closest('.cat-group').classList.toggle('collapsed');
+        }
+
+        // Ticking a parent covers everything under it, so its subcategories stop
+        // being separate choices — keeping the saved list to the parent alone.
+        function onParentCategoryToggle(box) {
+            const group = box.closest('.cat-group');
+            group.classList.toggle('covered', box.checked);
+            group.querySelectorAll('.cat-row.child input[type="checkbox"]').forEach(child => {
+                child.disabled = box.checked;
+                if (box.checked) child.checked = false;
+            });
+        }
+
+        function selectedCategoryIds() {
+            return qa('#itemCategories input[data-cat]')
+                .filter(box => box.checked && !box.disabled)
+                .map(box => parseInt(box.dataset.cat));
         }
 
         async function loadMonth() {
@@ -1672,10 +1801,11 @@
             q('#itemIntervalUnit').value = 'month';
             q('#itemDayRule').value = 'exact';
             q('#itemDayOrdinal').value = '1';
+            resetItemPayeeSearch();
             q('#itemPayee').value = '';
             q('#itemAccount').value = '';
             qa('#itemAccounts option').forEach(o => o.selected = false);
-            qa('#itemCategories option').forEach(o => o.selected = false);
+            renderItemCategories([]);
 
             // Default to the first of the month being viewed.
             const [y, m] = state.currentMonth.split('-');
@@ -1749,12 +1879,12 @@
             q('#itemIntervalUnit').value = wasOnce ? 'month' : (item.interval_unit || 'month');
             q('#itemDayRule').value = item.day_rule || 'exact';
             q('#itemDayOrdinal').value = item.day_ordinal || 1;
+            resetItemPayeeSearch();  // the saved payee must be in the list to select it
             q('#itemPayee').value = item.payee_id || '';
             q('#itemAccount').value = item.set_aside_account_id || '';
             const accounts = new Set(item.account_ids || []);
             qa('#itemAccounts option').forEach(o => o.selected = accounts.has(parseInt(o.value)));
-            const categories = new Set(item.category_ids || []);
-            qa('#itemCategories option').forEach(o => o.selected = categories.has(parseInt(o.value)));
+            renderItemCategories(item.category_ids || []);
 
             q('#deleteItemBtn').style.display = 'block';
             applyKindToForm(item.kind);
@@ -1783,7 +1913,7 @@
                 payee_id: kind !== 'planned' && q('#itemPayee').value ? parseInt(q('#itemPayee').value) : null,
                 set_aside_account_id: kind === 'fixed' && q('#itemAccount').value ? parseInt(q('#itemAccount').value) : null,
                 account_ids: kind === 'planned' ? selected('#itemAccounts') : [],
-                category_ids: kind === 'planned' ? selected('#itemCategories') : [],
+                category_ids: kind === 'planned' ? selectedCategoryIds() : [],
                 starts_ym: state.currentMonth,
                 currency: state.baseCurrency
             };
