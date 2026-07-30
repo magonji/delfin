@@ -409,7 +409,7 @@
                     <button class="lbtn" id="btnNextMonth" aria-label="Next month" style="height:28px;width:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor"><path d="M9 5l7 7-7 7z"/></svg></button>
                 </div>
             </div>
-            <div id="pastNote" style="display:none;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--muted);padding-top:12px;">This month is closed — its figures are the record of what was budgeted at the time. Editing a line here corrects that record only.</div>
+            <div id="pastNote" style="display:none;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--muted);padding-top:12px;">This month is closed — its figures are the record of what was budgeted at the time. Editing a line asks whether the change stops here or carries on into the months after it; the months before it never move.</div>
             <div class="split hero-split">
                 <div>
                     <div class="budget-amount">
@@ -606,7 +606,7 @@
                 </div>
                 <div class="form-group">
                     <label id="itemAmountLabel">Amount</label>
-                    <input type="number" id="itemAmount" step="0.01" min="0">
+                    <input type="number" id="itemAmount" step="0.01" min="0" inputmode="decimal">
                 </div>
                 <label class="form-check" id="itemEstimatedRow">
                     <input type="checkbox" id="itemEstimated">
@@ -617,17 +617,19 @@
                     <input type="date" id="itemFirstDate">
                 </div>
                 <div class="form-group">
-                    <label>Repeats</label>
+                    <label>Repeats every</label>
                     <div class="form-row">
-                        <input type="number" id="itemIntervalCount" min="1" step="1" value="1">
+                        <input type="number" id="itemIntervalCount" min="0" step="1" value="1" inputmode="numeric">
                         <select id="itemIntervalUnit" onchange="onIntervalChange()">
                             <option value="day">days</option>
                             <option value="week">weeks</option>
                             <option value="month" selected>months</option>
                             <option value="year">years</option>
-                            <option value="once">— only once</option>
                         </select>
                     </div>
+                </div>
+                <div class="form-hint" id="itemOnceHint" style="display:none;">
+                    0 means it happens only once — it won't repeat, and it counts in the month of the date above.
                 </div>
                 <div class="form-group" id="itemDayRuleGroup">
                     <label>Falls on</label>
@@ -789,6 +791,33 @@
     </div>
 
     <!-- Correct a single line of a month already closed -->
+    <!-- How far a change to a definition should reach -->
+    <div id="scopeModal" class="modal">
+        <div class="modal-content" style="max-width:400px;">
+            <div class="modal-header">
+                <h3 id="scopeTitle">This change affects</h3>
+                <button class="modal-close" onclick="resolveScope(null)">&times;</button>
+            </div>
+            <div class="modal-body">
+                <label class="form-check">
+                    <input type="radio" name="scopeChoice" value="month">
+                    <span id="scopeMonthLabel">Only this month</span>
+                </label>
+                <label class="form-check">
+                    <input type="radio" name="scopeChoice" value="forward" checked>
+                    <span id="scopeForwardLabel">This month and the ones after</span>
+                </label>
+                <div class="form-hint" style="margin-top:2px;">
+                    Earlier months keep what they were budgeted with either way.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="resolveScope(null)">Cancel</button>
+                <button class="btn btn-primary" onclick="resolveScope(selectedScope())">Continue</button>
+            </div>
+        </div>
+    </div>
+
     <div id="lineModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -798,8 +827,8 @@
             <div class="modal-body">
                 <input type="hidden" id="lineId">
                 <p class="muted" style="margin-top:0;font-size:12.5px;line-height:1.5;">
-                    This month is closed. Changes here fix the record for <strong id="lineMonthLabel"></strong>
-                    only — they don't touch the definition or any other month.
+                    There is no definition behind this line any more, so it stands on its own.
+                    Changes here fix the record for <strong id="lineMonthLabel"></strong> only.
                 </p>
                 <div class="form-group">
                     <label>Name</label>
@@ -807,7 +836,7 @@
                 </div>
                 <div class="form-group">
                     <label>Amount budgeted</label>
-                    <input type="number" id="lineAmount" step="0.01">
+                    <input type="number" id="lineAmount" step="0.01" min="0" inputmode="decimal">
                 </div>
             </div>
             <div class="modal-footer">
@@ -1536,9 +1565,8 @@
             show('#itemCategoriesGroup', kind === 'planned');
             show('#itemCategoriesHint', kind === 'planned');
             show('#itemEstimatedRow', kind !== 'planned');
-            show('#itemDateGroup', kind !== 'income');
-            q('#itemDateLabel').textContent = kind === 'fixed' ? 'First payment date' : 'Starts on';
             q('#itemAmountLabel').textContent = kind === 'planned' ? 'Amount to budget' : 'Amount';
+            // The date field and its label depend on the rhythm too, so onIntervalChange owns them.
             onIntervalChange();
         }
 
@@ -1577,13 +1605,37 @@
                 `Working days are Monday to Friday — bank holidays aren’t known, so a real payment may shift by a day.`;
         }
 
+        // 0 in the interval box is how a one-off is entered, so everything that
+        // only makes sense for a rhythm gets out of the way.
+        function isOnceSelected() {
+            return parseInt(q('#itemIntervalCount').value) === 0;
+        }
+
+        // A planned expense is an envelope for a month, not a payment that lands on
+        // a day, so it never asks for a date. Income only needs one when it happens
+        // just once, since that date is what picks the month it counts in.
+        function itemNeedsDate(kind, once) {
+            if (kind === 'planned') return false;
+            return kind !== 'income' || once;
+        }
+
         function onIntervalChange() {
-            const unit = q('#itemIntervalUnit').value;
+            const kind = q('#itemKind').value;
+            const once = isOnceSelected();
+            const unit = once ? 'once' : q('#itemIntervalUnit').value;
             const count = parseInt(q('#itemIntervalCount').value) || 1;
-            q('#itemIntervalCount').style.display = unit === 'once' ? 'none' : '';
+            q('#itemIntervalUnit').style.display = once ? 'none' : '';
+            q('#itemOnceHint').style.display = once ? 'block' : 'none';
+            q('#itemOnceHint').textContent = itemNeedsDate(kind, once)
+                ? "0 means it happens only once — it won't repeat, and it counts in the month of the date above."
+                : "0 means it happens only once — it won't repeat, and it counts in this month alone.";
+
+            q('#itemDateGroup').style.display = itemNeedsDate(kind, once) ? '' : 'none';
+            q('#itemDateLabel').textContent = once ? 'Date it falls on'
+                : kind === 'fixed' ? 'First payment date' : 'Starts on';
 
             // A day rule only means something for monthly and yearly rhythms.
-            const monthly = (unit === 'month' || unit === 'year') && q('#itemKind').value !== 'income';
+            const monthly = (unit === 'month' || unit === 'year') && kind !== 'income';
             q('#itemDayRuleGroup').style.display = monthly ? '' : 'none';
             if (!monthly) {
                 q('#itemDayOrdinalGroup').style.display = 'none';
@@ -1597,7 +1649,7 @@
                 : unit === 'week' ? count * 7 / 30.436875 : unit === 'day' ? count / 30.436875 : 0;
             const amount = parseFloat(q('#itemAmount').value);
             const hint = q('#itemProrateHint');
-            if (months > 1.0001 && q('#itemKind').value === 'fixed') {
+            if (months > 1.0001 && kind === 'fixed') {
                 const share = amount ? fmtMoney(amount / months, state.baseCurrency) : 'its monthly share';
                 hint.style.display = 'block';
                 hint.textContent = `Longer than a month, so it is prorated: ${share} a month goes into the budget, starting this month even if the first charge is later.`;
@@ -1663,10 +1715,12 @@
             }
         }
 
-        // A row opens its definition, or the month's own record once the month is closed.
+        // A row opens its definition, whatever month it sits in — the scope prompt
+        // decides whether a change stops at this month or runs on from it. Only a
+        // line whose definition is gone falls back to editing the record itself.
         function openLine(lineId, itemId) {
-            if (state.data?.is_past) editLine(lineId);
-            else editItem(itemId);
+            if (itemId) editItem(itemId);
+            else editLine(lineId);
         }
 
         async function editItem(itemId) {
@@ -1688,8 +1742,11 @@
             q('#itemAmount').value = item.amount;
             q('#itemEstimated').checked = !!item.is_estimated;
             q('#itemFirstDate').value = item.first_date || '';
-            q('#itemIntervalCount').value = item.interval_count || 1;
-            q('#itemIntervalUnit').value = item.interval_unit || 'month';
+            // A stored one-off shows as 0; the unit keeps a sane value for when
+            // the count is raised again.
+            const wasOnce = item.interval_unit === 'once';
+            q('#itemIntervalCount').value = wasOnce ? 0 : (item.interval_count || 1);
+            q('#itemIntervalUnit').value = wasOnce ? 'month' : (item.interval_unit || 'month');
             q('#itemDayRule').value = item.day_rule || 'exact';
             q('#itemDayOrdinal').value = item.day_ordinal || 1;
             q('#itemPayee').value = item.payee_id || '';
@@ -1707,7 +1764,8 @@
         async function saveItem() {
             const id = q('#itemId').value;
             const kind = q('#itemKind').value;
-            const unit = q('#itemIntervalUnit').value;
+            const once = isOnceSelected();
+            const unit = once ? 'once' : q('#itemIntervalUnit').value;
             const selected = (sel) => qa(sel + ' option').filter(o => o.selected).map(o => parseInt(o.value));
 
             const payload = {
@@ -1715,9 +1773,9 @@
                 name: q('#itemName').value.trim(),
                 amount: parseFloat(q('#itemAmount').value),
                 is_estimated: kind !== 'planned' && q('#itemEstimated').checked,
-                first_date: (kind !== 'income' && q('#itemFirstDate').value)
+                first_date: (itemNeedsDate(kind, once) && q('#itemFirstDate').value)
                     ? q('#itemFirstDate').value + 'T00:00:00' : null,
-                interval_count: unit === 'once' ? 1 : (parseInt(q('#itemIntervalCount').value) || 1),
+                interval_count: once ? 1 : (parseInt(q('#itemIntervalCount').value) || 1),
                 interval_unit: unit,
                 day_rule: (kind !== 'income' && (unit === 'month' || unit === 'year'))
                     ? q('#itemDayRule').value : 'exact',
@@ -1734,10 +1792,27 @@
                 alert('Please enter a name and an amount');
                 return;
             }
+            // Without a date a one-off has no month to land in, so it would never
+            // show up. A planned expense has no date to give: the backend pins it
+            // to the month the item starts in, which is the one on screen.
+            if (once && itemNeedsDate(kind, once) && !payload.first_date) {
+                alert('A one-off needs a date — that is the month it counts in.');
+                return;
+            }
+
+            // An edit is made from the month on screen. Both "just fix this month"
+            // and "it changed from here on" are real intentions, so ask instead of
+            // guessing; either way the months before this one are left alone.
+            let scope = 'forward';
+            if (id) {
+                scope = await askScope('Save');
+                if (!scope) return;
+            }
 
             try {
                 if (id) {
-                    await api(`/budget/items/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+                    await api(`/budget/items/${id}?${scopeQuery(scope)}`,
+                              { method: 'PUT', body: JSON.stringify(payload) });
                 } else {
                     await api('/budget/items', { method: 'POST', body: JSON.stringify(payload) });
                 }
@@ -1752,15 +1827,47 @@
         async function deleteItem() {
             const id = q('#itemId').value;
             if (!id) return;
-            if (!confirm('Remove this from this month on? Months already closed keep it.')) return;
+            const scope = await askScope('Remove');
+            if (!scope) return;
             try {
-                await api(`/budget/items/${id}`, { method: 'DELETE' });
+                await api(`/budget/items/${id}?${scopeQuery(scope)}`, { method: 'DELETE' });
                 closeModal('itemModal');
                 await loadMonth();
                 await loadHistory();
             } catch (e) {
                 alert('Error deleting: ' + e.message);
             }
+        }
+
+        // ── How far a change reaches ───────────────────────────────────────
+        let scopeResolve = null;
+
+        function scopeQuery(scope) {
+            return `effective_ym=${encodeURIComponent(state.currentMonth)}&scope=${scope}`;
+        }
+
+        function selectedScope() {
+            const picked = qa('#scopeModal input[name="scopeChoice"]').find(r => r.checked);
+            return picked ? picked.value : 'forward';
+        }
+
+        function resolveScope(value) {
+            closeModal('scopeModal');
+            const done = scopeResolve;
+            scopeResolve = null;
+            if (done) done(value);
+        }
+
+        // Resolves to 'month', 'forward', or null when the user backs out.
+        function askScope(verb) {
+            const label = monthLabel(state.currentMonth);
+            q('#scopeTitle').textContent = `${verb} — this affects`;
+            q('#scopeMonthLabel').textContent = `Only ${label}`;
+            q('#scopeForwardLabel').textContent = `${label} and every month after`;
+            qa('#scopeModal input[name="scopeChoice"]')
+                .forEach(r => r.checked = r.value === 'forward');
+            openModal('scopeModal');
+            return new Promise(resolve => { scopeResolve = resolve; });
         }
 
         // ── Kakeibo mapping ────────────────────────────────────────────────

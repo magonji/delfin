@@ -4400,16 +4400,19 @@ def _apply_item_payload(db: Session, item: models.BudgetItem, data: schemas.Budg
     item.payee_id = data.payee_id
     item.set_aside_account_id = data.set_aside_account_id
 
-    # A definition never starts in a month that is already closed, and editing one
-    # never moves the month it started in.
-    current = budget_engine.current_ym()
+    # Editing a definition never moves the month it started in. A new one may
+    # start in a closed month — changes are effective-dated from the month the
+    # user is looking at, and that month is allowed to be in the past.
     if item.starts_ym is None:
-        item.starts_ym = max(data.starts_ym or current, current)
+        item.starts_ym = data.starts_ym or budget_engine.current_ym()
 
     # Without a first date, the item starts on the first day of its first month.
+    # A one-off gets pinned there too when it has no date of its own: a planned
+    # expense never asks for one, and a one-off has to land in some month — its
+    # first month is the one the user was looking at when they made the change.
     if data.first_date:
         item.first_date = data.first_date
-    elif item.first_date is None:
+    elif item.first_date is None or data.interval_unit == "once":
         year, month = budget_engine.parse_ym(item.starts_ym)
         item.first_date = datetime(year, month, 1)
 
@@ -4422,6 +4425,18 @@ def _apply_item_payload(db: Session, item: models.BudgetItem, data: schemas.Budg
         item.accounts.append(models.BudgetItemAccount(account_id=account_id))
     for category_id in dict.fromkeys(data.category_ids or []):
         item.categories.append(models.BudgetItemCategory(category_id=category_id))
+
+
+def _edit_target_month(effective_ym: Optional[str], scope: str) -> tuple[str, str]:
+    """Validate the month an edit is made from and the reach it should have."""
+    if scope not in ("month", "forward"):
+        raise HTTPException(status_code=400, detail="scope must be month or forward")
+    ym = effective_ym or budget_engine.current_ym()
+    try:
+        budget_engine.parse_ym(ym)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="effective_ym must look like 2026-07")
+    return ym, scope
 
 
 @app.get("/budget/items")
@@ -4442,43 +4457,67 @@ def list_budget_items(
 
 @app.post("/budget/items")
 def create_budget_item(data: schemas.BudgetItemCreate, db: Session = Depends(get_db)):
-    """Create a definition and materialise it into the current month."""
+    """Create a definition and materialise it from the month it starts in."""
     item = models.BudgetItem()
     _apply_item_payload(db, item, data)
     db.add(item)
     db.commit()
     db.refresh(item)
-    budget_engine.apply_item_change(db, item)
+    item.series_id = item.id  # a new definition is the first of its series
+    db.commit()
+    budget_engine.apply_item_change(db, item, item.starts_ym)
     return _item_payload(item)
 
 
 @app.put("/budget/items/{item_id}")
-def update_budget_item(item_id: int, data: schemas.BudgetItemCreate, db: Session = Depends(get_db)):
+def update_budget_item(
+    item_id: int,
+    data: schemas.BudgetItemCreate,
+    effective_ym: Optional[str] = Query(None, description="Month the edit is made from, e.g. 2026-10"),
+    scope: str = Query("forward", description="month = that month only | forward = that month on"),
+    db: Session = Depends(get_db),
+):
     """
-    Edit a definition. The change reaches this month and every month ahead;
-    months already closed keep the values they were budgeted with.
+    Edit a definition from a given month on. The months before it keep the
+    values they were budgeted with: rather than rewriting the definition, it
+    is split in two at that month, so the old and new figures each own their
+    own stretch of history.
     """
     item = db.query(models.BudgetItem).filter(models.BudgetItem.id == item_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Budget item not found")
-    _apply_item_payload(db, item, data)
+    ym, scope = _edit_target_month(effective_ym, scope)
+
+    target = budget_engine.prepare_item_edit(db, item, ym, scope)
+    _apply_item_payload(db, target, data)
     db.commit()
-    db.refresh(item)
-    budget_engine.apply_item_change(db, item)
-    return _item_payload(item)
+    db.refresh(target)
+    budget_engine.apply_item_change(db, target, ym)
+    return _item_payload(target)
 
 
 @app.delete("/budget/items/{item_id}")
-def delete_budget_item(item_id: int, db: Session = Depends(get_db)):
+def delete_budget_item(
+    item_id: int,
+    effective_ym: Optional[str] = Query(None, description="Month the removal starts from, e.g. 2026-10"),
+    scope: str = Query("forward", description="month = that month only | forward = that month on"),
+    db: Session = Depends(get_db),
+):
     """
-    Stop a definition from this month on. Past months keep their lines, so the
-    history of what was budgeted stays intact.
+    Stop a definition from a given month, either for that month alone or from
+    there on. Earlier months keep their lines, so the history of what was
+    budgeted stays intact.
     """
     item = db.query(models.BudgetItem).filter(models.BudgetItem.id == item_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Budget item not found")
-    budget_engine.retire_item(db, item)
-    return {"message": "Budget item retired from this month on"}
+    ym, scope = _edit_target_month(effective_ym, scope)
+
+    if scope == "month":
+        budget_engine.retire_item_for_month(db, item, ym)
+        return {"message": f"Budget item removed from {ym}"}
+    budget_engine.retire_item(db, item, ym)
+    return {"message": f"Budget item retired from {ym} on"}
 
 
 @app.patch("/budget/lines/{line_id}")

@@ -312,49 +312,190 @@ def ensure_month(db: Session, ym: str) -> None:
     db.commit()
 
 
-def apply_item_change(db: Session, item: BudgetItem) -> None:
+# =============================================================================
+# VERSIONING
+#
+# An edit is always made from a month. "Rent goes up in October" must leave
+# July to September alone, so the definition is not overwritten: it is cut in
+# two at October, and each half owns its own stretch of months. Both halves
+# share a ``series_id``, which is what makes them the same rent rather than two
+# unrelated expenses.
+# =============================================================================
+
+def series_of(item: BudgetItem) -> int:
+    """The series an item belongs to. Rows written before versioning are their own."""
+    return item.series_id or item.id
+
+
+def series_items(db: Session, item: BudgetItem) -> List[BudgetItem]:
+    """Every version of `item`, oldest first."""
+    key = series_of(item)
+    return db.query(BudgetItem).filter(
+        (BudgetItem.series_id == key) | (BudgetItem.id == key)
+    ).order_by(BudgetItem.starts_ym).all()
+
+
+def _clone_item(db: Session, item: BudgetItem, starts_ym: str) -> BudgetItem:
+    """A copy of `item` covering months from `starts_ym`, in the same series."""
+    from backend.models import BudgetItemAccount, BudgetItemCategory
+
+    clone = BudgetItem(
+        kind=item.kind, name=item.name, amount=item.amount, currency=item.currency,
+        is_estimated=item.is_estimated, first_date=item.first_date,
+        interval_count=item.interval_count, interval_unit=item.interval_unit,
+        day_rule=item.day_rule, day_ordinal=item.day_ordinal,
+        payee_id=item.payee_id, set_aside_account_id=item.set_aside_account_id,
+        starts_ym=starts_ym, ends_ym=item.ends_ym, is_active=item.is_active,
+        series_id=series_of(item),
+    )
+    db.add(clone)
+    db.flush()  # need the id before the link rows
+    for link in item.accounts:
+        db.add(BudgetItemAccount(item_id=clone.id, account_id=link.account_id))
+    for link in item.categories:
+        db.add(BudgetItemCategory(item_id=clone.id, category_id=link.category_id))
+    db.flush()
+    db.refresh(clone)
+    return clone
+
+
+def split_item(db: Session, item: BudgetItem, ym: str) -> BudgetItem:
     """
-    Push a template edit forward: the current month is updated in place (keeping
-    any manual paid/pending override) and future projections are dropped so they
-    rebuild from the new definition. Past months are never touched.
+    Make sure a version boundary exists at `ym`, and return the version that
+    owns `ym` onwards. If the item already begins at or after `ym` there is no
+    earlier history to protect and the item itself is returned unchanged.
     """
+    if item.starts_ym >= ym:
+        return item
+    clone = _clone_item(db, item, ym)
+    item.ends_ym = shift_ym(ym, -1)
+    db.flush()
+    return clone
+
+
+def _materialised_months(db: Session, from_ym: str) -> List[str]:
+    """
+    Months at or after `from_ym` that the app has already written lines for,
+    always including the month the edit starts in and the current month — those
+    two must end up consistent even if nothing had been generated yet.
+    """
+    rows = db.query(BudgetMonthLine.year_month).filter(
+        BudgetMonthLine.year_month >= from_ym
+    ).distinct().all()
+    months = {row[0] for row in rows} | {from_ym}
     cur = current_ym()
+    if cur >= from_ym:
+        months.add(cur)
+    return sorted(months)
+
+
+def rematerialise_series(db: Session, item: BudgetItem, from_ym: str) -> None:
+    """
+    Rewrite every line of `item`'s series from `from_ym` on, so each month picks
+    up whichever version now covers it. Manual paid/pending overrides survive,
+    since they record what happened rather than what was planned.
+    """
+    versions = series_items(db, item)
+    ids = [v.id for v in versions]
+    if not ids:
+        return
+
+    old = db.query(BudgetMonthLine).filter(
+        BudgetMonthLine.item_id.in_(ids),
+        BudgetMonthLine.year_month >= from_ym,
+    ).all()
+    overrides = {line.year_month: line.paid_override for line in old}
+    # A month someone corrected by hand says what actually happened, so a later
+    # change to the definition does not get to overwrite it.
+    corrected = {line.year_month for line in old if line.source == "manual"}
+    # Work out which months to rewrite before the delete, or a month whose only
+    # line was this item's would drop out of the set and never come back.
+    months = _materialised_months(db, from_ym)
+
+    # Drop the doomed rows from the session first: a bulk delete leaves them in
+    # the identity map, and SQLite hands their primary keys straight back to the
+    # replacements we are about to insert.
+    for line in old:
+        if line.source != "manual":
+            db.expunge(line)
     db.query(BudgetMonthLine).filter(
-        BudgetMonthLine.year_month > cur,
-        BudgetMonthLine.item_id == item.id,
-        BudgetMonthLine.source == "template",
+        BudgetMonthLine.item_id.in_(ids),
+        BudgetMonthLine.year_month >= from_ym,
+        BudgetMonthLine.source != "manual",
     ).delete(synchronize_session=False)
+    db.flush()
 
-    line = db.query(BudgetMonthLine).filter(
-        BudgetMonthLine.year_month == cur,
-        BudgetMonthLine.item_id == item.id,
-    ).first()
-    vals = line_values_for_month(item, cur)
+    cur = current_ym()
+    for ym in months:
+        if ym in corrected:
+            continue
+        for version in versions:
+            if not version.is_active or version.starts_ym > ym:
+                continue
+            if version.ends_ym and version.ends_ym < ym:
+                continue
+            vals = line_values_for_month(version, ym)
+            if not vals:
+                continue
+            line = _build_line(version, ym, vals)
+            line.paid_override = overrides.get(ym)
+            line.is_frozen = 1 if ym < cur else 0
+            db.add(line)
+            break  # at most one version covers any given month
 
-    if vals is None:
-        if line is not None and not line.is_frozen:
-            db.delete(line)
-    elif line is None:
-        db.add(_build_line(item, cur, vals))
-    elif not line.is_frozen:
-        _write_values(line, item, vals)
 
+def prepare_item_edit(db: Session, item: BudgetItem, ym: str, scope: str) -> BudgetItem:
+    """
+    Cut the series so that `ym` can be given new values, and return the row the
+    new values belong on. With scope "forward" that row runs to the end of the
+    series; with "month" it is capped at `ym` and a tail carrying the old values
+    picks up again the month after.
+    """
+    target = split_item(db, item, ym)
+    if scope == "month":
+        if not target.ends_ym or target.ends_ym > ym:
+            split_item(db, target, shift_ym(ym, 1))  # the tail keeps the old values
+        target.ends_ym = ym
+    db.flush()
+    return target
+
+
+def apply_item_change(db: Session, item: BudgetItem, from_ym: Optional[str] = None) -> None:
+    """
+    Push a definition change into `from_ym` and every month after it, leaving
+    earlier months exactly as they were. Defaults to the current month, which is
+    what creating an item wants.
+    """
+    rematerialise_series(db, item, from_ym or current_ym())
     db.commit()
 
 
-def retire_item(db: Session, item: BudgetItem) -> None:
+def retire_item(db: Session, item: BudgetItem, from_ym: Optional[str] = None) -> None:
     """
-    Stop an item from this month on without erasing what it did in the past: it
-    ends last month, and its current and future lines go away.
+    Stop an item from `from_ym` on without erasing what it did before: it ends
+    the month before, and its lines from there on go away. Later versions of the
+    same series go too — the whole thing is being stopped, not just this slice.
     """
-    cur = current_ym()
-    item.ends_ym = shift_ym(cur, -1)
-    item.is_active = 0
-    db.query(BudgetMonthLine).filter(
-        BudgetMonthLine.item_id == item.id,
-        BudgetMonthLine.year_month >= cur,
-        BudgetMonthLine.is_frozen == 0,
-    ).delete(synchronize_session=False)
+    start = from_ym or current_ym()
+    for version in series_items(db, item):
+        if version.starts_ym >= start:
+            version.is_active = 0
+        elif not version.ends_ym or version.ends_ym >= start:
+            version.ends_ym = shift_ym(start, -1)
+    db.flush()
+    rematerialise_series(db, item, start)
+    db.commit()
+
+
+def retire_item_for_month(db: Session, item: BudgetItem, ym: str) -> None:
+    """Drop an item from a single month, leaving it in place before and after."""
+    target = split_item(db, item, ym)
+    if not target.ends_ym or target.ends_ym > ym:
+        split_item(db, target, shift_ym(ym, 1))  # the tail keeps the old values
+    target.is_active = 0
+    target.ends_ym = ym
+    db.flush()
+    rematerialise_series(db, item, ym)
     db.commit()
 
 

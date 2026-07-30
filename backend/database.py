@@ -52,8 +52,17 @@ _ADDED_COLUMNS = {
     "budget_items": {
         "day_rule": "VARCHAR DEFAULT 'exact'",
         "day_ordinal": "INTEGER",
+        "series_id": "INTEGER",
     },
 }
+
+# Run after the columns exist, to give the new ones a sensible value on rows that
+# predate them. Each must be safe to run on every start.
+_BACKFILLS = (
+    # Every item that has never been versioned is a series of one, keyed by itself.
+    ("budget_items", "series_id",
+     "UPDATE budget_items SET series_id = id WHERE series_id IS NULL"),
+)
 
 
 def _ensure_columns(eng) -> None:
@@ -66,6 +75,10 @@ def _ensure_columns(eng) -> None:
             for name, ddl in columns.items():
                 if name not in present:
                     c.exec_driver_sql(f'ALTER TABLE "{table}" ADD COLUMN {name} {ddl}')
+        for table, column, sql in _BACKFILLS:
+            present = {row[1] for row in c.exec_driver_sql(f'PRAGMA table_info("{table}")')}
+            if column in present:
+                c.exec_driver_sql(sql)
         c.commit()
 
 

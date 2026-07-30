@@ -260,6 +260,13 @@ class BudgetItem(Base):
     starts_ym = Column(String, nullable=False, index=True)  # first month it applies to
     ends_ym = Column(String, nullable=True, index=True)     # last month, NULL = open-ended
     is_active = Column(Integer, default=1, index=True)
+
+    # Editing an item from a given month on splits it in two: the old row is
+    # capped at the month before and a new row carries the new values from
+    # there. Both keep the same series_id, so "this rent" stays one thing
+    # across its versions. NULL on rows written before versioning existed,
+    # which the backfill in database._ensure_columns fills with the row's id.
+    series_id = Column(Integer, nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -270,6 +277,7 @@ class BudgetItem(Base):
 
     __table_args__ = (
         Index('idx_budget_item_kind_active', 'kind', 'is_active'),
+        Index('idx_budget_item_series', 'series_id', 'starts_ym'),
     )
 
 

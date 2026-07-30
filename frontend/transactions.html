@@ -219,6 +219,14 @@
         .error-message { background: var(--red); color: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: none; }
         .amount-negative { color: var(--red); }
         .amount-positive { color: var(--green); }
+        /* Beats the `.modal input` colour rule, which is more specific than `.amount-*` alone. */
+        .modal input.amount-negative { color: var(--red); }
+        .modal input.amount-positive { color: var(--green); }
+        .amount-field { display: flex; align-items: stretch; gap: 8px; }
+        .amount-field input { flex: 1 1 auto; min-width: 0; }
+        .sign-toggle { flex: 0 0 auto; width: 48px; padding: 0; border: 1px solid var(--field); border-radius: 9px; background: #fff; color: var(--muted); font-family: 'IBM Plex Sans', sans-serif; font-size: 18px; font-weight: 600; line-height: 1; cursor: pointer; transition: color 0.2s, border-color 0.2s, background 0.2s; }
+        .sign-toggle.is-negative { color: var(--red); border-color: var(--red); background: rgba(176, 64, 46, 0.08); }
+        .sign-toggle.is-positive { color: var(--green); border-color: var(--green); background: rgba(60, 122, 87, 0.08); }
         .hidden { display: none; }
         .mobile-detail { display: none; }
 
@@ -980,7 +988,7 @@
                         <div class="form-group"><label>Time</label><input type="time" id="time" required></div>
                     </div>
                     <div class="form-row">
-                        <div class="form-group"><label>Amount</label><input type="number" id="amount" step="0.01" required onblur="colorAmountInput(this)"></div>
+                        <div class="form-group"><label>Amount</label><div class="amount-field"><input type="number" id="amount" step="0.01" inputmode="decimal" required oninput="onAmountInput(this)" onblur="onAmountInput(this)"><button type="button" id="amountSignToggle" class="sign-toggle is-positive" onclick="toggleAmountSign()" title="Switch between expense (−) and income (+)" aria-label="Switch between expense and income">+</button></div></div>
                         <div class="form-group">
                             <label>Payee</label>
                             <input type="text" id="payee" list="payeeList" placeholder="Who?">
@@ -1027,10 +1035,10 @@
                         <div class="form-group"><label>To Account</label><select id="toAccount" required><option value="">Select...</option></select></div>
                     </div>
                     <div class="form-row">
-                        <div class="form-group"><label>Amount Sent</label><input type="number" id="fromAmount" step="0.01" required></div>
+                        <div class="form-group"><label>Amount Sent</label><input type="number" id="fromAmount" step="0.01" inputmode="decimal" required></div>
                         <div class="form-group hidden" id="toAmountGroup">
                             <label>Amount Received</label>
-                            <input type="number" id="toAmount" step="0.01" placeholder="Different currency?">
+                            <input type="number" id="toAmount" step="0.01" inputmode="decimal" placeholder="Different currency?">
                         </div>
                     </div>
                     <div class="form-group"><label>Note</label><textarea id="transferNote" rows="2"></textarea></div>
@@ -1139,6 +1147,50 @@
                     input.classList.add('amount-positive');
                 }
             }
+        }
+
+        // Expenses are negative, but a mobile decimal keypad has no minus key,
+        // so the sign lives in a button next to the amount field.
+        let amountIsNegative = false;
+
+        function updateAmountSignToggle() {
+            const btn = document.getElementById('amountSignToggle');
+            if (!btn) return;
+            btn.textContent = amountIsNegative ? '−' : '+';
+            btn.classList.toggle('is-negative', amountIsNegative);
+            btn.classList.toggle('is-positive', !amountIsNegative);
+        }
+
+        function onAmountInput(input) {
+            const raw = input.value.trim();
+            const value = parseFloat(raw);
+            if (amountIsNegative && /^\d*\.?\d+$/.test(raw)) {
+                // Sign was set before typing: put the minus back in front.
+                input.value = '-' + raw;
+            } else if (!isNaN(value) && value !== 0) {
+                amountIsNegative = value < 0;
+            }
+            updateAmountSignToggle();
+            colorAmountInput(input);
+        }
+
+        function toggleAmountSign() {
+            const input = document.getElementById('amount');
+            const value = parseFloat(input.value);
+            amountIsNegative = !amountIsNegative;
+            if (!isNaN(value) && value !== 0) input.value = String(-value);
+            updateAmountSignToggle();
+            colorAmountInput(input);
+            input.focus();
+        }
+
+        // Adopt the sign of whatever is already in the field (open/edit).
+        function syncAmountSign() {
+            const input = document.getElementById('amount');
+            const value = parseFloat(input.value);
+            amountIsNegative = !isNaN(value) && value < 0;
+            updateAmountSignToggle();
+            colorAmountInput(input);
         }
 
         function setScrollTarget(transactionId, transferId = null) {
@@ -2117,6 +2169,8 @@
             const now = new Date();
             document.getElementById('time').value = now.toTimeString().split(' ')[0].substring(0,5);
             document.getElementById('amount').value = '';
+            colorAmountInput(document.getElementById('amount'));
+            updateAmountSignToggle();
             document.getElementById('payee').value = '';
             document.getElementById('parentCategory').value = '';
             document.getElementById('category').value = '';
@@ -2396,7 +2450,7 @@
             openTransactionModal();
             const d = new Date(t.date); document.getElementById('date').valueAsDate = d; document.getElementById('time').value = d.toTimeString().slice(0,5);
             document.getElementById('amount').value = t.amount; document.getElementById('account').value = t.account_id; document.getElementById('note').value = t.note||'';
-            colorAmountInput(document.getElementById('amount'));
+            syncAmountSign();
             if(t.category_id) { 
                 const c = allCategories.find(x=>x.id===t.category_id); 
                 if(c?.parent) { document.getElementById('parentCategory').value = c.parent; loadSubcategories(c.parent); setTimeout(()=>document.getElementById('category').value=t.category_id, 100); }
@@ -2682,9 +2736,8 @@
             document.getElementById('date').value = dateStr;
             document.getElementById('time').value = timeStr;
             
-            // Reset amount color
-            const amountInput = document.getElementById('amount');
-            amountInput.classList.remove('amount-positive', 'amount-negative');
+            // Reset amount colour and sign
+            syncAmountSign();
             
             // If filtering by account, preselect that account
             if (filtersActive && activeFilters.accountId) {

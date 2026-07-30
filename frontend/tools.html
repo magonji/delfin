@@ -2988,9 +2988,10 @@
                         <label style="font-size: 12px; display: block; margin-bottom: 4px;">
                             ${toAmountLabel}
                         </label>
-                        <input type="number" 
-                            id="convertedAmount_${index}" 
-                            step="0.01" 
+                        <input type="number"
+                            id="convertedAmount_${index}"
+                            step="0.01"
+                            inputmode="decimal"
                             placeholder="Enter amount in ${trans.amount < 0 ? toCurrency : fromCurrency}"
                             style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px;"
                             onchange="parsedTransactions[${index}].convertedAmount = parseFloat(this.value)">
