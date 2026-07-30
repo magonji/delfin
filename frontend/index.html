@@ -1383,7 +1383,9 @@ async function init() {
         q('#selectYear').innerHTML = years.map(y => `<option value="${y}">${y}</option>`).join('');
         if (years.length) loadYearlySummary(years[0]);
 
-        state.categories = await api('/categories');
+        // Without a limit the endpoint caps at 200, silently dropping categories
+        // from the filter — the other pages all ask for 1000.
+        state.categories = await api('/categories?limit=1000');
         restoreSelectedCategories();
         renderCategoriesList();
         loadCategoriesSeries();

@@ -275,21 +275,23 @@
         .bucket-search:focus { outline: none; border-color: var(--accent); }
         .bucket-group.hidden, .bucket-row.hidden { display: none; }
 
-        /* Category picker for planned expenses: parents first, subcategories folded in. */
-        .cat-tree { max-height: 240px; overflow-y: auto; border: 1px solid var(--field); border-radius: 9px; background: #fff; padding: 2px 12px; }
-        .cat-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
-        .cat-row + .cat-row { border-top: 1px solid #F7F0E4; }
-        .cat-tree .cat-row label { display: flex; align-items: center; gap: 8px; margin: 0; min-width: 0;
+        /* Tick lists in the item modal: accounts flat, categories with their
+           subcategories folded into the parent. */
+        .pick-list { max-height: 240px; overflow-y: auto; border: 1px solid var(--field); border-radius: 9px; background: #fff; padding: 2px 12px; }
+        .pick-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
+        .pick-row + .pick-row, .pick-group + .pick-group { border-top: 1px solid #F7F0E4; }
+        .pick-list label { display: flex; align-items: center; gap: 8px; margin: 0; min-width: 0;
             font-size: 13.5px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--ink); cursor: pointer; }
-        .cat-tree .cat-row.parent label { font-weight: 600; }
-        .cat-row input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--green); flex: 0 0 auto; margin: 0; }
-        .cat-row small { color: var(--muted); font-size: 11px; font-family: 'IBM Plex Mono', monospace; margin-left: auto; flex: 0 0 auto; }
-        .cat-row.child { padding-left: 22px; }
-        .cat-toggle { background: transparent; border: none; padding: 0; margin: 0; cursor: pointer; color: var(--muted); font-size: 10px; width: 14px; flex: 0 0 auto; }
-        .cat-group.collapsed .cat-row.child { display: none; }
-        .cat-group.collapsed .cat-toggle { transform: rotate(-90deg); }
+        .pick-list .pick-row.parent label { font-weight: 600; }
+        .pick-row input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--green); flex: 0 0 auto; margin: 0; }
+        .pick-row small { color: var(--muted); font-size: 11px; font-family: 'IBM Plex Mono', monospace; margin-left: auto; flex: 0 0 auto; }
+        .pick-row.child { padding-left: 22px; }
+        .pick-toggle { background: transparent; border: none; padding: 0; margin: 0; cursor: pointer; color: var(--muted); font-size: 10px; width: 14px; flex: 0 0 auto; }
+        .pick-group.collapsed .pick-row.child { display: none; }
+        .pick-group.collapsed .pick-toggle { transform: rotate(-90deg); }
         /* A checked parent already covers its subcategories, so they stop being choices. */
-        .cat-group.covered .cat-row.child label { color: var(--muted); cursor: default; }
+        .pick-group.covered .pick-row.child label { color: var(--muted); cursor: default; }
+        .pick-empty { padding: 8px 0; font-size: 12.5px; color: var(--muted); }
 
         /* Navigation (nav-links live in the header block above) */
         .dropdown { position: relative; display: inline-flex; }
@@ -679,12 +681,12 @@
                 </div>
                 <div class="form-group" id="itemAccountsGroup">
                     <label>Accounts that count towards it</label>
-                    <select id="itemAccounts" multiple></select>
+                    <div id="itemAccounts" class="pick-list"></div>
                 </div>
                 <div class="form-hint" id="itemAccountsHint">Leave empty to count every account.</div>
                 <div class="form-group" id="itemCategoriesGroup">
                     <label>Categories that count towards it</label>
-                    <div id="itemCategories" class="cat-tree"></div>
+                    <div id="itemCategories" class="pick-list"></div>
                 </div>
                 <div class="form-hint" id="itemCategoriesHint">Ticking a parent category includes every subcategory under it — open one to pick subcategories on their own.</div>
             </div>
@@ -1052,7 +1054,10 @@
             try {
                 [state.payees, state.categories, state.accounts] = await Promise.all([
                     api('/payees'),
-                    api('/categories'),
+                    // /categories caps at 200 and has no ordering, so without a
+                    // limit a parent can be cut while its subcategories survive —
+                    // leaving a group with nothing to tick.
+                    api('/categories?limit=1000'),
                     api('/accounts')
                 ]);
                 populatePickers();
@@ -1121,12 +1126,36 @@
         function populatePickers() {
             renderItemPayees(q('#itemPayeeSearch').value);
 
-            const accountOptions = [...state.accounts].sort((a, b) => a.name.localeCompare(b.name))
-                .map(a => `<option value="${a.id}">${esc(a.name)}</option>`).join('');
-            q('#itemAccount').innerHTML = '<option value="">-- None --</option>' + accountOptions;
-            q('#itemAccounts').innerHTML = accountOptions;
+            // The set-aside account is a single choice, so it stays a select.
+            q('#itemAccount').innerHTML = '<option value="">-- None --</option>'
+                + [...state.accounts].sort((a, b) => a.name.localeCompare(b.name))
+                    .map(a => `<option value="${a.id}">${esc(a.name)}</option>`).join('');
 
-            renderItemCategories(selectedCategoryIds());
+            renderItemAccounts(checkedIds('#itemAccounts'));
+            renderItemCategories(checkedIds('#itemCategories'));
+        }
+
+        // ── Tick lists ─────────────────────────────────────────────────────
+        // A disabled box is one covered by its parent, so it is not a choice of
+        // its own and must not be saved.
+        function checkedIds(container) {
+            return qa(`${container} input[data-pick]`)
+                .filter(box => box.checked && !box.disabled)
+                .map(box => parseInt(box.dataset.pick));
+        }
+
+        function renderItemAccounts(selectedIds = []) {
+            const chosen = new Set((selectedIds || []).map(Number));
+            const accounts = [...state.accounts].sort((a, b) => a.name.localeCompare(b.name));
+            q('#itemAccounts').innerHTML = accounts.length
+                ? accounts.map(a => `
+                    <div class="pick-row">
+                        <label>
+                            <input type="checkbox" data-pick="${a.id}" ${chosen.has(a.id) ? 'checked' : ''}>
+                            <span>${esc(a.name)}</span>
+                        </label>
+                    </div>`).join('')
+                : '<div class="pick-empty">No accounts yet.</div>';
         }
 
         // ── Category picker ────────────────────────────────────────────────
@@ -1167,53 +1196,82 @@
                 const parentChecked = g.id != null && chosen.has(g.id);
                 const childChecked = g.children.some(c => chosen.has(c.id));
                 const children = g.children.map(c => `
-                    <div class="cat-row child">
+                    <div class="pick-row child">
                         <label>
-                            <input type="checkbox" data-cat="${c.id}"
+                            <input type="checkbox" data-pick="${c.id}"
                                    ${chosen.has(c.id) && !parentChecked ? 'checked' : ''}
-                                   ${parentChecked ? 'disabled' : ''}>
+                                   ${parentChecked ? 'disabled' : ''}
+                                   onchange="onChildCategoryToggle(this)">
                             <span>${esc(c.name)}</span>
                         </label>
                     </div>`).join('');
+                // A parent that exists as a category of its own is saved as one id.
+                // One that only exists as a name on its children has no id to save,
+                // so its box ticks them all instead of standing for them.
                 const box = g.id != null
-                    ? `<input type="checkbox" data-cat="${g.id}" ${parentChecked ? 'checked' : ''}
+                    ? `<input type="checkbox" data-pick="${g.id}" ${parentChecked ? 'checked' : ''}
                               onchange="onParentCategoryToggle(this)">`
-                    : '';
+                    : g.children.length
+                        ? `<input type="checkbox" onchange="onGroupSelectAll(this)"
+                                  title="Tick every subcategory under it">`
+                        : '';
                 // A group holding a selection opens, so nothing chosen is out of sight.
                 const collapsed = g.children.length && !(childChecked && !parentChecked);
                 return `
-                    <div class="cat-group ${collapsed ? 'collapsed' : ''} ${parentChecked ? 'covered' : ''}">
-                        <div class="cat-row parent">
+                    <div class="pick-group ${collapsed ? 'collapsed' : ''} ${parentChecked ? 'covered' : ''}">
+                        <div class="pick-row parent">
                             ${g.children.length
-                                ? `<button type="button" class="cat-toggle" onclick="toggleCategoryGroup(this)" aria-label="Show subcategories">▼</button>`
-                                : '<span class="cat-toggle"></span>'}
+                                ? `<button type="button" class="pick-toggle" onclick="toggleCategoryGroup(this)" aria-label="Show subcategories">▼</button>`
+                                : '<span class="pick-toggle"></span>'}
                             <label>${box}<span>${esc(g.name)}</span></label>
                             ${g.children.length ? `<small>${g.children.length} sub</small>` : ''}
                         </div>
                         ${children}
                     </div>`;
             }).join('');
+            qa('#itemCategories .pick-group').forEach(refreshGroupBox);
+        }
+
+        // Keep a group's head box telling the truth about what is ticked under it.
+        function refreshGroupBox(group) {
+            const head = group.querySelector('.pick-row.parent input[type="checkbox"]');
+            if (!head) return;
+            const children = [...group.querySelectorAll('.pick-row.child input[type="checkbox"]')];
+            if (head.dataset.pick) {
+                // A real category: its own tick is what gets saved and it covers
+                // the children, so a partial selection only shows as indeterminate.
+                head.indeterminate = !head.checked && children.some(c => c.checked);
+                return;
+            }
+            head.checked = children.length > 0 && children.every(c => c.checked);
+            head.indeterminate = !head.checked && children.some(c => c.checked);
+        }
+
+        function onGroupSelectAll(box) {
+            const group = box.closest('.pick-group');
+            group.querySelectorAll('.pick-row.child input[type="checkbox"]')
+                .forEach(child => { child.checked = box.checked; });
+            refreshGroupBox(group);
+        }
+
+        function onChildCategoryToggle(box) {
+            refreshGroupBox(box.closest('.pick-group'));
         }
 
         function toggleCategoryGroup(btn) {
-            btn.closest('.cat-group').classList.toggle('collapsed');
+            btn.closest('.pick-group').classList.toggle('collapsed');
         }
 
         // Ticking a parent covers everything under it, so its subcategories stop
         // being separate choices — keeping the saved list to the parent alone.
         function onParentCategoryToggle(box) {
-            const group = box.closest('.cat-group');
+            const group = box.closest('.pick-group');
             group.classList.toggle('covered', box.checked);
-            group.querySelectorAll('.cat-row.child input[type="checkbox"]').forEach(child => {
+            group.querySelectorAll('.pick-row.child input[type="checkbox"]').forEach(child => {
                 child.disabled = box.checked;
                 if (box.checked) child.checked = false;
             });
-        }
-
-        function selectedCategoryIds() {
-            return qa('#itemCategories input[data-cat]')
-                .filter(box => box.checked && !box.disabled)
-                .map(box => parseInt(box.dataset.cat));
+            refreshGroupBox(group);
         }
 
         async function loadMonth() {
@@ -1804,7 +1862,7 @@
             resetItemPayeeSearch();
             q('#itemPayee').value = '';
             q('#itemAccount').value = '';
-            qa('#itemAccounts option').forEach(o => o.selected = false);
+            renderItemAccounts([]);
             renderItemCategories([]);
 
             // Default to the first of the month being viewed.
@@ -1882,8 +1940,7 @@
             resetItemPayeeSearch();  // the saved payee must be in the list to select it
             q('#itemPayee').value = item.payee_id || '';
             q('#itemAccount').value = item.set_aside_account_id || '';
-            const accounts = new Set(item.account_ids || []);
-            qa('#itemAccounts option').forEach(o => o.selected = accounts.has(parseInt(o.value)));
+            renderItemAccounts(item.account_ids || []);
             renderItemCategories(item.category_ids || []);
 
             q('#deleteItemBtn').style.display = 'block';
@@ -1896,7 +1953,6 @@
             const kind = q('#itemKind').value;
             const once = isOnceSelected();
             const unit = once ? 'once' : q('#itemIntervalUnit').value;
-            const selected = (sel) => qa(sel + ' option').filter(o => o.selected).map(o => parseInt(o.value));
 
             const payload = {
                 kind,
@@ -1912,8 +1968,8 @@
                 day_ordinal: parseInt(q('#itemDayOrdinal').value) || 1,
                 payee_id: kind !== 'planned' && q('#itemPayee').value ? parseInt(q('#itemPayee').value) : null,
                 set_aside_account_id: kind === 'fixed' && q('#itemAccount').value ? parseInt(q('#itemAccount').value) : null,
-                account_ids: kind === 'planned' ? selected('#itemAccounts') : [],
-                category_ids: kind === 'planned' ? selectedCategoryIds() : [],
+                account_ids: kind === 'planned' ? checkedIds('#itemAccounts') : [],
+                category_ids: kind === 'planned' ? checkedIds('#itemCategories') : [],
                 starts_ym: state.currentMonth,
                 currency: state.baseCurrency
             };
