@@ -2,6 +2,8 @@
 
 A personal finance PWA built with Python, FastAPI, and vanilla JavaScript. Import your Financisto data and track, analyse, and manage your finances through a modern web interface that works on desktop and mobile.
 
+**[Delfin on the web →](https://magonji.github.io/delfin/)** — screenshots and a tour of what it does.
+
 ## Features
 
 ### Dashboard (`index.html`)
@@ -28,15 +30,23 @@ A personal finance PWA built with Python, FastAPI, and vanilla JavaScript. Impor
 - **Running balances**: Per-account and total portfolio balance shown on each row
 - **Mobile detail panel**: Tap a transaction on mobile to expand hidden info (category, location, note, balances) and action buttons
 - **Optimistic saves**: Modal closes instantly; balance recalculation and list refresh happen in the background
+- **Built for a phone keypad**: amount fields open the numeric keypad, and because a mobile decimal pad has no minus key, the amount carries a **± button** that switches between expense and income. The figure turns green or red as you type
 
 ### Budget (`budget.html`)
 
-- **Monthly budget**: Set a target and track spending against it with a progress bar
-- **Recurring expenses**: Track fixed monthly costs (subscriptions, rent, etc.) with payment status
-- **Planned expenses**: One-off upcoming expenses with target dates
-- **Weekly breakdown**: Expenses grouped by week with expandable detail
-- **Income tracking**: Monthly income summary with category breakdown
-- **Budget history**: Month-by-month history of budget vs actual spending
+The budget is built on two ideas: a month is **materialised**, not recomputed — what
+March said is what March keeps saying — and anything that recurs less often than
+monthly is **prorated**, so a £600 bill every six months is budgeted as £100 a
+month rather than a £600 spike.
+
+- **Definitions, not entries**: fixed expenses, expected income and planned expenses are templates that materialise into each month as lines. The line is the record of what was budgeted at the time
+- **Effective-dated edits**: an edit is made *from the month you are looking at*. Change the rent in October and July to September keep the old figure — the definition is split in two at that month rather than rewritten, and each half owns its own stretch of history. Saving or deleting asks whether the change stops at that month or carries on from it
+- **Kakeibo buckets**: spending is sorted into essentials, indulgences, culture and unexpected, mapped from your own categories. A parent category classifies everything under it unless a subcategory says otherwise
+- **Month calendar**: what falls on each day, what has already been paid, and the pace you are running at against the target
+- **Sinking funds**: prorated items accrue a monthly share from the month they start, even while the first real charge is still ahead. The money set aside is tracked per savings account
+- **Working-day rules**: a bill can land on an exact day, or on the *n*th working day counted from the start or the end of the month — wages on the second-to-last working day, say
+- **One-off items**: `0` in the repeat interval means it happens once, in the month of its date, and the repetition fields get out of the way
+- **Budget history**: month-by-month budgeted against actual
 
 ### Loans & Credit Cards (`loans.html`)
 
@@ -66,6 +76,7 @@ A personal finance PWA built with Python, FastAPI, and vanilla JavaScript. Impor
 - **Auto rate updates**: Exchange rates update automatically on server startup and on page load, and again as part of the nightly maintenance job (no manual button needed)
 - **Cache with dirty flag**: Dashboard and loans cache data locally (14-day TTL). When transactions change, a `dirty_data` flag triggers cache invalidation on next page load
 - **Safari compatibility**: `-webkit-appearance: none` on all form controls, custom SVG dropdown arrows, no input zoom on iOS
+- **Long lists stay usable**: the payee picker filters as you type, and the category picker for planned expenses folds subcategories into their parent — ticking the parent covers everything under it
 - **Responsive design**: Optimised layouts for desktop, tablet, and mobile. Sticky footer on all pages
 - **FAB buttons**: Floating action buttons on every page for quick access to new transaction/transfer (navigates to transactions page with modal auto-open)
 
@@ -92,7 +103,8 @@ delfin/
 │   ├── main.py                    # FastAPI app — all endpoints
 │   ├── models.py                  # SQLAlchemy models
 │   ├── schemas.py                 # Pydantic request/response schemas
-│   ├── database.py                # DB engine and session config
+│   ├── budget_engine.py           # Budget: materialisation, proration, versioning
+│   ├── database.py                # DB engine, session config, added-column migrations
 │   ├── helpers.py                 # Balance recalculation, rate helpers
 │   ├── update_exchange_rates.py   # ECB rate fetcher
 │   ├── maintenance.py             # Nightly job (rates+balances+payees+backup) & scheduler
@@ -118,6 +130,9 @@ delfin/
 │   └── icons/                     # App icons (180, 192, 512)
 ├── data/
 │   └── finance.db                 # SQLite database (gitignored)
+├── docs/                          # The project website, served by GitHub Pages
+│   ├── index.html
+│   └── img/
 ├── .github/workflows/
 │   └── docker-publish.yml         # CI: build arm64+amd64 image, push to ghcr.io
 ├── Dockerfile                     # Container image definition
@@ -286,7 +301,9 @@ Full interactive docs at `http://localhost:8422/docs`.
 | **Transfers** | `GET /transactions/transfers`, `POST /transactions/transfers` |
 | **Categories** | `GET /categories`, `POST /categories`, `PUT /categories/{id}` |
 | **Payees** | `GET /payees`, `POST /payees`, `POST /payees/recalculate-all-stats` |
-| **Budget** | `GET /budget`, `POST /budget`, `GET /recurring-expenses`, `GET /planned-expenses` |
+| **Budget** | `GET /budgets/{ym}/progress`, `POST /budgets`, `GET /budget/history`, `GET /budget/suggestions` |
+| **Budget definitions** | `GET /budget/items`, `POST /budget/items`, `PUT /budget/items/{id}?effective_ym=&scope=`, `DELETE /budget/items/{id}?effective_ym=&scope=`, `PATCH /budget/lines/{id}` |
+| **Kakeibo** | `GET /budget/buckets`, `PUT /budget/buckets` |
 | **Loans** | `GET /loans/summary`, `GET /loans/details` |
 | **Dashboard** | `GET /dashboard/summary`, `GET /networth-evolution`, `GET /balance-kpis` |
 | **Exchange Rates** | `GET /exchange-rates/latest`, `GET /exchange-rates`, `POST /exchange-rates/update` |
@@ -303,8 +320,18 @@ Full interactive docs at `http://localhost:8422/docs`.
 - **transactions**: Core table. Links to account, category, payee, location, project. Caches `account_balance_after` and `total_balance_after`
 - **exchange_rates**: Historical daily rates (GBP base) from ECB
 - **budgets**: Monthly spending targets
-- **recurring_expenses**: Fixed monthly costs with payment tracking
-- **planned_expenses**: One-off future expenses
+- **budget_items**: Budget definitions — fixed expense, expected income or planned expense. Carries the recurrence (`interval_count`/`interval_unit`, `day_rule`), the months it applies to (`starts_ym`/`ends_ym`) and a `series_id` tying its versions together
+- **budget_month_lines**: A definition materialised for one month — the auditable record of what was budgeted at the time. Frozen once the month closes
+- **budget_item_accounts** / **budget_item_categories**: What a planned expense counts spending from
+- **category_buckets**: Maps a category to a kakeibo bucket
+
+Editing a definition from a given month never rewrites history: the row is capped
+at the month before and a new one takes over from there, both sharing a
+`series_id`. Past months keep pointing at the version that was in force, so a
+line always reflects the figure it was budgeted with.
+
+> `recurring_expenses` and `planned_expenses` predate `budget_items` and are kept
+> so old data is not lost. Nothing on the budget page reads them any more.
 
 ### Balance Calculation
 
