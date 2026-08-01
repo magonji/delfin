@@ -61,6 +61,14 @@ h3 { font-size: 19px; font-weight: 700; }
 }
 .lede { font-size: clamp(17px, 2.2vw, 20px); color: #4A423A; max-width: 62ch; }
 .muted { color: var(--muted); }
+/* Inline code in running text — the block styling below is a separate thing. */
+:not(pre) > code {
+    font-family: 'IBM Plex Mono', monospace; font-size: .88em;
+    background: var(--panel); border: 1px solid var(--hair);
+    border-radius: 5px; padding: 1px 5px;
+    /* A long URL must be able to break, or it pushes the whole page sideways. */
+    overflow-wrap: break-word;
+}
 
 section { padding: clamp(56px, 9vw, 96px) 0; }
 section + section { border-top: 1px solid var(--hair); }
@@ -253,10 +261,20 @@ footer {
             <span class="eyebrow">What it is</span>
             <h2>A complete personal finance system</h2>
             <p>
-                Delfin is a FastAPI backend and a vanilla-JavaScript front end. It
-                imports your Financisto database, keeps every figure in the currency it
+                Delfin began as a way to open a
+                <a href="https://github.com/dsolonenko/financisto">Financisto</a>
+                database somewhere other than an Android phone. Financisto is a fine
+                ledger, and years of carefully-kept history end up inside it — but that
+                history stays on the handset. Delfin reads the database directly, native
+                <code>.backup</code> or CSV, so the same figures open on a desktop or an
+                iPhone. It writes the format back out as well: the data is no more
+                trapped here than it was there.
+            </p>
+            <p>
+                What grew around that is a full ledger of its own. A FastAPI backend and
+                a vanilla-JavaScript front end, keeping every figure in the currency it
                 happened in while converting for display at the rate of that day, and
-                stores the lot in a SQLite file encrypted with SQLCipher. One Docker
+                storing the lot in a SQLite file encrypted with SQLCipher. One Docker
                 command and it is up; the only request it makes to the outside world is
                 to the European Central Bank, for exchange rates.
             </p>
