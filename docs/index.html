@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Delfin · Self-hosted personal finance</title>
-<meta name="description" content="A self-hosted personal finance app. Multi-currency, encrypted at rest, installable as a PWA, and yours to run on a Raspberry Pi or any always-on machine.">
+<meta name="description" content="A self-hosted personal finance app. Track accounts and spending in any currency, budget by the month, and see what you owe on loans and cards.">
 <meta name="theme-color" content="#FAF3E9">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="icon" href="favicon.ico" sizes="any">
 <link rel="apple-touch-icon" href="img/icon.png">
 
 <meta property="og:title" content="Delfin · Self-hosted personal finance">
-<meta property="og:description" content="Track, analyse and budget your money on your own hardware. Multi-currency, encrypted at rest, no accounts and no cloud.">
+<meta property="og:description" content="Your ledger, kept with meticulous care. Track accounts and spending in any currency, budget by the month, and see what you owe on loans and cards.">
 <meta property="og:type" content="website">
 <meta property="og:image" content="img/icon.png">
 
@@ -75,6 +75,11 @@ section + section { border-top: 1px solid var(--hair); }
     border: 1px solid var(--border); box-shadow: 0 18px 44px rgba(80, 50, 30, .16);
 }
 .hero h1 { margin-bottom: 6px; }
+/* The app's own motto, set as it is on the login screen. */
+.hero .motto {
+    margin: 4px 0 0; font-family: 'Playfair Display', Georgia, serif;
+    font-style: italic; font-size: clamp(18px, 2.6vw, 23px); color: #5A4E3C;
+}
 .hero .lede { margin: 18px 0 0; }
 
 .cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; }
@@ -217,10 +222,10 @@ footer {
         <div>
             <span class="eyebrow">Self-hosted personal finance</span>
             <h1>Delfin</h1>
+            <p class="motto">Your ledger, kept with meticulous care.</p>
             <p class="lede">
-                Your money, on your own hardware. A multi-currency finance app that
-                runs on a Raspberry Pi or any always-on machine — no accounts, no
-                cloud, no one else holding your transaction history.
+                Track accounts and spending in any currency, budget by the month, and
+                see what you actually owe on your loans and cards.
             </p>
             <div class="cta">
                 <a class="btn primary" href="https://github.com/magonji/delfin">
@@ -246,38 +251,39 @@ footer {
     <div class="wrap">
         <div class="section-head">
             <span class="eyebrow">What it is</span>
-            <h2>A finance app you actually own</h2>
+            <h2>A complete personal finance system</h2>
             <p>
-                Delfin is a FastAPI backend and a vanilla-JavaScript front end that you
-                run yourself. It imports your Financisto database, keeps every figure in
-                its original currency while converting for display at the rate of the
-                day, and stores it all in a SQLite file encrypted with SQLCipher. One
-                Docker command and it is up.
+                Delfin is a FastAPI backend and a vanilla-JavaScript front end. It
+                imports your Financisto database, keeps every figure in the currency it
+                happened in while converting for display at the rate of that day, and
+                stores the lot in a SQLite file encrypted with SQLCipher. One Docker
+                command and it is up; the only request it makes to the outside world is
+                to the European Central Bank, for exchange rates.
             </p>
         </div>
         <div class="cards">
             <div class="card">
-                <span class="eyebrow">Nothing leaves the house</span>
-                <h3>Local by construction</h3>
+                <span class="eyebrow">Multi-currency</span>
+                <h3>Every rate, on its own date</h3>
                 <p class="muted" style="margin:0;font-size:14.5px;">
-                    No third-party service ever sees your data. The only outbound request
-                    is to the European Central Bank for exchange rates.
+                    Hold accounts in any currency the ECB publishes. Conversions use the
+                    rate from the day of the transaction, not today's.
                 </p>
             </div>
             <div class="card">
                 <span class="eyebrow">Encrypted at rest</span>
                 <h3>Locked until you log in</h3>
                 <p class="muted" style="margin:0;font-size:14.5px;">
-                    The database key lives only in memory. After a restart the app stays
-                    locked — backups are encrypted too.
+                    SQLCipher with AES-256. The key lives only in memory, so a restart
+                    leaves the app locked — and the backups are encrypted too.
                 </p>
             </div>
             <div class="card">
                 <span class="eyebrow">Runs anywhere</span>
-                <h3>Pi-sized</h3>
+                <h3>arm64 and amd64</h3>
                 <p class="muted" style="margin:0;font-size:14.5px;">
-                    Multi-arch images for arm64 and amd64. A Raspberry Pi is plenty; it
-                    does its housekeeping in one nightly pass.
+                    One multi-arch image, so Docker pulls the right one for your host.
+                    Housekeeping happens in a single nightly pass.
                 </p>
             </div>
         </div>
@@ -289,7 +295,7 @@ footer {
     <div class="wrap">
         <div class="section-head">
             <span class="eyebrow">A look around</span>
-            <h2>Five pages, one job each</h2>
+            <h2>Every part of it</h2>
         </div>
         <div class="shots">
             <figure class="shot"><button type="button" class="shot-open"><img src="img/dashboard.png" alt="Delfin dashboard"></button><figcaption>Dashboard — net worth, spend by category, trends</figcaption></figure>

@@ -151,7 +151,7 @@ delfin/
 > the app (rates update automatically on startup, balances recalculate after
 > every import, payee statistics refresh from the Tools page, and duplicate
 > categories are merged from Tools → Categories), and deployment is now handled
-> by Docker (see [Run with Docker](#run-with-docker-recommended-for-raspberry-pi--always-on-hosting)).
+> by Docker (see [Run with Docker](#run-with-docker-recommended)).
 
 ## Getting Started
 
@@ -189,12 +189,12 @@ uvicorn backend.main:app --reload --port 8422
 Tables are created/extended automatically by the SQLAlchemy models on startup,
 and exchange rates update automatically — no manual migration step needed.
 
-### Run with Docker (recommended for Raspberry Pi / always-on hosting)
+### Run with Docker (recommended)
 
 The image is published to the GitHub Container Registry at
-**`ghcr.io/magonji/delfin`** and rebuilt as a multi-arch image for **arm64**
-(Raspberry Pi 64-bit) and **amd64** (Windows/Mac/Linux x86 servers) on every push
-to `main` via GitHub Actions. Docker automatically pulls the right one for your host.
+**`ghcr.io/magonji/delfin`** and rebuilt as a multi-arch image for **arm64** and
+**amd64** on every push to `main` via GitHub Actions. Docker automatically pulls
+the right one for your host.
 
 **With Docker Compose** (easiest — persists the DB in `./data`):
 
