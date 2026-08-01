@@ -1,0 +1,596 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Delfin · Self-hosted personal finance</title>
+<meta name="description" content="A self-hosted personal finance app. Multi-currency, encrypted at rest, installable as a PWA, and yours to run on a Raspberry Pi or any always-on machine.">
+<meta name="theme-color" content="#FAF3E9">
+<link rel="icon" href="favicon.ico">
+<link rel="apple-touch-icon" href="img/icon.png">
+
+<meta property="og:title" content="Delfin · Self-hosted personal finance">
+<meta property="og:description" content="Track, analyse and budget your money on your own hardware. Multi-currency, encrypted at rest, no accounts and no cloud.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="img/icon.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+:root {
+    --bg: #FAF3E9;
+    --paper: #FFFDFA;
+    --panel: #F3E9DA;
+    --border: #D8C6B0;
+    --hair: #EFE4D3;
+    --muted: #8A7D6C;
+    --ink: #23201C;
+    --accent: #B0402E;
+    --green: #3C7A57;
+    --yellow: #C6893F;
+    --gutter: clamp(20px, 5vw, 40px);
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+}
+img { max-width: 100%; height: auto; display: block; }
+a { color: var(--accent); }
+
+.wrap { max-width: 1000px; margin: 0 auto; padding: 0 var(--gutter); }
+
+/* ── Type ────────────────────────────────────────────────────────────── */
+h1, h2, h3 { font-family: 'Playfair Display', Georgia, serif; margin: 0; line-height: 1.15; }
+h1 { font-size: clamp(44px, 9vw, 76px); font-weight: 800; letter-spacing: -0.02em; }
+h2 { font-size: clamp(26px, 4.2vw, 34px); font-weight: 700; padding-left: 14px; border-left: 3px solid var(--accent); }
+h3 { font-size: 19px; font-weight: 700; }
+.eyebrow {
+    font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 600;
+    letter-spacing: 2px; text-transform: uppercase; color: var(--muted);
+}
+.lede { font-size: clamp(17px, 2.2vw, 20px); color: #4A423A; max-width: 62ch; }
+.muted { color: var(--muted); }
+
+section { padding: clamp(56px, 9vw, 96px) 0; }
+section + section { border-top: 1px solid var(--hair); }
+.section-head { margin-bottom: 36px; }
+.section-head p { margin: 14px 0 0; max-width: 62ch; color: #4A423A; }
+
+/* ── Hero ────────────────────────────────────────────────────────────── */
+.hero { padding-top: clamp(48px, 8vw, 88px); padding-bottom: clamp(48px, 8vw, 80px); }
+.hero-grid { display: grid; grid-template-columns: 1fr auto; gap: clamp(24px, 5vw, 56px); align-items: center; }
+.hero-mark {
+    width: clamp(120px, 20vw, 190px); border-radius: 28px;
+    border: 1px solid var(--border); box-shadow: 0 18px 44px rgba(80, 50, 30, .16);
+}
+.hero h1 { margin-bottom: 6px; }
+.hero .lede { margin: 18px 0 0; }
+
+.cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; }
+.btn {
+    display: inline-flex; align-items: center; gap: 9px;
+    height: 48px; padding: 0 22px; border-radius: 10px;
+    border: 1px solid var(--border); background: var(--paper); color: var(--ink);
+    font-family: 'Playfair Display', serif; font-size: 15px; font-weight: 600;
+    text-decoration: none; transition: transform .12s ease, box-shadow .12s ease;
+}
+.btn:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(80, 50, 30, .14); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn svg { width: 17px; height: 17px; fill: currentColor; }
+
+.badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 26px; }
+.badge {
+    font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: .6px;
+    padding: 5px 11px; border-radius: 999px;
+    background: var(--panel); border: 1px solid var(--hair); color: #5C5245;
+}
+
+/* ── Cards ───────────────────────────────────────────────────────────── */
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
+.card {
+    background: var(--paper); border: 1px solid var(--hair); border-radius: 14px;
+    padding: 24px 22px;
+}
+.card .eyebrow { display: block; margin-bottom: 10px; }
+.card h3 { margin-bottom: 12px; }
+.card ul { margin: 0; padding-left: 18px; }
+.card li { margin-bottom: 7px; font-size: 14.5px; color: #4A423A; }
+.card li:last-child { margin-bottom: 0; }
+.card li b { color: var(--ink); font-weight: 600; }
+
+/* ── Screenshots ─────────────────────────────────────────────────────── */
+.shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+.shot { margin: 0; }
+.shot img {
+    width: 100%; border-radius: 12px;
+    border: 1px solid var(--border); box-shadow: 0 12px 30px rgba(80, 50, 30, .13);
+}
+.shot figcaption {
+    margin-top: 10px; font-family: 'IBM Plex Mono', monospace;
+    font-size: 11.5px; letter-spacing: .5px; color: var(--muted);
+}
+/* The thumbnail is a button so it can be reached and opened from the keyboard. */
+.shot-open {
+    display: block; width: 100%; padding: 0; border: none; background: none;
+    border-radius: 12px; cursor: zoom-in;
+    transition: transform .18s ease, box-shadow .18s ease;
+}
+.shot-open:hover { transform: translateY(-3px); }
+.shot-open:hover img { box-shadow: 0 18px 40px rgba(80, 50, 30, .22); }
+.shot-open:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+
+/* ── Lightbox ────────────────────────────────────────────────────────── */
+#lightbox[hidden] { display: none; }
+#lightbox {
+    position: fixed; inset: 0; z-index: 100;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 14px; padding: clamp(16px, 4vw, 44px);
+    background: rgba(24, 18, 12, .88); backdrop-filter: blur(6px);
+    cursor: zoom-out;
+}
+#lightbox img {
+    max-width: 100%; max-height: 82vh; width: auto;
+    border-radius: 10px; box-shadow: 0 30px 80px rgba(0, 0, 0, .55);
+    /* The FLIP animation drives transform, so it must start from the centre. */
+    transform-origin: center center;
+}
+#lightbox figcaption {
+    font-family: 'IBM Plex Mono', monospace; font-size: 12px;
+    letter-spacing: .5px; color: #E8DCC8; text-align: center; max-width: 60ch;
+}
+.lightbox-close {
+    position: absolute; top: clamp(10px, 2vw, 22px); right: clamp(10px, 2vw, 22px);
+    width: 44px; height: 44px; border-radius: 50%; cursor: pointer;
+    background: rgba(243, 233, 218, .12); border: 1px solid rgba(243, 233, 218, .3);
+    color: #F3E9DA; font-size: 22px; line-height: 1;
+}
+.lightbox-close:hover { background: rgba(243, 233, 218, .24); }
+.lightbox-close:focus-visible { outline: 3px solid #F3E9DA; outline-offset: 3px; }
+
+@media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .shot-open, .shot-open:hover { transition: none; transform: none; }
+}
+
+/* ── Code ────────────────────────────────────────────────────────────── */
+.code { position: relative; margin: 0 0 18px; }
+.code pre {
+    margin: 0; padding: 18px 56px 18px 20px; overflow-x: auto;
+    background: #2B2621; color: #F3E9DA; border-radius: 12px;
+    font-family: 'IBM Plex Mono', monospace; font-size: 13px; line-height: 1.7;
+}
+.code .prompt { color: #C6893F; user-select: none; }
+.code .comment { color: #8A7D6C; }
+.copy {
+    position: absolute; top: 12px; right: 12px;
+    background: rgba(243, 233, 218, .12); border: 1px solid rgba(243, 233, 218, .28);
+    color: #F3E9DA; border-radius: 8px; padding: 5px 10px; cursor: pointer;
+    font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: .5px;
+}
+.copy:hover { background: rgba(243, 233, 218, .22); }
+
+.steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 22px; margin-top: 8px; }
+.step-n {
+    font-family: 'Playfair Display', serif; font-size: 30px; font-weight: 700;
+    color: var(--accent); line-height: 1;
+}
+
+/* ── Callout ─────────────────────────────────────────────────────────── */
+.callout {
+    background: var(--panel); border: 1px solid var(--hair);
+    border-left: 3px solid var(--yellow); border-radius: 12px;
+    padding: 18px 20px; font-size: 14.5px; color: #4A423A;
+}
+.callout b { color: var(--ink); }
+
+/* ── Footer ──────────────────────────────────────────────────────────── */
+footer {
+    border-top: 1px solid var(--hair); padding: 34px 0 44px;
+    font-size: 13.5px; color: var(--muted);
+}
+.footer-row { display: flex; flex-wrap: wrap; gap: 14px 26px; align-items: center; justify-content: space-between; }
+.footer-row a { text-decoration: none; }
+.footer-row a:hover { text-decoration: underline; }
+
+@media (max-width: 720px) {
+    .hero-grid { grid-template-columns: 1fr; }
+    .hero-mark { order: -1; }
+}
+</style>
+</head>
+<body>
+
+<!-- ── Hero ────────────────────────────────────────────────────────── -->
+<header class="hero">
+    <div class="wrap hero-grid">
+        <div>
+            <span class="eyebrow">Self-hosted personal finance</span>
+            <h1>Delfin</h1>
+            <p class="lede">
+                Your money, on your own hardware. A multi-currency finance app that
+                runs on a Raspberry Pi or any always-on machine — no accounts, no
+                cloud, no one else holding your transaction history.
+            </p>
+            <div class="cta">
+                <a class="btn primary" href="https://github.com/magonji/delfin">
+                    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.4 7.4 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+                    View on GitHub
+                </a>
+                <a class="btn" href="#install">Run it yourself</a>
+            </div>
+            <div class="badges">
+                <span class="badge">MIT licence</span>
+                <span class="badge">AES-256 at rest</span>
+                <span class="badge">30+ currencies</span>
+                <span class="badge">Installable PWA</span>
+                <span class="badge">arm64 · amd64</span>
+            </div>
+        </div>
+        <img class="hero-mark" src="img/icon.png" alt="The Delfin dolphin mark" width="512" height="512">
+    </div>
+</header>
+
+<!-- ── What it is ──────────────────────────────────────────────────── -->
+<section>
+    <div class="wrap">
+        <div class="section-head">
+            <span class="eyebrow">What it is</span>
+            <h2>A finance app you actually own</h2>
+            <p>
+                Delfin is a FastAPI backend and a vanilla-JavaScript front end that you
+                run yourself. It imports your Financisto database, keeps every figure in
+                its original currency while converting for display at the rate of the
+                day, and stores it all in a SQLite file encrypted with SQLCipher. One
+                Docker command and it is up.
+            </p>
+        </div>
+        <div class="cards">
+            <div class="card">
+                <span class="eyebrow">Nothing leaves the house</span>
+                <h3>Local by construction</h3>
+                <p class="muted" style="margin:0;font-size:14.5px;">
+                    No third-party service ever sees your data. The only outbound request
+                    is to the European Central Bank for exchange rates.
+                </p>
+            </div>
+            <div class="card">
+                <span class="eyebrow">Encrypted at rest</span>
+                <h3>Locked until you log in</h3>
+                <p class="muted" style="margin:0;font-size:14.5px;">
+                    The database key lives only in memory. After a restart the app stays
+                    locked — backups are encrypted too.
+                </p>
+            </div>
+            <div class="card">
+                <span class="eyebrow">Runs anywhere</span>
+                <h3>Pi-sized</h3>
+                <p class="muted" style="margin:0;font-size:14.5px;">
+                    Multi-arch images for arm64 and amd64. A Raspberry Pi is plenty; it
+                    does its housekeeping in one nightly pass.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ── Screenshots (each figure hides itself if the image is missing) ─ -->
+<section id="screens" hidden>
+    <div class="wrap">
+        <div class="section-head">
+            <span class="eyebrow">A look around</span>
+            <h2>Five pages, one job each</h2>
+        </div>
+        <div class="shots">
+            <figure class="shot"><button type="button" class="shot-open"><img src="img/dashboard.png" alt="Delfin dashboard"></button><figcaption>Dashboard — net worth, spend by category, trends</figcaption></figure>
+            <figure class="shot"><button type="button" class="shot-open"><img src="img/transactions.png" alt="Delfin transactions"></button><figcaption>Transactions — quick entry, filters, running balances</figcaption></figure>
+            <figure class="shot"><button type="button" class="shot-open"><img src="img/budget.png" alt="Delfin budget"></button><figcaption>Budget — kakeibo buckets and a month calendar</figcaption></figure>
+            <figure class="shot"><button type="button" class="shot-open"><img src="img/loans.png" alt="Delfin loans and credit cards"></button><figcaption>Loans &amp; cards — repayment, interest, estimated APR</figcaption></figure>
+            <figure class="shot"><button type="button" class="shot-open"><img src="img/tools.png" alt="Delfin tools"></button><figcaption>Tools — import, export, backups, maintenance</figcaption></figure>
+            <figure class="shot"><button type="button" class="shot-open"><img src="img/mobile.png" alt="Delfin on a phone"></button><figcaption>Installed on a phone as a PWA</figcaption></figure>
+        </div>
+    </div>
+</section>
+
+<!-- ── Features ────────────────────────────────────────────────────── -->
+<section>
+    <div class="wrap">
+        <div class="section-head">
+            <span class="eyebrow">What is inside</span>
+            <h2>Features</h2>
+        </div>
+        <div class="cards">
+            <div class="card">
+                <span class="eyebrow">Dashboard</span>
+                <h3>The whole picture</h3>
+                <ul>
+                    <li><b>Net worth evolution</b> — daily, weekly or monthly, over any range, with accounts excludable one by one</li>
+                    <li><b>Spend by category</b> — doughnut with month navigation, by top expense, category or subcategory</li>
+                    <li><b>Trends</b> — income against expenses by month and by year, plus category trends over time</li>
+                    <li><b>Top payees</b> and monthly transaction volume</li>
+                </ul>
+            </div>
+            <div class="card">
+                <span class="eyebrow">Transactions</span>
+                <h3>Built for fast entry</h3>
+                <ul>
+                    <li><b>Save &amp; New</b> batch mode — balance recalculation deferred until the last save</li>
+                    <li><b>Payee autocomplete</b> that remembers the usual category and location</li>
+                    <li><b>Transfers</b> across currencies, with the rate shown</li>
+                    <li><b>Bulk edit</b>, advanced filters and infinite scroll</li>
+                    <li><b>Running balances</b> per account and portfolio-wide on every row</li>
+                </ul>
+            </div>
+            <div class="card">
+                <span class="eyebrow">Budget</span>
+                <h3>Kakeibo, month by month</h3>
+                <ul>
+                    <li><b>Four buckets</b> — essentials, indulgences, culture, unexpected — mapped from your own categories</li>
+                    <li><b>A month calendar</b> marking what falls on each day, and what has already been paid</li>
+                    <li><b>Fixed costs, expected income and planned expenses</b> as definitions that materialise into each month</li>
+                    <li><b>Anything longer than a month is prorated</b> — a bill every six months becomes a monthly sinking fund</li>
+                    <li><b>Closed months keep their record</b>: an edit applies from the month you are looking at onwards</li>
+                </ul>
+            </div>
+            <div class="card">
+                <span class="eyebrow">Loans &amp; cards</span>
+                <h3>Debt, worked out for you</h3>
+                <ul>
+                    <li><b>Tells cards from loans</b> automatically, by the shape of the spending</li>
+                    <li><b>Borrowed, repaid, interest, outstanding</b> — and an estimated APR via XIRR</li>
+                    <li><b>Lender detected</b> from the payees on the account</li>
+                    <li><b>Card progress bars</b> against your historical maximum debt</li>
+                </ul>
+            </div>
+            <div class="card">
+                <span class="eyebrow">Tools</span>
+                <h3>Your data stays portable</h3>
+                <ul>
+                    <li><b>Financisto in and out</b> — native <code>.backup</code> or CSV, with a compatibility report before anything is written</li>
+                    <li><b>Any bank CSV</b> via a column-mapping step, with reusable per-bank profiles and duplicate detection</li>
+                    <li><b>Merge duplicates</b> across categories, accounts, payees, locations and projects</li>
+                    <li><b>Backup and restore</b> using SQLite's online backup API — consistent, never a raw file copy</li>
+                </ul>
+            </div>
+            <div class="card">
+                <span class="eyebrow">Throughout</span>
+                <h3>The quiet parts</h3>
+                <ul>
+                    <li><b>Multi-currency</b> — every currency in the ECB feed, converted at the rate of the transaction date</li>
+                    <li><b>Nightly maintenance</b> — rates, balances, payee stats and an off-disk backup, but only when your data actually changed</li>
+                    <li><b>PWA</b> — installable on iOS, Android and desktop, with a service worker</li>
+                    <li><b>No frameworks</b> — vanilla JavaScript and Chart.js, so there is nothing to keep upgrading</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ── Install ─────────────────────────────────────────────────────── -->
+<section id="install">
+    <div class="wrap">
+        <div class="section-head">
+            <span class="eyebrow">Getting started</span>
+            <h2>Up in one command</h2>
+            <p>
+                The image is published to the GitHub Container Registry and rebuilt for
+                arm64 and amd64 on every push. Docker pulls the right one for your host.
+            </p>
+        </div>
+
+        <div class="code">
+            <button class="copy" type="button">copy</button>
+<pre><span class="comment"># Clone and start — the database persists in ./data</span>
+<span class="prompt">$</span> <span class="cmd">git clone https://github.com/magonji/delfin.git</span>
+<span class="prompt">$</span> <span class="cmd">cd delfin</span>
+<span class="prompt">$</span> <span class="cmd">docker compose up -d</span></pre>
+        </div>
+
+        <div class="code">
+            <button class="copy" type="button">copy</button>
+<pre><span class="comment"># Or run the published image directly</span>
+<span class="prompt">$</span> <span class="cmd">docker run -d --name delfin --restart unless-stopped \
+    -e TZ=Europe/Madrid \
+    -p 8422:8422 \
+    -v "$(pwd)/data:/app/data" \
+    ghcr.io/magonji/delfin:latest</span></pre>
+        </div>
+
+        <div class="steps">
+            <div>
+                <div class="step-n">1</div>
+                <h3>Open it</h3>
+                <p class="muted" style="font-size:14.5px;margin:6px 0 0;">
+                    Go to <code>http://&lt;host&gt;:8422/app/index.html</code> and set a
+                    password. Save the recovery code it shows you — there is no other way in.
+                </p>
+            </div>
+            <div>
+                <div class="step-n">2</div>
+                <h3>Bring your data</h3>
+                <p class="muted" style="font-size:14.5px;margin:6px 0 0;">
+                    Tools → Import Financisto, or map any bank CSV. You get a compatibility
+                    report first, so nothing is dropped without telling you.
+                </p>
+            </div>
+            <div>
+                <div class="step-n">3</div>
+                <h3>Install it</h3>
+                <p class="muted" style="font-size:14.5px;margin:6px 0 0;">
+                    Add it to your home screen. It is a PWA, so it behaves like an app on
+                    the phone and keeps working while the page reloads in the background.
+                </p>
+            </div>
+        </div>
+
+        <p class="muted" style="margin-top:30px;font-size:14.5px;">
+            Prefer to run it from source? Python 3.9+, <code>pip install -r requirements.txt</code>,
+            then <code>uvicorn backend.main:app --port 8422</code>. Full instructions in the
+            <a href="https://github.com/magonji/delfin#getting-started">README</a>.
+        </p>
+    </div>
+</section>
+
+<!-- ── Security ────────────────────────────────────────────────────── -->
+<section>
+    <div class="wrap">
+        <div class="section-head">
+            <span class="eyebrow">Security</span>
+            <h2>Encrypted, and locked until you say so</h2>
+            <p>
+                A random 256-bit key encrypts the database. That key is stored wrapped
+                twice — once behind your password, once behind your recovery code —
+                so changing the password only re-wraps it. The database is never
+                re-encrypted, and existing backups stay valid.
+            </p>
+        </div>
+        <div class="callout">
+            <b>Over plain HTTP on a LAN the password and cookie travel unencrypted.</b>
+            For real protection put Delfin behind HTTPS — a reverse proxy or Tailscale.
+            And keep your password, recovery code and keyfile safe: losing them means
+            the data is unrecoverable, by design.
+        </div>
+    </div>
+</section>
+
+<!-- ── Lightbox ────────────────────────────────────────────────────── -->
+<div id="lightbox" hidden role="dialog" aria-modal="true" aria-label="Enlarged screenshot">
+    <button type="button" class="lightbox-close" aria-label="Close">&times;</button>
+    <img alt="">
+    <figcaption></figcaption>
+</div>
+
+<footer>
+    <div class="wrap footer-row">
+        <span>Released under the MIT Licence · © 2025 Mario González Jiménez</span>
+        <span>
+            <a href="https://github.com/magonji/delfin">Source</a> ·
+            <a href="https://github.com/magonji/delfin/issues">Issues</a> ·
+            <a href="https://github.com/magonji/delfin#api-overview">API</a>
+        </span>
+    </div>
+</footer>
+
+<script>
+// Screenshots are optional: reveal the section only for the ones that load, so
+// the page is complete before any have been added.
+(function () {
+    const section = document.getElementById('screens');
+    const shots = [...section.querySelectorAll('.shot')];
+    let shown = 0;
+    shots.forEach(shot => {
+        const img = shot.querySelector('img');
+        const drop = () => { shot.remove(); };
+        const keep = () => { if (++shown === 1) section.hidden = false; };
+        if (img.complete) { img.naturalWidth ? keep() : drop(); }
+        else { img.addEventListener('load', keep); img.addEventListener('error', drop); }
+    });
+})();
+
+// Clicking a screenshot opens it over a dark backdrop. The image grows out of
+// the thumbnail's own position (measure, invert, play) rather than fading in, so
+// it reads as the same picture getting bigger.
+(function () {
+    const box = document.getElementById('lightbox');
+    const big = box.querySelector('img');
+    const caption = box.querySelector('figcaption');
+    const closeBtn = box.querySelector('.lightbox-close');
+    const still = matchMedia('(prefers-reduced-motion: reduce)');
+    const EASE = 'cubic-bezier(.2,.7,.3,1)';
+    let opener = null;      // the button to hand focus back to
+    let running = null;     // the in-flight animation, so clicks cannot pile up
+    let closing = false;    // a click on the ✕ also reaches the backdrop
+
+    function open(button) {
+        const thumb = button.querySelector('img');
+        opener = button;
+        closing = false;
+        big.src = thumb.currentSrc || thumb.src;
+        big.alt = thumb.alt;
+        caption.textContent =
+            button.parentElement.querySelector('figcaption').textContent;
+        box.hidden = false;
+        closeBtn.focus();
+
+        if (still.matches) return;
+        const from = thumb.getBoundingClientRect();
+        const to = big.getBoundingClientRect();
+        if (!to.width) return;   // image not measurable yet: skip straight to open
+        running = big.animate([
+            { transform: flip(from, to), opacity: .4 },
+            { transform: 'none', opacity: 1 },
+        ], { duration: 340, easing: EASE });
+        box.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 240, easing: EASE });
+    }
+
+    function close() {
+        if (box.hidden || closing) return;
+        closing = true;
+        const back = opener;
+        opener = null;
+
+        const finish = () => { box.hidden = true; closing = false; if (back) back.focus(); };
+        const thumb = back && back.querySelector('img');
+        if (still.matches || !thumb) return finish();
+
+        // Shrink back into the thumbnail, wherever it now sits on the page.
+        const from = thumb.getBoundingClientRect();
+        const to = big.getBoundingClientRect();
+        if (running) running.cancel();
+        big.animate([
+            { transform: 'none', opacity: 1 },
+            { transform: flip(from, to), opacity: .3 },
+        ], { duration: 260, easing: EASE });
+        box.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 260, easing: EASE })
+           .addEventListener('finish', finish);
+    }
+
+    // The transform that puts the enlarged image exactly over the thumbnail.
+    function flip(from, to) {
+        const scale = from.width / to.width;
+        const dx = (from.left + from.width / 2) - (to.left + to.width / 2);
+        const dy = (from.top + from.height / 2) - (to.top + to.height / 2);
+        return `translate(${dx}px, ${dy}px) scale(${scale})`;
+    }
+
+    document.querySelectorAll('.shot-open').forEach(button => {
+        button.addEventListener('click', () => open(button));
+    });
+    box.addEventListener('click', close);          // backdrop, image and caption
+    closeBtn.addEventListener('click', close);
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
+    // A resize mid-view would make the shrink land in the wrong place.
+    addEventListener('resize', () => {
+        if (!box.hidden) { box.hidden = true; closing = false; opener = null; }
+    });
+})();
+
+// Copy the commands themselves — the prompts and comments are decoration, and
+// each .cmd span holds exactly what should land on the clipboard.
+document.querySelectorAll('.copy').forEach(btn => {
+    btn.addEventListener('click', async () => {
+        const pre = btn.parentElement.querySelector('pre');
+        const text = [...pre.querySelectorAll('.cmd')]
+            .map(node => node.textContent)
+            .join('\n');
+        try {
+            await navigator.clipboard.writeText(text);
+            btn.textContent = 'copied';
+            setTimeout(() => { btn.textContent = 'copy'; }, 1600);
+        } catch {
+            btn.textContent = 'press ⌘C';
+        }
+    });
+});
+</script>
+</body>
+</html>

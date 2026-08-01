@@ -479,6 +479,12 @@ if (window.Chart) {
 const q = (sel) => document.querySelector(sel);
 const qa = (sel) => Array.from(document.querySelectorAll(sel));
 const fmtMoney = (n, c = 'GBP') => new Intl.NumberFormat('en-GB', { style: 'currency', currency: c, maximumFractionDigits: 2 }).format(n || 0);
+// The symbol on its own, for chart axes that have no room for the full figure.
+const currencySymbol = (c = 'GBP') => {
+    const part = new Intl.NumberFormat('en-GB', { style: 'currency', currency: c })
+        .formatToParts(0).find(p => p.type === 'currency');
+    return part ? part.value : '';
+};
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
 const colour = (i) => PALETTE[i % PALETTE.length];
 
@@ -850,7 +856,10 @@ async function loadNetworth() {
                     const d = new Date(label);
                     return [d.toLocaleString('en', { month: 'short' }), d.getFullYear()];
                 } } },
-                y: { grid: { color: CHART_HAIR }, border: { display: false }, ticks: { callback: v => Math.abs(v) >= 1000 ? '£' + (v/1000).toFixed(0) + 'k' : '£' + v } }
+                y: { grid: { color: CHART_HAIR }, border: { display: false }, ticks: { callback: v => {
+                    const sym = currencySymbol(data.base_currency);
+                    return Math.abs(v) >= 1000 ? sym + (v/1000).toFixed(0) + 'k' : sym + v;
+                } } }
             }
         }
     }, '_nwChart');

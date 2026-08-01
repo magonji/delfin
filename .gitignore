@@ -21,6 +21,7 @@ __pycache__/
 *.so
 
 # Virtual environment (por si lo usas en el futuro)
+.venv/
 venv/
 env/
 ENV/
@@ -47,3 +48,6 @@ Thumbs.db
 
 # Environment variables (para contraseñas en el futuro)
 .env
+
+scripts/
+docs/img/README.md
