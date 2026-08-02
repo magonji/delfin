@@ -124,7 +124,7 @@
         /* Scoped to #filters: the `#filters button` rule above carries an id, so a
            plain .filter-actions selector loses to it and never paints. Clear is left
            to that rule, which is the look it has always had. */
-        #filters .filter-actions button:first-child { background: var(--yellow); color: var(--ink); border-color: var(--yellow); }
+        #filters .filter-actions button:first-child { background: #E0BE94; color: var(--ink); border-color: #E0BE94; }
         #filterToggle { display: none; }
 
         /* Bulk edit mode controls */
@@ -1506,6 +1506,11 @@
             
             // Now render transactions (dropdowns are already populated)
             processAndDisplayTransactions(transactionsData);
+
+            // The first render bypasses loadRecentTransactions, so the summary was
+            // left showing its placeholder until a filter was applied or cleared.
+            // With no filters set this reports the totals over everything.
+            updateTransactionsSummary();
             
             const transactionsList = document.getElementById('transactionsList');
             transactionsList.addEventListener('scroll', () => {
