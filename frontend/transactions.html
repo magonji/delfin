@@ -11,6 +11,8 @@
     <link rel="icon" href="favicon.ico" sizes="any">
     <link rel="apple-touch-icon" sizes="180x180" href="/app/icons/icon-180.png" />
     <link rel="manifest" href="manifest.json" />
+    <!-- Shared cache: loaded before the page script so DelfinCache exists. -->
+    <script src="/app/cache.js"></script>
     <title>Delfin · Transactions</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1385,7 +1387,7 @@
 
         // --- Cache management and data refresh ---
         function cacheClearAll() {
-            Object.keys(localStorage).filter(k => k.startsWith('cache_')).forEach(k => localStorage.removeItem(k));
+            DelfinCache.clear();
         }
         
         // Refresh: spin the icon (via CSS) and show the current stage in a tooltip on hover.
@@ -1825,8 +1827,11 @@
             } catch (e) { console.error('Summary load failed', e); }
         }
 
-        async function loadRecentTransactions(reset = false) {
-            if (reset) localStorage.setItem('dirty_data', '1');
+        // `isFilterChange` marks the two callers that only re-read the list.
+        // Marking those as a data change threw the whole dashboard cache away
+        // every time you touched a filter, so the next visit rebuilt it all.
+        async function loadRecentTransactions(reset = false, isFilterChange = false) {
+            if (reset && !isFilterChange) DelfinCache.markDirty('transactions');
             if (isLoadingTransactions || (!hasMoreTransactions && !reset)) return;
             isLoadingTransactions = true;
             if (reset) { transactionsSkip = 0; hasMoreTransactions = true; regularTransactions = []; transferTransactions = []; pendingTransferOuts = []; pendingTransferIns = []; updateTransactionsSummary(); }
@@ -2133,11 +2138,11 @@
                 searchText: document.getElementById('filterSearch').value
             };
             filtersActive = Object.values(activeFilters).some(v => v);
-            loadRecentTransactions(true);
+            loadRecentTransactions(true, true);
         }
         function clearFilters() {
             ['filterStartDate','filterEndDate','filterAccount','filterCategory','filterSearch'].forEach(id=>document.getElementById(id).value='');
-            activeFilters = { startDate: null }; filtersActive = false; loadRecentTransactions(true);
+            activeFilters = { startDate: null }; filtersActive = false; loadRecentTransactions(true, true);
         }
 
         async function handleTransactionSubmit(e) {

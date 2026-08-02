@@ -11,6 +11,8 @@
     <link rel="icon" href="favicon.ico" sizes="any">
     <link rel="apple-touch-icon" sizes="180x180" href="/app/icons/icon-180.png" />
     <link rel="manifest" href="manifest.json" />
+    <!-- Shared cache: loaded before the page script so DelfinCache exists. -->
+    <script src="/app/cache.js"></script>
     <title>Delfin · Budget</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1027,7 +1029,7 @@
         });
 
         function cacheClearAll() {
-            Object.keys(localStorage).filter(k => k.startsWith('cache_')).forEach(k => localStorage.removeItem(k));
+            DelfinCache.clear();
         }
 
         // Refresh: spin the icon (via CSS) and show the current stage in a tooltip on hover.
@@ -1489,6 +1491,8 @@
                     method: 'PATCH',
                     body: JSON.stringify({ paid: !currentlyPaid })
                 });
+                // Budget figures feed the dashboard, so tell it to refresh.
+                DelfinCache.markDirty('budget');
                 await loadMonth();
             } catch (e) {
                 alert('Error updating: ' + e.message);
@@ -1946,6 +1950,7 @@
                     body: JSON.stringify({ name: q('#lineName').value.trim(), amount })
                 });
                 closeModal('lineModal');
+                DelfinCache.markDirty('budget');
                 await loadMonth();
                 await loadHistory();
             } catch (e) {
@@ -2053,6 +2058,7 @@
                     await api('/budget/items', { method: 'POST', body: JSON.stringify(payload) });
                 }
                 closeModal('itemModal');
+                DelfinCache.markDirty('budget');
                 await loadMonth();
                 await loadHistory();
             } catch (e) {
@@ -2068,6 +2074,7 @@
             try {
                 await api(`/budget/items/${id}?${scopeQuery(scope)}`, { method: 'DELETE' });
                 closeModal('itemModal');
+                DelfinCache.markDirty('budget');
                 await loadMonth();
                 await loadHistory();
             } catch (e) {
@@ -2236,6 +2243,7 @@
             try {
                 await api('/budget/buckets', { method: 'PUT', body: JSON.stringify({ mappings }) });
                 closeModal('bucketsModal');
+                DelfinCache.markDirty('budget');
                 await loadMonth();
             } catch (e) {
                 alert('Error saving: ' + e.message);
@@ -2338,6 +2346,7 @@
                     });
                 }
                 closeModal('suggestModal');
+                DelfinCache.markDirty('budget');
                 await loadMonth();
             } catch (e) {
                 alert('Error adding: ' + e.message);

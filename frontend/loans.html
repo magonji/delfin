@@ -11,6 +11,8 @@
     <link rel="icon" href="favicon.ico" sizes="any">
     <link rel="apple-touch-icon" sizes="180x180" href="/app/icons/icon-180.png" />
     <link rel="manifest" href="manifest.json" />
+    <!-- Shared cache: loaded before the page script so DelfinCache exists. -->
+    <script src="/app/cache.js"></script>
     <title>Delfin · Loans and Credit Cards</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -246,7 +248,6 @@
     const q = (sel) => document.querySelector(sel);
     
     // Cache duration: 14 days in milliseconds
-    const CACHE_DURATION = 14 * 24 * 60 * 60 * 1000;
     
     // Pattern to identify interest/fee transactions (matches category names)
     const INTEREST_PATTERN = /interest|fee|hipoteca|comisiones|interés|comisión/i;
@@ -319,24 +320,14 @@
      * @param {string} key - LocalStorage key
      * @returns {object|null} - Cached value or null if expired/missing
      */
-    function getCache(key) {
-        try {
-            const cached = JSON.parse(localStorage.getItem(key));
-            if (!cached) return null;
-            if (Date.now() - cached.timestamp < CACHE_DURATION) return cached.value;
-            localStorage.removeItem(key);
-        } catch (e) { console.error(e); }
-        return null;
-    }
+    const getCache = (key) => DelfinCache.get(key);
 
     /**
      * Stores data in cache with timestamp
      * @param {string} key - LocalStorage key
      * @param {object} value - Data to cache
      */
-    function setCache(key, value) {
-        localStorage.setItem(key, JSON.stringify({ value, timestamp: Date.now() }));
-    }
+    const setCache = (key, value) => DelfinCache.set(key, value, 'volatile');
 
     // =============================================================================
     // DATA LOADING
@@ -346,20 +337,20 @@
      * Loads loan data from cache or API and renders the dashboard
      */
     async function loadData() {
-        if (localStorage.getItem('dirty_data')) { localStorage.removeItem('loans_summary'); localStorage.removeItem('loans_details'); localStorage.removeItem('dirty_data'); }
+        DelfinCache.consumeDirty('loans');
         try {
             // Load summary data (KPIs)
-            let summary = getCache('loans_summary');
+            let summary = getCache('cache_loans_summary');
             if (!summary) {
                 summary = await api('/loans/summary');
-                setCache('loans_summary', summary);
+                setCache('cache_loans_summary', summary);
             }
 
             // Load detailed loan/card data with transactions
-            let details = getCache('loans_details');
+            let details = getCache('cache_loans_details');
             if (!details) {
                 details = await api('/loans/details?include_completed=true');
-                setCache('loans_details', details);
+                setCache('cache_loans_details', details);
             }
 
             // Both are in hand before anything is drawn: the KPI symbol depends on
@@ -723,9 +714,7 @@
         btn.classList.add('spinning');
         const wasHovered = btn.matches(':hover');
         try {
-            Object.keys(localStorage).filter(k => k.startsWith('cache_')).forEach(k => localStorage.removeItem(k));
-            localStorage.removeItem('loans_summary');
-            localStorage.removeItem('loans_details');
+            DelfinCache.clear();
             setRefreshStage('Recalculating balances…');
             if (wasHovered) _refreshTip.classList.add('show');
             await fetch(`${API_BASE}/admin/initialise-balances`, { method: 'POST' });

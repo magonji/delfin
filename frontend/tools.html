@@ -11,6 +11,8 @@
     <link rel="icon" href="favicon.ico" sizes="any">
     <link rel="apple-touch-icon" sizes="180x180" href="/app/icons/icon-180.png" />
     <link rel="manifest" href="manifest.json" />
+    <!-- Shared cache: loaded before the page script so DelfinCache exists. -->
+    <script src="/app/cache.js"></script>
     <title>Delfin · Tools</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -965,7 +967,7 @@
         const API_URL = (localStorage.getItem('delfin_api') || (location.pathname.startsWith('/app') ? location.origin : 'http://localhost:8422')).replace(/\/$/, '');
 
         function cacheClearAll() {
-            Object.keys(localStorage).filter(k => k.startsWith('cache_')).forEach(k => localStorage.removeItem(k));
+            DelfinCache.clear();
         }
 
         // Show the current refresh stage in a tooltip while hovering the spinning icon.
@@ -1456,7 +1458,7 @@
                 const res = await fetch(`${API_URL}/payees/${targetId}/merge/${id}`, { method: 'POST' });
                 if (!res.ok) throw new Error('Merge failed');
                 const result = await res.json();
-                localStorage.setItem('dirty_data', '1');
+                DelfinCache.markDirty('tools');
                 showSuccess(`Merged "${source.name}" into "${target?.name || 'payee'}" (${result.transactions_reassigned} transactions reassigned)`);
                 await loadPayees();
                 filterPayees();
@@ -1482,7 +1484,7 @@
             try {
                 const res = await fetch(`${API_URL}/payees/${id}`, { method: 'DELETE' });
                 if (!res.ok) throw new Error('Delete failed');
-                localStorage.setItem('dirty_data', '1');
+                DelfinCache.markDirty('tools');
                 showSuccess(`Deleted "${payee.name}"`);
                 await loadPayees();
                 filterPayees();
@@ -1564,7 +1566,7 @@
                 const res = await fetch(`${API_URL}/${cfg.path}/${targetId}/merge/${id}`, { method: 'POST' });
                 if (!res.ok) throw new Error('Merge failed');
                 const result = await res.json();
-                localStorage.setItem('dirty_data', '1');
+                DelfinCache.markDirty('tools');
                 showSuccess(`Merged "${source.name}" into "${target?.name || cfg.label}" (${result.transactions_reassigned} transactions reassigned)`);
                 await cfg.reload();
                 cfg.refilter();
@@ -1585,7 +1587,7 @@
             try {
                 const res = await fetch(`${API_URL}/${cfg.path}/${id}`, { method: 'DELETE' });
                 if (!res.ok) throw new Error('Delete failed');
-                localStorage.setItem('dirty_data', '1');
+                DelfinCache.markDirty('tools');
                 showSuccess(`Deleted "${item.name}"`);
                 await cfg.reload();
                 cfg.refilter();
@@ -3169,7 +3171,7 @@
                 if (!mergeRes.ok) throw new Error('Failed to merge');
                 const result = await mergeRes.json();
 
-                localStorage.setItem('dirty_data', '1');
+                DelfinCache.markDirty('tools');
                 showSuccess(`Merged ${result.groups_merged} set(s): removed ${result.categories_deleted} duplicate categories, reassigned ${result.transactions_reassigned} transactions.`);
 
                 // Refresh categories list
@@ -3963,7 +3965,7 @@
                 if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || `HTTP ${res.status}`); }
                 const data = await res.json();
                 cacheClearAll();
-                localStorage.setItem('dirty_data', '1');
+                DelfinCache.markDirty('tools');
                 statusDiv.style.display = 'block';
                 statusDiv.style.background = '#d1f2eb'; statusDiv.style.color = '#0f5132';
                 statusDiv.innerHTML = `Restored ${data.transactions} transactions, ${data.accounts} accounts.`
@@ -4138,7 +4140,7 @@
                     else msg = `Done${didStr}. No backup needed — no changes since the last one.`;
                 }
                 mtStatus(msg, r.status !== 'already_running');
-                localStorage.setItem('dirty_data', '1');
+                DelfinCache.markDirty('tools');
             } catch (e) {
                 mtStatus('Maintenance failed: ' + e.message, false);
             } finally {
@@ -4292,7 +4294,7 @@
                 }
                 const data = await res.json();
                 const r = data.result || {};
-                localStorage.setItem('dirty_data', '1');
+                DelfinCache.markDirty('tools');
                 let msg = `Imported ${r.transactions_imported} transactions`;
                 if (r.duplicates_skipped) msg += ` (${r.duplicates_skipped} duplicates skipped)`;
                 if (data.safety_backup) msg += `. Safety backup: ${data.safety_backup}`;

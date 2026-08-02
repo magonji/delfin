@@ -1,10 +1,11 @@
-const CACHE_NAME = 'delfin-v36';
+const CACHE_NAME = 'delfin-v37';
 const STATIC_ASSETS = [
   '/app/index.html',
   '/app/transactions.html',
   '/app/loans.html',
   '/app/budget.html',
   '/app/tools.html',
+  '/app/cache.js',
   '/app/manifest.json',
   '/app/icons/icon-180.png',
   '/app/icons/icon-192.png',
@@ -53,8 +54,10 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // HTML pages: network-first (always get latest when online, cache fallback for offline)
-  if (url.pathname.endsWith('.html')) {
+  // HTML and scripts: network-first (always get latest when online, cache fallback
+  // for offline). Code must not be served a version behind, which is what the
+  // stale-while-revalidate branch below would do.
+  if (url.pathname.endsWith('.html') || url.pathname.endsWith('.js')) {
     event.respondWith(
       fetch(event.request).then(response => {
         const clone = response.clone();

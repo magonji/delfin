@@ -11,6 +11,8 @@
     <link rel="icon" href="favicon.ico" sizes="any">
     <link rel="apple-touch-icon" sizes="180x180" href="/app/icons/icon-180.png" />
     <link rel="manifest" href="manifest.json" />
+    <!-- Shared cache: loaded before the page script so DelfinCache exists. -->
+    <script src="/app/cache.js"></script>
     <title>Delfin · The Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -536,22 +538,12 @@ async function api(path, opts = {}) {
     return res.headers.get('content-type')?.includes('application/json') ? res.json() : res.text();
 }
 
-function cacheSet(key, data, ttl = 1209600) {
-    localStorage.setItem(key, JSON.stringify({ data, expiry: Date.now() + ttl * 1000 }));
-}
-
-function cacheGet(key) {
-    const raw = localStorage.getItem(key);
-    if (!raw) return null;
-    try {
-        const { data, expiry } = JSON.parse(raw);
-        return Date.now() > expiry ? (localStorage.removeItem(key), null) : data;
-    } catch { return null; }
-}
-
-function cacheClearAll() {
-    Object.keys(localStorage).filter(k => k.startsWith('cache_')).forEach(k => localStorage.removeItem(k));
-}
+// Thin aliases over the shared cache in cache.js. The second argument says how
+// fast the figure goes out of date: 'volatile' for anything derived from
+// balances, 'historical' for closed periods, 'catalog' for lists of things.
+const cacheGet = (key) => DelfinCache.get(key);
+const cacheSet = (key, data, kind = 'volatile') => DelfinCache.set(key, data, kind);
+const cacheClearAll = () => DelfinCache.clear();
 
 // Application state
 const state = { baseCurrency: 'GBP', months: [], categories: [], accounts: [], excludedAccountIds: new Set(), selectedCategoryIds: new Set(), yearAxisFull: false, yearlyAxisFull: false, totalBalanceConverted: null };
@@ -719,7 +711,7 @@ function renderTxDelta() {
 }
 
 async function loadSummary() {
-    let sum = cacheGet('cache_summary') || await api('/dashboard/summary').then(d => { cacheSet('cache_summary', d); return d; });
+    let sum = cacheGet('cache_summary') || await api('/dashboard/summary').then(d => { cacheSet('cache_summary', d, 'volatile'); return d; });
     state.baseCurrency = sum.base_currency || 'GBP';
     noteCurrenciesInUse([state.baseCurrency]);
     const footer = q('#footerNote');
@@ -739,7 +731,7 @@ async function loadSummary() {
     const now = new Date();
     const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     try {
-        const bp = cacheGet('cache_budget_progress') || await api(`/budgets/${ym}/progress`).then(d => { cacheSet('cache_budget_progress', d); return d; });
+        const bp = cacheGet('cache_budget_progress') || await api(`/budgets/${ym}/progress`).then(d => { cacheSet('cache_budget_progress', d, 'volatile'); return d; });
         setKPI('#kpiBudgetAvail', bp.remaining, true);
         renderBudgetDelta(bp.percentage);
     } catch { q('#kpiBudgetAvail').textContent = '—'; renderBudgetDelta(null); }
@@ -754,7 +746,7 @@ async function loadBalanceKpis() {
     };
 
     // Total balance (no exclusions)
-    const total = cacheGet('cache_nw_kpi_total') || await api('/dashboard/networth/daily').then(d => { cacheSet('cache_nw_kpi_total', d); return d; });
+    const total = cacheGet('cache_nw_kpi_total') || await api('/dashboard/networth/daily').then(d => { cacheSet('cache_nw_kpi_total', d, 'volatile'); return d; });
     state.totalBalanceConverted = total.summary?.current_balance ?? 0;
     setMoney('#kpiTotalBalance', state.totalBalanceConverted);
     renderBalanceDelta('#deltaTotalBalance', state.totalBalanceConverted, balanceOneYearAgo(total.data_points));
@@ -764,7 +756,7 @@ async function loadBalanceKpis() {
     const loanIds = res.loan_account_ids || [];
     if (loanIds.length) {
         const excluded = loanIds.join(',');
-        const noLoans = cacheGet('cache_nw_kpi_noloans') || await api(`/dashboard/networth/daily?excluded_accounts=${excluded}`).then(d => { cacheSet('cache_nw_kpi_noloans', d); return d; });
+        const noLoans = cacheGet('cache_nw_kpi_noloans') || await api(`/dashboard/networth/daily?excluded_accounts=${excluded}`).then(d => { cacheSet('cache_nw_kpi_noloans', d, 'volatile'); return d; });
         const nlCur = noLoans.summary?.current_balance ?? 0;
         setMoney('#kpiBalanceNoLoans', nlCur);
         renderBalanceDelta('#deltaBalanceNoLoans', nlCur, balanceOneYearAgo(noLoans.data_points));
@@ -785,7 +777,7 @@ function updateAcctNetTotal() {
 }
 
 async function loadAccounts() {
-    let data = cacheGet('cache_accounts') || await api('/accounts/with-balances?include_closed=true').then(d => { cacheSet('cache_accounts', d); return d; });
+    let data = cacheGet('cache_accounts') || await api('/accounts/with-balances?include_closed=true').then(d => { cacheSet('cache_accounts', d, 'volatile'); return d; });
     state.accounts = data.sort((a, b) => (b.current_balance || 0) - (a.current_balance || 0));
     renderExcludeList();
 
@@ -835,7 +827,7 @@ function renderExcludeList() {
 
 async function toggleLoanExclusion() {
     if (!state.loanAccountIds) {
-        const res = cacheGet('cache_loan_ids') || await api('/loans/account-ids').then(d => { cacheSet('cache_loan_ids', d, 86400); return d; });
+        const res = cacheGet('cache_loan_ids') || await api('/loans/account-ids').then(d => { cacheSet('cache_loan_ids', d, 'historical'); return d; });
         state.loanAccountIds = res.loan_account_ids || [];
     }
     const allExcluded = state.loanAccountIds.every(id => state.excludedAccountIds.has(id));
@@ -872,7 +864,7 @@ async function loadNetworth() {
             if (reqId === _nwReqId) console.error('Net worth load failed', e);
             return;
         }
-        cacheSet(cacheKey, data);
+        cacheSet(cacheKey, data, 'historical');
     }
     // A newer request started while we were awaiting — drop this stale result.
     if (reqId !== _nwReqId) return;
@@ -925,7 +917,7 @@ async function loadNetworth() {
 async function loadAvailableMonths() {
     // v2: response now carries per-month transaction counts (for the KPI delta).
     const cacheKey = 'cache_available_months_v2';
-    const res = cacheGet(cacheKey) || await api('/dashboard/available-months').then(d => { cacheSet(cacheKey, d); return d; });
+    const res = cacheGet(cacheKey) || await api('/dashboard/available-months').then(d => { cacheSet(cacheKey, d, 'catalog'); return d; });
     state.months = res.months || [];
     const sel = q('#selectMonth');
     sel.innerHTML = state.months.map(m => `<option value="${m.value}">${m.label}</option>`).join('');
@@ -937,7 +929,7 @@ async function loadMonthlyBreakdown(ym) {
     const viewMode = q('#selectViewMode').value;
     // v2: payload now carries per-expense detail (id, account, …) for the modals.
     const cacheKey = `cache_monthly_v2_${ym}_${viewMode}`;
-    const data = cacheGet(cacheKey) || await api(`/dashboard/categories/breakdown/${ym}?view_mode=${viewMode}`).then(d => { cacheSet(cacheKey, d); return d; });
+    const data = cacheGet(cacheKey) || await api(`/dashboard/categories/breakdown/${ym}?view_mode=${viewMode}`).then(d => { cacheSet(cacheKey, d, 'historical'); return d; });
     // In "top" mode the doughnut shows each of the 10 biggest expenses as a slice
     // (its share of the month's total spend) plus a light-grey "Other expenses"
     // slice for everything else. Other modes keep the per-category breakdown.
@@ -1037,7 +1029,7 @@ async function showCategoryModal(name, viewMode, ym, baseCurrency) {
     let data;
     try {
         const cacheKey = `cache_monthexp_${ym}`;
-        data = cacheGet(cacheKey) || await api(`/dashboard/categories/breakdown/${ym}/expenses`).then(d => { cacheSet(cacheKey, d); return d; });
+        data = cacheGet(cacheKey) || await api(`/dashboard/categories/breakdown/${ym}/expenses`).then(d => { cacheSet(cacheKey, d, 'historical'); return d; });
     } catch (e) {
         q('#detailModalBody').innerHTML = `<div class="detail-loading">Couldn't load expenses.</div>`;
         return;
@@ -1060,7 +1052,7 @@ async function showCategoryModal(name, viewMode, ym, baseCurrency) {
 
 async function loadYearlySummary(year) {
     const cacheKey = `cache_yearly_${year}`;
-    const data = cacheGet(cacheKey) || await api(`/dashboard/yearly-summary?year=${year}`).then(d => { cacheSet(cacheKey, d); return d; });
+    const data = cacheGet(cacheKey) || await api(`/dashboard/yearly-summary?year=${year}`).then(d => { cacheSet(cacheKey, d, 'historical'); return d; });
     const income = data.monthly_data.map(m => m.income), expenses = data.monthly_data.map(m => m.expenses);
     const yAxis = configureAxisToggle('#yearAxisToggle', state.yearAxisFull, [...income, ...expenses]);
     renderChart('#yearChart', {
@@ -1088,7 +1080,7 @@ async function loadYearlyTrendAll() {
 
     const results = await Promise.all(years.map(y => {
         const cacheKey = `cache_yearly_${y}`;
-        return cacheGet(cacheKey) || api(`/dashboard/yearly-summary?year=${y}`).then(d => { cacheSet(cacheKey, d); return d; });
+        return cacheGet(cacheKey) || api(`/dashboard/yearly-summary?year=${y}`).then(d => { cacheSet(cacheKey, d, 'historical'); return d; });
     }));
     const base = results[0]?.base_currency || 'GBP';
     const totals = (prop) => results.map(r => r.summary[prop]);
@@ -1259,7 +1251,7 @@ async function loadCategoriesSeries() {
     ps.set('category_ids', catIds);
 
     const cacheKey = `cache_catseries_${period}_${from}_${to}_${catIds}`;
-    const data = cacheGet(cacheKey) || await api(`/dashboard/categories/${period}?${ps}`).then(d => { cacheSet(cacheKey, d); return d; });
+    const data = cacheGet(cacheKey) || await api(`/dashboard/categories/${period}?${ps}`).then(d => { cacheSet(cacheKey, d, 'historical'); return d; });
     const datasets = Object.entries(data.categories).map(([name, vals], i) => ({ label: name, data: vals, backgroundColor: colour(i), borderColor: colour(i), borderWidth: 0, maxBarThickness: 46 }));
 
     renderChart('#categoriesChart', {
@@ -1289,7 +1281,7 @@ async function loadTopList(url, listId, isTx = false) {
     const actualUrl = !isTx && payeeType === 'locations' ? '/dashboard/top-locations' : url;
 
     const cacheKey = `cache_${listId}_${from}_${to}_${isTx ? txType : payeeType}`;
-    let data = cacheGet(cacheKey) || await api(`${actualUrl}?${ps}`).then(d => { cacheSet(cacheKey, d); return d; });
+    let data = cacheGet(cacheKey) || await api(`${actualUrl}?${ps}`).then(d => { cacheSet(cacheKey, d, 'historical'); return d; });
     const list = q(`#${listId}`);
     list.innerHTML = '';
 
@@ -1413,7 +1405,9 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDetai
 
 // Initialisation
 async function init() {
-    if (localStorage.getItem('dirty_data')) { cacheClearAll(); localStorage.removeItem('dirty_data'); }
+    // Clears this page's flag only, so Loans still knows to refresh when you
+    // get there. The old single flag was consumed by whoever loaded first.
+    DelfinCache.consumeDirty('index');
     try {
         // Settle which currencies are in play before a single figure is drawn:
         // whether USD prints as "$" or "US$" depends on the company it keeps.
@@ -1421,7 +1415,7 @@ async function init() {
         try {
             const accounts = cacheGet('cache_accounts')
                 || await api('/accounts/with-balances?include_closed=true')
-                       .then(d => { cacheSet('cache_accounts', d); return d; });
+                       .then(d => { cacheSet('cache_accounts', d, 'volatile'); return d; });
             noteCurrenciesInUse((accounts || []).map(a => a.currency));
         } catch (e) { /* no list yet — the narrow symbol is the safe default */ }
 
