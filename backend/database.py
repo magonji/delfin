@@ -54,7 +54,20 @@ _ADDED_COLUMNS = {
         "day_ordinal": "INTEGER",
         "series_id": "INTEGER",
     },
+    "transactions": {
+        # Lines of a split transaction, sharing the id of the first line.
+        "split_group_id": "INTEGER",
+    },
 }
+
+# Indexes on tables that already existed. ``create_all`` skips a table it finds,
+# indexes included, so an index added later has to be created explicitly.
+_ADDED_INDEXES = (
+    ("transactions", "CREATE INDEX IF NOT EXISTS ix_transactions_split_group_id "
+                     "ON transactions (split_group_id)"),
+    ("transactions", "CREATE INDEX IF NOT EXISTS idx_transaction_split_group "
+                     "ON transactions (split_group_id, id)"),
+)
 
 # Run after the columns exist, to give the new ones a sensible value on rows that
 # predate them. Each must be safe to run on every start.
@@ -75,6 +88,9 @@ def _ensure_columns(eng) -> None:
             for name, ddl in columns.items():
                 if name not in present:
                     c.exec_driver_sql(f'ALTER TABLE "{table}" ADD COLUMN {name} {ddl}')
+        for table, sql in _ADDED_INDEXES:
+            if {row[1] for row in c.exec_driver_sql(f'PRAGMA table_info("{table}")')}:
+                c.exec_driver_sql(sql)
         for table, column, sql in _BACKFILLS:
             present = {row[1] for row in c.exec_driver_sql(f'PRAGMA table_info("{table}")')}
             if column in present:

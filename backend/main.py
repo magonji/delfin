@@ -1181,6 +1181,7 @@ def get_transactions(
             "payee_id": trans.payee_id,
             "location_id": trans.location_id,
             "project_id": trans.project_id,
+            "split_group_id": trans.split_group_id,
             "account_balance_after": trans.account_balance_after,
             "total_balance_after": trans.total_balance_after,
             "created_at": trans.created_at.isoformat() if hasattr(trans.created_at, "isoformat") else trans.created_at,
@@ -1273,8 +1274,12 @@ def get_transactions_summary(
         else:
             money_out += -converted
 
+    # A split is one transaction to the user, however many lines it holds.
+    split_groups = {t.split_group_id for t in transactions if t.split_group_id}
+    count = sum(1 for t in transactions if not t.split_group_id) + len(split_groups)
+
     return {
-        "count": len(transactions),
+        "count": count,
         "money_in": round(money_in, 2),
         "money_out": round(money_out, 2),
         "base_currency": base_currency,
@@ -1380,6 +1385,264 @@ def get_transfers(
     return grouped_transfers[skip:skip + limit]
 
 
+# ============================================
+# SPLIT TRANSACTIONS
+#
+# One purchase whose lines belong to different categories, projects or notes.
+# Each line is stored as an ordinary transaction row; what ties them together
+# is a shared ``split_group_id`` — the id of the lowest-numbered line. Because
+# the lines are real transactions, balances, filters, budgets and every
+# category report keep working without knowing that splits exist; only the
+# ledger view and these endpoints treat a group as a single entry.
+# ============================================
+
+def _split_lines(db: Session, group_id: int) -> List[models.Transaction]:
+    """The lines of a split, in entry order."""
+    return db.query(models.Transaction).filter(
+        models.Transaction.split_group_id == group_id
+    ).order_by(models.Transaction.id.asc()).all()
+
+
+def _reanchor_split(db: Session, group_id: Optional[int]) -> Optional[int]:
+    """
+    Keep a split keyed by its lowest surviving line, so the key can never point
+    at a deleted row (whose id SQLite may hand out again). A group down to a
+    single line is no longer a split and is dissolved back into a plain
+    transaction. Returns the group id that survives, or None.
+    """
+    if not group_id:
+        return None
+    lines = _split_lines(db, group_id)
+    if not lines:
+        return None
+    if len(lines) == 1:
+        lines[0].split_group_id = None
+        return None
+    anchor = min(line.id for line in lines)
+    if anchor != group_id:
+        for line in lines:
+            line.split_group_id = anchor
+    return anchor
+
+
+def _recalculate_from_date(db: Session, earliest_date, account_ids: List[int]) -> None:
+    """
+    Recalculate balances from the first transaction at or after a date.
+
+    Anchoring on the *first* row at that date rather than the last one before it
+    matters as soon as several transactions share a timestamp — which is exactly
+    what the lines of a split do. Recalculation runs from the trigger forward,
+    so the trigger has to be the earliest row that could have changed.
+    """
+    trigger = db.query(models.Transaction).filter(
+        models.Transaction.date >= earliest_date
+    ).order_by(models.Transaction.date.asc(), models.Transaction.id.asc()).first()
+    if trigger:
+        recalculate_balances_from_transaction(db, trigger.id, account_ids)
+    else:
+        initialise_all_balances(db)
+
+
+def _serialise_split(db: Session, group_id: int, line_ids: Optional[List[int]] = None) -> dict:
+    """
+    Present a group of lines as one transaction with a breakdown.
+
+    ``line_ids`` names the rows to read when the group no longer exists —
+    an update that leaves a single line behind dissolves the split, and the
+    caller still needs the result of what it just saved.
+    """
+    query = db.query(models.Transaction).options(
+        joinedload(models.Transaction.account),
+        joinedload(models.Transaction.category),
+        joinedload(models.Transaction.payee),
+        joinedload(models.Transaction.location),
+        joinedload(models.Transaction.project),
+    )
+    lines = query.filter(
+        models.Transaction.split_group_id == group_id
+    ).order_by(models.Transaction.id.asc()).all()
+
+    if not lines and line_ids:
+        lines = query.filter(
+            models.Transaction.id.in_(line_ids)
+        ).order_by(models.Transaction.id.asc()).all()
+        if lines:
+            group_id = lines[0].id
+
+    if not lines:
+        raise HTTPException(status_code=404, detail="Split transaction not found")
+
+    head = lines[0]
+    last = lines[-1]
+    return {
+        "split_group_id": group_id,
+        "date": head.date.isoformat() if hasattr(head.date, "isoformat") else str(head.date),
+        "account_id": head.account_id,
+        "account_name": head.account.name if head.account else None,
+        "currency": head.currency or "GBP",
+        "payee_id": head.payee_id,
+        "payee_name": head.payee.name if head.payee else None,
+        "location_id": head.location_id,
+        "location_name": head.location.name if head.location else None,
+        "amount": round(sum(float(line.amount or 0.0) for line in lines), 2),
+        "account_balance_after": last.account_balance_after,
+        "total_balance_after": last.total_balance_after,
+        "lines": [
+            {
+                "id": line.id,
+                "amount": float(line.amount) if line.amount is not None else 0.0,
+                "category_id": line.category_id,
+                "category_name": line.category.name if line.category else None,
+                "category_parent": line.category.parent if line.category else None,
+                "project_id": line.project_id,
+                "project_name": line.project.name if line.project else None,
+                "note": line.note,
+            }
+            for line in lines
+        ],
+    }
+
+
+@app.post("/transactions/split", response_model=schemas.SplitTransactionResponse)
+def create_split_transaction(
+    payload: schemas.SplitTransactionCreate,
+    skip_recalculation: bool = Query(False),
+    db: Session = Depends(get_db)
+):
+    """Create a split: one row per line, all sharing a new group id."""
+    if len(payload.lines) < 2:
+        raise HTTPException(status_code=400,
+                            detail="A split transaction needs at least two lines")
+    rows = []
+    for line in payload.lines:
+        row = models.Transaction(
+            date=payload.date,
+            amount=line.amount,
+            currency=payload.currency or "GBP",
+            note=line.note,
+            account_id=payload.account_id,
+            category_id=line.category_id,
+            payee_id=payload.payee_id,
+            location_id=payload.location_id,
+            project_id=line.project_id,
+        )
+        db.add(row)
+        rows.append(row)
+
+    try:
+        db.flush()
+        group_id = min(row.id for row in rows)
+        for row in rows:
+            row.split_group_id = group_id
+        db.flush()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error during insert: {str(e)}")
+
+    if not skip_recalculation:
+        try:
+            recalculate_balances_from_transaction(db, group_id)
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(status_code=500, detail=f"Calculation error: {str(e)}")
+    db.commit()
+
+    return _serialise_split(db, group_id)
+
+
+@app.get("/transactions/split/{group_id}", response_model=schemas.SplitTransactionResponse)
+def get_split_transaction(group_id: int, db: Session = Depends(get_db)):
+    """Retrieve a split as a single entry with its breakdown."""
+    return _serialise_split(db, group_id)
+
+
+@app.put("/transactions/split/{group_id}", response_model=schemas.SplitTransactionResponse)
+def update_split_transaction(
+    group_id: int,
+    payload: schemas.SplitTransactionCreate,
+    db: Session = Depends(get_db)
+):
+    """
+    Replace a split's lines. A line sent with an ``id`` is updated in place (so
+    it keeps its position in the ledger), a line without one is added, and any
+    existing line the payload leaves out is deleted.
+
+    Pointing this at a plain transaction's id splits it: the row becomes the
+    first line of a new group keyed on itself, which is how the UI turns a
+    transaction it is already editing into a split without a delete-and-recreate.
+    """
+    existing = {line.id: line for line in _split_lines(db, group_id)}
+    if not existing:
+        plain = db.query(models.Transaction).filter(
+            models.Transaction.id == group_id,
+            models.Transaction.split_group_id.is_(None),
+        ).first()
+        if plain is None:
+            raise HTTPException(status_code=404, detail="Split transaction not found")
+        plain.split_group_id = group_id
+        existing = {plain.id: plain}
+
+    head = next(iter(existing.values()))
+    old_account_id = head.account_id
+    old_date = head.date
+
+    kept = set()
+    touched = []
+    for line in payload.lines:
+        row = existing.get(line.id) if line.id else None
+        if row is None:
+            row = models.Transaction(split_group_id=group_id)
+            db.add(row)
+        else:
+            kept.add(row.id)
+        touched.append(row)
+        row.date = payload.date
+        row.amount = line.amount
+        row.currency = payload.currency or "GBP"
+        row.note = line.note
+        row.account_id = payload.account_id
+        row.category_id = line.category_id
+        row.payee_id = payload.payee_id
+        row.location_id = payload.location_id
+        row.project_id = line.project_id
+        row.updated_at = datetime.utcnow()
+
+    for line_id, row in existing.items():
+        if line_id not in kept:
+            db.delete(row)
+
+    db.flush()
+    surviving_ids = [row.id for row in touched]
+    # Deleting the line the group was keyed on moves the key to the next one;
+    # coming down to a single line dissolves the split altogether.
+    group_id = _reanchor_split(db, group_id) or group_id
+    db.flush()
+
+    affected = list({old_account_id, payload.account_id})
+    _recalculate_from_date(db, min(old_date, payload.date), affected)
+    db.commit()
+
+    return _serialise_split(db, group_id, line_ids=surviving_ids)
+
+
+@app.delete("/transactions/split/{group_id}")
+def delete_split_transaction(group_id: int, db: Session = Depends(get_db)):
+    """Delete every line of a split in one go."""
+    lines = _split_lines(db, group_id)
+    if not lines:
+        raise HTTPException(status_code=404, detail="Split transaction not found")
+
+    account_ids = list({line.account_id for line in lines})
+    earliest = min(line.date for line in lines)
+    for line in lines:
+        db.delete(line)
+    db.flush()
+
+    _recalculate_from_date(db, earliest, account_ids)
+    db.commit()
+    return {"message": f"Split transaction deleted ({len(lines)} lines)"}
+
+
 @app.get("/transactions/{transaction_id}", response_model=schemas.TransactionResponse)
 def get_transaction(
     transaction_id: int,
@@ -1429,7 +1692,22 @@ def check_duplicate_transaction(
             Transaction.amount == duplicate_check.amount,
             Transaction.account_id == duplicate_check.account_id
         ).first() is not None
-        
+
+        if not exists:
+            # A split is stored one row per line, so a statement line for the
+            # whole purchase matches the group's total, never a single row.
+            # Without this, importing the bank's CSV would duplicate every
+            # transaction the user had already split by hand.
+            totals = db.query(
+                func.sum(Transaction.amount).label("total")
+            ).filter(
+                func.date(Transaction.date) == parsed_date.date(),
+                Transaction.account_id == duplicate_check.account_id,
+                Transaction.split_group_id.isnot(None),
+            ).group_by(Transaction.split_group_id).all()
+            target = round(float(duplicate_check.amount), 2)
+            exists = any(round(float(t.total or 0), 2) == target for t in totals)
+
         return {"exists": exists}
         
     except ValueError as e:
@@ -1474,16 +1752,18 @@ def check_duplicates_batch(
         existing = db.query(
             Transaction.date,
             Transaction.amount,
-            Transaction.account_id
+            Transaction.account_id,
+            Transaction.split_group_id
         ).filter(
             Transaction.account_id.in_(account_ids),
             func.date(Transaction.date) >= min_date.isoformat(),
             func.date(Transaction.date) <= max_date.isoformat()
         ).all()
-        
+
         # Build a set of (date_str, amount, account_id) tuples for O(1) lookup
         # Convert date to YYYY-MM-DD string format for consistent comparison
         existing_set = set()
+        split_totals = {}
         for tx in existing:
             # Handle both datetime objects and strings
             if hasattr(tx.date, 'date'):
@@ -1493,9 +1773,19 @@ def check_duplicates_batch(
             else:
                 # It's already a string, extract date part
                 tx_date_str = str(tx.date).split('T')[0].split(' ')[0]
-            
+
             existing_set.add((tx_date_str, round(float(tx.amount), 2), tx.account_id))
-        
+
+            # A split is one purchase spread over several rows. The bank knows
+            # only the total, so index that too — otherwise re-importing the
+            # statement would duplicate everything the user had split by hand.
+            if tx.split_group_id:
+                key = (tx_date_str, tx.account_id, tx.split_group_id)
+                split_totals[key] = split_totals.get(key, 0.0) + float(tx.amount)
+
+        for (tx_date_str, account_id, _), total in split_totals.items():
+            existing_set.add((tx_date_str, round(total, 2), account_id))
+
         # Check each transaction against the set
         results = []
         for i, t in enumerate(transactions):
@@ -1632,18 +1922,9 @@ def update_transaction(
     # Recalculate balances from the EARLIEST date for both accounts
     affected_account_ids = list(set([old_account_id, transaction.account_id]))
     earliest_date = min(old_date, db_transaction.date)
-    
-    # Find a transaction at or before the earliest date to use as trigger
-    trigger_transaction = db.query(models.Transaction).filter(
-        models.Transaction.date <= earliest_date
-    ).order_by(models.Transaction.date.desc(), models.Transaction.id.desc()).first()
-    
-    if trigger_transaction:
-        recalculate_balances_from_transaction(db, trigger_transaction.id, affected_account_ids)
-        db.commit()
-    else:
-        initialise_all_balances(db)
-        db.commit()
+
+    _recalculate_from_date(db, earliest_date, affected_account_ids)
+    db.commit()
 
     db.refresh(db_transaction)
     return db_transaction
@@ -1666,10 +1947,15 @@ def delete_transaction(
     # Store the account ID and date before deleting
     affected_account_id = db_transaction.account_id
     transaction_date = db_transaction.date
+    split_group_id = db_transaction.split_group_id
 
     # Delete the transaction
     db.delete(db_transaction)
     db.flush()  # Flush instead of commit to keep the transaction open
+
+    # Deleting one line of a split leaves the rest of the group standing.
+    _reanchor_split(db, split_group_id)
+    db.flush()
 
     # Find the next transaction after the deleted one to trigger recalculation
     next_transaction = db.query(models.Transaction).filter(
@@ -1715,24 +2001,32 @@ def delete_transactions_batch(
     
     # Collect affected accounts before deleting
     affected_accounts = set()
+    affected_splits = set()
     deleted_count = 0
     not_found = []
-    
+
     for tx_id in transaction_ids:
         tx = db.query(models.Transaction).filter(
             models.Transaction.id == tx_id
         ).first()
-        
+
         if tx:
             affected_accounts.add(tx.account_id)
+            if tx.split_group_id:
+                affected_splits.add(tx.split_group_id)
             db.delete(tx)
             deleted_count += 1
         else:
             not_found.append(tx_id)
-    
+
     # Flush deletions before recalculating
     db.flush()
-    
+
+    # Re-key any split that lost lines, and dissolve one-line leftovers.
+    for group_id in affected_splits:
+        _reanchor_split(db, group_id)
+    db.flush()
+
     # Recalculate balances ONLY for affected accounts (not all accounts)
     if affected_accounts:
         recalculate_balances_for_accounts(db, list(affected_accounts))

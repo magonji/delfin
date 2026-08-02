@@ -92,7 +92,14 @@ class Transaction(Base):
     payee_id = Column(Integer, ForeignKey("payees.id"), index=True)
     location_id = Column(Integer, ForeignKey("locations.id"), index=True)
     project_id = Column(Integer, ForeignKey("projects.id"), index=True)
-    
+
+    # A split transaction — one purchase spread over several categories,
+    # projects or notes — is stored as one row per line, all sharing the id of
+    # the first line. Keeping the lines as ordinary transactions means balances,
+    # filters and every category-based report stay correct without knowing
+    # anything about splits. NULL on a plain single-line transaction.
+    split_group_id = Column(Integer, nullable=True, index=True)
+
     account_balance_after = Column(Float, nullable=True, index=True)
     total_balance_after = Column(Float, nullable=True, index=True)
     
@@ -122,6 +129,9 @@ class Transaction(Base):
         # Covering index for the main transaction listing query
         # Helps with: ORDER BY date DESC, id DESC with filters
         Index('idx_transaction_date_desc_id_desc', 'date', 'id'),
+
+        # Fetching the lines of a split, in entry order
+        Index('idx_transaction_split_group', 'split_group_id', 'id'),
     )
 
 

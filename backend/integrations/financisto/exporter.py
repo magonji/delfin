@@ -4,9 +4,11 @@ Delfin -> Financisto export.
 Produces either the native ``.backup`` (gzipped entity dump that Financisto can
 restore directly) or the Financisto CSV export layout.
 
-The two structural inversions of the importer:
+The three structural inversions of the importer:
     * Delfin's two-transaction transfers (paired by "Transfer In"/"Transfer Out"
       locations) are collapsed back into a single Financisto transfer row.
+    * Delfin's split transactions (one row per line, sharing a split_group_id)
+      are rebuilt into a Financisto parent envelope plus its children.
     * Delfin's (parent, name) categories are rebuilt into a Financisto nested set.
 
 Delfin-only data (its own budgets, recurring/planned expenses and the
@@ -37,6 +39,10 @@ def export_notes() -> List[str]:
         "Exchange rates are not exported (Financisto recomputes its own; Delfin "
         "refreshes ECB rates automatically).",
         "Running balances are recomputed by Financisto on restore.",
+        "Split transactions survive both formats: the .backup rebuilds "
+        "Financisto's parent envelope, and the CSV writes a SPLIT total row "
+        "followed by one line per sub-item, the same shape Financisto's own "
+        "CSV export produces.",
     ]
 
 
@@ -262,13 +268,84 @@ def _build_transaction_entities(
                 fin_id, t_in, account_fin_id, category_fin_id, payee_fin_id,
                 project_fin_id, location_fin_id, skip_location=True)))
 
+    # Delfin stores a split as one row per line; Financisto wants a parent
+    # envelope carrying the total, with the lines hanging off it by parent_id.
+    splits: Dict[int, List[models.Transaction]] = {}
     for t in regular:
+        if t.split_group_id:
+            splits.setdefault(t.split_group_id, []).append(t)
+
+    emitted: set = set()
+    for t in regular:
+        group_id = t.split_group_id
+        if not group_id:
+            fin_id += 1
+            entities.append((fz.T_TRANSACTIONS, _regular_entity(
+                fin_id, t, account_fin_id, category_fin_id, payee_fin_id,
+                project_fin_id, location_fin_id)))
+            continue
+
+        if group_id in emitted:
+            continue  # already written with the rest of its split
+        emitted.add(group_id)
+        lines = splits[group_id]
+
+        if len(lines) < 2:
+            # A group down to one line is an ordinary transaction again.
+            fin_id += 1
+            entities.append((fz.T_TRANSACTIONS, _regular_entity(
+                fin_id, lines[0], account_fin_id, category_fin_id, payee_fin_id,
+                project_fin_id, location_fin_id)))
+            continue
+
         fin_id += 1
-        entities.append((fz.T_TRANSACTIONS, _regular_entity(
-            fin_id, t, account_fin_id, category_fin_id, payee_fin_id,
-            project_fin_id, location_fin_id)))
+        parent_fin_id = fin_id
+        head = lines[0]
+        total = sum(float(line.amount or 0.0) for line in lines)
+        # A note every line agrees on describes the purchase, so it belongs on
+        # the envelope; notes that differ stay with their own line.
+        distinct_notes = {(line.note or "").strip() for line in lines}
+        shared_note = head.note if len(distinct_notes) == 1 else ""
+        entities.append((fz.T_TRANSACTIONS, _split_parent_entity(
+            parent_fin_id, head, total, shared_note,
+            account_fin_id, payee_fin_id, location_fin_id)))
+
+        for line in lines:
+            fin_id += 1
+            child = _regular_entity(
+                fin_id, line, account_fin_id, category_fin_id, payee_fin_id,
+                project_fin_id, location_fin_id)
+            child["parent_id"] = parent_fin_id
+            # Payee and location live on the envelope in Financisto.
+            child["payee_id"] = 0
+            child["location_id"] = 0
+            if shared_note:
+                child["note"] = ""
+            entities.append((fz.T_TRANSACTIONS, child))
 
     return entities
+
+
+def _split_parent_entity(fin_id, head, total, note, account_fin_id,
+                         payee_fin_id, location_fin_id) -> dict:
+    """The envelope of a split: Financisto marks it with category_id -1."""
+    return {
+        "_id": fin_id,
+        "from_account_id": account_fin_id.get(head.account_id, 0),
+        "to_account_id": 0,
+        "category_id": -1,
+        "project_id": 0,
+        "location_id": location_fin_id.get(head.location_id, 0) if head.location_id else 0,
+        "payee_id": payee_fin_id.get(head.payee_id, 0) if head.payee_id else 0,
+        "note": note or "",
+        "from_amount": fz.major_to_minor(total),
+        "to_amount": 0,
+        "datetime": fz.datetime_to_epoch_ms(head.date),
+        "is_template": 0,
+        "status": "UR",
+        "is_ccard_payment": 0,
+        "parent_id": 0,
+    }
 
 
 def _transfer_entity(fin_id, t_out, t_in, account_fin_id) -> dict:
@@ -338,10 +415,16 @@ def export_csv(db: Session) -> bytes:
         models.Transaction.date.asc(), models.Transaction.id.asc()
     ).all()
 
+    # Financisto's CSV writes a split as a "SPLIT" total row followed by one
+    # row per line, each with "~" for the date. Group the lines so the export
+    # says the same thing.
+    splits: Dict[int, List[models.Transaction]] = {}
     for t in txns:
+        if t.split_group_id:
+            splits.setdefault(t.split_group_id, []).append(t)
+
+    def row_for(t, *, as_line=False, note=None):
         dt = t.date
-        date_str = dt.strftime("%Y-%m-%d") if dt else "~"
-        time_str = dt.strftime("%H:%M:%S") if dt else ""
         cat_name, cat_parent = cat.get(t.category_id, (None, None))
         location_name = loc.get(t.location_id)
         payee_name = payee.get(t.payee_id)
@@ -349,9 +432,9 @@ def export_csv(db: Session) -> bytes:
         if location_name in (TRANSFER_IN, TRANSFER_OUT):
             payee_name = location_name
             location_name = None
-        writer.writerow([
-            date_str,
-            time_str,
+        return [
+            "~" if as_line else (dt.strftime("%Y-%m-%d") if dt else "~"),
+            "" if as_line else (dt.strftime("%H:%M:%S") if dt else ""),
             acc_name.get(t.account_id, ""),
             f"{t.amount:.2f}",
             t.currency or acc_currency.get(t.account_id, ""),
@@ -359,10 +442,39 @@ def export_csv(db: Session) -> bytes:
             "",  # original currency
             cat_name or "",
             cat_parent or "",
-            payee_name or "",
-            location_name or "",
+            "" if as_line else (payee_name or ""),
+            "" if as_line else (location_name or ""),
             proj.get(t.project_id, "") or "",
-            t.note or "",
-        ])
+            (t.note if note is None else note) or "",
+        ]
+
+    emitted: set = set()
+    for t in txns:
+        group_id = t.split_group_id
+        if not group_id:
+            writer.writerow(row_for(t))
+            continue
+        if group_id in emitted:
+            continue
+        emitted.add(group_id)
+        lines = splits[group_id]
+        if len(lines) < 2:
+            writer.writerow(row_for(lines[0]))
+            continue
+
+        head = lines[0]
+        total = sum(float(l.amount or 0.0) for l in lines)
+        distinct_notes = {(l.note or "").strip() for l in lines}
+        shared_note = head.note if len(distinct_notes) == 1 else ""
+
+        parent_row = row_for(head, note=shared_note)
+        parent_row[3] = f"{total:.2f}"
+        parent_row[7] = "SPLIT"   # the marker Financisto's own export writes
+        parent_row[8] = ""
+        parent_row[11] = ""
+        writer.writerow(parent_row)
+        for line in lines:
+            writer.writerow(row_for(line, as_line=True,
+                                    note="" if shared_note else line.note))
 
     return buf.getvalue().encode("utf-8")

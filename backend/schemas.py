@@ -160,7 +160,11 @@ class TransactionResponse(TransactionBase):
     updated_at: datetime
     account_balance_after: Optional[float] = None
     total_balance_after: Optional[float] = None
-    
+    # Set when this row is one line of a split; shared by all its sibling lines.
+    # Deliberately absent from TransactionBase so an ordinary update of a single
+    # line cannot detach it from its split by simply not mentioning it.
+    split_group_id: Optional[int] = None
+
     class Config:
         from_attributes = True
 
@@ -172,6 +176,77 @@ class TransactionWithDetails(TransactionResponse):
     payee_name: Optional[str] = None
     location_name: Optional[str] = None
     project_name: Optional[str] = None
+
+
+# --- Split transaction schemas ---
+
+class SplitLineBase(BaseModel):
+    """
+    One line of a split transaction: its own slice of the amount, with its own
+    category, project and note.
+    """
+    amount: float
+    category_id: Optional[int] = None
+    project_id: Optional[int] = None
+    note: Optional[str] = None
+
+    @field_validator('amount')
+    @classmethod
+    def round_amount(cls, v):
+        return round(v, 2)
+
+
+class SplitLineCreate(SplitLineBase):
+    # The existing line this one replaces, when editing a split. Omitted for a
+    # line being added; lines left out of the payload are deleted.
+    id: Optional[int] = None
+
+
+class SplitTransactionCreate(BaseModel):
+    """
+    A single purchase spread over several lines. Date, account, currency, payee
+    and location belong to the purchase as a whole; amount, category, project
+    and note belong to each line.
+    """
+    date: datetime
+    account_id: int
+    currency: str = "GBP"
+    payee_id: Optional[int] = None
+    location_id: Optional[int] = None
+    lines: List[SplitLineCreate]
+
+    @field_validator('lines')
+    @classmethod
+    def check_lines(cls, v):
+        # Creating a split needs two lines (enforced by the endpoint); updating
+        # one down to a single line is how a split is dissolved again.
+        if not v:
+            raise ValueError("A split transaction needs at least one line")
+        return v
+
+
+class SplitLineResponse(SplitLineBase):
+    id: int
+    category_name: Optional[str] = None
+    category_parent: Optional[str] = None
+    project_name: Optional[str] = None
+
+
+class SplitTransactionResponse(BaseModel):
+    """A split as one thing: the shared header, the total, and the lines."""
+    split_group_id: int
+    date: datetime
+    account_id: Optional[int] = None
+    account_name: Optional[str] = None
+    currency: str = "GBP"
+    payee_id: Optional[int] = None
+    payee_name: Optional[str] = None
+    location_id: Optional[int] = None
+    location_name: Optional[str] = None
+    amount: float                                    # the total of every line
+    account_balance_after: Optional[float] = None    # after the last line
+    total_balance_after: Optional[float] = None
+    lines: List[SplitLineResponse] = []
 
 
 # --- Transfer schema ---

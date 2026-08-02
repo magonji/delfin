@@ -225,6 +225,37 @@
         tr.skipped:hover td { opacity:.6; }
         .gap-small { display:flex; flex-direction:column; gap:4px; }
 
+        /* ── Splitting a statement line into several concepts ── */
+        .split-toggle { margin-top:4px; padding:3px 8px; font-size:10px; font-weight:700; letter-spacing:.5px;
+            text-transform:uppercase; font-family:'IBM Plex Sans',sans-serif; border:1px solid var(--border);
+            border-radius:6px; background:#fff; color:var(--muted); cursor:pointer; width:100%; }
+        .split-toggle:hover:not(:disabled) { border-color:var(--btn-primary); color:var(--btn-primary); }
+        .split-toggle.is-on { border-color:var(--btn-primary); color:var(--btn-primary); background:var(--panel); }
+        .split-toggle:disabled { opacity:.4; cursor:not-allowed; }
+        .split-summary { display:none; font-size:10px; font-weight:700; letter-spacing:.5px; text-transform:uppercase;
+            font-family:'IBM Plex Sans',sans-serif; color:var(--muted); padding:6px 0 2px; }
+        tr.split-row td { background:#FBF4EA; border-bottom:1px solid var(--hair); padding:12px 14px 12px 50px; }
+        tr.split-row:hover td { background:#FBF4EA; }
+        .split-line-row { display:grid; gap:6px; margin-bottom:6px;
+            grid-template-columns:96px minmax(0,1fr) minmax(0,1fr) minmax(0,.8fr) minmax(0,1.4fr) 26px;
+            align-items:center; }
+        .split-line-x { border:none; background:none; color:var(--muted); font-size:17px; line-height:1;
+            cursor:pointer; padding:0; }
+        .split-line-x:hover { color:var(--red); }
+        .split-foot { display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center; padding-top:6px; }
+        .split-foot button { padding:5px 10px; font-size:11px; font-family:'IBM Plex Sans',sans-serif;
+            border:1px solid var(--border); border-radius:6px; background:#fff; color:var(--ink); cursor:pointer; }
+        .split-foot button:hover:not(:disabled) { border-color:var(--btn-primary); }
+        .split-foot button:disabled { opacity:.4; cursor:not-allowed; }
+        .split-figures { font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--muted);
+            font-variant-numeric:tabular-nums; margin-left:auto; }
+        .split-figures .is-off { color:var(--red); font-weight:700; }
+        .split-figures .is-done { color:var(--green); font-weight:700; }
+        @media (max-width:900px) {
+            .split-line-row { grid-template-columns:1fr 1fr; }
+            tr.split-row td { padding-left:14px; }
+        }
+
         /* ── Toasts ── */
         #toast-container { position:fixed; top:25px; right:25px; z-index:9999; display:flex; flex-direction:column; gap:10px; }
         .toast { min-width:300px; padding:16px 20px; border-radius:9px; color:white;
@@ -664,6 +695,10 @@
                         statement is safe.</li>
                     <li>When a movement matches a known <strong>payee</strong>, its usual <strong>category</strong> is filled
                         in for you automatically.</li>
+                    <li>A statement line that was really several things at once can be <strong>split</strong>: the
+                        <em>Split</em> button under its category opens a list of lines, each with its own amount, category,
+                        project and note. The lines must add up to the amount the bank charged before the import will run,
+                        and the result is a single split transaction, not several separate ones.</li>
                 </ul>
             </div>
         </div>
@@ -2861,7 +2896,7 @@
                         </select>
                     </td>
                     <td>
-                        <div class="gap-small">
+                        <div class="gap-small" id="catCell_${index}">
                             <select id="parentCategory_${index}" class="import-select" onchange="handleParentCategoryChange(${index})" ${trans.type === 'transfer' ? 'disabled' : ''}>
                                 <option value="">Parent...</option>
                                 ${getUniqueParents().map(p => `<option value="${p}">${p}</option>`).join('')}
@@ -2871,9 +2906,14 @@
                                 <option value="">Subcategory...</option>
                             </select>
                         </div>
+                        <div class="split-summary" id="splitSummary_${index}"></div>
+                        <button type="button" class="split-toggle" id="splitBtn_${index}"
+                                onclick="toggleRowSplit(${index})"
+                                title="Spend one statement line across several categories"
+                                ${trans.type === 'transfer' ? 'disabled' : ''}>Split</button>
                     </td>
                     <td>
-                        <div class="gap-small">
+                        <div class="gap-small" id="locProjCell_${index}">
                             <select id="location_${index}" class="import-select" onchange="handleLocationChange(${index})" ${trans.type === 'transfer' ? 'disabled' : ''}>
                                 <option value="">Loc...</option>
                                 ${allLocations.map(l => `<option value="${l.id}">${l.name}</option>`).join('')}
@@ -2886,18 +2926,30 @@
                         </div>
                     </td>
                     <td>
-                        <textarea id="note_${index}" class="import-textarea"
-                                placeholder="Note..."
-                                onchange="parsedTransactions[${index}].note = this.value">${trans.note || ''}</textarea>
+                        <div id="noteCell_${index}">
+                            <textarea id="note_${index}" class="import-textarea"
+                                    placeholder="Note..."
+                                    onchange="parsedTransactions[${index}].note = this.value">${trans.note || ''}</textarea>
+                        </div>
                     </td>
                     <td class="col-status">
-                        ${trans.isDuplicate ? 
-                            '<span class="badge badge-dup">Dup</span>' : 
+                        ${trans.isDuplicate ?
+                            '<span class="badge badge-dup">Dup</span>' :
                             '<span class="badge badge-new">New</span>'}
                     </td>
                 `;
-                
+
                 tbody.appendChild(row);
+
+                // The split editor lives in a row of its own underneath, shown
+                // only while this line is being split.
+                const splitRow = document.createElement('tr');
+                splitRow.className = 'split-row';
+                splitRow.id = `splitRow_${index}`;
+                splitRow.style.display = 'none';
+                splitRow.innerHTML = `<td colspan="10" id="splitCell_${index}"></td>`;
+                tbody.appendChild(splitRow);
+                if (trans.splitLines) applyRowSplitState(index);
 
                 // Auto-suggest payee for non-duplicate transactions
                 if (!trans.isDuplicate && trans.type === 'transaction') {
@@ -2910,6 +2962,229 @@
             document.getElementById('duplicateCount').textContent = duplicateCount;
             document.getElementById('newCount').textContent = newCount;
             document.getElementById('importCount').textContent = newCount;
+        }
+
+        // ── Splitting one statement line into several concepts ──────────────
+        // A bank gives one figure for a purchase that may have been several
+        // things at once. A split row keeps that single figure as the total and
+        // carves it into lines, each with its own category, project and note;
+        // on import it becomes one Delfin split transaction, not several
+        // unrelated ones. The lines must add up before the import will run.
+
+        function escImport(value) {
+            return String(value ?? '').replace(/[&<>"']/g,
+                c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
+        function newSplitLine(amount) {
+            return { amount: Number.isFinite(amount) ? amount : null,
+                     parent: '', category_id: '', project_id: '', note: '' };
+        }
+
+        function rowSplitAssigned(trans) {
+            return Math.round((trans.splitLines || [])
+                .reduce((sum, l) => sum + (Number.isFinite(l.amount) ? l.amount : 0), 0) * 100) / 100;
+        }
+
+        function rowSplitLeft(trans) {
+            return Math.round((trans.amount - rowSplitAssigned(trans)) * 100) / 100;
+        }
+
+        function rowCurrency(trans) {
+            return (allAccountsForImport.find(a => a.id === trans.account_id) || {}).currency || 'GBP';
+        }
+
+        function toggleRowSplit(index) {
+            const trans = parsedTransactions[index];
+            if (trans.type === 'transfer') return;
+
+            if (trans.splitLines) {
+                trans.splitLines = null;
+            } else {
+                // The first line starts holding the whole amount, so splitting
+                // is a matter of taking pieces off it, never retyping the total.
+                trans.splitLines = [newSplitLine(trans.amount), newSplitLine(null)];
+                // Carry across anything already chosen for the row.
+                const parent = document.getElementById(`parentCategory_${index}`).value;
+                const category = document.getElementById(`category_${index}`).value;
+                const project = document.getElementById(`project_${index}`).value;
+                trans.splitLines[0].parent = parent === '__NEW__' ? '' : parent;
+                trans.splitLines[0].category_id = category === '__NEW__' ? '' : category;
+                trans.splitLines[0].project_id = project;
+                trans.splitLines[0].note = document.getElementById(`note_${index}`).value || '';
+            }
+            applyRowSplitState(index);
+        }
+
+        // Show the editor and stand the row's own category/project/note fields
+        // down, since those now belong to the individual lines.
+        function applyRowSplitState(index) {
+            const trans = parsedTransactions[index];
+            const on = !!trans.splitLines;
+
+            document.getElementById(`splitRow_${index}`).style.display = on ? '' : 'none';
+            document.getElementById(`catCell_${index}`).style.display = on ? 'none' : '';
+            document.getElementById(`locProjCell_${index}`).style.display = on ? 'none' : '';
+            document.getElementById(`noteCell_${index}`).style.display = on ? 'none' : '';
+            document.getElementById(`splitSummary_${index}`).style.display = on ? 'block' : 'none';
+
+            const button = document.getElementById(`splitBtn_${index}`);
+            button.classList.toggle('is-on', on);
+            button.textContent = on ? 'Undo split' : 'Split';
+
+            if (on) renderRowSplit(index);
+        }
+
+        function splitLineHtmlForRow(index, li, line) {
+            const subs = allCategories.filter(c => c.parent === line.parent)
+                                      .sort((a, b) => a.name.localeCompare(b.name));
+            return `
+            <div class="split-line-row">
+                <input type="number" step="0.01" inputmode="decimal" class="import-input"
+                       style="text-align:right" id="sl_${index}_${li}_amount"
+                       value="${line.amount ?? ''}" placeholder="Amount"
+                       oninput="onRowSplitInput(${index})">
+                <select class="import-select" id="sl_${index}_${li}_parent"
+                        onchange="onRowSplitParent(${index}, ${li})">
+                    <option value="">Parent...</option>
+                    ${getUniqueParents().map(p => `<option value="${escImport(p)}" ${p === line.parent ? 'selected' : ''}>${escImport(p)}</option>`).join('')}
+                </select>
+                <select class="import-select" id="sl_${index}_${li}_category"
+                        ${line.parent ? '' : 'disabled'} onchange="onRowSplitInput(${index})">
+                    <option value="">${line.parent ? 'Subcategory...' : 'Parent first'}</option>
+                    ${subs.map(c => `<option value="${c.id}" ${String(c.id) === String(line.category_id) ? 'selected' : ''}>${escImport(c.name)}</option>`).join('')}
+                </select>
+                <select class="import-select" id="sl_${index}_${li}_project" onchange="onRowSplitInput(${index})">
+                    <option value="">Proj...</option>
+                    ${allProjects.map(p => `<option value="${p.id}" ${String(p.id) === String(line.project_id) ? 'selected' : ''}>${escImport(p.name)}</option>`).join('')}
+                </select>
+                <input type="text" class="import-input" id="sl_${index}_${li}_note"
+                       value="${escImport(line.note || '')}" placeholder="Note..."
+                       oninput="onRowSplitInput(${index})">
+                <button type="button" class="split-line-x" onclick="removeRowSplitLine(${index}, ${li})"
+                        title="Remove this line" aria-label="Remove line ${li + 1}">&times;</button>
+            </div>`;
+        }
+
+        function renderRowSplit(index) {
+            const trans = parsedTransactions[index];
+            document.getElementById(`splitCell_${index}`).innerHTML = `
+                ${trans.splitLines.map((line, li) => splitLineHtmlForRow(index, li, line)).join('')}
+                <div class="split-foot">
+                    <button type="button" onclick="addRowSplitLine(${index})">+ Add line</button>
+                    <button type="button" id="splitRest_${index}" onclick="assignRowSplitRest(${index})">Put the rest on a new line</button>
+                    <span class="split-figures" id="splitFigures_${index}"></span>
+                </div>`;
+            updateRowSplitTally(index);
+        }
+
+        // Read the fields back into state without re-rendering, so typing in a
+        // line never costs the caret its place.
+        function syncRowSplit(index) {
+            const trans = parsedTransactions[index];
+            if (!trans.splitLines) return;
+            trans.splitLines = trans.splitLines.map((line, li) => {
+                const amountEl = document.getElementById(`sl_${index}_${li}_amount`);
+                if (!amountEl) return line;
+                const raw = amountEl.value;
+                return {
+                    amount: raw === '' ? null : Math.round(parseFloat(raw) * 100) / 100,
+                    parent: document.getElementById(`sl_${index}_${li}_parent`).value,
+                    category_id: document.getElementById(`sl_${index}_${li}_category`).value,
+                    project_id: document.getElementById(`sl_${index}_${li}_project`).value,
+                    note: document.getElementById(`sl_${index}_${li}_note`).value,
+                };
+            });
+        }
+
+        function onRowSplitInput(index) {
+            syncRowSplit(index);
+            updateRowSplitTally(index);
+        }
+
+        function onRowSplitParent(index, li) {
+            syncRowSplit(index);
+            parsedTransactions[index].splitLines[li].category_id = '';  // belonged to the old parent
+            renderRowSplit(index);
+        }
+
+        function updateRowSplitTally(index) {
+            const trans = parsedTransactions[index];
+            const currency = rowCurrency(trans);
+            const assigned = rowSplitAssigned(trans);
+            const left = rowSplitLeft(trans);
+            const balanced = Math.abs(left) < 0.005;
+
+            document.getElementById(`splitFigures_${index}`).innerHTML =
+                `Total ${fmtMoney(trans.amount, currency)} · `
+              + `On lines ${fmtMoney(assigned, currency)} · `
+              + `<span class="${balanced ? 'is-done' : 'is-off'}">Left ${fmtMoney(left, currency)}</span>`;
+
+            const count = trans.splitLines.length;
+            document.getElementById(`splitSummary_${index}`).textContent =
+                `Split · ${count} ${count === 1 ? 'line' : 'lines'}`;
+            document.getElementById(`splitRest_${index}`).disabled = balanced;
+        }
+
+        function addRowSplitLine(index, amount = null) {
+            syncRowSplit(index);
+            parsedTransactions[index].splitLines.push(newSplitLine(amount));
+            renderRowSplit(index);
+            const last = parsedTransactions[index].splitLines.length - 1;
+            document.getElementById(`sl_${index}_${last}_amount`).focus();
+        }
+
+        function removeRowSplitLine(index, li) {
+            syncRowSplit(index);
+            const lines = parsedTransactions[index].splitLines;
+            lines.splice(li, 1);
+            // Down to one line it is no longer a split; give the row back.
+            if (lines.length < 2) {
+                parsedTransactions[index].splitLines = null;
+                applyRowSplitState(index);
+                return;
+            }
+            renderRowSplit(index);
+        }
+
+        function assignRowSplitRest(index) {
+            syncRowSplit(index);
+            const trans = parsedTransactions[index];
+            const left = rowSplitLeft(trans);
+            if (Math.abs(left) < 0.005) return;
+            // A line still waiting for a figure is what the rest belongs on.
+            const empty = trans.splitLines.findIndex(l => !Number.isFinite(l.amount));
+            if (empty >= 0) {
+                trans.splitLines[empty].amount = left;
+                renderRowSplit(index);
+            } else {
+                addRowSplitLine(index, left);
+            }
+        }
+
+        // Every split about to be imported must add up and have a figure on
+        // each line. Returns a message naming the first offender, or null.
+        function validateRowSplits() {
+            for (let i = 0; i < parsedTransactions.length; i++) {
+                const trans = parsedTransactions[i];
+                if (trans.isDuplicate || trans.skip || !trans.splitLines) continue;
+                syncRowSplit(i);
+
+                const where = `"${trans.description || 'row ' + (i + 1)}"`;
+                if (trans.splitLines.length < 2) {
+                    return `The split on ${where} needs at least two lines.`;
+                }
+                if (trans.splitLines.some(l => !Number.isFinite(l.amount) || l.amount === 0)) {
+                    return `Every line of the split on ${where} needs an amount.`;
+                }
+                const left = rowSplitLeft(trans);
+                if (Math.abs(left) >= 0.005) {
+                    const currency = rowCurrency(trans);
+                    return `The split on ${where} does not add up — `
+                         + `${fmtMoney(left, currency)} is still unassigned.`;
+                }
+            }
+            return null;
         }
 
         // Get unique parent categories
@@ -2933,6 +3208,8 @@
             const locationSelect = document.getElementById(`location_${index}`);
             const projectSelect = document.getElementById(`project_${index}`);
             
+            const splitButton = document.getElementById(`splitBtn_${index}`);
+
             if (type === 'transfer') {
                 if(payeeContainer) payeeContainer.style.display = 'none';
                 accountSelect.style.display = 'block';
@@ -2940,17 +3217,26 @@
                 categorySelect.disabled = true;
                 locationSelect.disabled = true;
                 projectSelect.disabled = true;
-                
+
                 parsedTransactions[index].type = 'transfer';
                 accountSelect.onchange = () => checkCurrencyDifference(index);
-                
+
+                // A transfer moves money between two accounts; there is nothing
+                // to spread over categories, so any split on the row goes.
+                if (parsedTransactions[index].splitLines) {
+                    parsedTransactions[index].splitLines = null;
+                    applyRowSplitState(index);
+                }
+                if (splitButton) splitButton.disabled = true;
+
             } else {
                 if(payeeContainer) payeeContainer.style.display = 'flex';
                 accountSelect.style.display = 'none';
                 categoryParent.disabled = false;
                 locationSelect.disabled = false;
                 projectSelect.disabled = false;
-                
+                if (splitButton) splitButton.disabled = false;
+
                 parsedTransactions[index].type = 'transaction';
                 
                 const existingConversion = document.getElementById(`currencyConversion_${index}`);
@@ -2969,7 +3255,14 @@
             } else {
                 row.classList.remove('skipped');
             }
-            
+
+            // A skipped row's split editor goes with it, but the lines are kept
+            // in case the row is brought back.
+            const splitRow = document.getElementById(`splitRow_${index}`);
+            if (splitRow && parsedTransactions[index].splitLines) {
+                splitRow.style.display = skipCheckbox.checked ? 'none' : '';
+            }
+
             updateImportCounts();
         }
 
@@ -3432,9 +3725,20 @@
                 showToast('No new transactions to import', 'error');
                 return;
             }
-            
+
+            // Refuse a split whose lines disagree with the bank, rather than
+            // importing a figure the statement never showed.
+            const splitProblem = validateRowSplits();
+            if (splitProblem) {
+                showToast(splitProblem, 'error');
+                return;
+            }
+
+            const splitCount = transactionsToImport.filter(t => t.splitLines).length;
             const confirmed = await customConfirm(
-                `Import ${transactionsToImport.length} transactions?`,
+                splitCount
+                    ? `Import ${transactionsToImport.length} transactions, ${splitCount} of them split?`
+                    : `Import ${transactionsToImport.length} transactions?`,
                 'Confirm Import',
                 'Import'
             );
@@ -3540,6 +3844,7 @@
                 // PHASE 3: Batch create regular transactions (FAST!)
                 // ============================================
                 const regularTransactions = [];
+                const splitPayloads = [];  // statement lines carved into several concepts
                 const learnedRules = {};   // normalised description -> payee (saved after import)
 
                 for (let i = 0; i < parsedTransactions.length; i++) {
@@ -3555,11 +3860,31 @@
                     // (re-assigning a different payee overwrites the rule).
                     if (payeeName && trans.description) learnedRules[normalizeDesc(trans.description)] = payeeName;
 
-                    const categoryId = document.getElementById(`category_${i}`).value;
                     const locationId = document.getElementById(`location_${i}`).value;
-                    const projectId = document.getElementById(`project_${i}`).value;
                     // Stamp the transaction with the account's own currency, not a fixed GBP.
                     const acctCur = (allAccountsForImport.find(a => a.id === trans.account_id) || {}).currency || 'GBP';
+
+                    // A split row is one purchase, so it goes to the split
+                    // endpoint as a single entry rather than into the batch.
+                    if (trans.splitLines) {
+                        splitPayloads.push({
+                            date: trans.date,
+                            account_id: trans.account_id,
+                            currency: acctCur,
+                            payee_id: payeeId,
+                            location_id: locationId ? parseInt(locationId) : null,
+                            lines: trans.splitLines.map(l => ({
+                                amount: l.amount,
+                                category_id: l.category_id ? parseInt(l.category_id) : null,
+                                project_id: l.project_id ? parseInt(l.project_id) : null,
+                                note: l.note ? l.note : null,
+                            })),
+                        });
+                        continue;
+                    }
+
+                    const categoryId = document.getElementById(`category_${i}`).value;
+                    const projectId = document.getElementById(`project_${i}`).value;
 
                     regularTransactions.push({
                         date: trans.date,
@@ -3603,6 +3928,24 @@
                     } else {
                         console.error('Batch creation failed');
                         errorCount += regularTransactions.length;
+                    }
+                }
+
+                // Splits go one at a time — there are usually few, and the
+                // balance sweep in phase 4 covers them all, so each one skips
+                // its own recalculation.
+                for (const payload of splitPayloads) {
+                    try {
+                        const res = await fetch(`${API_URL}/transactions/split?skip_recalculation=true`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+                        if (res.ok) successCount++;
+                        else { console.error('Split creation failed', await res.text()); errorCount++; }
+                    } catch (err) {
+                        console.error('Split creation failed', err);
+                        errorCount++;
                     }
                 }
 
@@ -4207,6 +4550,7 @@
                 ['Format', fmtLabel],
                 ['Transactions', s.transactions],
                 ['Transfers', s.transfers],
+                ['Splits', s.splits],
                 ['Accounts', s.accounts],
                 ['Categories', s.categories],
                 ['Payees', s.payees],

@@ -23,6 +23,7 @@ A personal finance PWA built with Python, FastAPI, and vanilla JavaScript. Impor
 - **Quick entry**: Fast transaction input with payee autocomplete and automatic category/location suggestion
 - **Save & New**: Batch entry mode — saves and immediately opens a new form, deferring balance recalculation until the final save
 - **Transfers**: Create transfers between accounts with multi-currency support and automatic exchange rate display
+- **Split transactions**: One purchase carved into several lines, each with its own amount, category, project and note — the weekly shop that was half groceries and half a screwdriver. The ledger shows it as a single entry with the total and the balance it left behind; the caret opens the breakdown. The lines must add up to the amount before it can be saved. Any transaction can be split later, and a split whose lines are removed down to one becomes an ordinary transaction again
 - **Hierarchical categories**: Parent > subcategory selection with inline creation
 - **Advanced filters**: Date range, account, category, text search. Collapsible on mobile
 - **Bulk edit**: Select multiple transactions or transfers to change account, category, payee, or delete in batch
@@ -60,10 +61,10 @@ month rather than a £600 spike.
 ### Tools (`tools.html`)
 
 - **Entity management**: Edit and merge categories, accounts, payees, locations, and projects. Includes one-click **detect & merge duplicate categories** (reassigns all references)
-- **CSV import**: Import any bank statement CSV via a generic column-mapping step (delimiter, decimal, encoding, debit/credit), with reusable per-bank profiles, duplicate detection, and inline entity creation
+- **CSV import**: Import any bank statement CSV via a generic column-mapping step (delimiter, decimal, encoding, debit/credit), with reusable per-bank profiles, duplicate detection, and inline entity creation. A statement line that was several things at once can be **split** in the preview into lines with their own category, project and note; they must add up to the amount the bank charged, and the result is one split transaction rather than several separate ones
 - **CSV export**: Export transactions with date, account, and category filters in standard or detailed format
-- **Import Financisto**: Import a Financisto database — native `.backup` (gzipped) or CSV export — directly inside the app. Auto-detects the format, shows a pre-import **compatibility report** (so any data that can't be mapped is listed, never dropped silently), supports **merge** or **replace**, and always takes a safety backup first
-- **Export Financisto**: Export your entire database as a native `.backup` (restorable in Financisto) or Financisto CSV
+- **Import Financisto**: Import a Financisto database — native `.backup` (gzipped) or CSV export — directly inside the app. Auto-detects the format, shows a pre-import **compatibility report** (so any data that can't be mapped is listed, never dropped silently), supports **merge** or **replace**, and always takes a safety backup first. Transfers become Delfin transfer pairs and **splits become Delfin splits**, keeping each sub-item's category, project and note under one entry
+- **Export Financisto**: Export your entire database as a native `.backup` (restorable in Financisto) or Financisto CSV. Splits survive both formats: the `.backup` rebuilds Financisto's parent envelope plus its children, and the CSV writes a `SPLIT` total row followed by one sub-item row each, the same shape Financisto's own CSV export produces
 - **Database backup**: Download a timestamped `.db` backup (a consistent, WAL-safe snapshot via SQLite's online backup API)
 - **Restore database**: Restore from a `.db` backup (from the Backup tool or the daily backups). Validates the file, takes a safety backup of current data first, then swaps it in
 - **Refresh**: Recalculate all balances, payee statistics, and exchange rates
@@ -298,6 +299,7 @@ Full interactive docs at `http://localhost:8422/docs`.
 |------|--------------|
 | **Accounts** | `GET /accounts`, `GET /accounts/with-balances`, `POST /accounts` |
 | **Transactions** | `GET /transactions`, `POST /transactions`, `PUT /transactions/{id}`, `DELETE /transactions/{id}` |
+| **Splits** | `GET /transactions/split/{group_id}`, `POST /transactions/split`, `PUT /transactions/split/{group_id}`, `DELETE /transactions/split/{group_id}` |
 | **Transfers** | `GET /transactions/transfers`, `POST /transactions/transfers` |
 | **Categories** | `GET /categories`, `POST /categories`, `PUT /categories/{id}` |
 | **Payees** | `GET /payees`, `POST /payees`, `POST /payees/recalculate-all-stats` |
@@ -317,7 +319,7 @@ Full interactive docs at `http://localhost:8422/docs`.
 - **accounts**: Bank accounts, wallets, credit cards. Tracks `currency`, `initial_balance`, `current_balance`, `is_active`
 - **categories**: Hierarchical (parent + name). Types: expense, income
 - **payees**: Merchants. Caches most common category/location/project for autocomplete
-- **transactions**: Core table. Links to account, category, payee, location, project. Caches `account_balance_after` and `total_balance_after`
+- **transactions**: Core table. Links to account, category, payee, location, project. Caches `account_balance_after` and `total_balance_after`. A split transaction is stored as one row per line, all sharing a `split_group_id` (the id of the first line) — so balances, filters and every category-based report stay correct without knowing that splits exist
 - **exchange_rates**: Historical daily rates (GBP base) from ECB
 - **budgets**: Monthly spending targets
 - **budget_items**: Budget definitions — fixed expense, expected income or planned expense. Carries the recurrence (`interval_count`/`interval_unit`, `day_rule`), the months it applies to (`starts_ym`/`ends_ym`) and a `series_id` tying its versions together

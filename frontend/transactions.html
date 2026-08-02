@@ -222,7 +222,64 @@
         .transaction-item:hover .action-buttons { opacity: 1; }
         .btn-xs { background: none; border: none; cursor: pointer; font-size: 16px; font-weight: 600; padding: 2px; line-height: 1; transition: transform 0.1s, opacity 0.2s; opacity: 0.7; color: var(--text); }
         .btn-xs:hover { opacity: 1; transform: scale(1.3); }
-        
+
+        /* ── Split transactions: one ledger row that opens into its lines ── */
+        .split-caret {
+            display: inline-block; border: none; background: none; cursor: pointer;
+            padding: 0 4px 0 0; margin: 0; color: inherit; font: inherit; line-height: 1;
+        }
+        .split-caret::before {
+            content: ''; display: inline-block; width: 0; height: 0;
+            border-left: 4px solid currentColor;
+            border-top: 3.5px solid transparent; border-bottom: 3.5px solid transparent;
+            transition: transform 0.15s; transform-origin: 25% 50%;
+        }
+        .transaction-item.split-open .split-caret::before { transform: rotate(90deg); }
+        .split-lines {
+            display: none; grid-column: 1 / -1; order: 98; width: 100%;
+            margin-top: 9px; padding-top: 8px; border-top: 1px dashed var(--border);
+        }
+        .transaction-item.split-open .split-lines { display: block; }
+        .split-line {
+            display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px;
+            padding: 3px 0 3px 22px; font-size: 12.5px; color: #6E6250;
+        }
+        .split-line .sl-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .split-line .sl-extra { color: var(--muted); }
+        .split-line .sl-amt { font-variant-numeric: tabular-nums; text-align: right; }
+
+        /* ── Split editor inside the transaction modal ── */
+        .split-line-card {
+            border: 1px solid var(--hair); border-radius: 10px;
+            padding: 14px 14px 0; margin-bottom: 12px; background: #FBF4EA;
+        }
+        .split-line-head {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 10px; font-size: 10.5px; letter-spacing: 1.5px;
+            text-transform: uppercase; color: var(--muted);
+            font-family: 'IBM Plex Sans', sans-serif; font-weight: 700;
+        }
+        .split-line-remove {
+            background: none; border: none; cursor: pointer; color: var(--muted);
+            font-size: 18px; line-height: 1; padding: 0 2px; min-height: 0;
+        }
+        .split-line-remove:hover { color: var(--red); }
+        .split-tally {
+            display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: baseline;
+            padding: 10px 0 4px; font-size: 12.5px; font-variant-numeric: tabular-nums;
+            border-top: 1px solid var(--hair);
+        }
+        .split-tally .st-label { color: var(--muted); font-size: 11px; letter-spacing: .5px; text-transform: uppercase; }
+        .split-tally .st-left.is-off { color: var(--red); font-weight: 600; }
+        .split-tally .st-left.is-done { color: var(--green); font-weight: 600; }
+        .split-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; }
+        .split-actions button {
+            background: none; border: 1px solid var(--border); border-radius: 8px;
+            padding: 7px 14px; font-size: 12.5px; cursor: pointer; color: var(--text);
+            font-family: 'IBM Plex Mono', monospace;
+        }
+        .split-actions button:hover { border-color: var(--accent); color: var(--accent); }
+
         .success-message { background: var(--green); color: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: none; }
         .error-message { background: var(--red); color: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: none; }
         .amount-negative { color: var(--red); }
@@ -1005,7 +1062,7 @@
                             <datalist id="payeeList"></datalist>
                         </div>
                     </div>
-                    <div class="form-row">
+                    <div class="form-row" id="singleCategoryRow">
                         <div class="form-group"><label>Parent Category</label><select id="parentCategory"><option value="">Select...</option></select></div>
                         <div class="form-group"><label>Subcategory</label><select id="category" disabled><option value="">Select parent...</option></select></div>
                     </div>
@@ -1013,9 +1070,29 @@
                         <div class="form-group"><label>Account</label><select id="account" required><option value="">Select...</option></select></div>
                         <div class="form-group"><label>Location</label><select id="location"><option value="">Select...</option></select></div>
                     </div>
-                    <div class="form-group"><label>Project</label><select id="project"><option value="">Select...</option></select></div>
-                    <div class="form-group"><label>Note</label><textarea id="note" rows="2"></textarea></div>
-                    
+                    <div id="singleTailFields">
+                        <div class="form-group"><label>Project</label><select id="project"><option value="">Select...</option></select></div>
+                        <div class="form-group"><label>Note</label><textarea id="note" rows="2"></textarea></div>
+                    </div>
+
+                    <!-- Split editor: the amount above is the whole purchase; these lines carve it up -->
+                    <div id="splitEditor" style="display:none;">
+                        <div id="splitLines"></div>
+                        <div class="split-tally">
+                            <span><span class="st-label">Total</span> <span id="splitTotal">—</span></span>
+                            <span><span class="st-label">On lines</span> <span id="splitAssigned">—</span></span>
+                            <span><span class="st-label">Left</span> <span id="splitLeft" class="st-left">—</span></span>
+                        </div>
+                        <div class="split-actions">
+                            <button type="button" onclick="addSplitLine()">+ Add line</button>
+                            <button type="button" id="splitRestBtn" onclick="assignSplitRemainder()">Put the rest on a new line</button>
+                        </div>
+                    </div>
+
+                    <div class="split-actions" id="splitToggleRow">
+                        <button type="button" id="splitToggleBtn" onclick="toggleSplitMode()">Split into several lines</button>
+                    </div>
+
                     <div class="modal-footer-batch">
                         <button type="submit" class="btn-save">Save</button>
                         <button type="button" class="btn-cancel" onclick="closeTransactionModal()">Cancel</button>
@@ -1116,13 +1193,24 @@
         let transactionsSkip = 0; const LIMIT = 100;
         let isLoadingTransactions = false, hasMoreTransactions = true;
         let pendingTransferOuts = [], pendingTransferIns = []; // Cross-page transfer matching
+        let pendingSplitLines = [];                            // Cross-page split grouping
+        let allProjects = [];
         let bulkEditMode = false, selectedTransactions = [], selectedTransfers = [], currentBulkType = null;
         let activeFilters = { startDate: null, endDate: null, accountId: null, categoryId: null, searchText: null };
         let filtersActive = false;
         let targetTransactionId = null;
         let targetTransferId = null;
         let isScrollingToTarget = false;
-        
+        let openSplitGroups = new Set();   // groups the user has expanded in the ledger
+
+        // --- Split editor state ---
+        // The modal doubles as the split editor: `splitMode` swaps the single
+        // category/project/note fields for a list of lines, each of which is
+        // saved as its own transaction row sharing a split_group_id.
+        let splitMode = false;
+        let splitLines = [];           // [{ id, amount, parent, category_id, project_id, note }]
+        let editingSplitGroup = null;  // set while editing an existing split
+
         // --- Batch mode state for quick entry ---
         let transactionBatchCount = 0;
         let transferBatchCount = 0;
@@ -1185,6 +1273,7 @@
             }
             updateAmountSignToggle();
             colorAmountInput(input);
+            if (splitMode) updateSplitTally();
         }
 
         function toggleAmountSign() {
@@ -1194,6 +1283,7 @@
             if (!isNaN(value) && value !== 0) input.value = String(-value);
             updateAmountSignToggle();
             colorAmountInput(input);
+            if (splitMode) updateSplitTally();
             input.focus();
         }
 
@@ -1214,7 +1304,9 @@
         function findAndScrollToTarget() {
             let el = null;
             if (targetTransactionId) {
-                el = document.querySelector(`[data-transaction-id="${targetTransactionId}"]`);
+                // A split's lines carry no row of their own; the group does.
+                el = document.querySelector(`[data-transaction-id="${targetTransactionId}"]`)
+                  || document.querySelector(`[data-split-group="${targetTransactionId}"]`);
             } else if (targetTransferId) {
                 el = document.querySelector(`[data-transfer-id="${targetTransferId}"]`);
             }
@@ -1284,7 +1376,7 @@
 
                 const newReg = [], transfersOut = [...pendingTransferOuts], transfersIn = [...pendingTransferIns];
                 pendingTransferOuts = []; pendingTransferIns = [];
-                data.forEach(t => {
+                holdBackTrailingSplit(data).forEach(t => {
                     if (t.location_name === 'Transfer Out') transfersOut.push(t);
                     else if (t.location_name === 'Transfer In') transfersIn.push(t);
                     else newReg.push(t);
@@ -1339,17 +1431,90 @@
         
         function displayCombinedTransactionsNoScroll() {
             const combined = [
-                ...regularTransactions.map(t => ({...t, type: 'tx'})),
+                ...groupLedgerItems(regularTransactions),
                 ...transferTransactions.map(t => ({...t, type: 'tr'}))
             ].sort((a, b) => new Date(b.date) - new Date(a.date));
 
-            document.getElementById('transactionsList').innerHTML = combined.map(t => 
-                t.type === 'tx' ? displayRegularTransaction(t) : displayTransferItem(t)
-            ).join('') || '<p style="text-align:center;padding:20px;color:#888">No transactions</p>';
+            document.getElementById('transactionsList').innerHTML = combined.map(ledgerItemHtml).join('')
+                || '<p style="text-align:center;padding:20px;color:#888">No transactions</p>';
         }
 
         function parseMoneyAmount(value) {
             return Math.round(parseFloat(value) * 100) / 100;
+        }
+
+        // Category, project and note text is user-written and goes into markup.
+        function escapeHtml(value) {
+            return String(value ?? '').replace(/[&<>"']/g,
+                c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
+        // --- Split grouping helpers ---------------------------------------
+        // A split's lines are consecutive in the API's (date DESC, id DESC)
+        // ordering, so the only way one can be cut in half is at the end of a
+        // page. Hold those trailing lines back until the next page arrives,
+        // rather than briefly showing a split with a total that is too small.
+        function holdBackTrailingSplit(rows) {
+            const combined = [...pendingSplitLines, ...rows];
+            pendingSplitLines = [];
+            if (!hasMoreTransactions || !combined.length) return combined;
+
+            const lastGroup = combined[combined.length - 1].split_group_id;
+            if (!lastGroup) return combined;
+
+            let cut = combined.length;
+            while (cut > 0 && combined[cut - 1].split_group_id === lastGroup) cut--;
+            // A page made entirely of one split would stall the list; show it.
+            if (cut === 0) return combined;
+
+            pendingSplitLines = combined.splice(cut);
+            return combined;
+        }
+
+        // Collapse the lines of each split into a single ledger entry. The
+        // group takes the position of its first line in the incoming order, so
+        // it lands where the split belongs chronologically.
+        function groupLedgerItems(transactions) {
+            const items = [];
+            const groups = new Map();
+
+            transactions.forEach(t => {
+                if (!t.split_group_id) { items.push({ ...t, type: 'tx' }); return; }
+                let group = groups.get(t.split_group_id);
+                if (!group) {
+                    group = {
+                        type: 'split', split_group_id: t.split_group_id, date: t.date,
+                        account_id: t.account_id, account_name: t.account_name,
+                        currency: t.currency, payee_id: t.payee_id, payee_name: t.payee_name,
+                        location_id: t.location_id, location_name: t.location_name,
+                        amount: 0, lines: [],
+                    };
+                    groups.set(t.split_group_id, group);
+                    items.push(group);
+                }
+                group.lines.push(t);
+            });
+
+            groups.forEach(group => {
+                // The list arrives newest-first; within a split, entry order reads better.
+                group.lines.sort((a, b) => a.id - b.id);
+                group.amount = Math.round(group.lines.reduce((sum, l) => sum + (l.amount || 0), 0) * 100) / 100;
+                const last = group.lines[group.lines.length - 1];
+                group.account_balance_after = last.account_balance_after;
+                group.total_balance_after = last.total_balance_after;
+                // A note the whole purchase shares belongs on the header row;
+                // notes that differ stay with their own line.
+                const notes = new Set(group.lines.map(l => (l.note || '').trim()));
+                group.note = notes.size === 1 ? (group.lines[0].note || '') : '';
+            });
+
+            return items;
+        }
+
+        function ledgerItemHtml(item) {
+            if (item.type === 'tr') return displayTransferItem(item);
+            if (item.type === 'split') return displaySplitTransaction(item);
+            return displayRegularTransaction(item);
         }
 
         // Navigation dropdown toggle
@@ -1564,7 +1729,7 @@
             if (data.length < LIMIT) hasMoreTransactions = false;
             
             const newReg = [], transfersOut = [], transfersIn = [];
-            data.forEach(t => {
+            holdBackTrailingSplit(data).forEach(t => {
                 if (t.location_name === 'Transfer Out') transfersOut.push(t);
                 else if (t.location_name === 'Transfer In') transfersIn.push(t);
                 else newReg.push(t);
@@ -1776,8 +1941,10 @@
         }
         async function loadProjects() {
             const projs = await (await fetch(`${API_URL}/projects`)).json();
+            allProjects = projs;
             document.getElementById('project').innerHTML = '<option value="">Select...</option>' + projs.map(p => `<option value="${p.id}">${p.name}</option>`).join('') + '<option value="__NEW__" style="color:#667eea">➕ Add new</option>';
             document.getElementById('bulkProject').innerHTML = '<option value="">Don\'t change</option>' + projs.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+            if (splitMode) renderSplitLines();
         }
 
         // --- Transactions ---
@@ -1834,7 +2001,7 @@
             if (reset && !isFilterChange) DelfinCache.markDirty('transactions');
             if (isLoadingTransactions || (!hasMoreTransactions && !reset)) return;
             isLoadingTransactions = true;
-            if (reset) { transactionsSkip = 0; hasMoreTransactions = true; regularTransactions = []; transferTransactions = []; pendingTransferOuts = []; pendingTransferIns = []; updateTransactionsSummary(); }
+            if (reset) { transactionsSkip = 0; hasMoreTransactions = true; regularTransactions = []; transferTransactions = []; pendingTransferOuts = []; pendingTransferIns = []; pendingSplitLines = []; updateTransactionsSummary(); }
             
             try {
                 const params = new URLSearchParams({ skip: transactionsSkip, limit: LIMIT });
@@ -1851,7 +2018,7 @@
 
                 const newReg = [], transfersOut = [...pendingTransferOuts], transfersIn = [...pendingTransferIns];
                 pendingTransferOuts = []; pendingTransferIns = [];
-                data.forEach(t => {
+                holdBackTrailingSplit(data).forEach(t => {
                     if (t.location_name === 'Transfer Out') transfersOut.push(t);
                     else if (t.location_name === 'Transfer In') transfersIn.push(t);
                     else newReg.push(t);
@@ -1995,14 +2162,13 @@
 
         function displayCombinedTransactions() {
             const combined = [
-                ...regularTransactions.map(t => ({...t, type: 'tx'})),
+                ...groupLedgerItems(regularTransactions),
                 ...transferTransactions.map(t => ({...t, type: 'tr'}))
             ].sort((a, b) => new Date(b.date) - new Date(a.date));
 
-            document.getElementById('transactionsList').innerHTML = combined.map(t => 
-                t.type === 'tx' ? displayRegularTransaction(t) : displayTransferItem(t)
-            ).join('') || '<p style="text-align:center;padding:20px;color:#888">No transactions</p>';
-            
+            document.getElementById('transactionsList').innerHTML = combined.map(ledgerItemHtml).join('')
+                || '<p style="text-align:center;padding:20px;color:#888">No transactions</p>';
+
             if ((targetTransactionId || targetTransferId) && !isScrollingToTarget) {
                 setTimeout(() => scrollToTarget(), 50);
             }
@@ -2059,6 +2225,80 @@
                     </div>
                 </div>
             </div>`;
+        }
+
+        // A split is shown as one entry — the payee, the total, the balance it
+        // left behind — with its lines folded away behind the caret.
+        function displaySplitTransaction(g) {
+            const dateObj = new Date(g.date);
+            const dateStr = `${dateObj.getDate().toString().padStart(2,'0')}/${(dateObj.getMonth()+1).toString().padStart(2,'0')}/${dateObj.getFullYear().toString().slice(-2)}`;
+            const timeStr = dateObj.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+            const ids = g.lines.map(l => l.id);
+            const isSel = ids.length > 0 && ids.every(id => selectedTransactions.includes(id));
+            const isOpen = openSplitGroups.has(g.split_group_id);
+
+            const account = accountsMap.get(g.account_id);
+            const accountCurrency = account ? account.currency : g.currency;
+            const balanceAccountColor = g.account_balance_after >= 0 ? 'var(--green)' : 'var(--red)';
+            const balanceTotalColor = g.total_balance_after >= 0 ? 'var(--green)' : 'var(--red)';
+
+            const lineLabel = (l) => {
+                const cat = l.category_name || 'Uncategorised';
+                const extras = [];
+                if (l.project_name) extras.push(l.project_name);
+                if (l.note && l.note !== g.note) extras.push(l.note);
+                return `${escapeHtml(cat)}${extras.length ? ` <span class="sl-extra">· ${escapeHtml(extras.join(' · '))}</span>` : ''}`;
+            };
+            const linesHtml = g.lines.map(l => `
+                    <div class="split-line">
+                        <span class="sl-label">${lineLabel(l)}</span>
+                        <span class="sl-amt ${l.amount < 0 ? 'amount-negative' : 'amount-positive'}">${formatMoneyWithSymbol(l.amount, l.currency)}</span>
+                    </div>`).join('');
+
+            const mobileDetails = [];
+            mobileDetails.push(['Lines', `${g.lines.length} · ${g.lines.map(l => l.category_name || 'Uncategorised').join(', ')}`]);
+            if (g.location_name) mobileDetails.push(['Location', g.location_name]);
+            if (g.note) mobileDetails.push(['Note', g.note]);
+            if (g.account_balance_after != null) mobileDetails.push(['Acc. balance', `<span style="color:${balanceAccountColor}">${formatMoneyWithSymbol(g.account_balance_after, accountCurrency)}</span>`]);
+            if (g.total_balance_after != null) mobileDetails.push(['Total balance', `<span style="color:${balanceTotalColor}">${formatMoneyWithSymbol(g.total_balance_after, displayCurrency)}</span>`]);
+            const detailHtml = mobileDetails.map(([l, v]) => `<span class="md-label">${l}</span><span class="md-value">${v}</span>`).join('');
+
+            const gid = g.split_group_id;
+            return `
+            <div class="transaction-item grid-layout ${isSel ? 'selected' : ''} ${isOpen ? 'split-open' : ''}" data-split-group="${gid}" data-line-ids="${ids.join(',')}" onclick="${bulkEditMode ? `toggleSplitSelection(${gid})` : `rowClick(this, () => editSplit(${gid}))`}">
+                <div class="checkbox-column"><input type="checkbox" ${isSel ? 'checked' : ''} onclick="event.stopPropagation(); toggleSplitSelection(${gid})"></div>
+                <div class="t-cell date-cell ledger-date">
+                    <span class="date-display">${dateStr}</span>
+                    <span class="time-display">${timeStr}</span>
+                </div>
+                <div class="t-cell ledger-acct" title="${escapeHtml(g.account_name || '')}">${escapeHtml(g.account_name || '')}</div>
+                <div class="payee-cell" title="${escapeHtml(g.payee_name || '')}">
+                    <div class="payee-name">${g.payee_name ? escapeHtml(g.payee_name) : '<span style="color:#bbb">—</span>'}</div>
+                    <div class="cat-sub ${g.location_name ? 'has-loc' : ''}">
+                        <span class="category-display"><button type="button" class="split-caret" onclick="event.stopPropagation(); toggleSplitLines(${gid})" aria-label="Show the lines of this split"></button>Split · ${g.lines.length} ${g.lines.length === 1 ? 'line' : 'lines'}</span>
+                        ${g.location_name ? `<span class="location-display"><svg class="loc-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg> ${escapeHtml(g.location_name)}</span>` : ''}
+                    </div>
+                </div>
+                <div class="t-cell ledger-note" title="${escapeHtml(g.note || '')}">${escapeHtml(g.note || '')}</div>
+                <div class="t-cell t-amount ${g.amount < 0 ? 'amount-negative' : 'amount-positive'}">${formatMoneyWithSymbol(g.amount, g.currency)}</div>
+                <div class="t-cell balance-cell" style="color: ${balanceAccountColor}">${g.account_balance_after != null ? formatMoneyWithSymbol(g.account_balance_after, accountCurrency) : ''}</div>
+                <div class="t-cell balance-cell" style="color: ${balanceTotalColor}">${g.total_balance_after != null ? formatMoneyWithSymbol(g.total_balance_after, displayCurrency) : ''}</div>
+                <div class="split-lines">${linesHtml}</div>
+                <div class="mobile-detail">
+                    <div class="mobile-detail-grid">${detailHtml}</div>
+                    <div class="mobile-detail-actions">
+                        <button onclick="event.stopPropagation(); editSplit(${gid})">Edit</button>
+                        <button onclick="event.stopPropagation(); deleteSplit(${gid})" style="color:var(--red);border-color:var(--red)">Delete</button>
+                    </div>
+                </div>
+            </div>`;
+        }
+
+        function toggleSplitLines(groupId) {
+            const row = document.querySelector(`[data-split-group="${groupId}"]`);
+            if (!row) return;
+            const open = row.classList.toggle('split-open');
+            if (open) openSplitGroups.add(groupId); else openSplitGroups.delete(groupId);
         }
 
         function displayTransferItem(t) {
@@ -2145,6 +2385,362 @@
             activeFilters = { startDate: null }; filtersActive = false; loadRecentTransactions(true, true);
         }
 
+        // ── Split editor ──────────────────────────────────────────────────
+        // The modal's Amount is the purchase as a whole; the lines below carve
+        // it up. Saving is refused while they disagree, so a split can never
+        // record a different figure from the one that left the account.
+
+        function splitAssignedTotal() {
+            return Math.round(splitLines.reduce((sum, l) => sum + (Number.isFinite(l.amount) ? l.amount : 0), 0) * 100) / 100;
+        }
+
+        function splitCurrency() {
+            const opt = document.getElementById('account').selectedOptions[0];
+            return (opt && opt.dataset.currency) || displayCurrency;
+        }
+
+        function splitLineHtml(index, line) {
+            const parents = [...new Set(allCategories.map(c => c.parent || c.name))].sort();
+            const parentOpts = parents.map(p =>
+                `<option value="${escapeHtml(p)}" ${p === line.parent ? 'selected' : ''}>${escapeHtml(p)}</option>`).join('');
+            const subs = allCategories.filter(c => c.parent === line.parent)
+                                      .sort((a, b) => a.name.localeCompare(b.name));
+            const subOpts = subs.map(c =>
+                `<option value="${c.id}" ${c.id === line.category_id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('');
+            const projOpts = allProjects.map(p =>
+                `<option value="${p.id}" ${p.id === line.project_id ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('');
+
+            return `
+            <div class="split-line-card">
+                <div class="split-line-head">
+                    <span>Line ${index + 1}</span>
+                    <button type="button" class="split-line-remove" onclick="removeSplitLine(${index})"
+                            title="Remove this line" aria-label="Remove line ${index + 1}">&times;</button>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Amount</label>
+                        <input type="number" step="0.01" inputmode="decimal" id="splitAmount_${index}"
+                               value="${line.amount ?? ''}" oninput="onSplitLineInput()">
+                    </div>
+                    <div class="form-group">
+                        <label>Parent Category</label>
+                        <select id="splitParent_${index}" onchange="onSplitParentChange(${index})">
+                            <option value="">Select...</option>${parentOpts}
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Subcategory</label>
+                        <select id="splitCat_${index}" ${line.parent ? '' : 'disabled'} onchange="onSplitLineInput()">
+                            <option value="">${line.parent ? 'Select...' : 'Select parent...'}</option>${subOpts}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Project</label>
+                        <select id="splitProj_${index}" onchange="onSplitLineInput()">
+                            <option value="">Select...</option>${projOpts}
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Note</label>
+                    <input type="text" id="splitNote_${index}" value="${escapeHtml(line.note || '')}" oninput="onSplitLineInput()">
+                </div>
+            </div>`;
+        }
+
+        function renderSplitLines() {
+            document.getElementById('splitLines').innerHTML =
+                splitLines.map((line, i) => splitLineHtml(i, line)).join('');
+            updateSplitTally();
+        }
+
+        // Read the fields back into state without re-rendering, so typing in a
+        // line never costs the caret its place.
+        function syncSplitLinesFromDom() {
+            splitLines = splitLines.map((line, i) => {
+                const amountEl = document.getElementById(`splitAmount_${i}`);
+                if (!amountEl) return line;
+                const raw = amountEl.value;
+                const cat = document.getElementById(`splitCat_${i}`).value;
+                const proj = document.getElementById(`splitProj_${i}`).value;
+                return {
+                    ...line,
+                    amount: raw === '' ? null : parseMoneyAmount(raw),
+                    parent: document.getElementById(`splitParent_${i}`).value || null,
+                    category_id: cat ? parseInt(cat) : null,
+                    project_id: proj ? parseInt(proj) : null,
+                    note: document.getElementById(`splitNote_${i}`).value,
+                };
+            });
+        }
+
+        function onSplitLineInput() {
+            syncSplitLinesFromDom();
+            updateSplitTally();
+        }
+
+        function onSplitParentChange(index) {
+            syncSplitLinesFromDom();
+            splitLines[index].category_id = null;   // the old subcategory belongs to the old parent
+            renderSplitLines();
+        }
+
+        function updateSplitTally() {
+            const total = parseMoneyAmount(document.getElementById('amount').value);
+            const assigned = splitAssignedTotal();
+            const currency = splitCurrency();
+            const hasTotal = Number.isFinite(total);
+            const left = hasTotal ? Math.round((total - assigned) * 100) / 100 : 0;
+
+            document.getElementById('splitTotal').textContent =
+                hasTotal ? formatMoneyWithSymbol(total, currency) : '—';
+            document.getElementById('splitAssigned').textContent = formatMoneyWithSymbol(assigned, currency);
+
+            const leftEl = document.getElementById('splitLeft');
+            leftEl.textContent = hasTotal ? formatMoneyWithSymbol(left, currency) : '—';
+            leftEl.classList.toggle('is-off', hasTotal && Math.abs(left) >= 0.005);
+            leftEl.classList.toggle('is-done', hasTotal && Math.abs(left) < 0.005);
+            document.getElementById('splitRestBtn').disabled = !hasTotal || Math.abs(left) < 0.005;
+        }
+
+        function addSplitLine(amount = null) {
+            syncSplitLinesFromDom();
+            splitLines.push({ id: null, amount, parent: null, category_id: null, project_id: null, note: '' });
+            renderSplitLines();
+            document.getElementById(`splitAmount_${splitLines.length - 1}`).focus();
+        }
+
+        function removeSplitLine(index) {
+            syncSplitLinesFromDom();
+            splitLines.splice(index, 1);
+            if (!splitLines.length) splitLines.push({ id: null, amount: null, parent: null, category_id: null, project_id: null, note: '' });
+            renderSplitLines();
+        }
+
+        function assignSplitRemainder() {
+            syncSplitLinesFromDom();
+            const total = parseMoneyAmount(document.getElementById('amount').value);
+            if (!Number.isFinite(total)) return;
+            const left = Math.round((total - splitAssignedTotal()) * 100) / 100;
+            if (Math.abs(left) < 0.005) return;
+            // An empty line is waiting for exactly this; otherwise start a new one.
+            const empty = splitLines.findIndex(l => !Number.isFinite(l.amount));
+            if (empty >= 0) {
+                splitLines[empty].amount = left;
+                renderSplitLines();
+            } else {
+                addSplitLine(left);
+            }
+        }
+
+        function enterSplitMode(lines) {
+            splitMode = true;
+            splitLines = lines && lines.length ? lines : [
+                { id: null, amount: parseMoneyAmount(document.getElementById('amount').value) || null,
+                  parent: null, category_id: null, project_id: null, note: '' },
+                { id: null, amount: null, parent: null, category_id: null, project_id: null, note: '' },
+            ];
+            document.getElementById('singleCategoryRow').style.display = 'none';
+            document.getElementById('singleTailFields').style.display = 'none';
+            document.getElementById('splitEditor').style.display = '';
+            document.getElementById('splitToggleBtn').textContent = 'Back to a single line';
+            // While editing an existing split there is no "back": removing
+            // lines until one is left is what turns it into a plain
+            // transaction again, and the server does that on save.
+            document.getElementById('splitToggleRow').style.display = editingSplitGroup ? 'none' : '';
+            // "Save & New" keeps a form open for the next entry; a split is a
+            // deliberate, one-off piece of data entry, so it does not apply.
+            document.querySelectorAll('#transactionModal [data-new-only]').forEach(b => b.style.display = 'none');
+            renderSplitLines();
+        }
+
+        function exitSplitMode() {
+            splitMode = false;
+            editingSplitGroup = null;
+            splitLines = [];
+            document.getElementById('splitLines').innerHTML = '';
+            document.getElementById('singleCategoryRow').style.display = '';
+            document.getElementById('singleTailFields').style.display = '';
+            document.getElementById('splitEditor').style.display = 'none';
+            document.getElementById('splitToggleRow').style.display = '';
+            document.getElementById('splitToggleBtn').textContent = 'Split into several lines';
+        }
+
+        function toggleSplitMode() {
+            if (splitMode) {
+                // Going back to one line keeps whatever the first line said.
+                syncSplitLinesFromDom();
+                const first = splitLines[0] || {};
+                exitSplitMode();
+                setModalMode('transactionModal', !!document.getElementById('transactionForm').dataset.editingId);
+                if (first.parent) {
+                    document.getElementById('parentCategory').value = first.parent;
+                    loadSubcategories(first.parent);
+                    if (first.category_id) document.getElementById('category').value = first.category_id;
+                }
+                document.getElementById('project').value = first.project_id || '';
+                document.getElementById('note').value = first.note || '';
+            } else {
+                // Splitting a transaction already being edited turns that row
+                // into the split's first line — the backend accepts its id as
+                // the group, so nothing is deleted and recreated.
+                const editingId = document.getElementById('transactionForm').dataset.editingId;
+                const lines = splitLinesFromSingleForm();
+                if (editingId) {
+                    lines[0].id = parseInt(editingId);
+                    editingSplitGroup = parseInt(editingId);
+                }
+                enterSplitMode(lines);
+            }
+        }
+
+        // Turn the single-line fields into the first line when splitting an
+        // existing transaction, so nothing already typed is thrown away.
+        function splitLinesFromSingleForm() {
+            const amount = parseMoneyAmount(document.getElementById('amount').value);
+            const catId = document.getElementById('category').value;
+            const projId = document.getElementById('project').value;
+            return [
+                {
+                    id: null,
+                    amount: Number.isFinite(amount) ? amount : null,
+                    parent: document.getElementById('parentCategory').value || null,
+                    category_id: catId ? parseInt(catId) : null,
+                    project_id: projId ? parseInt(projId) : null,
+                    note: document.getElementById('note').value || '',
+                },
+                { id: null, amount: null, parent: null, category_id: null, project_id: null, note: '' },
+            ];
+        }
+
+        async function saveSplit(payeeId, payeeName) {
+            syncSplitLinesFromDom();
+
+            // Saving an existing split with one line left dissolves it back
+            // into an ordinary transaction; creating one always needs two.
+            if (splitLines.length < 2 && !editingSplitGroup) {
+                alert('A split needs at least two lines. Use "Back to a single line" instead.');
+                return false;
+            }
+            if (splitLines.some(l => !Number.isFinite(l.amount) || l.amount === 0)) {
+                alert('Every line of a split needs an amount.');
+                return false;
+            }
+
+            const currency = splitCurrency();
+            const total = parseMoneyAmount(document.getElementById('amount').value);
+            const left = Math.round((total - splitAssignedTotal()) * 100) / 100;
+            if (Math.abs(left) >= 0.005) {
+                alert(`The lines add up to ${formatMoneyWithSymbol(splitAssignedTotal(), currency)}, `
+                    + `but the transaction is ${formatMoneyWithSymbol(total, currency)}. `
+                    + `${formatMoneyWithSymbol(left, currency)} is still unassigned.`);
+                return false;
+            }
+
+            const accountId = parseInt(document.getElementById('account').value);
+            const locationId = document.getElementById('location').value;
+            const payload = {
+                date: `${document.getElementById('date').value}T${document.getElementById('time').value}:00`,
+                account_id: accountId,
+                currency,
+                payee_id: payeeId,
+                location_id: locationId ? parseInt(locationId) : null,
+                lines: splitLines.map(l => ({
+                    id: l.id || null,
+                    amount: l.amount,
+                    category_id: l.category_id,
+                    project_id: l.project_id,
+                    note: l.note ? l.note : null,
+                })),
+            };
+
+            const editing = editingSplitGroup;
+            const res = await fetch(
+                `${API_URL}/transactions/split${editing ? '/' + editing : ''}`,
+                { method: editing ? 'PUT' : 'POST', body: JSON.stringify(payload),
+                  headers: { 'Content-Type': 'application/json' } });
+
+            if (!res.ok) {
+                alert('Error saving the split transaction');
+                return false;
+            }
+
+            closeTransactionModal();
+            try {
+                await loadRecentTransactions(true);
+                loadPayees();
+            } catch (e) { console.error(e); }
+            return true;
+        }
+
+        async function editSplit(groupId) {
+            setScrollTarget(groupId);
+            const g = await (await fetch(`${API_URL}/transactions/split/${groupId}`)).json();
+            openTransactionModal();
+
+            const d = new Date(g.date);
+            document.getElementById('date').valueAsDate = d;
+            document.getElementById('time').value = d.toTimeString().slice(0, 5);
+            document.getElementById('amount').value = g.amount;
+            document.getElementById('account').value = g.account_id;
+            syncAmountSign();
+            document.getElementById('payee').value = g.payee_name || '';
+            document.getElementById('location').value = g.location_id || '';
+
+            editingSplitGroup = groupId;
+            enterSplitMode(g.lines.map(l => {
+                const cat = allCategories.find(c => c.id === l.category_id);
+                return {
+                    id: l.id,
+                    amount: l.amount,
+                    parent: cat ? (cat.parent || null) : null,
+                    category_id: cat && cat.parent ? l.category_id : null,
+                    project_id: l.project_id,
+                    note: l.note || '',
+                };
+            }));
+
+            const f = document.getElementById('transactionForm');
+            f.querySelector('button[type="submit"]').textContent = 'Update';
+            setModalMode('transactionModal', true);
+            document.querySelectorAll('#transactionModal [data-new-only]').forEach(b => b.style.display = 'none');
+            // Duplicating a split is not the same operation as duplicating a row.
+            document.querySelector('#transactionModal .btn-dup').style.display = 'none';
+        }
+
+        async function deleteSplit(groupId) {
+            const confirmed = await customConfirm(
+                'Delete this split transaction and all of its lines?', 'Delete split');
+            if (!confirmed) return;
+            const res = await fetch(`${API_URL}/transactions/split/${groupId}`, { method: 'DELETE' });
+            if (!res.ok) { alert('Error deleting the split transaction'); return; }
+            openSplitGroups.delete(groupId);
+            loadRecentTransactions(true);
+        }
+
+        // In bulk mode a split is picked as a whole: every line, or none.
+        function splitRowLineIds(el) {
+            return (el.dataset.lineIds || '').split(',').filter(Boolean).map(Number);
+        }
+
+        function toggleSplitSelection(groupId) {
+            if (!bulkEditMode || (currentBulkType && currentBulkType !== 'tx')) return;
+            const row = document.querySelector(`[data-split-group="${groupId}"]`);
+            if (!row) return;
+            currentBulkType = 'tx';
+
+            const ids = splitRowLineIds(row);
+            if (ids.every(id => selectedTransactions.includes(id))) {
+                selectedTransactions = selectedTransactions.filter(id => !ids.includes(id));
+            } else {
+                ids.forEach(id => { if (!selectedTransactions.includes(id)) selectedTransactions.push(id); });
+            }
+            updateBulkUI();
+        }
+
         async function handleTransactionSubmit(e) {
             e.preventDefault();
             await saveTransaction(false);  // false = no es "save and new", debe cerrar y recalcular
@@ -2168,6 +2764,8 @@
                 if(exist) payeeId = exist.id;
                 else payeeId = (await (await fetch(`${API_URL}/payees`, { method:'POST', body:JSON.stringify({name:payeeName}), headers:{'Content-Type':'application/json'} })).json()).id;
             }
+
+            if (splitMode) return await saveSplit(payeeId, payeeName);
 
             const accountId = parseInt(document.getElementById('account').value);
             const data = {
@@ -2515,6 +3113,12 @@
             duplicateTransaction(+id);
         }
         function deleteFromModal() {
+            if (editingSplitGroup) {
+                const groupId = editingSplitGroup;
+                closeTransactionModal();
+                deleteSplit(groupId);
+                return;
+            }
             const id = document.getElementById('transactionForm').dataset.editingId;
             if (!id) return;
             closeTransactionModal();
@@ -2679,36 +3283,45 @@
                 deleteBtn.onclick = bulkDeleteTransfers;
             }
             
-            document.querySelectorAll(currentBulkType === 'tx' ? '[data-transfer-id]' : '[data-transaction-id]').forEach(e => e.classList.add('disabled'));
-            
+            // Splits count as transactions, so they are disabled alongside them.
+            document.querySelectorAll(currentBulkType === 'tx'
+                ? '[data-transfer-id]'
+                : '[data-transaction-id], [data-split-group]').forEach(e => e.classList.add('disabled'));
+
             document.querySelectorAll('.transaction-item').forEach(el => {
-                const isSel = (el.dataset.transactionId && selectedTransactions.includes(parseInt(el.dataset.transactionId))) || 
-                              (el.dataset.transferId && selectedTransfers.includes(el.dataset.transferId));
-                el.classList.toggle('selected', isSel); 
+                const splitIds = el.dataset.splitGroup ? splitRowLineIds(el) : null;
+                const isSel = (el.dataset.transactionId && selectedTransactions.includes(parseInt(el.dataset.transactionId))) ||
+                              (el.dataset.transferId && selectedTransfers.includes(el.dataset.transferId)) ||
+                              (splitIds && splitIds.length > 0 && splitIds.every(id => selectedTransactions.includes(id)));
+                el.classList.toggle('selected', isSel);
                 el.querySelector('input').checked = isSel;
             });
         }
-        
+
         function selectAllVisible() {
             if(!bulkEditMode) return;
-            
+
             const firstItem = document.querySelector('.transaction-item:not(.disabled)');
             if(!firstItem) return;
-            
-            const type = firstItem.dataset.transactionId ? 'tx' : 'tr';
+
+            const type = firstItem.dataset.transferId ? 'tr' : 'tx';
             if(currentBulkType && currentBulkType !== type) return;
-            
+
             document.querySelectorAll('.transaction-item:not(.disabled)').forEach(el => {
-                if(type === 'tx') { 
-                    const id = parseInt(el.dataset.transactionId);
-                    if(!selectedTransactions.includes(id)) selectedTransactions.push(id); 
-                } else { 
+                if(type === 'tr') {
                     const id = el.dataset.transferId;
-                    if(!selectedTransfers.includes(id)) selectedTransfers.push(id); 
+                    if(id && !selectedTransfers.includes(id)) selectedTransfers.push(id);
+                } else if (el.dataset.splitGroup) {
+                    splitRowLineIds(el).forEach(id => {
+                        if(!selectedTransactions.includes(id)) selectedTransactions.push(id);
+                    });
+                } else {
+                    const id = parseInt(el.dataset.transactionId);
+                    if(id && !selectedTransactions.includes(id)) selectedTransactions.push(id);
                 }
             });
-            
-            currentBulkType = type; 
+
+            currentBulkType = type;
             updateBulkUI();
         }
 
@@ -2814,6 +3427,7 @@
         function openTransactionModal() {
             openModal('transactionModal');
             setModalMode('transactionModal', false);
+            exitSplitMode();
             const now = new Date();
             const dateStr = now.toISOString().split('T')[0];
             const timeStr = now.toTimeString().split(' ')[0].substring(0,5);
@@ -2835,9 +3449,10 @@
                 loadRecentTransactions(true);
             }
             resetTransactionBatchState();
-            closeModal('transactionModal'); 
-            delete document.getElementById('transactionForm').dataset.editingId; 
-            document.getElementById('transactionForm').querySelector('button[type="submit"]').textContent='Save'; 
+            closeModal('transactionModal');
+            exitSplitMode();
+            delete document.getElementById('transactionForm').dataset.editingId;
+            document.getElementById('transactionForm').querySelector('button[type="submit"]').textContent='Save';
         }
         function openTransferModal() {
             openModal('transferModal');
@@ -2896,16 +3511,6 @@
         async function saveNewProject(){ const n=document.getElementById('newProjectName').value; const created=await (await fetch(`${API_URL}/projects`,{method:'POST',body:JSON.stringify({name:n}),headers:{'Content-Type':'application/json'}})).json(); closeModal('newProjectModal'); await loadProjects(); if(created && created.id) document.getElementById('project').value=created.id; }
         async function saveNewAccount(){ const n=document.getElementById('newAccountName').value; const c=document.getElementById('newAccountCurrency').value; await fetch(`${API_URL}/accounts`,{method:'POST',body:JSON.stringify({name:n,currency:c,type:'Regular',initial_balance:0}),headers:{'Content-Type':'application/json'}}); closeModal('newAccountModal'); loadAccounts(); }
         
-        function selectAllVisible() {
-            if(!bulkEditMode) return;
-            const type = document.querySelector('.transaction-item:not(.disabled)').dataset.transactionId ? 'tx' : 'tr';
-            if(currentBulkType && currentBulkType !== type) return;
-            document.querySelectorAll('.transaction-item:not(.disabled)').forEach(el => {
-                if(type === 'tx') { if(!selectedTransactions.includes(parseInt(el.dataset.transactionId))) selectedTransactions.push(parseInt(el.dataset.transactionId)); }
-                else { if(!selectedTransfers.includes(el.dataset.transferId)) selectedTransfers.push(el.dataset.transferId); }
-            });
-            currentBulkType = type; updateBulkUI();
-        }
         function loadBulkSubcategories(p){ const s = document.getElementById('bulkCategory'); s.disabled=false; s.innerHTML='<option>Don\'t change</option>'+allCategories.filter(c=>c.parent===p).map(c=>`<option value="${c.id}">${c.name}</option>`).join(''); }
         
         async function applyBulkEdit() {
