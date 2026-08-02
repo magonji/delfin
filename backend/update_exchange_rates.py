@@ -9,7 +9,7 @@ from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from backend.database import SessionLocal
-from backend.models import ExchangeRate, Transaction
+from backend.models import Account, ExchangeRate, Transaction
 
 
 def get_first_transaction_date(db: Session) -> date:
@@ -36,10 +36,16 @@ def get_currencies_with_rates(db: Session) -> set:
 def get_currencies_in_use(db: Session) -> List[str]:
     """
     Currencies we need rates for (excluding the GBP base): every currency used
-    in transactions, plus the configured display currency so dashboard totals
-    can always be converted even if no transaction uses that currency yet.
+    in transactions, every currency an account is denominated in, plus the
+    configured display currency so dashboard totals can always be converted even
+    if no transaction uses that currency yet.
+
+    Accounts matter on their own: one that holds a balance but has never been
+    transacted on contributes nothing to the transaction currencies, and without
+    its rate its balance cannot be converted at all.
     """
     currencies = {c[0] for c in db.query(Transaction.currency).distinct().all() if c[0]}
+    currencies |= {c[0] for c in db.query(Account.currency).distinct().all() if c[0]}
 
     from backend import settings_store
     display = settings_store.get_settings().get("display_currency", "auto")

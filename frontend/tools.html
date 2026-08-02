@@ -1069,8 +1069,43 @@
 
         // Format a money amount with the proper symbol for any ISO currency
         // (Intl natively knows every ECB currency we support). Mirrors index.html.
+        // ── Money ───────────────────────────────────────────────────────────────
+        // Intl in en-GB writes USD as "US$". That qualification only earns its space if
+        // the reader also holds another dollar, so the narrow symbol ($) is the default
+        // and the long form comes back only for currencies that would otherwise be
+        // indistinguishable from another one the user actually has.
+        const _ambiguousCurrencies = new Set();
+        const _currenciesInUse = new Set();
+
+        const narrowSymbol = (c) => {
+            try {
+                const part = new Intl.NumberFormat('en-GB', {
+                    style: 'currency', currency: c, currencyDisplay: 'narrowSymbol'
+                }).formatToParts(0).find(p => p.type === 'currency');
+                return part ? part.value : c;
+            } catch (e) { return c; }
+        };
+
+        // Currencies arrive from several loaders at once, so this accumulates rather
+        // than replaces: a later call must not forget what an earlier one established.
+        function noteCurrenciesInUse(codes) {
+            (codes || []).filter(Boolean).forEach(c => _currenciesInUse.add(c));
+            const bySymbol = new Map();
+            for (const c of _currenciesInUse) {
+                const s = narrowSymbol(c);
+                bySymbol.set(s, (bySymbol.get(s) || []).concat(c));
+            }
+            _ambiguousCurrencies.clear();
+            for (const sharing of bySymbol.values()) {
+                if (sharing.length > 1) sharing.forEach(c => _ambiguousCurrencies.add(c));
+            }
+        }
+
+        const currencyDisplayFor = (c) => _ambiguousCurrencies.has(c) ? 'symbol' : 'narrowSymbol';
+
         const fmtMoney = (n, c = 'GBP') => new Intl.NumberFormat('en-GB', {
-            style: 'currency', currency: c, maximumFractionDigits: 2
+            style: 'currency', currency: c, currencyDisplay: currencyDisplayFor(c),
+            maximumFractionDigits: 2
         }).format(n || 0);
 
         // Fetch the canonical currency list once and fill a <select> with it.
@@ -1253,6 +1288,7 @@
             // Load ALL accounts including closed ones, WITH REAL BALANCES
             const response = await fetch(`${API_URL}/accounts/with-balances?include_closed=true`);
             allAccounts = await response.json();
+            noteCurrenciesInUse((allAccounts || []).map(a => a.currency));
             
             // Sort: active accounts first, then by name
             allAccounts.sort((a, b) => {

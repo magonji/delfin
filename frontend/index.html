@@ -479,11 +479,51 @@ if (window.Chart) {
 // Helpers
 const q = (sel) => document.querySelector(sel);
 const qa = (sel) => Array.from(document.querySelectorAll(sel));
-const fmtMoney = (n, c = 'GBP') => new Intl.NumberFormat('en-GB', { style: 'currency', currency: c, maximumFractionDigits: 2 }).format(n || 0);
+// ── Money ───────────────────────────────────────────────────────────────
+// Intl in en-GB writes USD as "US$". That qualification only earns its space if
+// the reader also holds another dollar, so the narrow symbol ($) is the default
+// and the long form comes back only for currencies that would otherwise be
+// indistinguishable from another one the user actually has.
+const _ambiguousCurrencies = new Set();
+
+const narrowSymbol = (c) => {
+    try {
+        const part = new Intl.NumberFormat('en-GB', {
+            style: 'currency', currency: c, currencyDisplay: 'narrowSymbol'
+        }).formatToParts(0).find(p => p.type === 'currency');
+        return part ? part.value : c;
+    } catch (e) { return c; }
+};
+
+// Currencies arrive from several loaders at once, so this accumulates rather
+// than replaces: a later call must not forget what an earlier one established.
+const _currenciesInUse = new Set();
+
+function noteCurrenciesInUse(codes) {
+    (codes || []).filter(Boolean).forEach(c => _currenciesInUse.add(c));
+    const bySymbol = new Map();
+    for (const c of _currenciesInUse) {
+        const s = narrowSymbol(c);
+        bySymbol.set(s, (bySymbol.get(s) || []).concat(c));
+    }
+    _ambiguousCurrencies.clear();
+    for (const sharing of bySymbol.values()) {
+        if (sharing.length > 1) sharing.forEach(c => _ambiguousCurrencies.add(c));
+    }
+}
+
+const currencyDisplayFor = (c) => _ambiguousCurrencies.has(c) ? 'symbol' : 'narrowSymbol';
+
+const fmtMoney = (n, c = 'GBP') => new Intl.NumberFormat('en-GB', {
+    style: 'currency', currency: c, currencyDisplay: currencyDisplayFor(c),
+    maximumFractionDigits: 2
+}).format(n || 0);
+
 // The symbol on its own, for chart axes that have no room for the full figure.
 const currencySymbol = (c = 'GBP') => {
-    const part = new Intl.NumberFormat('en-GB', { style: 'currency', currency: c })
-        .formatToParts(0).find(p => p.type === 'currency');
+    const part = new Intl.NumberFormat('en-GB', {
+        style: 'currency', currency: c, currencyDisplay: currencyDisplayFor(c)
+    }).formatToParts(0).find(p => p.type === 'currency');
     return part ? part.value : '';
 };
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
@@ -681,6 +721,7 @@ function renderTxDelta() {
 async function loadSummary() {
     let sum = cacheGet('cache_summary') || await api('/dashboard/summary').then(d => { cacheSet('cache_summary', d); return d; });
     state.baseCurrency = sum.base_currency || 'GBP';
+    noteCurrenciesInUse([state.baseCurrency]);
     const footer = q('#footerNote');
     if (footer) footer.textContent = `Delfin · figures converted to ${state.baseCurrency} at historical rates`;
 
@@ -1374,6 +1415,16 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDetai
 async function init() {
     if (localStorage.getItem('dirty_data')) { cacheClearAll(); localStorage.removeItem('dirty_data'); }
     try {
+        // Settle which currencies are in play before a single figure is drawn:
+        // whether USD prints as "$" or "US$" depends on the company it keeps.
+        // loadAccounts reuses this same cache entry, so it costs nothing.
+        try {
+            const accounts = cacheGet('cache_accounts')
+                || await api('/accounts/with-balances?include_closed=true')
+                       .then(d => { cacheSet('cache_accounts', d); return d; });
+            noteCurrenciesInUse((accounts || []).map(a => a.currency));
+        } catch (e) { /* no list yet — the narrow symbol is the safe default */ }
+
         await loadSummary();
 
         await Promise.all([

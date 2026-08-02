@@ -1216,7 +1216,7 @@ def get_transactions_summary(
     (GBP) at historical rates. Transfers are excluded so the in/out figures reflect
     real income and spending, not money moved between own accounts.
     """
-    base_currency = "GBP"
+    base_currency = get_base_currency(db)
 
     transfer_ids = [
         r.id for r in db.query(models.Location.id)
@@ -1242,7 +1242,10 @@ def get_transactions_summary(
     if end_date:
         query = query.filter(models.Transaction.date <= datetime.combine(end_date, time.max))
     if transfer_ids:
-        query = query.filter(~models.Transaction.location_id.in_(transfer_ids))
+        # A transaction with no location must still count: SQL evaluates
+        # "NOT IN" as NULL, not true, when the column itself is NULL.
+        query = query.filter(or_(models.Transaction.location_id.is_(None),
+                                 ~models.Transaction.location_id.in_(transfer_ids)))
     if search:
         pattern = f"%{search}%"
         query = query.outerjoin(models.Payee).filter(
@@ -2209,12 +2212,7 @@ def _as_datetime_ceil(d):
 @app.get("/dashboard/summary")
 def get_dashboard_summary(db: Session = Depends(get_db)):
     """Get summary counts for the dashboard. Balance KPIs are driven by the networth endpoint."""
-    currency_counts = db.query(
-        Transaction.currency,
-        sql_func.count(Transaction.id).label('count')
-    ).group_by(Transaction.currency).order_by(sql_func.count(Transaction.id).desc()).all()
-
-    base_currency = currency_counts[0][0] if currency_counts else "GBP"
+    base_currency = get_base_currency(db)
 
     total_transactions = db.query(sql_func.count(Transaction.id)).scalar()
     total_accounts = db.query(sql_func.count(Account.id)).filter(
@@ -2274,7 +2272,7 @@ def get_networth_evolution(
                 "percentage_change": 0, "peak_balance": 0, "peak_date": None,
                 "lowest_balance": 0, "lowest_date": None
             },
-            "base_currency": "GBP"
+            "base_currency": get_base_currency(db)
         }
 
     # Determine date range for exchange rates
@@ -2290,23 +2288,34 @@ def get_networth_evolution(
         currencies_query = currencies_query.filter(and_(*filters))
     currencies = [c[0] for c in currencies_query.all() if c[0]]
 
+    # Accounts that never appear in a transaction still hold money, and their
+    # currency may not be used anywhere else — without its rate the conversion
+    # below would quietly fall back to 1.0.
+    untouched_accounts = []
+    if not date_from:
+        touched_ids = {t.account_id for t in transactions}
+        untouched_q = db.query(Account).filter(Account.is_active == 1)
+        if touched_ids:
+            untouched_q = untouched_q.filter(~Account.id.in_(touched_ids))
+        if excluded_ids:
+            untouched_q = untouched_q.filter(~Account.id.in_(excluded_ids))
+        untouched_accounts = [a for a in untouched_q.all() if a.initial_balance]
+
     # Add account currencies for baseline calculation
     if date_from:
         account_currencies = db.query(Account.currency).distinct().all()
         for c in account_currencies:
             if c[0] and c[0] not in currencies:
                 currencies.append(c[0])
+    else:
+        for acc in untouched_accounts:
+            if acc.currency and acc.currency not in currencies:
+                currencies.append(acc.currency)
 
     # Load historical exchange rates (BULK)
     historical_rates = get_rates_bulk(db, currencies, min_trans_date, max_trans_date)
 
-    # Determine base currency
-    currency_counts = db.query(
-        Transaction.currency,
-        sql_func.count(Transaction.id).label('count')
-    ).group_by(Transaction.currency).order_by(sql_func.count(Transaction.id).desc()).all()
-    
-    base_currency = currency_counts[0][0] if currency_counts else "GBP"
+    base_currency = get_base_currency(db)
 
     # Calculate baseline balances
     account_balances = {}
@@ -2352,6 +2361,16 @@ def get_networth_evolution(
         for acc in db.query(Account).filter(Account.id.in_(account_ids_in_range)).all():
             if acc.initial_balance:
                 account_initial[acc.id] = (float(acc.initial_balance), acc.currency)
+
+        # An untouched account holds its opening balance for the whole timeline,
+        # so it is seeded here rather than "on first appearance" — it never
+        # appears. Without this, "all time" reported a smaller total than any
+        # dated range over the very same data.
+        opening_rates = historical_rates.get(min_trans_date, {}) or {}
+        opening_base_rate = opening_rates.get(base_currency, 1.0)
+        for acc in untouched_accounts:
+            acc_rate = opening_rates.get(acc.currency, 1.0)
+            account_balances[acc.id] = float(acc.initial_balance) * (opening_base_rate / acc_rate)
 
     # Process transactions with HISTORICAL rates
     for trans in transactions:
@@ -2495,7 +2514,7 @@ def get_categories_evolution(
 
     currencies = list(set([t.currency for t in transactions if t.currency])) if transactions else []
     historical_rates = get_rates_bulk(db, currencies, min_date, max_date) if currencies else {}
-    base_currency = "GBP"
+    base_currency = get_base_currency(db)
 
     # Generate all periods in range
     all_periods = []
@@ -2573,7 +2592,7 @@ def _collect_month_expenses(db: Session, start_date, end_date):
     the base currency (GBP) with that day's historical rate and excluding
     transfers. Returns (expenses, base_currency); each expense is a dict whose
     `amount`/`original_amount` are positive and unrounded."""
-    base_currency = "GBP"
+    base_currency = get_base_currency(db)
 
     transfer_ids = [
         r.id for r in db.query(Location.id)
@@ -2586,7 +2605,10 @@ def _collect_month_expenses(db: Session, start_date, end_date):
         Transaction.date <= _as_datetime_ceil(end_date)
     ]
     if transfer_ids:
-        filters.append(~Transaction.location_id.in_(transfer_ids))
+        # A transaction with no location must still count: SQL evaluates
+        # "NOT IN" as NULL, not true, when the column itself is NULL.
+        filters.append(or_(Transaction.location_id.is_(None),
+                           ~Transaction.location_id.in_(transfer_ids)))
 
     transactions = db.query(Transaction).filter(and_(*filters)).all()
     if not transactions:
@@ -2763,12 +2785,12 @@ def get_yearly_summary(
                 "highest_expense_month": None,
                 "highest_income_month": None
             },
-            "base_currency": "GBP"
+            "base_currency": get_base_currency(db)
         }
 
     currencies = list(set([t.currency for t in transactions if t.currency]))
     historical_rates = get_rates_bulk(db, currencies, start_date, end_date)
-    base_currency = "GBP"
+    base_currency = get_base_currency(db)
 
     monthly_data_dict = {}
     category_totals = {}
@@ -2866,14 +2888,14 @@ def get_top_payees(
     transactions = db.query(Transaction).filter(and_(*filters)).all()
 
     if not transactions:
-        return {"payees": [], "base_currency": "GBP"}
+        return {"payees": [], "base_currency": get_base_currency(db)}
 
     min_date = _to_date(min(t.date for t in transactions))
     max_date = _to_date(max(t.date for t in transactions))
 
     currencies = list(set([t.currency for t in transactions if t.currency]))
     historical_rates = get_rates_bulk(db, currencies, min_date, max_date)
-    base_currency = "GBP"
+    base_currency = get_base_currency(db)
 
     payee_data = {}
 
@@ -2946,13 +2968,16 @@ def get_top_locations(
         .all()
     ]
     if transfer_ids:
-        filters.append(~Transaction.location_id.in_(transfer_ids))
+        # A transaction with no location must still count: SQL evaluates
+        # "NOT IN" as NULL, not true, when the column itself is NULL.
+        filters.append(or_(Transaction.location_id.is_(None),
+                           ~Transaction.location_id.in_(transfer_ids)))
 
     # Get transactions
     transactions = db.query(Transaction).filter(and_(*filters)).all()
 
     if not transactions:
-        return {"locations": [], "base_currency": "GBP"}
+        return {"locations": [], "base_currency": get_base_currency(db)}
 
     # Date range
     min_date = _to_date(min(t.date for t in transactions))
@@ -2963,7 +2988,7 @@ def get_top_locations(
 
     # Load historical rates
     historical_rates = get_rates_bulk(db, currencies, min_date, max_date)
-    base_currency = "GBP"
+    base_currency = get_base_currency(db)
 
     # Aggregate by location
     location_data = {}
@@ -3106,7 +3131,7 @@ def get_top_individual_expenses(
         transactions = db.query(Transaction).filter(and_(*filters)).order_by(Transaction.amount).all()
 
     if not transactions:
-        return {"items": [], "base_currency": "GBP"}
+        return {"items": [], "base_currency": get_base_currency(db)}
 
     # Take top by absolute amount
     transactions = transactions[:limit * 2]  # Get extra to ensure we have enough after conversion
@@ -3120,7 +3145,7 @@ def get_top_individual_expenses(
 
     # Load historical rates
     historical_rates = get_rates_bulk(db, currencies, min_date, max_date)
-    base_currency = "GBP"
+    base_currency = get_base_currency(db)
 
     # Convert and collect
     items = []
@@ -3174,7 +3199,10 @@ def get_loan_account_ids(db: Session = Depends(get_db)):
             Transaction.payee_id != None,
         )
         if transfer_location_ids:
-            payee_query = payee_query.filter(~Transaction.location_id.in_(transfer_location_ids))
+            # A transaction with no location must still count: SQL evaluates
+            # "NOT IN" as NULL, not true, when the column itself is NULL.
+            payee_query = payee_query.filter(or_(Transaction.location_id.is_(None),
+                                                 ~Transaction.location_id.in_(transfer_location_ids)))
         unique_payees = set(p[0] for p in payee_query.distinct().all())
         if len(unique_payees) < CREDIT_CARD_PAYEE_THRESHOLD:
             loan_ids.append(account.id)
@@ -3193,12 +3221,7 @@ def get_loans_summary(db: Session = Depends(get_db)):
     # Get all accounts
     all_accounts = db.query(Account).all()
     
-    # Determine base currency
-    currency_counts = db.query(
-        Transaction.currency,
-        sql_func.count(Transaction.id).label('count')
-    ).group_by(Transaction.currency).order_by(sql_func.count(Transaction.id).desc()).all()
-    base_currency = currency_counts[0][0] if currency_counts else "GBP"
+    base_currency = get_base_currency(db)
     
     # Get exchange rates
     subq = db.query(
@@ -3350,12 +3373,7 @@ def get_loans_details(
     # Get all accounts
     all_accounts = db.query(Account).all()
     
-    # Determine base currency
-    currency_counts = db.query(
-        Transaction.currency,
-        sql_func.count(Transaction.id).label('count')
-    ).group_by(Transaction.currency).order_by(sql_func.count(Transaction.id).desc()).all()
-    base_currency = currency_counts[0][0] if currency_counts else "GBP"
+    base_currency = get_base_currency(db)
     
     # Get transfer location IDs
     transfer_locations = db.query(Location.id).filter(
@@ -3581,7 +3599,11 @@ def initialise_balances(db: Session = Depends(get_db)):
         # PHASE 2: Calculate total_balance_after using HISTORICAL exchange rates
         print("--- CALCULATING TOTAL BALANCE AFTER (historical rates) ---")
 
-        BASE_CURRENCY = 'GBP'
+        # The same column is written by the incremental paths in helpers.py and by
+        # recalculate_balances_for_accounts, both of which use the display currency.
+        # Hardcoding GBP here made a full recalculation silently rewrite every
+        # figure in a different currency from the one that produced it.
+        BASE_CURRENCY = get_base_currency(db)
 
         # Get ALL transactions ordered globally by date and ID
         all_transactions = db.query(models.Transaction).order_by(
@@ -3600,6 +3622,20 @@ def initialise_balances(db: Session = Depends(get_db)):
 
             # Track converted balances per account (same logic as networth endpoint)
             account_converted_balances = {}
+
+            # Seed the accounts that never appear in a transaction: they hold their
+            # opening balance throughout, so leaving them out made this running
+            # total disagree with the dashboard, which counts them.
+            touched_ids = {t.account_id for t in all_transactions}
+            opening_rates = historical_rates.get(min_date, {}) or {}
+            opening_base_rate = opening_rates.get(BASE_CURRENCY, 1.0)
+            for acc in accounts:
+                if acc.id in touched_ids or not acc.initial_balance:
+                    continue
+                acc_rate = opening_rates.get(acc.currency or BASE_CURRENCY, 1.0)
+                account_converted_balances[acc.id] = (
+                    float(acc.initial_balance) * (opening_base_rate / acc_rate)
+                )
 
             # Initialise with initial_balance converted at first transaction's rate
             account_initial_added = set()
@@ -4740,7 +4776,10 @@ def detect_recurring_expenses(
         Transaction.date >= datetime.combine(cutoff_date, time.min)
     ]
     if transfer_ids:
-        filters.append(~Transaction.location_id.in_(transfer_ids))
+        # A transaction with no location must still count: SQL evaluates
+        # "NOT IN" as NULL, not true, when the column itself is NULL.
+        filters.append(or_(Transaction.location_id.is_(None),
+                           ~Transaction.location_id.in_(transfer_ids)))
 
     transactions = db.query(Transaction).filter(and_(*filters)).all()
 

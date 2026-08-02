@@ -959,13 +959,51 @@
         const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c =>
             ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+        // ── Money ───────────────────────────────────────────────────────────────
+        // Intl in en-GB writes USD as "US$". That qualification only earns its space if
+        // the reader also holds another dollar, so the narrow symbol ($) is the default
+        // and the long form comes back only for currencies that would otherwise be
+        // indistinguishable from another one the user actually has.
+        const _ambiguousCurrencies = new Set();
+        const _currenciesInUse = new Set();
+
+        const narrowSymbol = (c) => {
+            try {
+                const part = new Intl.NumberFormat('en-GB', {
+                    style: 'currency', currency: c, currencyDisplay: 'narrowSymbol'
+                }).formatToParts(0).find(p => p.type === 'currency');
+                return part ? part.value : c;
+            } catch (e) { return c; }
+        };
+
+        // Currencies arrive from several loaders at once, so this accumulates rather
+        // than replaces: a later call must not forget what an earlier one established.
+        function noteCurrenciesInUse(codes) {
+            (codes || []).filter(Boolean).forEach(c => _currenciesInUse.add(c));
+            const bySymbol = new Map();
+            for (const c of _currenciesInUse) {
+                const s = narrowSymbol(c);
+                bySymbol.set(s, (bySymbol.get(s) || []).concat(c));
+            }
+            _ambiguousCurrencies.clear();
+            for (const sharing of bySymbol.values()) {
+                if (sharing.length > 1) sharing.forEach(c => _ambiguousCurrencies.add(c));
+            }
+        }
+
+        const currencyDisplayFor = (c) => _ambiguousCurrencies.has(c) ? 'symbol' : 'narrowSymbol';
+
         const fmtMoney = (n, c) => new Intl.NumberFormat('en-GB', {
-            style: 'currency', currency: c || state.baseCurrency, maximumFractionDigits: 2
+            style: 'currency', currency: c || state.baseCurrency,
+            currencyDisplay: currencyDisplayFor(c || state.baseCurrency),
+            maximumFractionDigits: 2
         }).format(n || 0);
 
         // Rounded to the nearest unit — used where space is tight (calendar cells).
         const fmtMoney0 = (n, c) => new Intl.NumberFormat('en-GB', {
-            style: 'currency', currency: c || state.baseCurrency, maximumFractionDigits: 0
+            style: 'currency', currency: c || state.baseCurrency,
+            currencyDisplay: currencyDisplayFor(c || state.baseCurrency),
+            maximumFractionDigits: 0
         }).format(n || 0);
 
         // Bare number, for the four figures crammed into a calendar cell.
@@ -1070,6 +1108,7 @@
                     api('/categories?limit=1000'),
                     api('/accounts')
                 ]);
+                noteCurrenciesInUse((state.accounts || []).map(a => a.currency));
                 populatePickers();
 
                 const months = await api('/dashboard/available-months');
@@ -1289,6 +1328,7 @@
                 const data = await api(`/budgets/${state.currentMonth}/progress`);
                 state.data = data;
                 state.baseCurrency = data.base_currency || 'GBP';
+                noteCurrenciesInUse([state.baseCurrency]);
                 renderHero(data);
                 renderFixed(data);
                 renderIncome(data);

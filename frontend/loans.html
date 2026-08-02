@@ -252,19 +252,43 @@
     const INTEREST_PATTERN = /interest|fee|hipoteca|comisiones|interés|comisión/i;
     
     // Currency symbol for any ISO 4217 code, derived via Intl (falls back to the code).
+    // "US$" only earns its space when another dollar is on the page; otherwise
+    // the narrow "$" is what someone expects to see. The cache is keyed on both
+    // the currency and that verdict, since the verdict changes as data loads.
+    const _ambiguousCurrencies = new Set();
+    const _currenciesInUse = new Set();
     const _symCache = {};
+
+    const _symbolFor = (currency, display) => {
+        try {
+            const parts = new Intl.NumberFormat('en', {
+                style: 'currency', currency, currencyDisplay: display
+            }).formatToParts(0);
+            return (parts.find(p => p.type === 'currency') || {}).value || (currency + ' ');
+        } catch (e) {
+            return currency + ' ';
+        }
+    };
+
+    function noteCurrenciesInUse(codes) {
+        (codes || []).filter(Boolean).forEach(c => _currenciesInUse.add(c));
+        const bySymbol = new Map();
+        for (const c of _currenciesInUse) {
+            const s = _symbolFor(c, 'narrowSymbol');
+            bySymbol.set(s, (bySymbol.get(s) || []).concat(c));
+        }
+        _ambiguousCurrencies.clear();
+        for (const sharing of bySymbol.values()) {
+            if (sharing.length > 1) sharing.forEach(c => _ambiguousCurrencies.add(c));
+        }
+    }
+
     const sym = (currency) => {
         if (!currency) return '';
-        if (_symCache[currency] === undefined) {
-            try {
-                const parts = new Intl.NumberFormat('en', { style: 'currency', currency, currencyDisplay: 'narrowSymbol' }).formatToParts(0);
-                const s = (parts.find(p => p.type === 'currency') || {}).value;
-                _symCache[currency] = s || (currency + ' ');
-            } catch (e) {
-                _symCache[currency] = currency + ' ';
-            }
-        }
-        return _symCache[currency];
+        const display = _ambiguousCurrencies.has(currency) ? 'symbol' : 'narrowSymbol';
+        const key = currency + '/' + display;
+        if (_symCache[key] === undefined) _symCache[key] = _symbolFor(currency, display);
+        return _symCache[key];
     };
 
     // Global state for currency display
@@ -330,7 +354,6 @@
                 summary = await api('/loans/summary');
                 setCache('loans_summary', summary);
             }
-            updateSummaryUI(summary);
 
             // Load detailed loan/card data with transactions
             let details = getCache('loans_details');
@@ -338,6 +361,16 @@
                 details = await api('/loans/details?include_completed=true');
                 setCache('loans_details', details);
             }
+
+            // Both are in hand before anything is drawn: the KPI symbol depends on
+            // which currencies the accounts below use, so it cannot be settled
+            // from the summary alone.
+            noteCurrenciesInUse([
+                summary.base_currency,
+                ...(details.loans || []).map(d => d.account && d.account.currency),
+                ...(details.credit_cards || []).map(d => d.account && d.account.currency),
+            ]);
+            updateSummaryUI(summary);
             renderDashboard(details);
 
         } catch (e) {
@@ -352,6 +385,7 @@
      */
     function updateSummaryUI(data) {
         globalCurrency = data.base_currency || 'GBP';
+        noteCurrenciesInUse([globalCurrency]);
         globalSymbol = sym(globalCurrency);
         const footer = q('#footerNote');
         if (footer) footer.textContent = `Delfin · balances in ${globalCurrency} at historical rates`;

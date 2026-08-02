@@ -1101,6 +1101,9 @@
         // --- Configuration and global state ---
         let allCategories = [], allPayees = [], allAccounts = [], allAccountsIncludingClosed = [], allLocations = [], regularTransactions = [], transferTransactions = [];
         let accountsMap = new Map();
+        // The running portfolio total is converted to the display currency, which
+        // the summary endpoint reports. Assuming GBP mislabels every other user.
+        let displayCurrency = 'GBP';
         let transactionsSkip = 0; const LIMIT = 100;
         let isLoadingTransactions = false, hasMoreTransactions = true;
         let pendingTransferOuts = [], pendingTransferIns = []; // Cross-page transfer matching
@@ -1421,9 +1424,51 @@
 
         // Base currency (used for formatting)
         
+        // ── Money ───────────────────────────────────────────────────────────────
+        // Intl in en-GB writes USD as "US$". That qualification only earns its space if
+        // the reader also holds another dollar, so the narrow symbol ($) is the default
+        // and the long form comes back only for currencies that would otherwise be
+        // indistinguishable from another one the user actually has.
+        const _ambiguousCurrencies = new Set();
+        const _currenciesInUse = new Set();
+
+        const narrowSymbol = (c) => {
+            try {
+                const part = new Intl.NumberFormat('en-GB', {
+                    style: 'currency', currency: c, currencyDisplay: 'narrowSymbol'
+                }).formatToParts(0).find(p => p.type === 'currency');
+                return part ? part.value : c;
+            } catch (e) { return c; }
+        };
+
+        // Currencies arrive from several loaders at once, so this accumulates rather
+        // than replaces: a later call must not forget what an earlier one established.
+        function noteCurrenciesInUse(codes) {
+            (codes || []).filter(Boolean).forEach(c => _currenciesInUse.add(c));
+            const bySymbol = new Map();
+            for (const c of _currenciesInUse) {
+                const s = narrowSymbol(c);
+                bySymbol.set(s, (bySymbol.get(s) || []).concat(c));
+            }
+            _ambiguousCurrencies.clear();
+            for (const sharing of bySymbol.values()) {
+                if (sharing.length > 1) sharing.forEach(c => _ambiguousCurrencies.add(c));
+            }
+        }
+
+        const currencyDisplayFor = (c) => _ambiguousCurrencies.has(c) ? 'symbol' : 'narrowSymbol';
+
+        // Was a table of five hard-coded symbols; every other currency fell back
+        // to its ISO code. Intl knows them all.
         function getCurrencySymbol(currency) {
-            const symbols = { 'GBP': '£', 'EUR': '€', 'USD': '$', 'JPY': '¥', 'CNY': '¥' };
-            return symbols[currency] || currency;
+            if (!currency) return '';
+            try {
+                const part = new Intl.NumberFormat('en-GB', {
+                    style: 'currency', currency,
+                    currencyDisplay: currencyDisplayFor(currency)
+                }).formatToParts(0).find(p => p.type === 'currency');
+                return part ? part.value : currency;
+            } catch (e) { return currency; }
         }
 
         function formatMoneyWithSymbol(amount, currency) {
@@ -1656,6 +1701,7 @@
                 allAccountsIncludingClosed = await (await fetch(`${API_URL}/accounts?include_closed=true`)).json();
                 accountsMap.clear();
                 allAccountsIncludingClosed.forEach(a => accountsMap.set(a.id, a));
+                noteCurrenciesInUse(allAccountsIncludingClosed.map(a => a.currency));
                 allAccounts = allAccountsIncludingClosed.filter(a => a.is_active).sort((a, b) => a.name.localeCompare(b.name));
                 populateAllAccountDropdowns(); 
             } catch (e) { console.error(e); }
@@ -1739,6 +1785,8 @@
             try {
                 const s = await (await fetch(`${API_URL}/transactions/summary?${currentFilterParams().toString()}`)).json();
                 const cur = s.base_currency || 'GBP';
+                displayCurrency = cur;
+                noteCurrenciesInUse([cur]);
                 const footer = document.getElementById('footerNote');
                 if (footer) footer.textContent = `Delfin · balances shown in ${cur} at historical rates`;
                 document.getElementById('sumCount').textContent = (s.count ?? 0).toLocaleString('en-GB');
@@ -1944,7 +1992,7 @@
             if (t.location_name) mobileDetails.push(['Location', t.location_name]);
             if (t.note) mobileDetails.push(['Note', t.note]);
             if (t.account_balance_after != null) mobileDetails.push(['Acc. balance', `<span style="color:${balanceAccountColor}">${formatMoneyWithSymbol(t.account_balance_after, accountCurrency)}</span>`]);
-            if (t.total_balance_after != null) mobileDetails.push(['Total balance', `<span style="color:${balanceTotalColor}">${formatMoneyWithSymbol(t.total_balance_after, 'GBP')}</span>`]);
+            if (t.total_balance_after != null) mobileDetails.push(['Total balance', `<span style="color:${balanceTotalColor}">${formatMoneyWithSymbol(t.total_balance_after, displayCurrency)}</span>`]);
 
             const detailHtml = mobileDetails.map(([l, v]) => `<span class="md-label">${l}</span><span class="md-value">${v}</span>`).join('');
 
@@ -1966,7 +2014,7 @@
                 <div class="t-cell ledger-note" title="${t.note || ''}">${t.note || ''}</div>
                 <div class="t-cell t-amount ${t.amount < 0 ? 'amount-negative' : 'amount-positive'}">${formatMoneyWithSymbol(t.amount, t.currency)}</div>
                 <div class="t-cell balance-cell" style="color: ${balanceAccountColor}">${t.account_balance_after != null ? formatMoneyWithSymbol(t.account_balance_after, accountCurrency) : ''}</div>
-                <div class="t-cell balance-cell" style="color: ${balanceTotalColor}">${t.total_balance_after != null ? formatMoneyWithSymbol(t.total_balance_after, 'GBP') : ''}</div>
+                <div class="t-cell balance-cell" style="color: ${balanceTotalColor}">${t.total_balance_after != null ? formatMoneyWithSymbol(t.total_balance_after, displayCurrency) : ''}</div>
                 <div class="mobile-detail">
                     <div class="mobile-detail-grid">${detailHtml}</div>
                     <div class="mobile-detail-actions">
