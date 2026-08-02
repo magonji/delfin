@@ -121,8 +121,10 @@
         #filters select { flex: 1 1 0; min-width: 64px; background: var(--paper) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%238A7D6C'/%3E%3C/svg%3E") no-repeat right 10px center; padding-right: 26px; cursor: pointer; }
         #filters input[type="date"] { flex: 0 0 auto; width: auto; color: #5A4E3C; }
         .filter-actions { display: flex; gap: 5px; flex: 0 0 auto; }
-        .filter-actions button:first-child { background: var(--btn-primary); color: #F6EFE3; border-color: var(--btn-primary); }
-        .filter-actions button:last-child { background: transparent; border-color: transparent; color: var(--muted); }
+        /* Scoped to #filters: the `#filters button` rule above carries an id, so a
+           plain .filter-actions selector loses to it and never paints. Clear is left
+           to that rule, which is the look it has always had. */
+        #filters .filter-actions button:first-child { background: var(--yellow); color: var(--ink); border-color: var(--yellow); }
         #filterToggle { display: none; }
 
         /* Bulk edit mode controls */
