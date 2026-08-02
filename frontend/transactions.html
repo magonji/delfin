@@ -140,12 +140,15 @@
         .page-head { margin-bottom: 22px; }
         .page-head-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
         .page-title { margin: 0; font-family: 'Playfair Display', serif; font-size: 34px; font-weight: 800; line-height: 1; padding-left: 18px; border-left: 3px solid var(--accent); }
-        .tx-summary { display: flex; }
-        .sum-cell { text-align: right; padding: 0 18px; border-left: 1px solid var(--hair); }
+        .tx-summary { display: flex; max-width: 100%; }
+        /* min-width:0 lets a cell be narrower than its number, which is what makes
+           the overflow measurable — see fitSummaryValues(). */
+        .sum-cell { text-align: right; padding: 0 18px; border-left: 1px solid var(--hair); min-width: 0; }
         .sum-cell:first-child { border-left: none; padding-left: 0; }
         .sum-cell:last-child { padding-right: 0; }
         .sum-label { font-size: 10px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
-        .sum-val { font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 800; margin-top: 4px; font-variant-numeric: tabular-nums; }
+        .sum-val { font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 800; margin-top: 4px; font-variant-numeric: tabular-nums;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
         /* Transaction table layout and styling */
         .transactions-wrapper { border: none; border-radius: 0; overflow: visible; }
@@ -587,6 +590,8 @@
             h1 { font-size: 20px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
             button, select, input, textarea { min-height: 44px; font-size: 16px; }
             .container { margin: 10px auto; max-width: 100%; overflow: hidden; }
+            .tx-summary { width: 100%; }
+            .sum-cell { flex: 1 1 0; padding: 0 8px; }
             .card { margin: 8px; padding: 8px; overflow: hidden; }
 
             /* Filter toggle */
@@ -1787,6 +1792,23 @@
             return params;
         }
 
+        // Playfair at 22px suits a four-figure total and runs off the side of a
+        // phone at seven, so each value is stepped down until it fits the cell it
+        // was given. Measured rather than guessed from the viewport: what matters
+        // is how many digits the number actually has.
+        function fitSummaryValues() {
+            document.querySelectorAll('.sum-val').forEach(el => {
+                el.style.fontSize = '';   // back to the CSS size before measuring
+                let size = parseFloat(getComputedStyle(el).fontSize) || 22;
+                while (size > 11 && el.scrollWidth > el.clientWidth) {
+                    size -= 1;
+                    el.style.fontSize = size + 'px';
+                }
+            });
+        }
+        addEventListener('resize', fitSummaryValues);
+        if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitSummaryValues);
+
         // Totals over the whole filtered set (converted to GBP, transfers excluded).
         async function updateTransactionsSummary() {
             try {
@@ -1799,6 +1821,7 @@
                 document.getElementById('sumCount').textContent = (s.count ?? 0).toLocaleString('en-GB');
                 document.getElementById('sumIn').textContent = formatMoneyWithSymbol(s.money_in ?? 0, cur);
                 document.getElementById('sumOut').textContent = formatMoneyWithSymbol(s.money_out ?? 0, cur);
+                fitSummaryValues();
             } catch (e) { console.error('Summary load failed', e); }
         }
 
