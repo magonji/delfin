@@ -58,6 +58,16 @@ _ADDED_COLUMNS = {
         # Lines of a split transaction, sharing the id of the first line.
         "split_group_id": "INTEGER",
     },
+    "loans": {
+        # What the loan cost to arrange, and whether it was paid at the outset
+        # or added to the debt.
+        "opening_fee": "FLOAT DEFAULT 0.0",
+        "fee_treatment": "VARCHAR DEFAULT 'upfront'",
+        # A standing charge for having the loan, and the price of ending it early.
+        "recurring_fee": "FLOAT DEFAULT 0.0",
+        "recurring_fee_months": "INTEGER DEFAULT 1",
+        "early_repayment_fee_pct": "FLOAT DEFAULT 0.0",
+    },
 }
 
 # Indexes on tables that already existed. ``create_all`` skips a table it finds,

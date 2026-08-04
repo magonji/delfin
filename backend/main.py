@@ -17,7 +17,7 @@ from backend import models, schemas
 from backend import maintenance
 from backend import backup as db_backup
 from backend import security
-from backend.models import Account, Category, Payee, Location, Project, Transaction, ExchangeRate, Budget, RecurringExpense, RecurringExpenseHistory, RecurringExpensePayment, PlannedExpense
+from backend.models import Account, Category, Payee, Location, Project, Transaction, ExchangeRate, Budget, RecurringExpense, RecurringExpenseHistory, RecurringExpensePayment, PlannedExpense, Loan
 from backend.schemas import ExchangeRateResponse
 from backend.helpers import (
     recalculate_balances_from_transaction,
@@ -27,6 +27,7 @@ from backend.helpers import (
     get_base_currency
 )
 from backend import budget_engine
+from backend import loan_engine
 
 # The database is encrypted; tables are created on unlock() after login,
 # not at import time (there is no engine until the app is unlocked).
@@ -3481,8 +3482,13 @@ def get_loan_account_ids(db: Session = Depends(get_db)):
     ).all()
     transfer_location_ids = set(loc.id for loc in transfer_locations)
 
+    declared_loan_accounts = {row[0] for row in db.query(Loan.account_id).all()}
+
     loan_ids = []
     for account in db.query(Account).all():
+        if account.id in declared_loan_accounts:
+            loan_ids.append(account.id)
+            continue
         first_tx = db.query(Transaction).filter(
             Transaction.account_id == account.id
         ).order_by(Transaction.date, Transaction.id).first()
@@ -3542,8 +3548,10 @@ def get_loans_summary(db: Session = Depends(get_db)):
     active_loans = 0
     total_owed = 0
     total_interest = 0
-    
+
     CREDIT_CARD_PAYEE_THRESHOLD = 3
+
+    declared_loan_accounts = {row[0] for row in db.query(Loan.account_id).all()}
     
     for account in all_accounts:
         # Get all transactions for this account, sorted chronologically
@@ -3554,26 +3562,29 @@ def get_loans_summary(db: Session = Depends(get_db)):
         if not transactions:
             continue
         
+        # An account with agreed terms is a loan because it was declared one.
+        declared = account.id in declared_loan_accounts
+
         # Check if account starts with negative transaction (debt account)
         first_transaction = transactions[0]
-        if first_transaction.amount >= 0:
+        if first_transaction.amount >= 0 and not declared:
             continue  # Not a debt account
-        
+
         # Identify transfer transactions
         transfer_ids = set()
         for tx in transactions:
             if tx.location_id and tx.location_id in transfer_location_ids:
                 transfer_ids.add(tx.id)
-        
+
         # Count unique payees (excluding transfers)
         unique_payees = set()
         for tx in transactions:
             if tx.payee_id and tx.id not in transfer_ids:
                 unique_payees.add(tx.payee_id)
-        
+
         # Determine if it's a credit card or loan
-        is_credit_card = len(unique_payees) >= CREDIT_CARD_PAYEE_THRESHOLD
-        
+        is_credit_card = (not declared) and len(unique_payees) >= CREDIT_CARD_PAYEE_THRESHOLD
+
         # Calculate metrics in account's original currency, then convert to base
         borrowed = 0
         repaid = 0
@@ -3681,8 +3692,12 @@ def get_loans_details(
         "completed": [],
         "base_currency": base_currency
     }
-    
+
     CREDIT_CARD_PAYEE_THRESHOLD = 3
+
+    # Agreed terms, where they have been entered. An account without them keeps
+    # being estimated from its movements, exactly as before.
+    loan_terms = {loan.account_id: loan for loan in db.query(Loan).all()}
     
     for account in all_accounts:
         # Get all transactions for this account, sorted chronologically
@@ -3690,20 +3705,24 @@ def get_loans_details(
             Transaction.account_id == account.id
         ).order_by(Transaction.date, Transaction.id).all()
         
+        # An account with agreed terms is a loan because it was declared one, so
+        # the pattern-matching below never gets to overrule it.
+        declared = loan_terms.get(account.id)
+
         if not transactions:
             continue
-        
+
         # Check if account starts with negative transaction (debt account)
         first_transaction = transactions[0]
-        if first_transaction.amount >= 0:
+        if first_transaction.amount >= 0 and not declared:
             continue  # Not a debt account
-        
+
         # Identify transfer transactions
         transfer_ids = set()
         for tx in transactions:
             if tx.location_id and tx.location_id in transfer_location_ids:
                 transfer_ids.add(tx.id)
-        
+
         # Count unique payees (excluding transfers)
         unique_payees = set()
         payee_names = []
@@ -3712,10 +3731,10 @@ def get_loans_details(
                 unique_payees.add(tx.payee_id)
                 if tx.payee and tx.payee.name:
                     payee_names.append(tx.payee.name)
-        
+
         # Determine if it's a credit card or loan
-        is_credit_card = len(unique_payees) >= CREDIT_CARD_PAYEE_THRESHOLD
-        
+        is_credit_card = (not declared) and len(unique_payees) >= CREDIT_CARD_PAYEE_THRESHOLD
+
         # Calculate metrics IN ACCOUNT'S ORIGINAL CURRENCY
         borrowed = 0
         repaid = 0
@@ -3824,7 +3843,15 @@ def get_loans_details(
             "unique_payees": len(unique_payees),
             "transactions": tx_list[::-1]
         }
-        
+
+        # With the contract in hand the schedule is arithmetic, so it replaces the
+        # guesswork: the agreed rate and lender win over the ones inferred above.
+        if declared:
+            debt_data["terms"] = loan_engine.as_dict(declared)
+            debt_data["schedule"] = loan_engine.summary(declared)
+            if declared.lender:
+                debt_data["lender_name"] = declared.lender.name
+
         # Categorize by type and status
         # Credit cards ALWAYS go to credit_cards list (never to completed)
         if is_credit_card:
@@ -3836,6 +3863,231 @@ def get_loans_details(
             result["loans"].append(debt_data)
     
     return result
+
+
+def _resolve_lender(db: Session, payload) -> Optional[int]:
+    """
+    The lender as an ordinary payee, created if the name is new, so repayments can
+    be matched to it like any other spending.
+    """
+    if payload.lender_payee_id:
+        return payload.lender_payee_id
+    name = (payload.lender_name or "").strip()
+    if not name:
+        return None
+    lender = db.query(Payee).filter(Payee.name == name).first()
+    if not lender:
+        lender = Payee(name=name)
+        db.add(lender)
+        db.flush()
+    return lender.id
+
+
+def _apply_terms(loan: Loan, payload) -> None:
+    """Copy the agreed terms onto a loan row. Shared by creating and editing."""
+    loan.name = payload.name.strip()
+    loan.principal = payload.principal
+    loan.annual_rate = payload.annual_rate or 0.0
+    loan.open_date = payload.open_date
+    loan.term_count = payload.term_count
+    loan.term_unit = payload.term_unit
+    loan.repayment_type = payload.repayment_type
+    loan.interest_months = payload.interest_months
+    loan.payment_months = payload.payment_months
+    loan.day_rule = payload.day_rule
+    loan.day_ordinal = payload.day_ordinal
+    loan.day_of_month = payload.day_of_month
+    loan.opening_fee = payload.opening_fee or 0.0
+    loan.fee_treatment = payload.fee_treatment
+    loan.recurring_fee = payload.recurring_fee or 0.0
+    loan.recurring_fee_months = payload.recurring_fee_months
+    loan.early_repayment_fee_pct = max(0.0, payload.early_repayment_fee_pct or 0.0)
+
+
+@app.post("/loans")
+def create_loan(payload: schemas.LoanCreate, db: Session = Depends(get_db)):
+    """
+    Record the terms of a loan.
+
+    Opening a new loan does three things at once, because they are one event:
+    the debt account is created, the drawdown is booked as a transfer into the
+    account the money landed in, and the terms are stored so the amortisation can
+    be computed. Passing ``account_id`` instead puts terms on a debt account that
+    already exists, leaving its movements untouched.
+    """
+    if payload.principal <= 0:
+        raise HTTPException(status_code=400, detail="The amount borrowed must be greater than zero")
+
+    name = (payload.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="The loan needs a name")
+
+    destination = None
+    if payload.disbursement_account_id:
+        destination = db.query(Account).filter(
+            Account.id == payload.disbursement_account_id
+        ).first()
+        if not destination:
+            raise HTTPException(status_code=404, detail="Account the money was paid into not found")
+    elif not payload.account_id:
+        # A brand-new loan account with no drawdown would be an account with no
+        # movements — invisible on this page and impossible to reconcile.
+        raise HTTPException(
+            status_code=400,
+            detail="Choose the account the money was paid into",
+        )
+
+    currency = payload.currency or (destination.currency if destination else get_base_currency(db))
+
+    # Either attach to an existing debt account, or open one for the loan.
+    if payload.account_id:
+        account = db.query(Account).filter(Account.id == payload.account_id).first()
+        if not account:
+            raise HTTPException(status_code=404, detail="Account not found")
+        if db.query(Loan).filter(Loan.account_id == account.id).first():
+            raise HTTPException(status_code=400, detail=f"'{account.name}' already has loan terms")
+        currency = account.currency or currency
+        created_account = False
+    else:
+        if db.query(Account).filter(Account.name == name).first():
+            raise HTTPException(status_code=400, detail=f"An account called '{name}' already exists")
+        account = Account(name=name, type="LIABILITY", currency=currency, initial_balance=0.0)
+        db.add(account)
+        db.flush()
+        created_account = True
+
+    lender_id = _resolve_lender(db, payload)
+
+    loan = Loan(
+        account_id=account.id,
+        currency=currency,
+        lender_payee_id=lender_id,
+        disbursement_account_id=destination.id if destination else None,
+    )
+    _apply_terms(loan, payload)
+    db.add(loan)
+    db.flush()
+
+    # The drawdown: the debt account goes negative by the capital, the account it
+    # was paid into goes up by the same. Only ever booked for an account opened
+    # here — an existing one already carries its own history.
+    if created_account and payload.create_disbursement and destination:
+        transfer_out_loc = db.query(Location).filter(Location.name == "Transfer Out").first()
+        if not transfer_out_loc:
+            transfer_out_loc = Location(name="Transfer Out")
+            db.add(transfer_out_loc)
+            db.flush()
+        transfer_in_loc = db.query(Location).filter(Location.name == "Transfer In").first()
+        if not transfer_in_loc:
+            transfer_in_loc = Location(name="Transfer In")
+            db.add(transfer_in_loc)
+            db.flush()
+
+        note = f"Loan drawdown — {name}"
+        out_tx = Transaction(
+            date=payload.open_date, amount=-abs(payload.principal), currency=currency,
+            account_id=account.id, location_id=transfer_out_loc.id, note=note,
+        )
+        in_tx = Transaction(
+            date=payload.open_date, amount=abs(payload.principal), currency=destination.currency,
+            account_id=destination.id, location_id=transfer_in_loc.id, note=note,
+        )
+        db.add(out_tx)
+        db.add(in_tx)
+        db.flush()
+        booked = [out_tx.id, in_tx.id]
+
+        # The arrangement fee is a charge in its own right, never part of the
+        # transfer: the drawdown moves the capital, the fee is what it cost to
+        # get it. Where it is charged is what tells the two treatments apart —
+        # added to the debt, or taken out of the money received.
+        fee = round(payload.opening_fee or 0.0, 2)
+        if fee > 0:
+            capitalised = payload.fee_treatment == "capitalised"
+            fee_account = account if capitalised else destination
+            fee_category = db.query(Category).filter(Category.name == "Loan fees").first()
+            if not fee_category:
+                fee_category = Category(name="Loan fees", type="expense")
+                db.add(fee_category)
+                db.flush()
+            fee_tx = Transaction(
+                date=payload.open_date, amount=-fee, currency=fee_account.currency,
+                account_id=fee_account.id, category_id=fee_category.id, payee_id=lender_id,
+                note=f"Arrangement fee — {name}",
+            )
+            db.add(fee_tx)
+            db.flush()
+            booked.append(fee_tx.id)
+
+        recalculate_balances_from_transaction(
+            db, min(booked), [account.id, destination.id]
+        )
+
+    db.commit()
+    db.refresh(loan)
+
+    return {
+        "loan": loan_engine.as_dict(loan),
+        "schedule": loan_engine.summary(loan),
+        "account_id": account.id,
+        "account_created": created_account,
+    }
+
+
+@app.put("/loans/{loan_id}")
+def update_loan(loan_id: int, payload: schemas.LoanUpdate, db: Session = Depends(get_db)):
+    """
+    Correct the terms of a loan.
+
+    Only the terms change. The account and the movements booked when the loan was
+    opened stay as they are — see ``schemas.LoanUpdate`` for why. The schedule is
+    recomputed from the new terms on the spot.
+    """
+    loan = db.query(Loan).filter(Loan.id == loan_id).first()
+    if not loan:
+        raise HTTPException(status_code=404, detail="Loan not found")
+    if payload.principal <= 0:
+        raise HTTPException(status_code=400, detail="The amount borrowed must be greater than zero")
+    if not (payload.name or "").strip():
+        raise HTTPException(status_code=400, detail="The loan needs a name")
+
+    _apply_terms(loan, payload)
+    loan.lender_payee_id = _resolve_lender(db, payload)
+    db.commit()
+    db.refresh(loan)
+
+    return {"loan": loan_engine.as_dict(loan), "schedule": loan_engine.summary(loan)}
+
+
+@app.delete("/loans/{loan_id}")
+def delete_loan(loan_id: int, db: Session = Depends(get_db)):
+    """
+    Forget the terms of a loan.
+
+    The account and every transaction on it survive: what goes is the contract,
+    not the debt. The loan reverts to being estimated from its movements, which is
+    how it was tracked before any terms were entered.
+    """
+    loan = db.query(Loan).filter(Loan.id == loan_id).first()
+    if not loan:
+        raise HTTPException(status_code=404, detail="Loan not found")
+    name = loan.name
+    db.delete(loan)
+    db.commit()
+    return {"message": f"Terms for '{name}' removed. The account and its transactions are untouched."}
+
+
+@app.get("/loans/{loan_id}/schedule")
+def get_loan_schedule(loan_id: int, db: Session = Depends(get_db)):
+    """The full amortisation table the loan's terms imply."""
+    loan = db.query(Loan).filter(Loan.id == loan_id).first()
+    if not loan:
+        raise HTTPException(status_code=404, detail="Loan not found")
+    return {
+        "loan": loan_engine.as_dict(loan),
+        "summary": loan_engine.summary(loan),
+        "rows": loan_engine.schedule(loan),
+    }
 
 # ============================================
 # ADMIN / MAINTENANCE ENDPOINTS

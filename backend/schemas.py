@@ -466,6 +466,113 @@ class BudgetLineUpdate(BaseModel):
         return round(v, 2) if v is not None else None
 
 
+# --- Loan schemas ---
+
+class LoanTerms(BaseModel):
+    """
+    What was agreed: the figures an amortisation schedule follows from. Shared by
+    creating a loan and editing one, so a term can never be valid on the way in
+    and invalid on the way back.
+    """
+    name: str
+    principal: float
+    annual_rate: float = 0.0
+    open_date: datetime
+    opening_fee: float = 0.0
+    fee_treatment: str = "upfront"   # upfront | capitalised
+    recurring_fee: float = 0.0
+    recurring_fee_months: int = 1
+    early_repayment_fee_pct: float = 0.0
+    term_count: int = 1
+    term_unit: str = "year"          # month | year
+    repayment_type: str = "french"   # french | interest_only | constant_principal
+    interest_months: int = 1
+    payment_months: int = 1
+    day_rule: str = "exact"          # exact | working_from_start | working_from_end
+    day_ordinal: Optional[int] = None
+    day_of_month: Optional[int] = None
+
+    lender_payee_id: Optional[int] = None
+    lender_name: Optional[str] = None       # creates the payee when it is new
+
+    @field_validator('principal', 'opening_fee', 'recurring_fee')
+    @classmethod
+    def round_principal(cls, v):
+        return round(v or 0, 2)
+
+    @field_validator('recurring_fee_months')
+    @classmethod
+    def check_fee_frequency(cls, v):
+        return max(1, int(v or 1))
+
+    @field_validator('fee_treatment')
+    @classmethod
+    def check_fee_treatment(cls, v):
+        if v not in ("upfront", "capitalised"):
+            raise ValueError("fee_treatment must be upfront or capitalised")
+        return v
+
+    @field_validator('term_unit')
+    @classmethod
+    def check_term_unit(cls, v):
+        if v not in ("month", "year"):
+            raise ValueError("term_unit must be month or year")
+        return v
+
+    @field_validator('repayment_type')
+    @classmethod
+    def check_repayment_type(cls, v):
+        if v not in ("french", "interest_only", "constant_principal"):
+            raise ValueError("repayment_type must be french, interest_only or constant_principal")
+        return v
+
+    @field_validator('day_rule')
+    @classmethod
+    def check_day_rule(cls, v):
+        if v not in ("exact", "working_from_start", "working_from_end"):
+            raise ValueError("day_rule must be exact, working_from_start or working_from_end")
+        return v
+
+    @field_validator('interest_months', 'payment_months')
+    @classmethod
+    def check_frequency(cls, v):
+        return max(1, int(v or 1))
+
+    @field_validator('term_count')
+    @classmethod
+    def check_term_count(cls, v):
+        return max(1, int(v or 1))
+
+
+class LoanCreate(LoanTerms):
+    """
+    Opening a loan. Either it gets an account of its own, or the terms are put on
+    a debt account that already exists (``account_id``) — one of the loans that
+    have been estimated from their movements up to now.
+    """
+    disbursement_account_id: Optional[int] = None
+    # Existing debt account to attach these terms to. When absent a new account
+    # is created, named after the loan.
+    account_id: Optional[int] = None
+    currency: Optional[str] = None  # defaults to the disbursement account's
+    # Book the drawdown as a transfer from the loan account into the account the
+    # money landed in. Off when attaching terms to an account that already has it.
+    create_disbursement: bool = True
+
+
+class LoanUpdate(LoanTerms):
+    """
+    Correcting the terms of a loan already recorded.
+
+    Terms only: the account and the movements booked when the loan was opened are
+    left alone. Rewriting a drawdown that has since been reconciled — or that the
+    user has edited themselves — would destroy work to fix a typo, so a changed
+    principal shows up as a gap between the real balance and the schedule instead,
+    which is exactly the signal that page exists to give.
+    """
+    pass
+
+
 class CategoryBucketEntry(BaseModel):
     category_id: int
     bucket: Optional[str] = None  # essentials | indulgences | culture | unexpected

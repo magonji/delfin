@@ -369,6 +369,79 @@ class BudgetMonthLine(Base):
     )
 
 
+class Loan(Base):
+    """
+    The agreed terms of a loan.
+
+    Loans are still *detected* from the movements of an account — an account
+    whose first transaction is negative, with few payees. This row adds what the
+    movements cannot say: the rate, the term and the rhythm of the instalments.
+    With it the amortisation is computed exactly instead of estimated by XIRR,
+    and both figures are shown side by side. One row per account at most.
+    """
+    __tablename__ = "loans"
+
+    id = Column(Integer, primary_key=True, index=True)
+    # The debt account itself — the one whose balance is the outstanding capital.
+    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=False, unique=True, index=True)
+    name = Column(String, nullable=False)
+    principal = Column(Float, nullable=False)
+    currency = Column(String, default="GBP")
+    annual_rate = Column(Float, nullable=False, default=0.0)  # nominal annual %, e.g. 3.75
+    open_date = Column(DateTime, nullable=False)
+
+    # What the loan cost to arrange — an arrangement, product or broker fee.
+    # It is not interest, so it never enters the nominal rate, but it is money
+    # the loan cost, so it does enter the effective rate.
+    opening_fee = Column(Float, default=0.0)
+    # upfront     = paid when the loan is drawn down, out of the money received
+    # capitalised = added to the debt and amortised along with the capital
+    fee_treatment = Column(String, default="upfront")
+
+    # A standing charge for having the loan at all — an administration or account
+    # fee, charged every ``recurring_fee_months`` from the opening date. It has
+    # its own rhythm because it rarely shares the instalment's.
+    recurring_fee = Column(Float, default=0.0)
+    recurring_fee_months = Column(Integer, default=1)
+
+    # Percentage of the capital outstanding, charged for settling early. It never
+    # enters the schedule or the effective rate — both assume the loan runs to
+    # term — and is only used to price settling the loan today.
+    early_repayment_fee_pct = Column(Float, default=0.0)
+
+    # Duration, from which the number of instalments follows.
+    term_count = Column(Integer, nullable=False, default=1)
+    term_unit = Column(String, default="year")  # month | year
+
+    # french            = constant instalment, the usual repayment mortgage
+    # interest_only     = interest each period, capital repaid at the end
+    # constant_principal = constant capital, falling instalment
+    repayment_type = Column(String, default="french")
+
+    # How often interest is charged, and how often an instalment is paid, both in
+    # months. They usually match; when they don't, interest accrued between
+    # instalments is compounded into the balance until the next one.
+    interest_months = Column(Integer, default=1)
+    payment_months = Column(Integer, default=1)
+
+    # Which day of the month the instalment lands on. Same rules as BudgetItem,
+    # so a loan paid on the first working day is expressed the same way here.
+    day_rule = Column(String, default="exact")  # exact | working_from_start | working_from_end
+    day_ordinal = Column(Integer, nullable=True)   # 1 = first/last working day
+    day_of_month = Column(Integer, nullable=True)  # only for day_rule == exact
+
+    lender_payee_id = Column(Integer, ForeignKey("payees.id"), nullable=True, index=True)
+    # Account the money was paid into when the loan was drawn down.
+    disbursement_account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True, index=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    account = relationship("Account", foreign_keys=[account_id])
+    disbursement_account = relationship("Account", foreign_keys=[disbursement_account_id])
+    lender = relationship("Payee")
+
+
 class CategoryBucket(Base):
     """Maps one of the user's categories to a kakeibo bucket."""
     __tablename__ = "category_buckets"
@@ -451,6 +524,18 @@ def round_budget_item_amount(mapper, connection, target):
     """Round budget item amount to 2 decimal places."""
     if target.amount is not None:
         target.amount = round(target.amount, 2)
+
+
+@event.listens_for(Loan, 'before_insert')
+@event.listens_for(Loan, 'before_update')
+def round_loan_principal(mapper, connection, target):
+    """Round the borrowed capital and the fees to 2 decimal places."""
+    if target.principal is not None:
+        target.principal = round(target.principal, 2)
+    if target.opening_fee is not None:
+        target.opening_fee = round(target.opening_fee, 2)
+    if target.recurring_fee is not None:
+        target.recurring_fee = round(target.recurring_fee, 2)
 
 
 @event.listens_for(BudgetMonthLine, 'before_insert')
