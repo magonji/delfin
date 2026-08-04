@@ -12,6 +12,14 @@ instalment is paid every ``payment_months``. They usually match. When they don't
 between instalments compounds into the balance, which is what the rate per
 payment period below expresses.
 
+Interest can also accrue **daily**, which most mortgages do, and that is a
+different shape rather than a shorter period: the interest in each instalment
+follows the actual days it covers, so a February one carries less than a March
+one. The instalment itself stays level, because the lender fixes it from the
+average period — the difference lands where every other rounding does, in the
+final payment. Days are counted ACT/365F: real days over a fixed 365-day year,
+so a leap year genuinely costs one day more.
+
 An arrangement fee is a cost of the loan but not interest, so it stays out of the
 nominal rate and shows up in two other places instead: in the capital amortised,
 when it is added to the debt rather than paid at the outset, and always in the
@@ -37,8 +45,12 @@ from backend.budget_engine import as_date, day_of_month_for
 REPAYMENT_TYPES = ("french", "interest_only", "constant_principal")
 TERM_UNITS = ("month", "year")
 FEE_TREATMENTS = ("upfront", "capitalised")
+INTEREST_UNITS = ("month", "day")
 # Months between charges, offered as a frequency. 1 = monthly … 12 = annual.
 FREQUENCY_MONTHS = (1, 3, 6, 12)
+# ACT/365F: interest accrues over the real days of a period, but a year is
+# always 365 days — the convention British lenders quote daily rates on.
+DAYS_PER_YEAR = 365.0
 
 
 def add_months(d: date, months: int) -> date:
@@ -113,6 +125,27 @@ def early_repayment_fee_pct(loan) -> float:
     return max(0.0, float(getattr(loan, "early_repayment_fee_pct", 0) or 0))
 
 
+def accrues_daily(loan) -> bool:
+    """Whether interest follows the days rather than the months."""
+    return (getattr(loan, "interest_unit", None) or "month") == "day"
+
+
+def daily_rate(loan) -> float:
+    """The rate a single day earns, as a decimal."""
+    return max(0.0, float(loan.annual_rate or 0) / 100.0 / DAYS_PER_YEAR)
+
+
+def rate_over_days(loan, days: float) -> float:
+    """
+    What a stretch of `days` earns at the daily rate, compounded — the amount by
+    which the debt grows between one instalment and the next.
+    """
+    d = daily_rate(loan)
+    if d <= 0 or days <= 0:
+        return 0.0
+    return (1.0 + d) ** days - 1.0
+
+
 def rate_per_payment(loan) -> float:
     """
     The interest rate applied at each instalment, as a decimal.
@@ -121,12 +154,18 @@ def rate_per_payment(loan) -> float:
     it. Raising that to the number of interest periods per instalment compounds
     the ones that pass between instalments — and reduces to the plain slice when
     the two rhythms coincide.
+
+    With daily accrual this is the *average* period, the one an average month
+    long. It is what fixes the level instalment; the schedule then charges each
+    period its real days, which is where the two part company.
     """
     annual = float(loan.annual_rate or 0) / 100.0
     if annual <= 0:
         return 0.0
-    interest_every = max(1, int(loan.interest_months or 1))
     pay_every = max(1, int(loan.payment_months or 1))
+    if accrues_daily(loan):
+        return rate_over_days(loan, DAYS_PER_YEAR * pay_every / 12.0)
+    interest_every = max(1, int(loan.interest_months or 1))
     per_interest_period = annual * interest_every / 12.0
     return (1.0 + per_interest_period) ** (pay_every / interest_every) - 1.0
 
@@ -190,12 +229,22 @@ def schedule(loan) -> List[Dict]:
     kind = loan.repayment_type or "french"
     fixed_instalment = instalment(loan) if kind == "french" else None
     capital_slice = principal / n if kind == "constant_principal" else None
+    # Daily accrual charges each period its own days; the first runs from the
+    # drawdown, so a loan taken out mid-month opens with a short one.
+    daily = accrues_daily(loan)
+    previous = as_date(loan.open_date)
 
     rows: List[Dict] = []
     balance = principal
     for i, due in enumerate(dates, start=1):
         opening = balance
-        interest = round(opening * r, 2)
+        if daily:
+            days = (due - previous).days
+            interest = round(opening * rate_over_days(loan, days), 2)
+            previous = due
+        else:
+            days = None
+            interest = round(opening * r, 2)
         last = i == n
 
         if kind == "interest_only":
@@ -222,6 +271,7 @@ def schedule(loan) -> List[Dict]:
             "instalment": round(interest + capital, 2),
             "outflow": round(interest + capital + fee, 2),
             "closing_balance": balance,
+            "days": days,  # None unless interest accrues daily
         })
     return rows
 
@@ -313,6 +363,7 @@ def summary(loan, today: Optional[date] = None) -> Dict:
         "early_repayment_fee_pct": early_repayment_fee_pct(loan),
         "early_repayment_fee": settlement_fee,
         "settlement_today": round(expected_balance + settlement_fee, 2),
+        "interest_unit": getattr(loan, "interest_unit", None) or "month",
         "financed_principal": financed_principal(loan),
         "net_advanced": net_advanced(loan),
         # Everything the borrower parts with. A capitalised fee is already inside
@@ -347,6 +398,7 @@ def as_dict(loan) -> Dict:
         "term_unit": loan.term_unit,
         "repayment_type": loan.repayment_type,
         "interest_months": loan.interest_months,
+        "interest_unit": getattr(loan, "interest_unit", None) or "month",
         "payment_months": loan.payment_months,
         "day_rule": loan.day_rule,
         "day_ordinal": loan.day_ordinal,

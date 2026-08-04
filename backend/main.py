@@ -3893,6 +3893,7 @@ def _apply_terms(loan: Loan, payload) -> None:
     loan.term_unit = payload.term_unit
     loan.repayment_type = payload.repayment_type
     loan.interest_months = payload.interest_months
+    loan.interest_unit = payload.interest_unit
     loan.payment_months = payload.payment_months
     loan.day_rule = payload.day_rule
     loan.day_ordinal = payload.day_ordinal

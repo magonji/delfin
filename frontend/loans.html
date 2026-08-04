@@ -393,12 +393,16 @@
                 </div>
                 <div class="form-group">
                     <label>Interest is charged</label>
-                    <select id="loanInterestMonths" onchange="quoteLoan()">
+                    <select id="loanInterestFrequency" onchange="onLoanInterestFrequencyChange()">
+                        <option value="day">daily</option>
                         <option value="1" selected>monthly</option>
                         <option value="3">quarterly</option>
                         <option value="6">every six months</option>
                         <option value="12">annually</option>
                     </select>
+                </div>
+                <div class="form-hint" id="loanDailyHint" style="display:none;">
+                    Interest follows the real days of each period, so a February instalment carries less than a March one and a leap year costs a day more. The instalment itself stays level — the difference lands in the final payment.
                 </div>
                 <div class="form-group">
                     <label>Instalments are paid</label>
@@ -831,6 +835,7 @@
             kind,
             `${sc.payments_made} of ${sc.payments_total} paid`,
         ];
+        if (t.interest_unit === 'day') bits.splice(3, 0, 'interest accrued daily');
         if (sc.opening_fee > 0) {
             bits.push(sc.fee_treatment === 'capitalised'
                 ? `${s}${formatNum(sc.opening_fee)} fee, added to the loan`
@@ -900,18 +905,22 @@
                 .find(d => d.account.id === accountId)?.account.currency || globalCurrency;
             const s = sym(currency);
             const today = new Date().toISOString().slice(0, 10);
-            // The fee column only earns its width on a loan that charges one.
+            // Each optional column only earns its width where it means something.
             const hasFees = data.rows.some(r => r.fee > 0);
+            const hasDays = data.rows.some(r => r.days != null);
             wrap.innerHTML = `
                 <table class="schedule-table">
                     <thead><tr>
-                        <th>Due</th><th>Interest</th><th>Capital</th>
+                        <th>Due</th>
+                        ${hasDays ? '<th>Days</th>' : ''}
+                        <th>Interest</th><th>Capital</th>
                         ${hasFees ? '<th>Fee</th>' : ''}
                         <th>${hasFees ? 'Total' : 'Instalment'}</th><th>Balance</th>
                     </tr></thead>
                     <tbody>${data.rows.map(r => `
                         <tr class="${r.date <= today ? 'past' : ''}">
                             <td>${formatDate(r.date)}</td>
+                            ${hasDays ? `<td>${r.days == null ? '—' : r.days}</td>` : ''}
                             <td>${s}${formatNum(r.interest)}</td>
                             <td>${s}${formatNum(r.capital)}</td>
                             ${hasFees ? `<td>${r.fee ? s + formatNum(r.fee) : '—'}</td>` : ''}
@@ -1003,10 +1012,21 @@
     let _editingLoanId = null;  // set while the modal is correcting existing terms
     let _editingCurrency = null; // that loan's currency, for the live quote
 
-    /** Rate applied at each instalment, as a decimal. Mirrors rate_per_payment(). */
-    function ratePerPayment(annualPct, interestMonths, paymentMonths) {
+    // ACT/365F, as in the engine: real days over a fixed 365-day year.
+    const DAYS_PER_YEAR = 365;
+
+    /**
+     * Rate applied at each instalment, as a decimal. Mirrors rate_per_payment().
+     * With daily accrual this is the average period — the one that fixes the
+     * level instalment; the schedule's real per-period days come from the server.
+     */
+    function ratePerPayment(annualPct, interestMonths, paymentMonths, interestUnit) {
         const annual = (annualPct || 0) / 100;
         if (annual <= 0) return 0;
+        if (interestUnit === 'day') {
+            const daily = annual / DAYS_PER_YEAR;
+            return Math.pow(1 + daily, DAYS_PER_YEAR * paymentMonths / 12) - 1;
+        }
         const perInterestPeriod = annual * interestMonths / 12;
         return Math.pow(1 + perInterestPeriod, paymentMonths / interestMonths) - 1;
     }
@@ -1014,7 +1034,7 @@
     /** The instalment the terms imply. Mirrors instalment(). */
     function instalmentFor(principal, annualPct, terms) {
         const n = Math.max(1, Math.floor(terms.months / terms.paymentMonths));
-        const r = ratePerPayment(annualPct, terms.interestMonths, terms.paymentMonths);
+        const r = ratePerPayment(annualPct, terms.interestMonths, terms.paymentMonths, terms.interestUnit);
         if (terms.type === 'interest_only') return principal * r;
         if (terms.type === 'constant_principal') return principal / n + principal * r;
         if (r === 0) return principal / n;
@@ -1054,17 +1074,30 @@
         return (Math.pow(1 + perPeriod, periodsPerYear) - 1) * 100;
     }
 
-    /** Reads the form into the shape the two functions above expect. */
+    /**
+     * Reads the form into the shape the two functions above expect. The one
+     * select covers both a monthly rhythm and daily accrual, since to the person
+     * filling it in they are answers to the same question.
+     */
     function readLoanForm() {
         const termCount = parseInt(q('#loanTermCount').value) || 0;
         const termUnit = q('#loanTermUnit').value;
         const paymentMonths = parseInt(q('#loanPaymentMonths').value) || 1;
+        const frequency = q('#loanInterestFrequency').value;
         return {
             months: termCount * (termUnit === 'year' ? 12 : 1),
             paymentMonths,
-            interestMonths: parseInt(q('#loanInterestMonths').value) || 1,
+            interestUnit: frequency === 'day' ? 'day' : 'month',
+            interestMonths: frequency === 'day' ? 1 : (parseInt(frequency) || 1),
             type: q('#loanRepaymentType').value,
         };
+    }
+
+    /** Daily accrual behaves differently enough to say so. */
+    function onLoanInterestFrequencyChange() {
+        q('#loanDailyHint').style.display =
+            q('#loanInterestFrequency').value === 'day' ? 'block' : 'none';
+        quoteLoan();
     }
 
     /** Shows the instalment as the form is filled in, or hides it while incomplete. */
@@ -1208,7 +1241,8 @@
         q('#loanTermCount').value = t.term_count || 1;
         q('#loanTermUnit').value = t.term_unit || 'year';
         q('#loanRepaymentType').value = t.repayment_type || 'french';
-        q('#loanInterestMonths').value = String(t.interest_months || 1);
+        q('#loanInterestFrequency').value =
+            t.interest_unit === 'day' ? 'day' : String(t.interest_months || 1);
         q('#loanPaymentMonths').value = String(t.payment_months || 1);
         q('#loanDayRule').value = t.day_rule || 'exact';
         q('#loanDayOrdinal').value = String(t.day_ordinal || 1);
@@ -1222,6 +1256,7 @@
 
         onLoanDayRuleChange();
         onLoanFeeChange();
+        onLoanInterestFrequencyChange();
     }
 
     /**
@@ -1283,6 +1318,7 @@
         onLoanModeChange();
         onLoanDayRuleChange();
         onLoanFeeChange();
+        onLoanInterestFrequencyChange();
     }
 
     function closeLoanModal() {
@@ -1312,6 +1348,7 @@
         if (!editing && !existing && !destination) return showLoanError('Choose the account the money was paid into.');
 
         const rule = q('#loanDayRule').value;
+        const terms = readLoanForm();
         const body = {
             name,
             principal,
@@ -1325,8 +1362,9 @@
             term_count: parseInt(q('#loanTermCount').value) || 1,
             term_unit: q('#loanTermUnit').value,
             repayment_type: q('#loanRepaymentType').value,
-            interest_months: parseInt(q('#loanInterestMonths').value) || 1,
-            payment_months: parseInt(q('#loanPaymentMonths').value) || 1,
+            interest_months: terms.interestMonths,
+            interest_unit: terms.interestUnit,
+            payment_months: terms.paymentMonths,
             day_rule: rule,
             day_ordinal: rule === 'exact' ? null : parseInt(q('#loanDayOrdinal').value) || 1,
             day_of_month: rule === 'exact' ? parseInt(q('#loanDayOfMonth').value) || null : null,

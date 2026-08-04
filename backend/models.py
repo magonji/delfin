@@ -423,6 +423,11 @@ class Loan(Base):
     # instalments is compounded into the balance until the next one.
     interest_months = Column(Integer, default=1)
     payment_months = Column(Integer, default=1)
+    # Daily accrual is a different animal from a monthly charge, not a shorter
+    # one: interest follows the actual days in each period, so a February
+    # instalment carries less than a March one. ``interest_months`` is ignored
+    # when this is "day".
+    interest_unit = Column(String, default="month")  # month | day
 
     # Which day of the month the instalment lands on. Same rules as BudgetItem,
     # so a loan paid on the first working day is expressed the same way here.

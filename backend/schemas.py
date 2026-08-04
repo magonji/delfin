@@ -487,6 +487,7 @@ class LoanTerms(BaseModel):
     term_unit: str = "year"          # month | year
     repayment_type: str = "french"   # french | interest_only | constant_principal
     interest_months: int = 1
+    interest_unit: str = "month"     # month | day — "day" ignores interest_months
     payment_months: int = 1
     day_rule: str = "exact"          # exact | working_from_start | working_from_end
     day_ordinal: Optional[int] = None
@@ -537,6 +538,13 @@ class LoanTerms(BaseModel):
     @classmethod
     def check_frequency(cls, v):
         return max(1, int(v or 1))
+
+    @field_validator('interest_unit')
+    @classmethod
+    def check_interest_unit(cls, v):
+        if v not in ("month", "day"):
+            raise ValueError("interest_unit must be month or day")
+        return v
 
     @field_validator('term_count')
     @classmethod

@@ -67,6 +67,8 @@ _ADDED_COLUMNS = {
         "recurring_fee": "FLOAT DEFAULT 0.0",
         "recurring_fee_months": "INTEGER DEFAULT 1",
         "early_repayment_fee_pct": "FLOAT DEFAULT 0.0",
+        # Whether interest accrues by the month or by the day.
+        "interest_unit": "VARCHAR DEFAULT 'month'",
     },
 }
 
