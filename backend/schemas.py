@@ -1,7 +1,7 @@
 """
 Pydantic schemas for request/response validation.
 """
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 from datetime import datetime
 from typing import Optional, List
 
@@ -478,6 +478,10 @@ class LoanTerms(BaseModel):
     principal: float
     annual_rate: float = 0.0
     open_date: datetime
+    # When the first instalment is due. None derives it from the rhythm and the
+    # day rule; set it when the loan's first payment does not fall a whole
+    # period after the drawdown.
+    first_payment_date: Optional[datetime] = None
     opening_fee: float = 0.0
     fee_treatment: str = "upfront"   # upfront | capitalised
     recurring_fee: float = 0.0
@@ -545,6 +549,13 @@ class LoanTerms(BaseModel):
         if v not in ("month", "day"):
             raise ValueError("interest_unit must be month or day")
         return v
+
+    @model_validator(mode='after')
+    def check_first_payment(self):
+        # Interest cannot be charged for a period that ends before it began.
+        if self.first_payment_date and self.first_payment_date <= self.open_date:
+            raise ValueError("first_payment_date must be after the opening date")
+        return self
 
     @field_validator('term_count')
     @classmethod

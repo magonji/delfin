@@ -398,6 +398,12 @@ class Loan(Base):
     # capitalised = added to the debt and amortised along with the capital
     fee_treatment = Column(String, default="upfront")
 
+    # Interest starts on the drawdown, but the first instalment rarely falls a
+    # whole period later — draw down mid-month and pay on the 1st and the first
+    # period is a stub. NULL means "one payment period after the drawdown, on the
+    # day the rule gives"; setting it says exactly when the first one is due.
+    first_payment_date = Column(DateTime, nullable=True)
+
     # A standing charge for having the loan at all — an administration or account
     # fee, charged every ``recurring_fee_months`` from the opening date. It has
     # its own rhythm because it rarely shares the instalment's.

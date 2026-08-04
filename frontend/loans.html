@@ -373,6 +373,14 @@
                     <label>Opening date</label>
                     <input type="date" id="loanOpenDate" onchange="quoteLoan()">
                 </div>
+                <div class="form-hint">Interest starts here, on the day the money is drawn down.</div>
+                <div class="form-group">
+                    <label>First payment date <span style="text-transform:none;letter-spacing:0">— optional</span></label>
+                    <input type="date" id="loanFirstPayment" onchange="quoteLoan()">
+                </div>
+                <div class="form-hint">
+                    Leave it empty and the first instalment falls one period after the opening date, on the day chosen below. Set it when it doesn't — the first instalment then carries only the interest that has actually accrued, which is more or less than a full one.
+                </div>
                 <div class="form-group">
                     <label>Duration</label>
                     <div class="form-row">
@@ -836,6 +844,13 @@
             `${sc.payments_made} of ${sc.payments_total} paid`,
         ];
         if (t.interest_unit === 'day') bits.splice(3, 0, 'interest accrued daily');
+        // The first instalment not looking like the rest wants explaining.
+        if (sc.first_period_is_stub) {
+            const longer = sc.first_period_days > sc.period_days;
+            bits.push(`first period ${sc.first_period_days} days`
+                + ` (${s}${formatNum(sc.first_period_interest)} interest,`
+                + ` ${longer ? 'more' : 'less'} than a full one)`);
+        }
         if (sc.opening_fee > 0) {
             bits.push(sc.fee_treatment === 'capitalised'
                 ? `${s}${formatNum(sc.opening_fee)} fee, added to the loan`
@@ -906,8 +921,10 @@
             const s = sym(currency);
             const today = new Date().toISOString().slice(0, 10);
             // Each optional column only earns its width where it means something.
+            // Days are trivia on a plain monthly loan, and the whole story on one
+            // that accrues daily or opens with an odd first period.
             const hasFees = data.rows.some(r => r.fee > 0);
-            const hasDays = data.rows.some(r => r.days != null);
+            const hasDays = data.summary.interest_unit === 'day' || data.summary.first_period_is_stub;
             wrap.innerHTML = `
                 <table class="schedule-table">
                     <thead><tr>
@@ -1012,84 +1029,37 @@
     let _editingLoanId = null;  // set while the modal is correcting existing terms
     let _editingCurrency = null; // that loan's currency, for the live quote
 
-    // ACT/365F, as in the engine: real days over a fixed 365-day year.
-    const DAYS_PER_YEAR = 365;
-
     /**
-     * Rate applied at each instalment, as a decimal. Mirrors rate_per_payment().
-     * With daily accrual this is the average period — the one that fixes the
-     * level instalment; the schedule's real per-period days come from the server.
-     */
-    function ratePerPayment(annualPct, interestMonths, paymentMonths, interestUnit) {
-        const annual = (annualPct || 0) / 100;
-        if (annual <= 0) return 0;
-        if (interestUnit === 'day') {
-            const daily = annual / DAYS_PER_YEAR;
-            return Math.pow(1 + daily, DAYS_PER_YEAR * paymentMonths / 12) - 1;
-        }
-        const perInterestPeriod = annual * interestMonths / 12;
-        return Math.pow(1 + perInterestPeriod, paymentMonths / interestMonths) - 1;
-    }
-
-    /** The instalment the terms imply. Mirrors instalment(). */
-    function instalmentFor(principal, annualPct, terms) {
-        const n = Math.max(1, Math.floor(terms.months / terms.paymentMonths));
-        const r = ratePerPayment(annualPct, terms.interestMonths, terms.paymentMonths, terms.interestUnit);
-        if (terms.type === 'interest_only') return principal * r;
-        if (terms.type === 'constant_principal') return principal / n + principal * r;
-        if (r === 0) return principal / n;
-        return principal * r / (1 - Math.pow(1 + r, -n));
-    }
-
-    /**
-     * The effective annual rate — what the borrowing really costs once the
-     * arrangement fee is counted. Mirrors effective_rate(): the rate at which
-     * the money advanced equals the present value of the instalments, found by
-     * bisection. Only exact for a level instalment, which is why the falling
-     * one is left alone.
-     *
-     * @param {number} advanced - Money that actually reached the borrower
-     * @param {number[]} flows - What leaves at each instalment, fees included
-     * @param {number} periodsPerYear - Instalments in a year
-     * @param {number} balloon - Capital repaid on top of the final instalment
-     * @returns {number|null} - Annual rate as a percentage, or null if unsolvable
-     */
-    function effectiveRateFor(advanced, flows, periodsPerYear, balloon = 0) {
-        const n = flows.length;
-        if (!(advanced > 0) || !(n > 0)) return null;
-        const pv = (r) => {
-            let sum = 0;
-            for (let i = 1; i <= n; i++) sum += flows[i - 1] / Math.pow(1 + r, i);
-            if (balloon) sum += balloon / Math.pow(1 + r, n);
-            return sum - advanced;
-        };
-        if (pv(0) < 0) return null;
-        let low = 0, high = 1;
-        while (pv(high) > 0) { high *= 2; if (high > 1e6) return null; }
-        for (let i = 0; i < 200; i++) {
-            const mid = (low + high) / 2;
-            if (pv(mid) > 0) low = mid; else high = mid;
-        }
-        const perPeriod = (low + high) / 2;
-        return (Math.pow(1 + perPeriod, periodsPerYear) - 1) * 100;
-    }
-
-    /**
-     * Reads the form into the shape the two functions above expect. The one
-     * select covers both a monthly rhythm and daily accrual, since to the person
+     * Reads the form into the shape the API expects. The one interest select
+     * covers both a monthly rhythm and daily accrual, since to the person
      * filling it in they are answers to the same question.
      */
     function readLoanForm() {
-        const termCount = parseInt(q('#loanTermCount').value) || 0;
-        const termUnit = q('#loanTermUnit').value;
-        const paymentMonths = parseInt(q('#loanPaymentMonths').value) || 1;
         const frequency = q('#loanInterestFrequency').value;
+        const openDate = q('#loanOpenDate').value;
+        const firstPayment = q('#loanFirstPayment').value;
+        const rule = q('#loanDayRule').value;
         return {
-            months: termCount * (termUnit === 'year' ? 12 : 1),
-            paymentMonths,
-            interestUnit: frequency === 'day' ? 'day' : 'month',
-            interestMonths: frequency === 'day' ? 1 : (parseInt(frequency) || 1),
-            type: q('#loanRepaymentType').value,
+            name: q('#loanName').value.trim() || 'Loan',
+            principal: parseFloat(q('#loanPrincipal').value) || 0,
+            annual_rate: parseFloat(q('#loanRate').value) || 0,
+            open_date: openDate ? `${openDate}T00:00:00` : null,
+            first_payment_date: firstPayment ? `${firstPayment}T00:00:00` : null,
+            term_count: parseInt(q('#loanTermCount').value) || 1,
+            term_unit: q('#loanTermUnit').value,
+            repayment_type: q('#loanRepaymentType').value,
+            interest_unit: frequency === 'day' ? 'day' : 'month',
+            interest_months: frequency === 'day' ? 1 : (parseInt(frequency) || 1),
+            payment_months: parseInt(q('#loanPaymentMonths').value) || 1,
+            day_rule: rule,
+            day_ordinal: rule === 'exact' ? null : parseInt(q('#loanDayOrdinal').value) || 1,
+            day_of_month: rule === 'exact' ? parseInt(q('#loanDayOfMonth').value) || null : null,
+            opening_fee: Math.max(0, parseFloat(q('#loanFee').value) || 0),
+            fee_treatment: q('#loanFeeTreatment').value,
+            recurring_fee: Math.max(0, parseFloat(q('#loanRecurringFee').value) || 0),
+            recurring_fee_months: parseInt(q('#loanRecurringFeeMonths').value) || 1,
+            early_repayment_fee_pct: Math.max(0, parseFloat(q('#loanEarlyFee').value) || 0),
+            lender_name: q('#loanLender').value.trim() || null,
         };
     }
 
@@ -1100,60 +1070,68 @@
         quoteLoan();
     }
 
-    /** Shows the instalment as the form is filled in, or hides it while incomplete. */
+    // The quote comes from the same engine that draws the card, so the two can
+    // never disagree — which a mirror of the arithmetic in here could not
+    // promise once an odd first period started moving every row of the
+    // schedule. Typing is faster than a round trip, so it is debounced and late
+    // answers are dropped.
+    let _quoteTimer = null;
+    let _quoteToken = 0;
+
+    /** Shows what the terms work out to, or hides the box while they can't. */
     function quoteLoan() {
+        clearTimeout(_quoteTimer);
+        _quoteTimer = setTimeout(runQuote, 250);
+    }
+
+    async function runQuote() {
         const box = q('#loanQuote');
-        const principal = parseFloat(q('#loanPrincipal').value);
-        const terms = readLoanForm();
-        if (!(principal > 0) || terms.months < terms.paymentMonths) {
+        const body = readLoanForm();
+        if (!(body.principal > 0) || !body.open_date) {
             box.style.display = 'none';
             return;
         }
-        const rate = parseFloat(q('#loanRate').value) || 0;
-        // A capitalised fee is borrowed too, so it is what gets amortised; one
-        // paid at the outset simply never reaches the borrower.
-        const fee = Math.max(0, parseFloat(q('#loanFee').value) || 0);
-        const capitalised = q('#loanFeeTreatment').value === 'capitalised';
-        const financed = capitalised ? principal + fee : principal;
-        const advanced = capitalised ? principal : principal - fee;
 
-        const amount = instalmentFor(financed, rate, terms);
-        const n = Math.floor(terms.months / terms.paymentMonths);
-        const every = { 1: 'monthly', 3: 'quarterly', 6: 'every six months', 12: 'annually' }[terms.paymentMonths];
-
-        const currency = currencyForLoan();
-        const s = sym(currency);
-        box.style.display = 'block';
-        q('#loanQuoteLabel').textContent = terms.type === 'constant_principal' ? 'First instalment' : 'Instalment';
-        q('#loanQuoteValue').textContent = `${s}${formatNum(amount)} ${every}`;
-
-        // The standing fee rides on top of the instalment. Mirrors fees_in_period():
-        // count the fee months gone by at each instalment, and difference them.
-        const standing = Math.max(0, parseFloat(q('#loanRecurringFee').value) || 0);
-        const standingMonths = parseInt(q('#loanRecurringFeeMonths').value) || 1;
-        const feeAt = (i) => standing * (
-            Math.floor(i * terms.paymentMonths / standingMonths)
-            - Math.floor((i - 1) * terms.paymentMonths / standingMonths));
-
-        const bits = [`${n} payment${n === 1 ? '' : 's'}`];
-        if (standing > 0) bits.push(`plus ${s}${formatNum(standing)} standing fee`);
-        if (terms.type === 'interest_only') {
-            bits.push(`then ${s}${formatNum(financed)} at the end`);
-        } else if (terms.type === 'french') {
-            bits.push(`${s}${formatNum(amount * n - financed)} interest in total`);
+        const token = ++_quoteToken;
+        let sc;
+        try {
+            sc = (await loanRequest('/loans/preview', 'POST', body)).schedule;
+        } catch (e) {
+            box.style.display = 'none';
+            return;
         }
-        // A falling instalment has no single figure to discount, so no rate is
-        // offered rather than a wrong one.
-        if (terms.type !== 'constant_principal') {
-            const balloon = terms.type === 'interest_only' ? financed : 0;
-            const flows = Array.from({ length: n }, (_, k) => amount + feeAt(k + 1));
-            const apr = effectiveRateFor(advanced, flows, 12 / terms.paymentMonths, balloon);
-            if (apr !== null) bits.push(`${formatApr(apr)}% effective`);
+        if (token !== _quoteToken) return;  // a later keystroke has overtaken this
+        if (!sc || !sc.payments_total) {
+            box.style.display = 'none';
+            return;
+        }
+
+        const s = sym(currencyForLoan());
+        const every = { 1: 'monthly', 3: 'quarterly', 6: 'every six months', 12: 'annually' };
+        box.style.display = 'block';
+        q('#loanQuoteLabel').textContent =
+            body.repayment_type === 'constant_principal' ? 'First instalment' : 'Instalment';
+        q('#loanQuoteValue').textContent =
+            `${s}${formatNum(sc.instalment)} ${every[body.payment_months] || ''}`;
+
+        const bits = [`${sc.payments_total} payment${sc.payments_total === 1 ? '' : 's'}`];
+        if (sc.recurring_fee > 0) bits.push(`plus ${s}${formatNum(sc.recurring_fee)} standing fee`);
+        if (body.repayment_type === 'interest_only') {
+            bits.push(`then ${s}${formatNum(sc.financed_principal)} at the end`);
+        } else {
+            bits.push(`${s}${formatNum(sc.total_interest)} interest in total`);
+        }
+        if (sc.effective_rate != null) bits.push(`${formatApr(sc.effective_rate)}% effective`);
+        if (sc.first_period_is_stub) {
+            bits.push(`first period ${sc.first_period_days} days`
+                + ` (${s}${formatNum(sc.first_period_interest)} interest,`
+                + ` ${sc.first_period_days > sc.period_days ? 'more' : 'less'} than a full one)`);
         }
         // The early repayment charge prices leaving, not staying: it belongs
         // nowhere near the rate above.
-        const early = Math.max(0, parseFloat(q('#loanEarlyFee').value) || 0);
-        if (early > 0) bits.push(`${formatRate(early)}% to settle early`);
+        if (sc.early_repayment_fee_pct > 0) {
+            bits.push(`${formatRate(sc.early_repayment_fee_pct)}% to settle early`);
+        }
         q('#loanQuoteSub').textContent = bits.join(' · ');
     }
 
@@ -1238,6 +1216,8 @@
         q('#loanPrincipal').value = t.principal;
         q('#loanRate').value = t.annual_rate || 0;
         q('#loanOpenDate').value = (t.open_date || '').slice(0, 10);
+        // Blank when it was derived, so it stays derived unless it is set here.
+        q('#loanFirstPayment').value = (t.first_payment_date || '').slice(0, 10);
         q('#loanTermCount').value = t.term_count || 1;
         q('#loanTermUnit').value = t.term_unit || 'year';
         q('#loanRepaymentType').value = t.repayment_type || 'french';
@@ -1339,37 +1319,21 @@
         const name = q('#loanName').value.trim();
         const principal = parseFloat(q('#loanPrincipal').value);
         const openDate = q('#loanOpenDate').value;
+        const firstPayment = q('#loanFirstPayment').value;
         const destination = q('#loanDestination').value;
 
         if (!name) return showLoanError('The loan needs a name.');
         if (!(principal > 0)) return showLoanError('Enter the amount borrowed.');
         if (!openDate) return showLoanError('Enter the opening date.');
+        if (firstPayment && firstPayment <= openDate) {
+            return showLoanError('The first payment must come after the opening date.');
+        }
         if (existing && !q('#loanExistingAccount').value) return showLoanError('Choose the account.');
         if (!editing && !existing && !destination) return showLoanError('Choose the account the money was paid into.');
 
-        const rule = q('#loanDayRule').value;
-        const terms = readLoanForm();
-        const body = {
-            name,
-            principal,
-            annual_rate: parseFloat(q('#loanRate').value) || 0,
-            opening_fee: Math.max(0, parseFloat(q('#loanFee').value) || 0),
-            fee_treatment: q('#loanFeeTreatment').value,
-            recurring_fee: Math.max(0, parseFloat(q('#loanRecurringFee').value) || 0),
-            recurring_fee_months: parseInt(q('#loanRecurringFeeMonths').value) || 1,
-            early_repayment_fee_pct: Math.max(0, parseFloat(q('#loanEarlyFee').value) || 0),
-            open_date: `${openDate}T00:00:00`,
-            term_count: parseInt(q('#loanTermCount').value) || 1,
-            term_unit: q('#loanTermUnit').value,
-            repayment_type: q('#loanRepaymentType').value,
-            interest_months: terms.interestMonths,
-            interest_unit: terms.interestUnit,
-            payment_months: terms.paymentMonths,
-            day_rule: rule,
-            day_ordinal: rule === 'exact' ? null : parseInt(q('#loanDayOrdinal').value) || 1,
-            day_of_month: rule === 'exact' ? parseInt(q('#loanDayOfMonth').value) || null : null,
-            lender_name: q('#loanLender').value.trim() || null,
-        };
+        // Exactly the terms the quote was computed from, so what was on screen
+        // is what gets saved.
+        const body = readLoanForm();
         // Which account this is belongs to opening a loan, not to correcting one.
         if (!editing) {
             body.account_id = existing ? parseInt(q('#loanExistingAccount').value) : null;
@@ -1458,7 +1422,7 @@
 
     /** Clears the form so the next Add loan doesn't inherit the last one. */
     function resetLoanForm() {
-        ['loanName', 'loanPrincipal', 'loanLender'].forEach(id => { q(`#${id}`).value = ''; });
+        ['loanName', 'loanPrincipal', 'loanLender', 'loanFirstPayment'].forEach(id => { q(`#${id}`).value = ''; });
         ['loanRate', 'loanFee', 'loanRecurringFee', 'loanEarlyFee'].forEach(id => { q(`#${id}`).value = '0'; });
         _editingLoanId = null;
         _editingCurrency = null;

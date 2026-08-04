@@ -69,6 +69,9 @@ _ADDED_COLUMNS = {
         "early_repayment_fee_pct": "FLOAT DEFAULT 0.0",
         # Whether interest accrues by the month or by the day.
         "interest_unit": "VARCHAR DEFAULT 'month'",
+        # When the first instalment falls, when it is not a whole period after
+        # the drawdown. NULL keeps the derived date, so old rows are unaffected.
+        "first_payment_date": "DATETIME",
     },
 }
 

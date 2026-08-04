@@ -3889,6 +3889,7 @@ def _apply_terms(loan: Loan, payload) -> None:
     loan.principal = payload.principal
     loan.annual_rate = payload.annual_rate or 0.0
     loan.open_date = payload.open_date
+    loan.first_payment_date = payload.first_payment_date
     loan.term_count = payload.term_count
     loan.term_unit = payload.term_unit
     loan.repayment_type = payload.repayment_type
@@ -4033,6 +4034,23 @@ def create_loan(payload: schemas.LoanCreate, db: Session = Depends(get_db)):
         "account_id": account.id,
         "account_created": created_account,
     }
+
+
+@app.post("/loans/preview")
+def preview_loan(payload: schemas.LoanTerms):
+    """
+    What a set of terms works out to, without saving anything.
+
+    The Add loan form used to mirror the arithmetic in JavaScript to show the
+    instalment as you typed. That worked while the sums had closed forms, but the
+    effective rate depends on the whole schedule — an odd first period shifts
+    every row and swells the final payment — so keeping a second implementation
+    honest stopped being possible. The form asks here instead, and there is one
+    engine again.
+    """
+    loan = Loan()
+    _apply_terms(loan, payload)
+    return {"schedule": loan_engine.summary(loan)}
 
 
 @app.put("/loans/{loan_id}")

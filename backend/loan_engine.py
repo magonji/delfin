@@ -20,6 +20,13 @@ average period — the difference lands where every other rounding does, in the
 final payment. Days are counted ACT/365F: real days over a fixed 365-day year,
 so a leap year genuinely costs one day more.
 
+**Interest starts on the drawdown, not on the first payment date**, and the two
+are rarely a whole period apart: money drawn on the 15th against instalments due
+on the 1st leaves a first period of a fortnight, not a month. That stub is
+charged for what it is — the elapsed time, on whichever accrual basis — instead
+of being rounded up to a full period. It cuts both ways: a first payment nearly
+two months out carries nearly two months of interest.
+
 An arrangement fee is a cost of the loan but not interest, so it stays out of the
 nominal rate and shows up in two other places instead: in the capital amortised,
 when it is added to the debt rather than paid at the outset, and always in the
@@ -190,20 +197,67 @@ def instalment(loan) -> float:
     return round(principal * r / (1.0 - (1.0 + r) ** -n), 2)
 
 
-def payment_dates(loan) -> List[date]:
-    """
-    When each instalment falls due. The first lands one payment period after the
-    loan is drawn down; the day of the month comes from the loan's day rule, so
-    "the first working day" resolves afresh in every month.
-    """
+def period_days(loan) -> float:
+    """The nominal length of a payment period in days — a whole one, ACT/365F."""
+    return DAYS_PER_YEAR * max(1, int(loan.payment_months or 1)) / 12.0
+
+
+def whole_period_end(loan) -> Optional[date]:
+    """The date exactly one payment period after the drawdown, by the calendar."""
     opened = as_date(loan.open_date)
     if not opened:
+        return None
+    return add_months(opened, max(1, int(loan.payment_months or 1)))
+
+
+def first_period_is_stub(loan) -> bool:
+    """
+    Whether the first instalment covers something other than a whole period.
+
+    Judged by the calendar, not by counting days: a month is a month whether it
+    has 28 days or 31, so a loan drawn on 31 January and paid on 28 February is
+    a whole period, while one drawn on the 15th and paid on the 1st is not.
+    """
+    first, whole = first_payment(loan), whole_period_end(loan)
+    return bool(first and whole and first != whole)
+
+
+def first_payment(loan) -> Optional[date]:
+    """
+    When the first instalment falls due.
+
+    Given explicitly it is taken as it stands — that is the point of the field.
+    Otherwise it is derived: one payment period after the drawdown, moved to the
+    day the rule gives. Note the derived date can land *before* a whole period is
+    up (drawn on the 15th, paid on the 1st working day), which is exactly the
+    stub the schedule then charges for honestly.
+    """
+    stated = as_date(getattr(loan, "first_payment_date", None))
+    if stated:
+        return stated
+    opened = as_date(loan.open_date)
+    if not opened:
+        return None
+    landing = add_months(opened, max(1, int(loan.payment_months or 1)))
+    day = day_of_month_for(loan, landing.year, landing.month, int(loan.day_of_month or opened.day))
+    return date(landing.year, landing.month, day)
+
+
+def payment_dates(loan) -> List[date]:
+    """
+    When each instalment falls due. The first comes from ``first_payment``; the
+    rest follow it a payment period at a time, with the day of the month coming
+    from the loan's day rule, so "the first working day" resolves afresh in
+    every month.
+    """
+    first = first_payment(loan)
+    if not first:
         return []
     every = max(1, int(loan.payment_months or 1))
-    fallback = int(loan.day_of_month or opened.day)
-    out = []
-    for i in range(1, payment_count(loan) + 1):
-        landing = add_months(opened, i * every)
+    fallback = int(loan.day_of_month or first.day)
+    out = [first]
+    for i in range(1, payment_count(loan)):
+        landing = add_months(first, i * every)
         day = day_of_month_for(loan, landing.year, landing.month, fallback)
         out.append(date(landing.year, landing.month, day))
     return out
@@ -229,22 +283,29 @@ def schedule(loan) -> List[Dict]:
     kind = loan.repayment_type or "french"
     fixed_instalment = instalment(loan) if kind == "french" else None
     capital_slice = principal / n if kind == "constant_principal" else None
-    # Daily accrual charges each period its own days; the first runs from the
-    # drawdown, so a loan taken out mid-month opens with a short one.
+    # Interest runs from the drawdown, so the first period is however long it
+    # really is. Daily accrual then day-counts every period; a monthly charge
+    # only has to bend for that first one.
     daily = accrues_daily(loan)
+    nominal = period_days(loan)
+    stub = first_period_is_stub(loan)
     previous = as_date(loan.open_date)
 
     rows: List[Dict] = []
     balance = principal
     for i, due in enumerate(dates, start=1):
         opening = balance
+        days = (due - previous).days
+        previous = due
         if daily:
-            days = (due - previous).days
-            interest = round(opening * rate_over_days(loan, days), 2)
-            previous = due
+            period_rate = rate_over_days(loan, days)
+        elif i == 1 and stub:
+            # Compound the whole-period rate over the fraction of a period that
+            # actually elapsed. Longer than a period works the same way.
+            period_rate = (1.0 + r) ** (days / nominal) - 1.0 if r > 0 else 0.0
         else:
-            days = None
-            interest = round(opening * r, 2)
+            period_rate = r
+        interest = round(opening * period_rate, 2)
         last = i == n
 
         if kind == "interest_only":
@@ -271,7 +332,7 @@ def schedule(loan) -> List[Dict]:
             "instalment": round(interest + capital, 2),
             "outflow": round(interest + capital + fee, 2),
             "closing_balance": balance,
-            "days": days,  # None unless interest accrues daily
+            "days": days,  # real days this instalment covers
         })
     return rows
 
@@ -364,6 +425,13 @@ def summary(loan, today: Optional[date] = None) -> Dict:
         "early_repayment_fee": settlement_fee,
         "settlement_today": round(expected_balance + settlement_fee, 2),
         "interest_unit": getattr(loan, "interest_unit", None) or "month",
+        # The gap between the drawdown and the first instalment, and whether it
+        # is a whole period. A stub is worth saying out loud: it is the reason
+        # the first instalment does not look like the rest.
+        "first_period_days": rows[0]["days"],
+        "period_days": round(period_days(loan)),
+        "first_period_is_stub": first_period_is_stub(loan),
+        "first_period_interest": rows[0]["interest"],
         "financed_principal": financed_principal(loan),
         "net_advanced": net_advanced(loan),
         # Everything the borrower parts with. A capitalised fee is already inside
@@ -394,6 +462,13 @@ def as_dict(loan) -> Dict:
         "recurring_fee_months": max(1, int(getattr(loan, "recurring_fee_months", 1) or 1)),
         "early_repayment_fee_pct": early_repayment_fee_pct(loan),
         "open_date": open_date.isoformat() if isinstance(open_date, (date, datetime)) else str(open_date),
+        # What was stored, so the form shows it back blank when it was derived.
+        "first_payment_date": (
+            as_date(loan.first_payment_date).isoformat()
+            if getattr(loan, "first_payment_date", None) else None
+        ),
+        # What it actually resolves to, derived or not.
+        "first_payment": first_payment(loan).isoformat() if first_payment(loan) else None,
         "term_count": loan.term_count,
         "term_unit": loan.term_unit,
         "repayment_type": loan.repayment_type,
