@@ -27,7 +27,7 @@ from sqlalchemy.orm import Session
 
 from backend.helpers import get_base_currency, get_latest_rates, get_rates_bulk
 from backend.models import (
-    Account, BudgetItem, BudgetMonthLine, Category, CategoryBucket, Location,
+    Account, BudgetItem, BudgetMonthLine, Category, CategoryBucket, Loan, Location,
     Payee, Transaction,
 )
 
@@ -665,7 +665,25 @@ def month_snapshot(db: Session, ym: str) -> Dict:
             "is_frozen": bool(line.is_frozen),
         }))
 
-    fixed_out = [out for _, out in fixed_pairs]
+    # Money moved to an account of your own is a different kind of commitment
+    # from a bill, and splits into two of its own: putting money by, and paying
+    # something off. The test for "not a bill" is the one the engine already
+    # makes to decide *how* to spot the payment — a line with somewhere to put
+    # the money and nobody to pay is answered by a transfer arriving, not by a
+    # charge going out. Prorated lines are excluded: those are sinking funds for
+    # future bills, which have a section of their own.
+    def _is_transfer_line(line) -> bool:
+        return bool(line.set_aside_account_id) and not line.payee_id and not line.is_prorated
+
+    transfer_pairs = [(line, out) for line, out in fixed_pairs if _is_transfer_line(line)]
+    debt_ids = _debt_accounts(db, {line.set_aside_account_id for line, _ in transfer_pairs})
+
+    fixed_out = [out for line, out in fixed_pairs if not _is_transfer_line(line)]
+    savings_out = [out for line, out in transfer_pairs if line.set_aside_account_id not in debt_ids]
+    debt_out = [out for line, out in transfer_pairs if line.set_aside_account_id in debt_ids]
+    target_savings = sum(out["converted_amount"] for out in savings_out)
+    target_debt = sum(out["converted_amount"] for out in debt_out)
+    target_fixed -= target_savings + target_debt
 
     # --- sinking funds: verified per account, not per expense -----------------------
     funds: Dict[Optional[int], Dict] = {}
@@ -803,8 +821,23 @@ def month_snapshot(db: Session, ym: str) -> Dict:
     spent += imputed_spent
     income_actual = sum(tx_base(tx) for tx in incomes)
 
-    target = target_fixed + target_planned
+    target = target_fixed + target_savings + target_debt + target_planned
+
+    # Two different questions, kept apart.
+    #
+    # `remaining` asks whether the plan is holding: it is the slice of the target
+    # neither spent nor still owed, so it sits at zero all month and only moves
+    # when a bill comes in under its budget or money goes somewhere unbudgeted.
+    # That is what the progress bar divides up, and it is why it is nearly always
+    # zero — which made "Available" a promise the figure never kept.
+    #
+    # `available` asks what there is left to spend, which is the question the word
+    # actually poses: what is coming in, less what has gone and what is still
+    # owed. Budget nothing as income and there is no such thing to answer with, so
+    # it falls back to the target and behaves exactly as `remaining` does.
     remaining = target - spent - committed
+    headroom_base = income_expected if income_expected > 0 else target
+    available = headroom_base - spent - committed
 
     today = date.today()
     if start <= today <= end:
@@ -823,6 +856,8 @@ def month_snapshot(db: Session, ym: str) -> Dict:
         "is_past": ym < current_ym(),
         "target": round(target, 2),
         "target_fixed": round(target_fixed, 2),
+        "target_savings": round(target_savings, 2),
+        "target_debt": round(target_debt, 2),
         "target_planned": round(target_planned, 2),
         "spent": round(spent, 2),
         # How much of "spent" stands in for bills ticked off by hand — money the
@@ -830,10 +865,14 @@ def month_snapshot(db: Session, ym: str) -> Dict:
         # just being larger than the transactions add up to.
         "imputed_spent": round(imputed_spent, 2),
         "committed": round(committed, 2),
+        # How the target divides up — what the progress bar draws.
         "remaining": round(remaining, 2),
+        # What there is left to spend. The headline figure, and what "safe to
+        # spend a day" is worth dividing.
+        "available": round(available, 2),
         "percentage": round(spent / target * 100, 1) if target > 0 else 0,
         "days_remaining": days_remaining,
-        "daily_available": round(remaining / days_remaining, 2) if days_remaining > 0 else 0,
+        "daily_available": round(available / days_remaining, 2) if days_remaining > 0 else 0,
         "daily_target": round(daily_target, 2),
         "set_aside_total": round(set_aside_total, 2),
         "income": {
@@ -845,10 +884,14 @@ def month_snapshot(db: Session, ym: str) -> Dict:
             "expected": round(income_expected - target, 2),
         },
         "fixed_expenses": fixed_out,
+        "savings_goals": savings_out,
+        "debt_payments": debt_out,
         "planned_expenses": planned_out,
         "income_items": income_out,
         "sinking_funds": sinking_funds,
-        "calendar": _calendar(db, ym, expenses, fixed_out, matched_tx_ids, tx_base),
+        # The calendar marks what falls due each day, and a transfer to savings
+        # falls due like anything else — so it sees both lists.
+        "calendar": _calendar(db, ym, expenses, fixed_out + savings_out + debt_out, matched_tx_ids, tx_base),
         # Kept for the dashboard KPI in index.html, which reads these two keys.
         "budget": {"year_month": ym, "amount": round(target, 2), "currency": base_currency},
     }
@@ -890,24 +933,74 @@ def _detect_payment(line: BudgetMonthLine, expenses: List[Transaction],
     return len(matches) >= needed, matches
 
 
+DEBT_ACCOUNT_TYPES = {"LIABILITY", "CREDIT_CARD"}
+
+
+def _debt_accounts(db: Session, account_ids: set) -> set:
+    """
+    Which of these accounts are debts rather than somewhere to put money by.
+
+    Paying £200 into savings and £200 off a mortgage are the same gesture and the
+    same arithmetic, but not the same intention, so they are told apart here.
+    Three signals, most certain first: agreed loan terms settle it outright; an
+    account typed as a liability or a card says so plainly; and failing both, an
+    account whose very first movement was negative is one that opened by owing —
+    the same test the loans page uses to tell a debt from an asset.
+
+    Only the accounts a budget line actually points at are looked at, so this
+    stays a handful of rows however many accounts exist.
+    """
+    if not account_ids:
+        return set()
+
+    debts = {row[0] for row in
+             db.query(Loan.account_id).filter(Loan.account_id.in_(account_ids)).all()}
+
+    for account in db.query(Account).filter(Account.id.in_(account_ids - debts)).all():
+        if (account.type or "").strip().upper().replace(" ", "_") in DEBT_ACCOUNT_TYPES:
+            debts.add(account.id)
+
+    for account_id in account_ids - debts:
+        first = (db.query(Transaction.amount)
+                 .filter(Transaction.account_id == account_id)
+                 .order_by(Transaction.date, Transaction.id).first())
+        if first and first[0] < 0:
+            debts.add(account_id)
+
+    return debts
+
+
 def _loose_match(line: BudgetMonthLine, expenses: List[Transaction],
                  already_matched: set) -> List[Transaction]:
     """
     A last look for the transaction behind a bill ticked off by hand.
 
-    The payee is ignored here, deliberately: a payee the rules did not recognise
-    is the usual reason a bill needs ticking at all, which leaves the amount as
-    the only evidence. Finding nothing is itself the answer — it means the
-    payment was never recorded, and the caller stands the budgeted amount in for
-    it rather than letting it look like money saved.
+    Detection can fail on either half of its test, so this drops each in turn.
+    The payee goes first and without any amount check at all: naming a payee is
+    saying "this is who bills me", so a charge from them is the bill however far
+    it lands from the estimate — a water bill budgeted at £100 that arrives at
+    £40 is still the water bill. Only with no payee to go on does the amount
+    become the evidence.
+
+    Finding nothing is itself the answer: it means the payment was never
+    recorded, and the caller stands the budgeted amount in for it rather than
+    letting it look like money saved.
     """
+    needed = max(1, line.occurrences or 1)
+
+    if line.payee_id:
+        matches = [t for t in expenses
+                   if t.payee_id == line.payee_id and t.id not in already_matched]
+        if matches:
+            return matches[:needed]
+
     expected = abs(line.full_amount or line.amount or 0)
     if expected <= 0:
         return []
     low, high = expected * (1 - AMOUNT_TOLERANCE), expected * (1 + AMOUNT_TOLERANCE)
     matches = [t for t in expenses
                if t.id not in already_matched and low <= abs(t.amount) <= high]
-    return matches[:max(1, line.occurrences or 1)]
+    return matches[:needed]
 
 
 def _calendar(db: Session, ym: str, expenses: List[Transaction], fixed_out: List[Dict],

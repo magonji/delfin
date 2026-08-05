@@ -455,13 +455,13 @@
                         <div class="prog-legend">
                             <span><i class="dot" style="background:var(--red)"></i>Spent <span id="legSpent">0%</span></span>
                             <span><i class="dot" style="background:var(--yellow)"></i>Committed <span id="legCommitted">0%</span></span>
-                            <span>Available <span id="legAvailable">0%</span></span>
+                            <span>Saved <span id="legAvailable">0%</span></span>
                         </div>
                     </div>
                     <div class="stats-row">
                         <div class="stat"><div class="stat-label">Spent</div><div class="stat-value spent" id="statSpent">-</div><div class="stat-note" id="statSpentNote"></div></div>
                         <div class="stat"><div class="stat-label">Committed</div><div class="stat-value committed" id="statCommitted">-</div></div>
-                        <div class="stat"><div class="stat-label">Available</div><div class="stat-value available" id="statAvailable">-</div></div>
+                        <div class="stat"><div class="stat-label">Available</div><div class="stat-value available" id="statAvailable">-</div><div class="stat-note" id="statAvailableNote"></div></div>
                     </div>
                 </div>
                 <div>
@@ -546,6 +546,30 @@
                         <span>Budgeted <strong id="plannedTotal">-</strong></span>
                         <span>Spent <strong id="plannedSpent">-</strong></span>
                         <span>Left <strong id="plannedLeft">-</strong></span>
+                    </div>
+                </div>
+                <div class="card-block">
+                    <div class="sec-head">
+                        <h2 class="sechead">Savings</h2>
+                        <button class="lbtn add-btn" onclick="openItemModal('saving')">+ Add</button>
+                    </div>
+                    <div id="savingsList" style="padding-top:6px;"></div>
+                    <div class="recurring-summary" id="savingsSummary" style="display:none;">
+                        <span>Target <strong id="savingsTotal">-</strong></span>
+                        <span>Moved <strong id="savingsMoved">-</strong></span>
+                        <span>Pending <strong id="savingsPending">-</strong></span>
+                    </div>
+                </div>
+                <div class="card-block">
+                    <div class="sec-head">
+                        <h2 class="sechead">Debt</h2>
+                        <button class="lbtn add-btn" onclick="openItemModal('debt')">+ Add</button>
+                    </div>
+                    <div id="debtList" style="padding-top:6px;"></div>
+                    <div class="recurring-summary" id="debtSummary" style="display:none;">
+                        <span>Target <strong id="debtTotal">-</strong></span>
+                        <span>Paid <strong id="debtPaid">-</strong></span>
+                        <span>Pending <strong id="debtPending">-</strong></span>
                     </div>
                 </div>
             </div>
@@ -1334,6 +1358,8 @@
                 noteCurrenciesInUse([state.baseCurrency]);
                 renderHero(data);
                 renderFixed(data);
+                renderSavings(data);
+                renderDebt(data);
                 renderIncome(data);
                 renderPlanned(data);
                 renderCalendar(data);
@@ -1348,13 +1374,22 @@
         function renderHero(d) {
             const cur = d.base_currency;
             q('#budgetDisplay').textContent = d.target > 0 ? fmtMoney(d.target, cur) : 'No budget yet';
+            // Savings only earn a mention once there are any, so a budget without
+            // them reads exactly as it did before.
+            const parts = [`${fmtMoney(d.target_fixed, cur)} fixed`];
+            if (d.target_savings > 0) parts.push(`${fmtMoney(d.target_savings, cur)} saved`);
+            if (d.target_debt > 0) parts.push(`${fmtMoney(d.target_debt, cur)} debt`);
+            parts.push(`${fmtMoney(d.target_planned, cur)} planned`);
             q('#budgetSub').textContent = d.target > 0
-                ? `Monthly target · ${fmtMoney(d.target_fixed, cur)} fixed + ${fmtMoney(d.target_planned, cur)} planned`
+                ? `Monthly target · ${parts.join(' + ')}`
                 : 'Monthly target — add fixed and planned expenses to build it';
 
             const target = d.target || 0;
             const spentPct = target > 0 ? (d.spent / target) * 100 : 0;
             const committedPct = target > 0 ? (d.committed / target) * 100 : 0;
+            // The bar divides the target up, so it keeps using `remaining` — the
+            // slice neither spent nor owed. The headline below answers a different
+            // question and uses `available`.
             const availPct = target > 0 ? (d.remaining / target) * 100 : 0;
             const segSpentW = Math.max(0, Math.min(spentPct, 100));
             q('#segSpent').style.width = `${segSpentW}%`;
@@ -1371,8 +1406,13 @@
             q('#statSpentNote').textContent = d.imputed_spent > 0
                 ? `incl. ${fmtMoney(d.imputed_spent, cur)} ticked off by hand` : '';
             q('#statCommitted').textContent = fmtMoney(d.committed, cur);
-            q('#statAvailable').textContent = fmtMoney(d.remaining, cur);
-            q('#statAvailable').className = 'stat-value ' + (d.remaining >= 0 ? 'available' : 'spent');
+            q('#statAvailable').textContent = fmtMoney(d.available, cur);
+            q('#statAvailable').className = 'stat-value ' + (d.available >= 0 ? 'available' : 'spent');
+            // Say what it is measured against, since with no budgeted income
+            // there is nothing to measure headroom from and it falls back to
+            // the target — the same figure it has always shown.
+            q('#statAvailableNote').textContent = d.income.expected > 0
+                ? `of ${fmtMoney(d.income.expected, cur)} expected income` : 'against the target';
 
             const isFuture = state.currentMonth > new Date().toISOString().slice(0, 7);
             q('#futureBadge').style.display = isFuture ? 'inline-block' : 'none';
@@ -1465,6 +1505,73 @@
             q('#fixedPending').textContent = fmtMoney(total - paid, d.base_currency);
 
             renderFunds(d, prorated);
+        }
+
+        /**
+         * Money committed to an account of your own rather than to a biller.
+         * Putting it by and paying it off are the same gesture and the same
+         * arithmetic, so they share this renderer — but they are not the same
+         * intention, so they get a section each. Either way it is out of
+         * Available from the first of the month, before it has actually moved.
+         *
+         * @param {object} d - The month payload
+         * @param {object} cfg - Which list to draw, where, and what to call it
+         */
+        function renderTransfers(d, cfg) {
+            const list = q(cfg.list);
+            const lines = d[cfg.key] || [];
+
+            if (!lines.length) {
+                list.innerHTML = `<div class="empty-state">${cfg.empty}</div>`;
+                q(cfg.summary).style.display = 'none';
+                return;
+            }
+
+            let total = 0, done = 0;
+            list.innerHTML = lines.map(l => {
+                total += l.converted_amount;
+                if (l.paid) done += l.converted_amount;
+
+                const status = l.paid ? '✓' : '○';
+                const sub = [l.set_aside_account_name ? cfg.preposition + ' ' + l.set_aside_account_name : null,
+                             frequencyLabel(l)].filter(Boolean).join(' · ')
+                            || 'No account chosen — the transfer can’t be spotted';
+                const est = l.is_estimated ? '<span class="est">est</span>' : '';
+
+                return `
+                    <div class="recurring-item ${l.paid ? 'paid' : ''}" onclick="openLine(${l.id}, ${l.item_id})">
+                        <span class="status" onclick="event.stopPropagation(); toggleLinePaid(${l.id}, ${l.paid})"
+                              style="cursor:pointer" title="Set by hand">${status}</span>
+                        <div class="info">
+                            <div class="name">${esc(l.name)}${est}</div>
+                            <div class="category">${esc(sub)}</div>
+                        </div>
+                        <span class="amount">${fmtMoney(l.converted_amount, d.base_currency)}</span>
+                    </div>`;
+            }).join('');
+
+            q(cfg.summary).style.display = 'flex';
+            q(cfg.total).textContent = fmtMoney(total, d.base_currency);
+            q(cfg.done).textContent = fmtMoney(done, d.base_currency);
+            q(cfg.pending).textContent = fmtMoney(total - done, d.base_currency);
+        }
+
+        function renderSavings(d) {
+            renderTransfers(d, {
+                key: 'savings_goals', preposition: 'into',
+                list: '#savingsList', summary: '#savingsSummary',
+                total: '#savingsTotal', done: '#savingsMoved', pending: '#savingsPending',
+                empty: 'Nothing set aside<br><small>Budget what you mean to save each month, so it stops showing as available</small>',
+            });
+        }
+
+        function renderDebt(d) {
+            renderTransfers(d, {
+                key: 'debt_payments', preposition: 'off',
+                list: '#debtList', summary: '#debtSummary',
+                total: '#debtTotal', done: '#debtPaid', pending: '#debtPending',
+                empty: 'Nothing budgeted<br><small>Budget what you mean to pay off each month — loans, cards, overpayments</small>',
+            });
         }
 
         function renderFunds(d, proratedTotal) {
@@ -1798,20 +1905,43 @@
         }
 
         // ── Budget item modal ──────────────────────────────────────────────
-        const KIND_TITLES = { fixed: 'Fixed Expense', income: 'Expected Income', planned: 'Planned Expense' };
+        // "saving" and "debt" are shapes of the form, not kinds of item: both save
+        // a fixed line with somewhere to put the money and nobody to pay, which is
+        // what the engine reads back as a transfer rather than a bill. Which of
+        // the two sections it lands in is decided there, by whether the account is
+        // a debt — so it follows the account and cannot drift out of step with it.
+        // Keeping them out of the data model also means an existing set-aside line
+        // sorts itself into the right section, with nothing to migrate.
+        const KIND_TITLES = {
+            fixed: 'Fixed Expense', income: 'Expected Income',
+            planned: 'Planned Expense', saving: 'Savings Goal', debt: 'Debt Payment',
+        };
+        const TRANSFER_KINDS = ['saving', 'debt'];
+        const isTransferKind = (kind) => TRANSFER_KINDS.includes(kind);
+        const asItemKind = (kind) => isTransferKind(kind) ? 'fixed' : kind;
 
         function applyKindToForm(kind) {
             const show = (id, on) => q(id).style.display = on ? '' : 'none';
-            show('#itemPayeeGroup', kind !== 'planned');
+            const transfer = isTransferKind(kind);
+            // These are spotted by the money arriving, so a payee would only get
+            // in the way — the engine ignores the account when one is set.
+            show('#itemPayeeGroup', kind !== 'planned' && !transfer);
             q('#itemPayeeLabel').textContent = kind === 'income'
                 ? 'Payer (optional)' : 'Payee — used to spot the payment';
-            show('#itemAccountGroup', kind === 'fixed');
+            show('#itemAccountGroup', kind === 'fixed' || transfer);
+            q('#itemAccountLabel').textContent =
+                kind === 'saving' ? 'Account the money is moved into'
+                : kind === 'debt' ? 'Debt the money is paid off'
+                : 'Savings or debt account it is paid into';
             show('#itemAccountsGroup', kind === 'planned');
             show('#itemAccountsHint', kind === 'planned');
             show('#itemCategoriesGroup', kind === 'planned');
             show('#itemCategoriesHint', kind === 'planned');
             show('#itemEstimatedRow', kind !== 'planned');
-            q('#itemAmountLabel').textContent = kind === 'planned' ? 'Amount to budget' : 'Amount';
+            q('#itemAmountLabel').textContent =
+                kind === 'planned' ? 'Amount to budget'
+                : kind === 'saving' ? 'Amount to set aside'
+                : kind === 'debt' ? 'Amount to pay off' : 'Amount';
             // The date field and its label depend on the rhythm too, so onIntervalChange owns them.
             onIntervalChange();
         }
@@ -1935,7 +2065,8 @@
         // In a closed month a row edits the record itself, not the definition —
         // otherwise a correction to March would quietly rewrite today's budget.
         function editLine(lineId) {
-            const all = [...(state.data.fixed_expenses || []), ...(state.data.income_items || []),
+            const all = [...(state.data.fixed_expenses || []), ...(state.data.savings_goals || []),
+                         ...(state.data.debt_payments || []), ...(state.data.income_items || []),
                          ...(state.data.planned_expenses || [])];
             const line = all.find(l => l.id === lineId);
             if (!line) return;
@@ -1983,9 +2114,18 @@
             } catch (e) { alert('Error loading: ' + e.message); return; }
             if (!item) return;
 
-            q('#itemModalTitle').textContent = 'Edit ' + KIND_TITLES[item.kind];
+            // Read the form shape back out of the item, the same way the engine
+            // does: a fixed line with somewhere to put the money and nobody to pay
+            // is a transfer. Which section it sits in was already decided by the
+            // server, so ask its answer rather than working out again whether the
+            // account is a debt.
+            const transfer = item.kind === 'fixed' && item.set_aside_account_id && !item.payee_id;
+            const isDebt = (state.data.debt_payments || []).some(l => l.item_id === item.id);
+            const kind = transfer ? (isDebt ? 'debt' : 'saving') : item.kind;
+
+            q('#itemModalTitle').textContent = 'Edit ' + KIND_TITLES[kind];
             q('#itemId').value = item.id;
-            q('#itemKind').value = item.kind;
+            q('#itemKind').value = kind;
             q('#itemName').value = item.name;
             q('#itemAmount').value = item.amount;
             q('#itemEstimated').checked = !!item.is_estimated;
@@ -2004,7 +2144,7 @@
             renderItemCategories(item.category_ids || []);
 
             q('#deleteItemBtn').style.display = 'block';
-            applyKindToForm(item.kind);
+            applyKindToForm(kind);
             openModal('itemModal');
         }
 
@@ -2014,8 +2154,9 @@
             const once = isOnceSelected();
             const unit = once ? 'once' : q('#itemIntervalUnit').value;
 
+            const saving = isTransferKind(kind);
             const payload = {
-                kind,
+                kind: asItemKind(kind),
                 name: q('#itemName').value.trim(),
                 amount: parseFloat(q('#itemAmount').value),
                 is_estimated: kind !== 'planned' && q('#itemEstimated').checked,
@@ -2026,13 +2167,22 @@
                 day_rule: (kind !== 'income' && (unit === 'month' || unit === 'year'))
                     ? q('#itemDayRule').value : 'exact',
                 day_ordinal: parseInt(q('#itemDayOrdinal').value) || 1,
-                payee_id: kind !== 'planned' && q('#itemPayee').value ? parseInt(q('#itemPayee').value) : null,
-                set_aside_account_id: kind === 'fixed' && q('#itemAccount').value ? parseInt(q('#itemAccount').value) : null,
+                // A savings goal is answered by the transfer arriving; a payee
+                // would send the engine looking for a charge instead.
+                payee_id: (!saving && kind !== 'planned' && q('#itemPayee').value)
+                    ? parseInt(q('#itemPayee').value) : null,
+                set_aside_account_id: ((kind === 'fixed' || saving) && q('#itemAccount').value)
+                    ? parseInt(q('#itemAccount').value) : null,
                 account_ids: kind === 'planned' ? checkedIds('#itemAccounts') : [],
                 category_ids: kind === 'planned' ? checkedIds('#itemCategories') : [],
                 starts_ym: state.currentMonth,
                 currency: state.baseCurrency
             };
+
+            if (saving && !payload.set_aside_account_id) {
+                alert('Choose the account the money moves to — without it the transfer can’t be spotted');
+                return;
+            }
 
             if (!payload.name || isNaN(payload.amount)) {
                 alert('Please enter a name and an amount');
