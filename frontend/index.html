@@ -732,7 +732,10 @@ async function loadSummary() {
     const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     try {
         const bp = cacheGet('cache_budget_progress') || await api(`/budgets/${ym}/progress`).then(d => { cacheSet('cache_budget_progress', d, 'volatile'); return d; });
-        setKPI('#kpiBudgetAvail', bp.remaining, true);
+        // `available` is what there is left to spend; `remaining` only divides the
+        // target up and sits at zero all month, which is not what this cell claims.
+        // A payload cached before `available` existed still has to render.
+        setKPI('#kpiBudgetAvail', bp.available ?? bp.remaining ?? 0, true);
         renderBudgetDelta(bp.percentage);
     } catch { q('#kpiBudgetAvail').textContent = '—'; renderBudgetDelta(null); }
 }

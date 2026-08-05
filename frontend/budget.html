@@ -504,37 +504,25 @@
             </div>
         </section>
 
-        <!-- Fixed | Income + Planned -->
+        <!-- Fixed + Planned + Debt | Income + Savings -->
         <section class="split">
-            <div>
-                <div class="sec-head">
-                    <h2 class="sechead">Fixed Expenses</h2>
-                    <button class="lbtn add-btn" onclick="openItemModal('fixed')">+ Add</button>
-                </div>
-                <div id="fixedList" style="padding-top:6px;"></div>
-                <div class="recurring-summary" id="fixedSummary" style="display:none;">
-                    <span>Total <strong id="fixedTotal">-</strong></span>
-                    <span>Paid <strong id="fixedPaid">-</strong></span>
-                    <span>Pending <strong id="fixedPending">-</strong></span>
-                </div>
-                <div id="fundsBlock" style="display:none;margin-top:16px;padding-top:12px;border-top:1px solid var(--hair);">
-                    <div class="thismonth-label">Set aside for future bills</div>
-                    <div id="fundsList"></div>
-                </div>
-                <button class="lbtn add-btn" style="width:100%;margin-top:14px;height:34px;" onclick="openSuggestModal('fixed')">⌕ Suggest from history</button>
-            </div>
             <div>
                 <div class="card-block">
                     <div class="sec-head">
-                        <h2 class="sechead">Expected Income</h2>
-                        <button class="lbtn add-btn" onclick="openItemModal('income')">+ Add</button>
+                        <h2 class="sechead">Fixed Expenses</h2>
+                        <button class="lbtn add-btn" onclick="openItemModal('fixed')">+ Add</button>
                     </div>
-                    <div id="incomeList" style="padding-top:6px;"></div>
-                    <div class="recurring-summary" id="incomeSummary" style="display:none;">
-                        <span>Expected <strong id="incomeTotal">-</strong></span>
-                        <span>Received <strong id="incomeReceived">-</strong></span>
+                    <div id="fixedList" style="padding-top:6px;"></div>
+                    <div class="recurring-summary" id="fixedSummary" style="display:none;">
+                        <span>Total <strong id="fixedTotal">-</strong></span>
+                        <span>Paid <strong id="fixedPaid">-</strong></span>
+                        <span>Pending <strong id="fixedPending">-</strong></span>
                     </div>
-                    <button class="lbtn add-btn" style="width:100%;margin-top:14px;height:34px;" onclick="openSuggestModal('income')">⌕ Suggest from history</button>
+                    <div id="fundsBlock" style="display:none;margin-top:16px;padding-top:12px;border-top:1px solid var(--hair);">
+                        <div class="thismonth-label">Set aside for future bills</div>
+                        <div id="fundsList"></div>
+                    </div>
+                    <button class="lbtn add-btn" style="width:100%;margin-top:14px;height:34px;" onclick="openSuggestModal('fixed')">&#8981; Suggest from history</button>
                 </div>
                 <div class="card-block">
                     <div class="sec-head">
@@ -550,18 +538,6 @@
                 </div>
                 <div class="card-block">
                     <div class="sec-head">
-                        <h2 class="sechead">Savings</h2>
-                        <button class="lbtn add-btn" onclick="openItemModal('saving')">+ Add</button>
-                    </div>
-                    <div id="savingsList" style="padding-top:6px;"></div>
-                    <div class="recurring-summary" id="savingsSummary" style="display:none;">
-                        <span>Target <strong id="savingsTotal">-</strong></span>
-                        <span>Moved <strong id="savingsMoved">-</strong></span>
-                        <span>Pending <strong id="savingsPending">-</strong></span>
-                    </div>
-                </div>
-                <div class="card-block">
-                    <div class="sec-head">
                         <h2 class="sechead">Debt</h2>
                         <button class="lbtn add-btn" onclick="openItemModal('debt')">+ Add</button>
                     </div>
@@ -570,6 +546,32 @@
                         <span>Target <strong id="debtTotal">-</strong></span>
                         <span>Paid <strong id="debtPaid">-</strong></span>
                         <span>Pending <strong id="debtPending">-</strong></span>
+                    </div>
+                </div>
+            </div>
+            <div>
+                <div class="card-block">
+                    <div class="sec-head">
+                        <h2 class="sechead">Expected Income</h2>
+                        <button class="lbtn add-btn" onclick="openItemModal('income')">+ Add</button>
+                    </div>
+                    <div id="incomeList" style="padding-top:6px;"></div>
+                    <div class="recurring-summary" id="incomeSummary" style="display:none;">
+                        <span>Expected <strong id="incomeTotal">-</strong></span>
+                        <span>Received <strong id="incomeReceived">-</strong></span>
+                    </div>
+                    <button class="lbtn add-btn" style="width:100%;margin-top:14px;height:34px;" onclick="openSuggestModal('income')">&#8981; Suggest from history</button>
+                </div>
+                <div class="card-block">
+                    <div class="sec-head">
+                        <h2 class="sechead">Savings</h2>
+                        <button class="lbtn add-btn" onclick="openItemModal('saving')">+ Add</button>
+                    </div>
+                    <div id="savingsList" style="padding-top:6px;"></div>
+                    <div class="recurring-summary" id="savingsSummary" style="display:none;">
+                        <span>Target <strong id="savingsTotal">-</strong></span>
+                        <span>Moved <strong id="savingsMoved">-</strong></span>
+                        <span>Pending <strong id="savingsPending">-</strong></span>
                     </div>
                 </div>
             </div>
