@@ -618,12 +618,26 @@ def month_snapshot(db: Session, ym: str) -> Dict:
 
     matched_tx_ids: set = set()
     fixed_pairs, target_fixed, committed = [], 0.0, 0.0
+    # Bills ticked off by hand that no transaction accounts for. Marking one paid
+    # releases what was set aside for it, and without this the money would look
+    # saved rather than spent — `remaining` rising by the whole budgeted amount.
+    imputed_spent = 0.0
 
     for line in sorted(fixed_lines, key=lambda l: -(l.amount or 0)):
         budgeted = to_base(line.amount or 0, line.currency, latest_rates)
         target_fixed += budgeted
         paid, matches = _detect_payment(line, expenses, transfers_in, matched_tx_ids)
         if paid and not line.is_prorated:
+            if not matches:
+                # Ticked by hand with nothing recognised. Either the payment is
+                # in the month under a payee the rules missed — in which case it
+                # is already in `spent` and must not be counted again — or it was
+                # never recorded, and the budgeted amount stands in for it. The
+                # amount is the only evidence left, the payee having been what
+                # failed to match in the first place.
+                matches = _loose_match(line, expenses, matched_tx_ids)
+                if not matches:
+                    imputed_spent += budgeted
             for tx in matches:
                 matched_tx_ids.add(tx.id)
         if not line.is_prorated and not paid:
@@ -688,29 +702,60 @@ def month_snapshot(db: Session, ym: str) -> Dict:
     sinking_funds.sort(key=lambda f: -f["expected"])
 
     # --- planned expenses ----------------------------------------------------------
+    #
+    # A purchase belongs to one budget line, never several. It used to be counted
+    # by every line whose filters it fitted — a grocery shop on the everyday card
+    # answering for both "Groceries" and "everything on that card" — and since
+    # each line then released its own share of `committed` while the spending was
+    # only counted once, the headline figures drifted apart: money spent made
+    # `remaining` go *up*. Lines are offered each transaction in order of how
+    # specific they are, and the first to claim it keeps it.
     children = _category_children(db)
     planned_out, target_planned = [], 0.0
 
-    for line in sorted(planned_lines, key=lambda l: -(l.amount or 0)):
-        budgeted = to_base(line.amount or 0, line.currency, latest_rates)
-        target_planned += budgeted
+    resolved = []
+    for line in planned_lines:
         account_ids = set(_loads(line.account_ids))
         category_ids = set()
         for cid in _loads(line.category_ids):
             category_ids.add(cid)
             category_ids.update(children.get(cid, []))
+        resolved.append((line, account_ids, category_ids))
+
+    def _specificity(entry) -> int:
+        """Narrowest claim first; a line naming only accounts is the catch-all."""
+        _, accounts, categories = entry
+        if accounts and categories:
+            return 0
+        if categories:
+            return 1
+        return 2
+
+    resolved.sort(key=lambda e: (_specificity(e), -(e[0].amount or 0)))
+
+    # Seeded from the bills, so an expense already answered for by a fixed line
+    # is not budgeted for twice. Kept separate from `matched_tx_ids` because that
+    # set means "this is a bill" to the calendar, which a grocery shop is not.
+    claimed_by_planned = set(matched_tx_ids)
+
+    for line, account_ids, category_ids in resolved:
+        budgeted = to_base(line.amount or 0, line.currency, latest_rates)
+        target_planned += budgeted
 
         # With nothing to match on there is no way to follow the spending, so the
         # line stays at zero rather than claiming every expense of the month.
         spent_here, tx_ids = 0.0, []
         if account_ids or category_ids:
             for tx in expenses:
+                if tx.id in claimed_by_planned:
+                    continue  # already answered for by a narrower line, or a bill
                 if account_ids and tx.account_id not in account_ids:
                     continue
                 if category_ids and tx.category_id not in category_ids:
                     continue
                 spent_here += abs(tx_base(tx))
                 tx_ids.append(tx.id)
+                claimed_by_planned.add(tx.id)
 
         committed += max(0.0, budgeted - spent_here)
         planned_out.append({
@@ -729,6 +774,9 @@ def month_snapshot(db: Session, ym: str) -> Dict:
             "transaction_count": len(tx_ids),
             "is_frozen": bool(line.is_frozen),
         })
+
+    # Claiming order is about specificity; the page still reads biggest first.
+    planned_out.sort(key=lambda p: -p["converted_amount"])
 
     # --- expected income -----------------------------------------------------------
     income_out, income_expected = [], 0.0
@@ -750,6 +798,9 @@ def month_snapshot(db: Session, ym: str) -> Dict:
     spent = sum(abs(tx_base(tx)) for tx in expenses)
     # Bills settled by transfer leave the accounts too, so they belong in "spent".
     spent += sum(tx_base(tx) for tx in transfers_in if tx.id in matched_tx_ids)
+    # Bills ticked off by hand with no transaction to show for them: the money
+    # left even though nothing here records it leaving.
+    spent += imputed_spent
     income_actual = sum(tx_base(tx) for tx in incomes)
 
     target = target_fixed + target_planned
@@ -774,6 +825,10 @@ def month_snapshot(db: Session, ym: str) -> Dict:
         "target_fixed": round(target_fixed, 2),
         "target_planned": round(target_planned, 2),
         "spent": round(spent, 2),
+        # How much of "spent" stands in for bills ticked off by hand — money the
+        # app has no transaction for, so the figure can be explained rather than
+        # just being larger than the transactions add up to.
+        "imputed_spent": round(imputed_spent, 2),
         "committed": round(committed, 2),
         "remaining": round(remaining, 2),
         "percentage": round(spent / target * 100, 1) if target > 0 else 0,
@@ -833,6 +888,26 @@ def _detect_payment(line: BudgetMonthLine, expenses: List[Transaction],
 
     matches = matches[:needed]
     return len(matches) >= needed, matches
+
+
+def _loose_match(line: BudgetMonthLine, expenses: List[Transaction],
+                 already_matched: set) -> List[Transaction]:
+    """
+    A last look for the transaction behind a bill ticked off by hand.
+
+    The payee is ignored here, deliberately: a payee the rules did not recognise
+    is the usual reason a bill needs ticking at all, which leaves the amount as
+    the only evidence. Finding nothing is itself the answer — it means the
+    payment was never recorded, and the caller stands the budgeted amount in for
+    it rather than letting it look like money saved.
+    """
+    expected = abs(line.full_amount or line.amount or 0)
+    if expected <= 0:
+        return []
+    low, high = expected * (1 - AMOUNT_TOLERANCE), expected * (1 + AMOUNT_TOLERANCE)
+    matches = [t for t in expenses
+               if t.id not in already_matched and low <= abs(t.amount) <= high]
+    return matches[:max(1, line.occurrences or 1)]
 
 
 def _calendar(db: Session, ym: str, expenses: List[Transaction], fixed_out: List[Dict],

@@ -120,6 +120,7 @@
         .stat-label { font-size: 10px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
         .stat-value { font-family: 'Playfair Display', serif; font-size: 24px; font-weight: 800; margin-top: 5px; }
         .stat-value.spent { color: var(--red); }
+        .stat-note { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: var(--muted); margin-top: 3px; line-height: 1.35; }
         .stat-value.committed { color: var(--yellow); }
         .stat-value.available { color: var(--green); }
 
@@ -458,7 +459,7 @@
                         </div>
                     </div>
                     <div class="stats-row">
-                        <div class="stat"><div class="stat-label">Spent</div><div class="stat-value spent" id="statSpent">-</div></div>
+                        <div class="stat"><div class="stat-label">Spent</div><div class="stat-value spent" id="statSpent">-</div><div class="stat-note" id="statSpentNote"></div></div>
                         <div class="stat"><div class="stat-label">Committed</div><div class="stat-value committed" id="statCommitted">-</div></div>
                         <div class="stat"><div class="stat-label">Available</div><div class="stat-value available" id="statAvailable">-</div></div>
                     </div>
@@ -1365,6 +1366,10 @@
             availEl.parentElement.classList.toggle('over', availPct < 0);
 
             q('#statSpent').textContent = fmtMoney(d.spent, cur);
+            // Bills ticked off by hand have no transaction behind them, so say so
+            // rather than leaving a total that the month's entries cannot explain.
+            q('#statSpentNote').textContent = d.imputed_spent > 0
+                ? `incl. ${fmtMoney(d.imputed_spent, cur)} ticked off by hand` : '';
             q('#statCommitted').textContent = fmtMoney(d.committed, cur);
             q('#statAvailable').textContent = fmtMoney(d.remaining, cur);
             q('#statAvailable').className = 'stat-value ' + (d.remaining >= 0 ? 'available' : 'spent');
