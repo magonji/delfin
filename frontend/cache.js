@@ -1,5 +1,10 @@
 /**
- * Delfin's client-side cache.
+ * Delfin's client-side cache, and the handful of constants every page shares.
+ *
+ * The account-type vocabulary lives at the bottom of this file for one reason:
+ * this is the only script all five pages already load, and it is precached by
+ * the service worker. A file of its own would mean a script tag on each page
+ * and another entry in sw.js, for twenty lines.
  *
  * One implementation shared by every page, so the rules are the same wherever
  * you look. Three things it gets right that the per-page versions did not:
@@ -108,5 +113,80 @@
         markDirty: markDirty,
         consumeDirty: consumeDirty,
         TTL: TTL
+    };
+})(window);
+
+/**
+ * What kind of thing an account is.
+ *
+ * The vocabulary is Financisto's, minus PayPal, so a database that came from
+ * there keeps its typing and goes back out again unchanged — anything Financisto
+ * does not recognise is exported as CASH, so inventing our own words here would
+ * quietly flatten the lot on the way out.
+ *
+ * Stored upper-case and canonical, shown in sentence case. Two of these carry
+ * weight beyond the label: LIABILITY and CREDIT_CARD are what the budget reads
+ * to tell paying a debt off from putting money by, and LIABILITY is what the
+ * loans page and the dashboard's "without loans" figure look for.
+ */
+(function (global) {
+    'use strict';
+
+    // Offered in the pickers, in the order most people need them.
+    var ORDER = ['BANK', 'SAVINGS', 'CASH', 'DEBIT_CARD', 'CREDIT_CARD',
+                 'ELECTRONIC', 'ASSET', 'LIABILITY', 'OTHER'];
+
+    var LABELS = {
+        BANK: 'Bank',
+        SAVINGS: 'Savings',
+        CASH: 'Cash',
+        DEBIT_CARD: 'Debit card',
+        CREDIT_CARD: 'Credit card',
+        ELECTRONIC: 'Electronic',
+        ASSET: 'Asset',
+        LIABILITY: 'Liability',
+        OTHER: 'Other',
+        // Not offered any more, but a Financisto import can still bring it in and
+        // an account carrying it has to stay readable and editable.
+        PAYPAL: 'PayPal'
+    };
+
+    function canonical(value) {
+        return (value || '').trim().toUpperCase().replace(/ /g, '_');
+    }
+
+    /**
+     * A value fit to show. Anything outside the vocabulary — an older database,
+     * a hand-written API call — is tidied rather than dropped, so nothing ever
+     * renders as blank or shouts in capitals.
+     */
+    function label(value) {
+        var key = canonical(value);
+        if (!key) return '';
+        if (LABELS[key]) return LABELS[key];
+        var words = key.toLowerCase().replace(/_/g, ' ');
+        return words.charAt(0).toUpperCase() + words.slice(1);
+    }
+
+    /** `<option>` markup for a picker, with `selected` on the current value. */
+    function options(selected) {
+        var current = canonical(selected);
+        var html = ORDER.map(function (t) {
+            return '<option value="' + t + '"' + (t === current ? ' selected' : '') +
+                   '>' + LABELS[t] + '</option>';
+        }).join('');
+        // An account already carrying a value we no longer offer keeps it, rather
+        // than being silently retyped the first time someone edits its name.
+        if (current && ORDER.indexOf(current) === -1) {
+            html += '<option value="' + current + '" selected>' + label(current) + '</option>';
+        }
+        return html;
+    }
+
+    global.DelfinAccountTypes = {
+        ORDER: ORDER,
+        label: label,
+        options: options,
+        canonical: canonical
     };
 })(window);

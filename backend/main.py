@@ -3475,48 +3475,33 @@ def get_top_individual_expenses(
 
 @app.get("/loans/account-ids")
 def get_loan_account_ids(db: Session = Depends(get_db)):
-    """Return the IDs of accounts detected as loans (not credit cards)."""
-    CREDIT_CARD_PAYEE_THRESHOLD = 3
-    transfer_locations = db.query(Location.id).filter(
-        Location.name.in_(["Transfer In", "Transfer Out"])
-    ).all()
-    transfer_location_ids = set(loc.id for loc in transfer_locations)
+    """
+    The IDs of accounts that are loans: agreed terms, or typed as a liability.
 
-    declared_loan_accounts = {row[0] for row in db.query(Loan.account_id).all()}
-
-    loan_ids = []
-    for account in db.query(Account).all():
-        if account.id in declared_loan_accounts:
-            loan_ids.append(account.id)
-            continue
-        first_tx = db.query(Transaction).filter(
-            Transaction.account_id == account.id
-        ).order_by(Transaction.date, Transaction.id).first()
-        if not first_tx or first_tx.amount >= 0:
-            continue
-        payee_query = db.query(Transaction.payee_id).filter(
-            Transaction.account_id == account.id,
-            Transaction.payee_id != None,
-        )
-        if transfer_location_ids:
-            # A transaction with no location must still count: SQL evaluates
-            # "NOT IN" as NULL, not true, when the column itself is NULL.
-            payee_query = payee_query.filter(or_(Transaction.location_id.is_(None),
-                                                 ~Transaction.location_id.in_(transfer_location_ids)))
-        unique_payees = set(p[0] for p in payee_query.distinct().all())
-        if len(unique_payees) < CREDIT_CARD_PAYEE_THRESHOLD:
-            loan_ids.append(account.id)
-    return {"loan_account_ids": loan_ids}
+    Feeds the dashboard's "without loans" balance and its exclude-loans toggle.
+    Credit cards are deliberately not here — money owed on a card is spending
+    already made, not capital borrowed, and leaving it out of that figure would
+    make you look richer for having reached for the card.
+    """
+    declared = {row[0] for row in db.query(Loan.account_id).filter(Loan.account_id.isnot(None)).all()}
+    typed = {row[0] for row in db.query(Account.id).filter(
+        func.replace(func.upper(func.trim(Account.type)), " ", "_") == "LIABILITY"
+    ).all()}
+    return {"loan_account_ids": sorted(declared | typed)}
 
 
 @app.get("/loans/summary")
 def get_loans_summary(db: Session = Depends(get_db)):
     """
-    Get summary of all loans and credit cards.
-    Detects loans/credit cards dynamically based on transaction patterns:
-    - Account must start with a negative transaction
-    - Credit cards: 3+ unique payees (excluding transfers)
-    - Loans: fewer than 3 unique payees
+    Summary of the loans and credit cards.
+
+    Which accounts those are is read off what they were declared to be: agreed
+    loan terms, or a type of liability or credit card. This page used to work it
+    out from spending patterns instead — an account whose first movement was
+    negative, then three or more payees for a card, fewer for a loan. On an
+    imported database the first movement is only where the history starts, so a
+    card whose earliest row was a payment went unseen while an ordinary current
+    account could be listed as one.
     """
     # Get all accounts
     all_accounts = db.query(Account).all()
@@ -3549,41 +3534,30 @@ def get_loans_summary(db: Session = Depends(get_db)):
     total_owed = 0
     total_interest = 0
 
-    CREDIT_CARD_PAYEE_THRESHOLD = 3
-
     declared_loan_accounts = {row[0] for row in db.query(Loan.account_id).all()}
-    
+
     for account in all_accounts:
+        # Agreed terms make it a loan whatever it says it is; failing those, it is
+        # whatever it was declared to be, and anything else does not belong here.
+        declared = account.id in declared_loan_accounts
+        account_type = (account.type or "").strip().upper().replace(" ", "_")
+        is_credit_card = (not declared) and account_type == "CREDIT_CARD"
+        if not (declared or is_credit_card or account_type == "LIABILITY"):
+            continue
+
         # Get all transactions for this account, sorted chronologically
         transactions = db.query(Transaction).filter(
             Transaction.account_id == account.id
         ).order_by(Transaction.date, Transaction.id).all()
-        
+
         if not transactions:
             continue
-        
-        # An account with agreed terms is a loan because it was declared one.
-        declared = account.id in declared_loan_accounts
-
-        # Check if account starts with negative transaction (debt account)
-        first_transaction = transactions[0]
-        if first_transaction.amount >= 0 and not declared:
-            continue  # Not a debt account
 
         # Identify transfer transactions
         transfer_ids = set()
         for tx in transactions:
             if tx.location_id and tx.location_id in transfer_location_ids:
                 transfer_ids.add(tx.id)
-
-        # Count unique payees (excluding transfers)
-        unique_payees = set()
-        for tx in transactions:
-            if tx.payee_id and tx.id not in transfer_ids:
-                unique_payees.add(tx.payee_id)
-
-        # Determine if it's a credit card or loan
-        is_credit_card = (not declared) and len(unique_payees) >= CREDIT_CARD_PAYEE_THRESHOLD
 
         # Calculate metrics in account's original currency, then convert to base
         borrowed = 0
@@ -3672,8 +3646,11 @@ def get_loans_details(
     db: Session = Depends(get_db)
 ):
     """
-    Get detailed information about all loans and credit cards.
-    Uses dynamic detection based on transaction patterns.
+    Detail of the loans and credit cards.
+
+    Membership is declared, not inferred: agreed loan terms, or a type of
+    liability or credit card. See ``get_loans_summary`` for why the old
+    pattern-matching went.
     """
     # Get all accounts
     all_accounts = db.query(Account).all()
@@ -3693,29 +3670,24 @@ def get_loans_details(
         "base_currency": base_currency
     }
 
-    CREDIT_CARD_PAYEE_THRESHOLD = 3
-
-    # Agreed terms, where they have been entered. An account without them keeps
-    # being estimated from its movements, exactly as before.
+    # Agreed terms, where they have been entered. They outrank the declared type:
+    # an account with a repayment schedule is a loan whatever it calls itself.
     loan_terms = {loan.account_id: loan for loan in db.query(Loan).all()}
-    
+
     for account in all_accounts:
+        declared = loan_terms.get(account.id)
+        account_type = (account.type or "").strip().upper().replace(" ", "_")
+        is_credit_card = (not declared) and account_type == "CREDIT_CARD"
+        if not (declared or is_credit_card or account_type == "LIABILITY"):
+            continue
+
         # Get all transactions for this account, sorted chronologically
         transactions = db.query(Transaction).filter(
             Transaction.account_id == account.id
         ).order_by(Transaction.date, Transaction.id).all()
-        
-        # An account with agreed terms is a loan because it was declared one, so
-        # the pattern-matching below never gets to overrule it.
-        declared = loan_terms.get(account.id)
 
         if not transactions:
             continue
-
-        # Check if account starts with negative transaction (debt account)
-        first_transaction = transactions[0]
-        if first_transaction.amount >= 0 and not declared:
-            continue  # Not a debt account
 
         # Identify transfer transactions
         transfer_ids = set()
@@ -3723,7 +3695,9 @@ def get_loans_details(
             if tx.location_id and tx.location_id in transfer_location_ids:
                 transfer_ids.add(tx.id)
 
-        # Count unique payees (excluding transfers)
+        # Who the money is owed to, for a loan without agreed terms naming them.
+        # The payee count is no longer what decides anything — it is reported for
+        # a card as a plain statistic of how widely it gets used.
         unique_payees = set()
         payee_names = []
         for tx in transactions:
@@ -3731,9 +3705,6 @@ def get_loans_details(
                 unique_payees.add(tx.payee_id)
                 if tx.payee and tx.payee.name:
                     payee_names.append(tx.payee.name)
-
-        # Determine if it's a credit card or loan
-        is_credit_card = (not declared) and len(unique_payees) >= CREDIT_CARD_PAYEE_THRESHOLD
 
         # Calculate metrics IN ACCOUNT'S ORIGINAL CURRENCY
         borrowed = 0
@@ -3820,7 +3791,7 @@ def get_loans_details(
         # For credit cards, get the actual current balance
         current_balance = round(balance, 2) if is_credit_card else None
         
-        open_date = first_transaction.date
+        open_date = transactions[0].date
         
         debt_data = {
             "account": {

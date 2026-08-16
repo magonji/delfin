@@ -477,6 +477,10 @@
                     <label>Currency</label>
                     <select id="editCurrency"></select>
                 </div>
+                <div class="form-group" id="editTypeGroup" style="display: none;">
+                    <label>Type</label>
+                    <select id="editType"></select>
+                </div>
                 <div class="form-group" id="editParentGroup" style="display: none;"><label>Parent Category</label><input type="text" id="editParent" readonly style="background: #f0f0f0;"></div>
                 <div style="display: flex; gap: 10px; padding: 0 25px;">
                     <button onclick="saveEdit()" style="flex: 1;">Save</button>
@@ -1432,7 +1436,7 @@
                     <div class="item-row" style="${acc.is_active === 0 ? 'opacity:0.55;' : ''}">
                         <div class="item-info">
                             <div class="item-name">${acc.name}${status_badge}</div>
-                            <div class="item-meta">Currency: ${acc.currency} · Type: ${acc.type || 'Regular'} · Balance: ${acc.current_balance.toFixed(2)}</div>
+                            <div class="item-meta">Currency: ${acc.currency} · Type: ${DelfinAccountTypes.label(acc.type) || '—'} · Balance: ${acc.current_balance.toFixed(2)}</div>
                         </div>
                         <div class="item-actions">
                             <button onclick="editItem('account', ${acc.id})">Edit</button>
@@ -1718,7 +1722,11 @@
         function editItem(type, id) {
             currentEditType = type;
             let item;
-            
+
+            // Only accounts have one, so it is hidden here rather than in each of
+            // the five branches below.
+            document.getElementById('editTypeGroup').style.display = 'none';
+
             switch(type) {
                 case 'category':
                     item = allCategories.find(c => c.id === id);
@@ -1736,6 +1744,8 @@
                     document.getElementById('editName').value = item.name;
                     document.getElementById('editCurrencyGroup').style.display = 'block';
                     document.getElementById('editCurrency').value = item.currency;
+                    document.getElementById('editTypeGroup').style.display = 'block';
+                    document.getElementById('editType').innerHTML = DelfinAccountTypes.options(item.type);
                     document.getElementById('editParentGroup').style.display = 'none';
                     break;
                 case 'payee':
@@ -1835,7 +1845,7 @@
                         body = {
                             name: newName,
                             currency: document.getElementById('editCurrency').value,
-                            type: currentEditItem.type,
+                            type: document.getElementById('editType').value,
                             initial_balance: currentEditItem.initial_balance
                         };
                         break;

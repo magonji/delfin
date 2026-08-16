@@ -942,10 +942,15 @@ def _debt_accounts(db: Session, account_ids: set) -> set:
 
     Paying £200 into savings and £200 off a mortgage are the same gesture and the
     same arithmetic, but not the same intention, so they are told apart here.
-    Three signals, most certain first: agreed loan terms settle it outright; an
-    account typed as a liability or a card says so plainly; and failing both, an
-    account whose very first movement was negative is one that opened by owing —
-    the same test the loans page uses to tell a debt from an asset.
+    Two signals, both declared: agreed loan terms settle it outright, and failing
+    those, an account typed as a liability or a card says so plainly.
+
+    There used to be a third — an account whose very first movement was negative
+    was read as one that opened by owing. It was dropped when the type became
+    something you choose. On an imported database the first movement is only
+    wherever the history happens to start, so an ordinary current account could
+    be taken for a debt and have its budget lines moved out of Savings on the
+    strength of a guess. What an account is, is now yours to say.
 
     Only the accounts a budget line actually points at are looked at, so this
     stays a handful of rows however many accounts exist.
@@ -959,13 +964,6 @@ def _debt_accounts(db: Session, account_ids: set) -> set:
     for account in db.query(Account).filter(Account.id.in_(account_ids - debts)).all():
         if (account.type or "").strip().upper().replace(" ", "_") in DEBT_ACCOUNT_TYPES:
             debts.add(account.id)
-
-    for account_id in account_ids - debts:
-        first = (db.query(Transaction.amount)
-                 .filter(Transaction.account_id == account_id)
-                 .order_by(Transaction.date, Transaction.id).first())
-        if first and first[0] < 0:
-            debts.add(account_id)
 
     return debts
 

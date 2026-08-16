@@ -90,6 +90,23 @@ _BACKFILLS = (
     # Every item that has never been versioned is a series of one, keyed by itself.
     ("budget_items", "series_id",
      "UPDATE budget_items SET series_id = id WHERE series_id IS NULL"),
+
+    # An account's type used to be free text nobody could set: the app wrote the
+    # literal 'Regular' on every account it created, and an import left it empty.
+    # Now that it is chosen from a list and has consequences, those two stand-ins
+    # have to become a real value. Agreed loan terms are the one thing that can be
+    # read off with certainty, so those go first and the rest start at cash for
+    # their owner to correct. Nothing is guessed from spending patterns — a type
+    # is what you declared it to be.
+    #
+    # Both are idempotent: once run, no row matches the WHERE clause again. The
+    # loans table is guaranteed to exist here, create_all having run first.
+    ("accounts", "type",
+     "UPDATE accounts SET type = 'LIABILITY' "
+     "WHERE (type IS NULL OR type = 'Regular') "
+     "AND id IN (SELECT account_id FROM loans WHERE account_id IS NOT NULL)"),
+    ("accounts", "type",
+     "UPDATE accounts SET type = 'CASH' WHERE type IS NULL OR type = 'Regular'"),
 )
 
 

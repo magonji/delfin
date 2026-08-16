@@ -8,6 +8,16 @@ from typing import Optional, List
 
 # --- Account schemas ---
 
+# Financisto's vocabulary, which is what an imported database already speaks and
+# what the exporter can hand back without flattening. PAYPAL is accepted but no
+# longer offered: an imported account carrying it must stay editable, or renaming
+# it would fail validation on its own current value.
+ACCOUNT_TYPES = {
+    "CASH", "BANK", "DEBIT_CARD", "CREDIT_CARD", "SAVINGS",
+    "ASSET", "LIABILITY", "ELECTRONIC", "OTHER", "PAYPAL",
+}
+
+
 class AccountBase(BaseModel):
     name: str
     type: Optional[str] = None
@@ -21,7 +31,20 @@ class AccountBase(BaseModel):
 
 
 class AccountCreate(AccountBase):
-    pass
+    # Deliberately not on AccountBase: AccountResponse inherits from it, and a
+    # database written before this vocabulary existed would then fail to *read*.
+    # Only what comes in over the API is held to the list.
+    @field_validator('type')
+    @classmethod
+    def known_account_type(cls, v):
+        if v is None or v == "":
+            return None
+        canonical = v.strip().upper().replace(" ", "_")
+        if canonical not in ACCOUNT_TYPES:
+            raise ValueError(
+                f"Unknown account type '{v}'. One of: {', '.join(sorted(ACCOUNT_TYPES))}"
+            )
+        return canonical
 
 
 class AccountResponse(AccountBase):

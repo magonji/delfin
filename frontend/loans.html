@@ -168,6 +168,12 @@
         .sechead { margin: 0; font-family: 'Playfair Display', serif; font-size: 25px; font-weight: 800; padding-left: 15px; border-left: 3px solid var(--accent); }
         .sec-count { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
 
+        /* Shown only when there is nothing at all to list. */
+        .empty-state { padding: 40px 20px 44px; text-align: center; max-width: 520px; margin: 0 auto; }
+        .empty-state h2 { margin: 0 0 14px; font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 800; }
+        .empty-state p { margin: 0 0 10px; font-size: 14px; line-height: 1.6; color: var(--muted); }
+        .empty-state a { color: var(--accent); font-weight: 600; }
+
         /* Debt rows (flat, editorial) */
         .loan-card { background: transparent; border: none; border-bottom: 1px solid var(--hair); border-radius: 0; margin: 0 -8px; padding: 20px 8px; transition: background .15s; }
         .loan-card:hover { box-shadow: none; background: #F4EAD9; }
@@ -288,6 +294,19 @@
         <section class="sec" id="completedLoansSection" style="display:none">
             <div class="sec-head"><h2 class="sechead">Paid Off Loans</h2><span class="sec-count" id="completedLoansCount">0</span></div>
             <div id="completedLoansList"></div>
+        </section>
+
+        <!-- What this page shows is now declared rather than guessed at, so with
+             nothing declared it would otherwise be a blank page that reads as a
+             fault. Says where to go instead. -->
+        <section class="sec" id="noDebtsSection" style="display:none">
+            <div class="empty-state">
+                <h2>Nothing marked as a loan or a credit card</h2>
+                <p>This page shows the accounts you have given a type of <strong>liability</strong>
+                   or <strong>credit card</strong>, and any account with agreed loan terms.</p>
+                <p>Set the type of an account under <a href="tools.html">Tools → Accounts</a>,
+                   or use <strong>Add loan</strong> above to have its account opened for you.</p>
+            </div>
         </section>
 
         <div class="footer" id="footerNote">Delfin · balances in GBP at historical rates</div>
@@ -640,6 +659,11 @@
         renderSection('activeLoans', data.loans, 'loan');
         renderSection('completedLoans', data.completed, 'mixed');
         renderSection('creditCards', data.credit_cards, 'card');
+
+        const nothing = !(data.loans || []).length
+                     && !(data.completed || []).length
+                     && !(data.credit_cards || []).length;
+        q('#noDebtsSection').style.display = nothing ? 'block' : 'none';
     }
 
     /**

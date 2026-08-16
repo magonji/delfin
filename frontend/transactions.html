@@ -961,6 +961,10 @@
                         <label>Currency</label>
                         <select id="newAccountCurrency"></select>
                     </div>
+                    <div class="form-group">
+                        <label>Type</label>
+                        <select id="newAccountType"></select>
+                    </div>
                     <div class="modal-footer">
                         <button class="btn-save" onclick="saveNewAccount()">Save</button>
                         <button class="btn-cancel" onclick="closeModal('newAccountModal')">Cancel</button>
@@ -1807,9 +1811,9 @@
         function setupEventListeners() {
             document.getElementById('parentCategory').addEventListener('change', (e) => { if (e.target.value === '__NEW__') { openModal('newCategoryModal'); e.target.value = ''; } else loadSubcategories(e.target.value); });
             document.getElementById('category').addEventListener('change', (e) => { if (e.target.value === '__NEW__') { document.getElementById('newSubcategoryParent').value = document.getElementById('parentCategory').value; openModal('newSubcategoryModal'); e.target.value = ''; } });
-            document.getElementById('account').addEventListener('change', (e) => { if (e.target.value === '__NEW__') { openModal('newAccountModal'); e.target.value = ''; } });
-            document.getElementById('fromAccount').addEventListener('change', (e) => { if (e.target.value === '__NEW__') { window.creatingAccountFor = 'fromAccount'; openModal('newAccountModal'); e.target.value = ''; } checkTransferCurrencies(); });
-            document.getElementById('toAccount').addEventListener('change', (e) => { if (e.target.value === '__NEW__') { window.creatingAccountFor = 'toAccount'; openModal('newAccountModal'); e.target.value = ''; } checkTransferCurrencies(); });
+            document.getElementById('account').addEventListener('change', (e) => { if (e.target.value === '__NEW__') { openNewAccountModal(); e.target.value = ''; } });
+            document.getElementById('fromAccount').addEventListener('change', (e) => { if (e.target.value === '__NEW__') { window.creatingAccountFor = 'fromAccount'; openNewAccountModal(); e.target.value = ''; } checkTransferCurrencies(); });
+            document.getElementById('toAccount').addEventListener('change', (e) => { if (e.target.value === '__NEW__') { window.creatingAccountFor = 'toAccount'; openNewAccountModal(); e.target.value = ''; } checkTransferCurrencies(); });
             document.getElementById('location').addEventListener('change', (e) => { if (e.target.value === '__NEW__') { openModal('newLocationModal'); e.target.value = ''; } });
             document.getElementById('project').addEventListener('change', (e) => { if (e.target.value === '__NEW__') { openModal('newProjectModal'); e.target.value = ''; } });
             document.getElementById('transactionForm').addEventListener('submit', handleTransactionSubmit);
@@ -3543,7 +3547,36 @@
         }
         async function saveNewLocation(){ const n=document.getElementById('newLocationName').value; const created=await (await fetch(`${API_URL}/locations`,{method:'POST',body:JSON.stringify({name:n}),headers:{'Content-Type':'application/json'}})).json(); closeModal('newLocationModal'); await loadLocations(); if(created && created.id) document.getElementById('location').value=created.id; }
         async function saveNewProject(){ const n=document.getElementById('newProjectName').value; const created=await (await fetch(`${API_URL}/projects`,{method:'POST',body:JSON.stringify({name:n}),headers:{'Content-Type':'application/json'}})).json(); closeModal('newProjectModal'); await loadProjects(); if(created && created.id) document.getElementById('project').value=created.id; }
-        async function saveNewAccount(){ const n=document.getElementById('newAccountName').value; const c=document.getElementById('newAccountCurrency').value; await fetch(`${API_URL}/accounts`,{method:'POST',body:JSON.stringify({name:n,currency:c,type:'Regular',initial_balance:0}),headers:{'Content-Type':'application/json'}}); closeModal('newAccountModal'); loadAccounts(); }
+        // Opened from the account pickers in the transaction and transfer forms.
+        // The fields are rebuilt each time rather than left as the last account
+        // left them, and the type starts unchosen on purpose: it is a declaration
+        // that decides how the budget and the loans page read the account, and a
+        // value sitting there ready to be accepted is a value nobody reads.
+        function openNewAccountModal(){
+            document.getElementById('newAccountName').value = '';
+            document.getElementById('newAccountType').innerHTML =
+                '<option value="">Select...</option>' + DelfinAccountTypes.options();
+            // The currency list is filled once at start-up, before the base
+            // currency is known, so it used to open on whichever code happened to
+            // come back first — sterling, whatever you actually count in. Set here,
+            // where the answer has certainly arrived. Guarded because assigning a
+            // value that is not among the options leaves the select drawn blank.
+            const cur = document.getElementById('newAccountCurrency');
+            if (displayCurrency && [...cur.options].some(o => o.value === displayCurrency)) {
+                cur.value = displayCurrency;
+            }
+            openModal('newAccountModal');
+        }
+        async function saveNewAccount(){
+            const n=document.getElementById('newAccountName').value.trim();
+            const c=document.getElementById('newAccountCurrency').value;
+            const t=document.getElementById('newAccountType').value;
+            if(!n){ alert('The account needs a name'); return; }
+            if(!t){ alert('Choose what kind of account this is'); return; }
+            const res=await fetch(`${API_URL}/accounts`,{method:'POST',body:JSON.stringify({name:n,currency:c,type:t,initial_balance:0}),headers:{'Content-Type':'application/json'}});
+            if(!res.ok){ alert('Error saving the account'); return; }
+            closeModal('newAccountModal'); loadAccounts();
+        }
         
         function loadBulkSubcategories(p){ const s = document.getElementById('bulkCategory'); s.disabled=false; s.innerHTML='<option>Don\'t change</option>'+allCategories.filter(c=>c.parent===p).map(c=>`<option value="${c.id}">${c.name}</option>`).join(''); }
         

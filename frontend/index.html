@@ -800,7 +800,8 @@ async function loadAccounts() {
         row.onclick = () => { location.href = `transactions.html?account=${a.id}`; };
         const color = amt > 0 ? 'var(--green)' : amt < 0 ? 'var(--red)' : 'var(--text)';
         const sign = amt < 0 ? '−' : '';
-        row.innerHTML = `<div><div class="acct-name">${esc(a.name)}</div><div class="acct-sub">${esc(a.type || 'Account')} · ${esc(a.currency)}</div></div>`
+        const kind = DelfinAccountTypes.label(a.type);
+        row.innerHTML = `<div><div class="acct-name">${esc(a.name)}</div><div class="acct-sub">${kind ? esc(kind) + ' · ' : ''}${esc(a.currency)}</div></div>`
             + `<div class="acct-amt" style="color:${color};">${sign}${fmtMoney(Math.abs(amt), a.currency)}</div>`;
         list.appendChild(row);
     });
