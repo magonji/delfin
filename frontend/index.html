@@ -174,7 +174,13 @@
             margin: 0 -10px; padding-left: 10px; padding-right: 10px; }
         .acct-row--clickable:hover { background: #F3E9DA; }
         .acct-name { font-weight: 600; font-size: 14px; }
-        .acct-sub { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: var(--muted); }
+        /* min-height holds the row steady when there is neither a type nor a
+           change to report — without it that row would be a line shorter than
+           the ones beside it, and the rule under each account would step. */
+        .acct-sub { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: var(--muted);
+            min-height: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .acct-delta.up { color: var(--green); }
+        .acct-delta.down { color: var(--red); }
         .acct-amt { font-family: 'IBM Plex Mono', monospace; font-size: 16px; font-weight: 600; }
         .acct-total { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr auto; align-items: baseline;
             margin-top: 6px; padding: 13px 0 2px; border-top: 1.5px solid var(--hair2); }
@@ -785,8 +791,54 @@ function updateAcctNetTotal() {
     }
 }
 
+/**
+ * The same day of last month, or the last day of it when there is no such day —
+ * the 31st compared against a 30-day month, the 29th to the 31st against
+ * February. Worth spelling out because Date does the opposite of what is wanted
+ * here: `new Date(2026, 1, 30)` is not the 28th of February, it is the 2nd of
+ * March. Built from local parts throughout, since toISOString would shift the
+ * date across midnight for anyone west of Greenwich.
+ */
+function sameDayLastMonth(today = new Date()) {
+    const y = today.getFullYear(), m = today.getMonth();
+    const daysInPrevious = new Date(y, m, 0).getDate();   // day 0 = last of the month before
+    const d = Math.min(today.getDate(), daysInPrevious);
+    const when = new Date(y, m - 1, d);
+    const pad = n => String(n).padStart(2, '0');
+    return `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}`;
+}
+
+/**
+ * How the balance has moved since then, for the line under the account name.
+ * Silent when there is nothing to compare against, and when nothing moved: a
+ * row of zeroes across the card would be noise, and the reader can tell an
+ * unchanged account by the absence. Debts read the right way round without any
+ * special casing — a card going from −2,000 to −2,500 is a fall.
+ */
+function acctDeltaHtml(a) {
+    if (a.balance_as_of == null) return '';
+    const diff = (a.current_balance ?? a.initial_balance ?? 0) - a.balance_as_of;
+    if (Math.abs(diff) < 0.005) return '';
+    const up = diff > 0;
+    return `<span class="acct-delta ${up ? 'up' : 'down'}">${up ? '▲' : '▼'} ${fmtMoney(Math.abs(diff), a.currency)}</span>`;
+}
+
+/**
+ * Two callers want this list — the currency priming at start-up and the account
+ * card — and they share one cache entry, so whoever asks first decides what the
+ * other one gets. Building the request in one place is the only thing keeping
+ * them honest: when the two spelled out their own URLs, the primer fetched
+ * without `as_of`, cached that, and the card silently never saw a figure to
+ * compare against.
+ */
+function fetchAccounts() {
+    return cacheGet('cache_accounts')
+        || api(`/accounts/with-balances?include_closed=true&as_of=${sameDayLastMonth()}`)
+               .then(d => { cacheSet('cache_accounts', d, 'volatile'); return d; });
+}
+
 async function loadAccounts() {
-    let data = cacheGet('cache_accounts') || await api('/accounts/with-balances?include_closed=true').then(d => { cacheSet('cache_accounts', d, 'volatile'); return d; });
+    let data = await fetchAccounts();
     state.accounts = data.sort((a, b) => (b.current_balance || 0) - (a.current_balance || 0));
     renderExcludeList();
 
@@ -800,8 +852,12 @@ async function loadAccounts() {
         row.onclick = () => { location.href = `transactions.html?account=${a.id}`; };
         const color = amt > 0 ? 'var(--green)' : amt < 0 ? 'var(--red)' : 'var(--text)';
         const sign = amt < 0 ? '−' : '';
-        const kind = DelfinAccountTypes.label(a.type);
-        row.innerHTML = `<div><div class="acct-name">${esc(a.name)}</div><div class="acct-sub">${kind ? esc(kind) + ' · ' : ''}${esc(a.currency)}</div></div>`
+        // The currency used to sit here and has given up its place to the change
+        // since last month. Nothing is lost: the balance alongside carries its
+        // symbol, and fmtMoney widens that symbol to US$/CA$ of its own accord
+        // when two currencies on the page would otherwise both read as $.
+        const parts = [esc(DelfinAccountTypes.label(a.type)), acctDeltaHtml(a)].filter(Boolean);
+        row.innerHTML = `<div><div class="acct-name">${esc(a.name)}</div><div class="acct-sub">${parts.join(' · ')}</div></div>`
             + `<div class="acct-amt" style="color:${color};">${sign}${fmtMoney(Math.abs(amt), a.currency)}</div>`;
         list.appendChild(row);
     });
@@ -1425,9 +1481,7 @@ async function init() {
         // whether USD prints as "$" or "US$" depends on the company it keeps.
         // loadAccounts reuses this same cache entry, so it costs nothing.
         try {
-            const accounts = cacheGet('cache_accounts')
-                || await api('/accounts/with-balances?include_closed=true')
-                       .then(d => { cacheSet('cache_accounts', d, 'volatile'); return d; });
+            const accounts = await fetchAccounts();
             noteCurrenciesInUse((accounts || []).map(a => a.currency));
         } catch (e) { /* no list yet — the narrow symbol is the safe default */ }
 

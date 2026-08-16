@@ -290,16 +290,34 @@ def get_accounts(
 @app.get("/accounts/with-balances")
 def get_accounts_with_balances(
     include_closed: bool = False,
+    as_of: Optional[str] = Query(
+        None, description="YYYY-MM-DD; also return each balance as it stood at the end of that day"
+    ),
     db: Session = Depends(get_db)
 ):
     """
     Get all accounts with their current balances from the last transaction.
     More efficient than getting balance separately for each account.
+
+    With ``as_of``, each account also carries ``balance_as_of``: the same reading
+    taken at the end of that day, for showing what has changed since. It is null
+    when the account has no movement that early. That is deliberately not read as
+    "the balance was zero": an account with nothing before the date might not have
+    existed yet, and the difference would then be the whole balance dressed up as
+    one month's worth. Nothing to compare against is reported as nothing.
     """
     query = db.query(models.Account)
     if not include_closed:
         query = query.filter(models.Account.is_active == 1)
     accounts = query.all()
+
+    cutoff = None
+    if as_of:
+        try:
+            # End of that day, so a transaction dated on it counts.
+            cutoff = datetime.strptime(as_of, "%Y-%m-%d") + timedelta(days=1)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="as_of must be YYYY-MM-DD")
 
     accounts_with_balances = []
     for account in accounts:
@@ -313,6 +331,15 @@ def get_accounts_with_balances(
         else:
             current_balance = account.initial_balance
 
+        balance_as_of = None
+        if cutoff is not None:
+            earlier = db.query(models.Transaction).filter(
+                models.Transaction.account_id == account.id,
+                models.Transaction.date < cutoff,
+            ).order_by(models.Transaction.date.desc(), models.Transaction.id.desc()).first()
+            if earlier and earlier.account_balance_after is not None:
+                balance_as_of = earlier.account_balance_after
+
         accounts_with_balances.append({
             "id": account.id,
             "name": account.name,
@@ -320,6 +347,7 @@ def get_accounts_with_balances(
             "currency": account.currency,
             "initial_balance": account.initial_balance,
             "current_balance": current_balance,
+            "balance_as_of": balance_as_of,
             "is_active": account.is_active,
             "created_at": account.created_at
         })
