@@ -2,6 +2,8 @@
 
 A personal finance PWA built with Python, FastAPI, and vanilla JavaScript. Import your Financisto data and track, analyse, and manage your finances through a modern web interface that works on desktop and mobile.
 
+*Delfin started as a personal Python project and has grown exponentially, largely through vibecoding, as I kept adding ideas and features to make it as useful as possible.*
+
 **[Delfin on the web →](https://magonji.github.io/delfin/)** — screenshots and a tour of what it does.
 
 ## Features

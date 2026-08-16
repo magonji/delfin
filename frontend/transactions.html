@@ -1664,6 +1664,16 @@
         }
 
         document.addEventListener('DOMContentLoaded', async () => {
+            // Arriving from the dashboard's account list: ?account=<id> lands here
+            // with that account already filtered. Set before the parallel fetch so
+            // the very first page of transactions is the filtered one — otherwise
+            // the unfiltered list would be drawn and then thrown away.
+            const accountParam = new URLSearchParams(location.search).get('account');
+            if (accountParam) {
+                activeFilters = { startDate: null, endDate: null, accountId: accountParam, categoryId: null, searchText: null };
+                filtersActive = true;
+            }
+
             // Load ALL data in parallel for faster initial load
             // Transaction fetch doesn't depend on dropdown data - they're used only for rendering
             const [, , , , , , transactionsData] = await Promise.all([
@@ -1673,17 +1683,39 @@
                 loadLocations(),
                 loadProjects(),
                 populateCurrencies('newAccountCurrency'),
-                fetchTransactionsData()  // Fetch raw data in parallel
+                fetchTransactionsData(),  // Fetch raw data in parallel
+                // Fills the summary strip, and is also where the base currency is
+                // learnt. It has to settle before the first render: `displayCurrency`
+                // starts on its GBP placeholder, and the Total Balance column would
+                // otherwise be stamped with a pound sign on every other base
+                // currency until a filter was touched. Awaited alongside the rest,
+                // so this costs no extra time.
+                updateTransactionsSummary()
             ]);
-            
+
             // Now render transactions (dropdowns are already populated)
             processAndDisplayTransactions(transactionsData);
 
-            // The first render bypasses loadRecentTransactions, so the summary was
-            // left showing its placeholder until a filter was applied or cleared.
-            // With no filters set this reports the totals over everything.
-            updateTransactionsSummary();
-            
+            // Show the incoming filter in the panel, so it reads as a filtered view
+            // and can be changed or cleared like any other. On a phone the panel is
+            // collapsed by default, so open it too.
+            if (accountParam) {
+                const sel = document.getElementById('filterAccount');
+                sel.value = accountParam;
+                if (sel.value) {
+                    document.getElementById('filters').classList.add('open');
+                } else {
+                    // Id not in the list (stale link): drop the filter rather than
+                    // leave an empty list with nothing in the panel to explain it.
+                    // Assigning an unknown value leaves selectedIndex at -1, which
+                    // draws the select blank, so put it back on "All accounts".
+                    sel.selectedIndex = 0;
+                    activeFilters.accountId = null;
+                    filtersActive = false;
+                    loadRecentTransactions(true, true);
+                }
+            }
+
             const transactionsList = document.getElementById('transactionsList');
             transactionsList.addEventListener('scroll', () => {
                 if (transactionsList.scrollTop + transactionsList.clientHeight >= transactionsList.scrollHeight - 200) loadRecentTransactions();
@@ -1720,7 +1752,9 @@
 
         // Helper to fetch transaction data without processing (for parallel loading)
         async function fetchTransactionsData() {
-            const params = new URLSearchParams({ skip: 0, limit: LIMIT });
+            const params = currentFilterParams();
+            params.append('skip', 0);
+            params.append('limit', LIMIT);
             return await (await fetch(`${API_URL}/transactions?${params.toString()}`)).json();
         }
         

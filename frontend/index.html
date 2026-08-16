@@ -167,6 +167,12 @@
         /* ── Balance by account ── */
         .accts { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0 40px; }
         .acct-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: baseline; padding: 11px 0; border-bottom: 1px solid var(--hair); }
+        /* Each row opens the account's transactions; same hover treatment as the
+           clickable rows in the lists above (padding + matching negative margin,
+           so the rectangle has room while the text stays on the wall). */
+        .acct-row--clickable { cursor: pointer; border-radius: 8px;
+            margin: 0 -10px; padding-left: 10px; padding-right: 10px; }
+        .acct-row--clickable:hover { background: #F3E9DA; }
         .acct-name { font-weight: 600; font-size: 14px; }
         .acct-sub { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: var(--muted); }
         .acct-amt { font-family: 'IBM Plex Mono', monospace; font-size: 16px; font-weight: 600; }
@@ -789,7 +795,9 @@ async function loadAccounts() {
     state.accounts.filter(a => a.is_active !== false && a.is_active !== 0).forEach(a => {
         const amt = a.current_balance ?? a.initial_balance ?? 0;
         const row = document.createElement('div');
-        row.className = 'acct-row';
+        row.className = 'acct-row acct-row--clickable';
+        row.title = `See ${a.name} transactions`;
+        row.onclick = () => { location.href = `transactions.html?account=${a.id}`; };
         const color = amt > 0 ? 'var(--green)' : amt < 0 ? 'var(--red)' : 'var(--text)';
         const sign = amt < 0 ? '−' : '';
         row.innerHTML = `<div><div class="acct-name">${esc(a.name)}</div><div class="acct-sub">${esc(a.type || 'Account')} · ${esc(a.currency)}</div></div>`
