@@ -695,6 +695,17 @@ function applyUnifiedRanges() {
     });
 }
 
+// Which way a figure has gone, wherever this page says so — the KPIs across the
+// top and the account list further down.
+//
+// Drawn rather than typed. ▲ and ▼ are not in IBM Plex Mono, so every browser
+// substitutes a different font for them and lands the glyph at a different
+// height — sitting on the baseline instead of level with the figures, which
+// leaves them hanging. A shape of our own is the same everywhere, takes its
+// colour from the text, and scales with it, so one pair serves both sizes.
+const ARROW_UP = '<svg class="delta-arrow" viewBox="0 0 12 10" aria-hidden="true"><path d="M6 0 12 10H0z"/></svg>';
+const ARROW_DOWN = '<svg class="delta-arrow" viewBox="0 0 12 10" aria-hidden="true"><path d="M6 10 0 0h12z"/></svg>';
+
 // ---- KPI "vs last year" deltas ----
 function oneYearAgoCutoff() {
     const d = new Date();
@@ -716,7 +727,7 @@ function renderBalanceDelta(id, current, prev) {
     if (prev == null || !isFinite(prev) || prev === 0) { el.textContent = ''; el.className = 'kpi-delta'; return; }
     const diff = current - prev, pct = diff / Math.abs(prev) * 100, up = diff >= 0;
     el.className = 'kpi-delta ' + (up ? 'up' : 'down');
-    el.innerHTML = `${up ? '▲' : '▼'} ${Math.abs(pct).toFixed(1)}% <span class="muted">vs last year</span>`;
+    el.innerHTML = `${up ? ARROW_UP : ARROW_DOWN} ${Math.abs(pct).toFixed(1)}% <span class="muted">vs last year</span>`;
 }
 function renderBudgetDelta(pct) {
     const el = q('#deltaBudget');
@@ -837,14 +848,6 @@ function sameDayLastMonth(today = new Date()) {
  * Debts read the right way round without special casing: a card going from
  * −2,000 to −2,500 is a fall, because you owe more.
  */
-// Drawn rather than typed. ▲ and ▼ are not in IBM Plex Mono, so every browser
-// substitutes a different font for them and lands the glyph at a different
-// height — sitting on the baseline instead of level with the figures, which
-// leaves them hanging. A shape of our own is the same everywhere, takes its
-// colour from the text, and can be centred on the digits exactly.
-const ARROW_UP = '<svg class="delta-arrow" viewBox="0 0 12 10" aria-hidden="true"><path d="M6 0 12 10H0z"/></svg>';
-const ARROW_DOWN = '<svg class="delta-arrow" viewBox="0 0 12 10" aria-hidden="true"><path d="M6 10 0 0h12z"/></svg>';
-
 function acctDeltaHtml(a) {
     if (a.balance_as_of == null) return '';
     const diff = (a.current_balance ?? a.initial_balance ?? 0) - a.balance_as_of;
