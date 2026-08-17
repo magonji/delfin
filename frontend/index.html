@@ -181,6 +181,18 @@
             min-height: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .acct-delta.up { color: var(--green); }
         .acct-delta.down { color: var(--red); }
+        /* Sized in em so it tracks the text, and raised so the triangle's middle
+           lands on the middle of the digits rather than on their baseline: the
+           figures' ink centre sits 0.35em above the baseline, and half of this
+           shape is 0.275em, leaving 0.07em to make up. */
+        .delta-arrow { width: .66em; height: .55em; fill: currentColor; vertical-align: .07em; }
+        /* Square, so the 16-unit grid the marks are drawn on is not distorted.
+           Raised by the same reasoning as the arrow: half of one em is 0.5em, and
+           the digits' ink centre sits 0.35em up, leaving 0.15em to come back down.
+           The margin is the space between mark and word — a plain space would be
+           a full character wide here and push the two apart. */
+        .acct-type-icon { width: 1em; height: 1em; fill: currentColor; vertical-align: -.15em;
+            margin-right: .35em; opacity: .85; }
         /* Unchanged: the same ink as the account name above it, so it reads as a
            statement rather than as the muted metadata it sits among. */
         .acct-delta.flat { color: var(--text); font-weight: 700; }
@@ -825,6 +837,14 @@ function sameDayLastMonth(today = new Date()) {
  * Debts read the right way round without special casing: a card going from
  * −2,000 to −2,500 is a fall, because you owe more.
  */
+// Drawn rather than typed. ▲ and ▼ are not in IBM Plex Mono, so every browser
+// substitutes a different font for them and lands the glyph at a different
+// height — sitting on the baseline instead of level with the figures, which
+// leaves them hanging. A shape of our own is the same everywhere, takes its
+// colour from the text, and can be centred on the digits exactly.
+const ARROW_UP = '<svg class="delta-arrow" viewBox="0 0 12 10" aria-hidden="true"><path d="M6 0 12 10H0z"/></svg>';
+const ARROW_DOWN = '<svg class="delta-arrow" viewBox="0 0 12 10" aria-hidden="true"><path d="M6 10 0 0h12z"/></svg>';
+
 function acctDeltaHtml(a) {
     if (a.balance_as_of == null) return '';
     const diff = (a.current_balance ?? a.initial_balance ?? 0) - a.balance_as_of;
@@ -833,7 +853,7 @@ function acctDeltaHtml(a) {
     // column of accounts you have to check rather than one you can skip over.
     if (Math.abs(diff) < 0.005) return '<span class="acct-delta flat">=</span>';
     const up = diff > 0;
-    return `<span class="acct-delta ${up ? 'up' : 'down'}">${up ? '▲' : '▼'} ${fmtMoney(Math.abs(diff), a.currency)}</span>`;
+    return `<span class="acct-delta ${up ? 'up' : 'down'}">${up ? ARROW_UP : ARROW_DOWN} ${fmtMoney(Math.abs(diff), a.currency)}</span>`;
 }
 
 /**
@@ -869,7 +889,8 @@ async function loadAccounts() {
         // since last month. Nothing is lost: the balance alongside carries its
         // symbol, and fmtMoney widens that symbol to US$/CA$ of its own accord
         // when two currencies on the page would otherwise both read as $.
-        const parts = [esc(DelfinAccountTypes.label(a.type)), acctDeltaHtml(a)].filter(Boolean);
+        const kind = DelfinAccountTypes.label(a.type);
+        const parts = [kind ? DelfinAccountTypes.icon(a.type) + esc(kind) : '', acctDeltaHtml(a)].filter(Boolean);
         row.innerHTML = `<div><div class="acct-name">${esc(a.name)}</div><div class="acct-sub">${parts.join(' · ')}</div></div>`
             + `<div class="acct-amt" style="color:${color};">${sign}${fmtMoney(Math.abs(amt), a.currency)}</div>`;
         list.appendChild(row);

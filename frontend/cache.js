@@ -151,8 +151,63 @@
         PAYPAL: 'PayPal'
     };
 
+    /**
+     * A mark for each kind, drawn on a 16-unit grid.
+     *
+     * These are read at about ten pixels, beside the word they illustrate, so
+     * every one is a single silhouette with no detail finer than a stroke: at
+     * that size an outline collapses into a smudge and hatching disappears.
+     * Where two kinds are genuinely the same object — a debit card and a credit
+     * card — they are told apart by one large feature, a chip against a magnetic
+     * stripe, and not by anything smaller. The word beside them carries the
+     * meaning regardless; these are a second glance, not the first.
+     *
+     * Holes are cut with fill-rule="evenodd" rather than drawn in the background
+     * colour, so the shapes stay right on any background.
+     */
+    var ICONS = {
+        // A pediment on columns.
+        BANK: 'M8 1 15.5 5.5H.5zM2.5 7h2.2v5H2.5zM6.9 7h2.2v5H6.9zM11.3 7h2.2v5h-2.2zM1 13.5h14V15H1z',
+        // Coins piling up. This was a slotted money box, but the slot cut in the
+        // lid read as a handle and the whole thing came out a briefcase.
+        SAVINGS: 'M8 1.2c3.3 0 6 .8 6 1.8s-2.7 1.8-6 1.8-6-.8-6-1.8 2.7-1.8 6-1.8z' +
+                 'M8 6.2c3.3 0 6 .8 6 1.8s-2.7 1.8-6 1.8-6-.8-6-1.8 2.7-1.8 6-1.8z' +
+                 'M8 11.2c3.3 0 6 .8 6 1.8s-2.7 1.8-6 1.8-6-.8-6-1.8 2.7-1.8 6-1.8z',
+        // A banknote, with the head cut out of the middle.
+        CASH: 'M1 4h14v8H1zM8 6.3a1.7 1.7 0 1 0 0 3.4 1.7 1.7 0 0 0 0-3.4z',
+        // A card with a chip. The chip is kept small and up in the corner: a large
+        // one in the middle of the card made this indistinguishable from the hole
+        // in the banknote above at the size these are actually read.
+        DEBIT_CARD: 'M1.5 3h13A1.5 1.5 0 0 1 16 4.5v7a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 0 11.5v-7A1.5 1.5 0 0 1 1.5 3zM2.4 5.2h3v2.2h-3z',
+        // The same card, banded by a magnetic stripe.
+        CREDIT_CARD: 'M1.5 3h13A1.5 1.5 0 0 1 16 4.5v7a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 0 11.5v-7A1.5 1.5 0 0 1 1.5 3zM0 5.4h16v2.2H0z',
+        // A bolt: money that only ever existed as a signal.
+        ELECTRONIC: 'M9.8 1 3 9h3.7l-.7 6 6.9-8.4H9z',
+        // A cut stone.
+        ASSET: 'M8 1.4 14.8 6 8 14.6 1.2 6z',
+        // An agreement, ruled with the terms you signed up to.
+        LIABILITY: 'M3.5 1h6L13 4.5V15h-9.5zM5.5 7.2h5v1.3h-5zM5.5 10h5v1.3h-5z',
+        // Nothing to say about it.
+        OTHER: 'M2.6 6.4a1.6 1.6 0 1 0 0 3.2 1.6 1.6 0 0 0 0-3.2zM8 6.4a1.6 1.6 0 1 0 0 3.2 1.6 1.6 0 0 0 0-3.2zM13.4 6.4a1.6 1.6 0 1 0 0 3.2 1.6 1.6 0 0 0 0-3.2z'
+    };
+    // Their own mark is theirs, not ours to draw: an electronic account it is.
+    ICONS.PAYPAL = ICONS.ELECTRONIC;
+
     function canonical(value) {
         return (value || '').trim().toUpperCase().replace(/ /g, '_');
+    }
+
+    /**
+     * The mark for a type, as inline SVG that takes its size from the text it
+     * sits in and its colour from whatever is around it. Empty for anything not
+     * in the vocabulary, so an older value degrades to its label alone rather
+     * than to a broken image.
+     */
+    function icon(value) {
+        var path = ICONS[canonical(value)];
+        if (!path) return '';
+        return '<svg class="acct-type-icon" viewBox="0 0 16 16" aria-hidden="true">' +
+               '<path fill-rule="evenodd" d="' + path + '"/></svg>';
     }
 
     /**
@@ -186,6 +241,7 @@
     global.DelfinAccountTypes = {
         ORDER: ORDER,
         label: label,
+        icon: icon,
         options: options,
         canonical: canonical
     };
