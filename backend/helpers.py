@@ -189,6 +189,83 @@ def convert_to_base_currency(amount: float, currency: str, base_currency: str, r
     return amount * (base_rate / currency_rate)
 
 
+def _as_date(value):
+    """Any date-like value as a plain date."""
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    try:
+        return datetime.fromisoformat(str(value)).date()
+    except Exception:
+        return None
+
+
+def rebuild_total_balances(db: Session) -> None:
+    """
+    Rewrite ``total_balance_after`` for every transaction.
+
+    The column is what the transactions list shows as "Total balance": the worth
+    of every account added together at that moment, in the base currency. So it
+    counts the accounts' opening balances, and converts each one at the rate of
+    the day being reported rather than at today's.
+
+    This is the single definition of that column. Three rebuilds used to keep one
+    each, two of which summed transaction amounts from zero and so left out every
+    opening balance -- a whole-ledger shift the moment either of them ran.
+    """
+    base_currency = get_base_currency(db)
+    accounts = db.query(Account).all()
+    accounts_map = {a.id: a for a in accounts}
+
+    all_transactions = db.query(Transaction).order_by(
+        Transaction.date.asc(), Transaction.id.asc()
+    ).all()
+    if not all_transactions:
+        return
+
+    currencies = list({a.currency for a in accounts if a.currency and a.currency != base_currency})
+    min_date = _as_date(all_transactions[0].date)
+    max_date = _as_date(all_transactions[-1].date)
+    historical_rates = get_rates_bulk(db, currencies, min_date, max_date) if currencies else {}
+
+    # Accounts that never appear in a transaction still hold their opening
+    # balance throughout, so they are seeded up front; leaving them out made this
+    # figure disagree with the dashboard, which counts them.
+    converted = {}
+    touched = {t.account_id for t in all_transactions}
+    opening_rates = historical_rates.get(min_date, {}) or {}
+    opening_base_rate = opening_rates.get(base_currency, 1.0)
+    for acc in accounts:
+        if acc.id in touched or not acc.initial_balance:
+            continue
+        acc_rate = opening_rates.get(acc.currency or base_currency, 1.0)
+        converted[acc.id] = float(acc.initial_balance) * (opening_base_rate / acc_rate)
+
+    for t in all_transactions:
+        if t is None:
+            continue
+        rates_for_day = historical_rates.get(_as_date(t.date), {base_currency: 1.0})
+        base_rate = rates_for_day.get(base_currency, 1.0)
+        acc = accounts_map.get(t.account_id)
+        currency = acc.currency if acc else base_currency
+
+        # An account enters the total carrying its opening balance, converted at
+        # the rate of the day it first appears.
+        if t.account_id not in converted:
+            opening = 0.0
+            if acc and acc.initial_balance:
+                opening = float(acc.initial_balance) * (
+                    base_rate / rates_for_day.get(acc.currency or base_currency, 1.0))
+            converted[t.account_id] = opening
+
+        converted[t.account_id] += float(t.amount or 0.0) * (
+            base_rate / rates_for_day.get(currency, 1.0))
+        t.total_balance_after = round(sum(converted.values()), 2)
+
+    db.flush()
+
+
 def recalculate_balances_from_transaction(
     db: Session,
     transaction_id: int,
@@ -226,10 +303,23 @@ def recalculate_balances_from_transaction(
             ((Transaction.date == trigger_date) & (Transaction.id < trigger_transaction.id))
         ).order_by(Transaction.date.desc(), Transaction.id.desc()).first()
 
-        if prev_transaction and prev_transaction.account_balance_after is not None:
+        if prev_transaction is None:
+            running_balance = float(account.initial_balance or 0.0)
+        elif prev_transaction.account_balance_after is not None:
             running_balance = float(prev_transaction.account_balance_after)
         else:
-            running_balance = float(account.initial_balance or 0.0)
+            # The predecessor carries no balance of its own: it was written with
+            # recalculation deferred, which is what entering a run of transactions
+            # through Save & New leaves behind. Its cached figure cannot seed the
+            # running total, and opening the account again from its initial
+            # balance would silently drop everything recorded before this point,
+            # so add those amounts up instead.
+            prior = db.query(func.sum(Transaction.amount)).filter(
+                Transaction.account_id == account_id,
+                (Transaction.date < trigger_date) |
+                ((Transaction.date == trigger_date) & (Transaction.id < trigger_transaction.id))
+            ).scalar()
+            running_balance = float(account.initial_balance or 0.0) + float(prior or 0.0)
 
         # Only fetch transactions from the trigger point forward
         transactions_from = db.query(Transaction).filter(
@@ -251,10 +341,39 @@ def recalculate_balances_from_transaction(
         ((Transaction.date == trigger_date) & (Transaction.id < trigger_transaction.id))
     ).order_by(Transaction.date.desc(), Transaction.id.desc()).first()
 
-    if prev_total_tx and prev_total_tx.total_balance_after is not None:
+    before_trigger = (
+        (Transaction.date < trigger_date) |
+        ((Transaction.date == trigger_date) & (Transaction.id < trigger_transaction.id))
+    )
+
+    if prev_total_tx is None:
+        total_balance = 0.0
+    elif prev_total_tx.total_balance_after is not None:
         total_balance = float(prev_total_tx.total_balance_after)
     else:
-        total_balance = 0.0
+        # Same gap as above, and costlier left alone: this figure seeds the total
+        # of every transaction from here on, whatever account it belongs to, so a
+        # wrong seed rewrites the whole tail of the ledger. Rather than re-derive
+        # the base -- which would mean guessing at opening balances and the rates
+        # they were converted at -- carry on from the last row that does hold a
+        # total, adding up the deferred rows lying between the two.
+        anchor = db.query(Transaction).filter(
+            Transaction.total_balance_after.isnot(None), before_trigger
+        ).order_by(Transaction.date.desc(), Transaction.id.desc()).first()
+
+        gap = db.query(Transaction).filter(before_trigger)
+        if anchor is None:
+            total_balance = 0.0
+        else:
+            total_balance = float(anchor.total_balance_after)
+            gap = gap.filter(
+                (Transaction.date > anchor.date) |
+                ((Transaction.date == anchor.date) & (Transaction.id > anchor.id))
+            )
+        for row in gap.order_by(Transaction.date.asc(), Transaction.id.asc()).all():
+            total_balance += convert_to_base_currency(
+                float(row.amount or 0.0), row.currency, base_currency, rates
+            )
 
     # Only iterate transactions from the trigger point forward
     transactions_from = db.query(Transaction).filter(
@@ -296,17 +415,6 @@ def initialise_all_balances(db: Session) -> None:
         
         account.current_balance = round(account_balance, 2)
     
-    # Step 2: Total balances
-    all_transactions = db.query(Transaction).order_by(
-        Transaction.date.asc(), Transaction.id.asc()
-    ).all()
-    
-    total_balance = 0.0
-    for transaction in all_transactions:
-        amount = float(transaction.amount) if transaction.amount is not None else 0.0
-        converted = convert_to_base_currency(amount, transaction.currency, base_currency, rates)
-        total_balance += converted
-        transaction.total_balance_after = round(total_balance, 2)
-    
-    db.flush()
-    print(f"Initialised balances for {len(all_transactions)} transactions")
+    # Step 2: Total balances, from the one definition of that column
+    rebuild_total_balances(db)
+    print("Initialised balances for all transactions")

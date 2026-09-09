@@ -246,3 +246,86 @@
         canonical: canonical
     };
 })(window);
+
+/**
+ * A deadline on every request.
+ *
+ * `fetch` has no timeout of its own. Offline it fails at once, which is easy to
+ * handle; on a connection that is up but barely moving it does neither — the
+ * promise sits there for as long as the radio keeps trying, and the page waits
+ * with it. Nothing in Delfin used to bound that wait, so a save on a weak signal
+ * could hang with no error, no message and no way back but a reload.
+ *
+ * Wrapping `fetch` once here rather than at each call site is deliberate: there
+ * are over a hundred of them across the five pages, and any one missed would be
+ * the one that hangs. A caller that passes its own `signal` is managing
+ * cancellation itself and is left alone; one that passes `timeout` (in
+ * milliseconds) overrides the default.
+ */
+(function (global) {
+    'use strict';
+
+    if (!global.fetch || !global.AbortController) return;
+
+    var DEFAULT_MS = 25000;
+
+    // Rebuilding every balance, importing a file, writing a backup: these earn
+    // their minutes, and cutting them off would abort work that was going to
+    // succeed. They still get a ceiling, because the point of all this is that
+    // nothing waits for ever.
+    var PATIENT_MS = 5 * 60 * 1000;
+    var PATIENT = [
+        /^\/admin\//,
+        /^\/integrations\//,
+        /\/recalculate-all-stats$/
+    ];
+    // Incremental, and on the path a save takes: it belongs on the short leash
+    // so a failure surfaces while there is still something to retry.
+    var IMPATIENT = [/^\/admin\/recalculate-balances-for-accounts$/];
+
+    function pathOf(input) {
+        try {
+            var raw = typeof input === 'string' ? input : (input && input.url) || '';
+            return new global.URL(raw, global.location.href).pathname;
+        } catch (e) {
+            return '';
+        }
+    }
+
+    function matches(list, path) {
+        return list.some(function (re) { return re.test(path); });
+    }
+
+    var nativeFetch = global.fetch.bind(global);
+
+    global.fetch = function (input, init) {
+        init = init || {};
+        if (init.signal) return nativeFetch(input, init);
+
+        var path = pathOf(input);
+        var ms = init.timeout ||
+            (!matches(IMPATIENT, path) && matches(PATIENT, path) ? PATIENT_MS : DEFAULT_MS);
+
+        var controller = new global.AbortController();
+        var timer = global.setTimeout(function () { controller.abort(); }, ms);
+
+        var opts = {};
+        Object.keys(init).forEach(function (k) { opts[k] = init[k]; });
+        delete opts.timeout;
+        opts.signal = controller.signal;
+
+        return nativeFetch(input, opts).catch(function (err) {
+            // An abort from our own timer is a timeout, and saying so is worth
+            // more to whoever catches it than "the operation was aborted".
+            if (err && err.name === 'AbortError' && controller.signal.aborted) {
+                var timeout = new Error('No answer from the server after '
+                    + (ms >= 1000 ? Math.round(ms / 1000) + ' seconds.' : ms + 'ms.'));
+                timeout.name = 'TimeoutError';
+                throw timeout;
+            }
+            throw err;
+        }).finally(function () {
+            global.clearTimeout(timer);
+        });
+    };
+})(window);

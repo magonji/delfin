@@ -778,8 +778,7 @@
         if (isCard) {
             const bal = debt.current_balance;
             const color = bal > 0 ? 'var(--green)' : (bal < 0 ? 'var(--red)' : '#666');
-            const sign = bal < 0 ? '-' : (bal > 0 ? '+' : '');
-            balanceDisplay = `<span style="color:${color}">${sign}${s}${formatNum(bal)}</span>`;
+            balanceDisplay = `<span style="color:${color}">${s}${formatNum(bal)}</span>`;
         } else {
             balanceDisplay = `<span style="color:${isCompleted ? 'var(--green)' : 'var(--red)'}">${s}${formatNum(debt.current_owed)}</span>`;
         }

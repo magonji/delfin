@@ -22,6 +22,7 @@ from backend.schemas import ExchangeRateResponse
 from backend.helpers import (
     recalculate_balances_from_transaction,
     initialise_all_balances,
+    rebuild_total_balances,
     get_rates_bulk,
     get_latest_rates,
     get_base_currency
@@ -1133,6 +1134,8 @@ def get_transactions(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     search: Optional[str] = None,                # text search (payee.name or note)
+    min_amount: Optional[float] = None,          # smallest size, ignoring sign
+    max_amount: Optional[float] = None,          # largest size, ignoring sign
     db: Session = Depends(get_db)
 ):
     """
@@ -1162,6 +1165,12 @@ def get_transactions(
         query = query.filter(models.Transaction.date >= datetime.combine(start_date, time.min))
     if end_date:
         query = query.filter(models.Transaction.date <= datetime.combine(end_date, time.max))
+    # Compared on the absolute value: "over 100" should catch both a 100 paid
+    # out and a 100 received, which is how the amount reads on the row.
+    if min_amount is not None:
+        query = query.filter(func.abs(models.Transaction.amount) >= min_amount)
+    if max_amount is not None:
+        query = query.filter(func.abs(models.Transaction.amount) <= max_amount)
 
     # Search (backend) - only if provided
     if search:
@@ -1238,6 +1247,8 @@ def get_transactions_summary(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     search: Optional[str] = None,
+    min_amount: Optional[float] = None,
+    max_amount: Optional[float] = None,
     db: Session = Depends(get_db)
 ):
     """
@@ -1271,6 +1282,10 @@ def get_transactions_summary(
         query = query.filter(models.Transaction.date >= datetime.combine(start_date, time.min))
     if end_date:
         query = query.filter(models.Transaction.date <= datetime.combine(end_date, time.max))
+    if min_amount is not None:
+        query = query.filter(func.abs(models.Transaction.amount) >= min_amount)
+    if max_amount is not None:
+        query = query.filter(func.abs(models.Transaction.amount) <= max_amount)
     if transfer_ids:
         # A transaction with no location must still count: SQL evaluates
         # "NOT IN" as NULL, not true, when the column itself is NULL.
@@ -2181,7 +2196,6 @@ def recalculate_balances_for_accounts(db: Session, account_ids: List[int]):
     """
     Recalculate balances for specific accounts and total portfolio balance.
     """
-    from backend.helpers import get_latest_rates, get_base_currency, convert_to_base_currency
 
     # Step 1: Recalculate account balances for affected accounts
     for account_id in account_ids:
@@ -2208,21 +2222,10 @@ def recalculate_balances_for_accounts(db: Session, account_ids: List[int]):
 
         account.current_balance = round(running_balance, 2)
 
-    # Step 2: Recalculate total portfolio balance across all accounts
-    rates = get_latest_rates(db)
-    base_currency = get_base_currency(db)
-
-    all_transactions = db.query(models.Transaction).order_by(
-        models.Transaction.date.asc(), models.Transaction.id.asc()
-    ).all()
-
-    total_balance = 0.0
-    for tx in all_transactions:
-        converted = convert_to_base_currency(
-            float(tx.amount or 0.0), tx.currency, base_currency, rates
-        )
-        total_balance += converted
-        tx.total_balance_after = round(total_balance, 2)
+    # Step 2: the running total, from the one definition of that column. This
+    # used to sum transaction amounts from zero, so a single call here quietly
+    # took every account's opening balance out of the whole column.
+    rebuild_total_balances(db)
 
 
 class RecalculateBalancesRequest(BaseModel):
@@ -4160,78 +4163,9 @@ def initialise_balances(db: Session = Depends(get_db)):
             # Update account's current balance
             account.current_balance = running_balance
         
-        # PHASE 2: Calculate total_balance_after using HISTORICAL exchange rates
-        print("--- CALCULATING TOTAL BALANCE AFTER (historical rates) ---")
+        # PHASE 2: the running total, from the one definition of that column
+        rebuild_total_balances(db)
 
-        # The same column is written by the incremental paths in helpers.py and by
-        # recalculate_balances_for_accounts, both of which use the display currency.
-        # Hardcoding GBP here made a full recalculation silently rewrite every
-        # figure in a different currency from the one that produced it.
-        BASE_CURRENCY = get_base_currency(db)
-
-        # Get ALL transactions ordered globally by date and ID
-        all_transactions = db.query(models.Transaction).order_by(
-            models.Transaction.date.asc(),
-            models.Transaction.id.asc()
-        ).all()
-
-        if all_transactions:
-            # Get all currencies used by accounts
-            all_currencies = list(set(acc.currency for acc in accounts if acc.currency and acc.currency != BASE_CURRENCY))
-
-            # Load historical rates for the full date range
-            min_date = _to_date(all_transactions[0].date)
-            max_date = _to_date(all_transactions[-1].date)
-            historical_rates = get_rates_bulk(db, all_currencies, min_date, max_date) if all_currencies else {}
-
-            # Track converted balances per account (same logic as networth endpoint)
-            account_converted_balances = {}
-
-            # Seed the accounts that never appear in a transaction: they hold their
-            # opening balance throughout, so leaving them out made this running
-            # total disagree with the dashboard, which counts them.
-            touched_ids = {t.account_id for t in all_transactions}
-            opening_rates = historical_rates.get(min_date, {}) or {}
-            opening_base_rate = opening_rates.get(BASE_CURRENCY, 1.0)
-            for acc in accounts:
-                if acc.id in touched_ids or not acc.initial_balance:
-                    continue
-                acc_rate = opening_rates.get(acc.currency or BASE_CURRENCY, 1.0)
-                account_converted_balances[acc.id] = (
-                    float(acc.initial_balance) * (opening_base_rate / acc_rate)
-                )
-
-            # Initialise with initial_balance converted at first transaction's rate
-            account_initial_added = set()
-
-            # Process transactions in global order
-            for t in all_transactions:
-                if t is None:
-                    continue
-
-                trans_date = _to_date(t.date)
-                rates_for_day = historical_rates.get(trans_date, {BASE_CURRENCY: 1.0})
-                base_rate = rates_for_day.get(BASE_CURRENCY, 1.0)
-
-                # On first appearance of account, add initial_balance converted at this date's rate
-                if t.account_id not in account_converted_balances:
-                    acc = accounts_map.get(t.account_id)
-                    init_bal = 0.0
-                    if acc and acc.initial_balance:
-                        acc_rate = rates_for_day.get(acc.currency or BASE_CURRENCY, 1.0)
-                        init_bal = float(acc.initial_balance) * (base_rate / acc_rate)
-                    account_converted_balances[t.account_id] = init_bal
-
-                # Convert this transaction's amount with historical rate
-                amount = float(t.amount) if t.amount is not None else 0.0
-                acc = accounts_map.get(t.account_id)
-                currency = acc.currency if acc else BASE_CURRENCY
-                trans_rate = rates_for_day.get(currency, 1.0)
-                converted_amount = amount * (base_rate / trans_rate)
-
-                account_converted_balances[t.account_id] += converted_amount
-                t.total_balance_after = round(sum(account_converted_balances.values()), 2)
-        
         # Commit all changes
         db.commit()
         print(f"--- FINISHED: {len(accounts)} accounts, {total_tx_count} transactions ---")

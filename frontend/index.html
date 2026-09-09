@@ -886,8 +886,9 @@ async function loadAccounts() {
         row.className = 'acct-row acct-row--clickable';
         row.title = `See ${a.name} transactions`;
         row.onclick = () => { location.href = `transactions.html?account=${a.id}`; };
+        // Red is what says the balance is negative; a minus sign as well would
+        // be saying it twice. Every money figure in Delfin reads this way.
         const color = amt > 0 ? 'var(--green)' : amt < 0 ? 'var(--red)' : 'var(--text)';
-        const sign = amt < 0 ? '−' : '';
         // The currency used to sit here and has given up its place to the change
         // since last month. Nothing is lost: the balance alongside carries its
         // symbol, and fmtMoney widens that symbol to US$/CA$ of its own accord
@@ -895,7 +896,7 @@ async function loadAccounts() {
         const kind = DelfinAccountTypes.label(a.type);
         const parts = [kind ? DelfinAccountTypes.icon(a.type) + esc(kind) : '', acctDeltaHtml(a)].filter(Boolean);
         row.innerHTML = `<div><div class="acct-name">${esc(a.name)}</div><div class="acct-sub">${parts.join(' · ')}</div></div>`
-            + `<div class="acct-amt" style="color:${color};">${sign}${fmtMoney(Math.abs(amt), a.currency)}</div>`;
+            + `<div class="acct-amt" style="color:${color};">${fmtMoney(Math.abs(amt), a.currency)}</div>`;
         list.appendChild(row);
     });
     const totalRow = document.createElement('div');

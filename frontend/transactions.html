@@ -122,6 +122,12 @@
         #filters input[type="text"] { flex: 2 1 0; min-width: 64px; }
         #filters select { flex: 1 1 0; min-width: 64px; background: var(--paper) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%238A7D6C'/%3E%3C/svg%3E") no-repeat right 10px center; padding-right: 26px; cursor: pointer; }
         #filters input[type="date"] { flex: 0 0 auto; width: auto; color: #5A4E3C; }
+        /* Two figures and a decimal point is all these ever hold, so they ask for
+           little and give it back first: the row never wraps, and the amounts
+           shrink before the search box does. */
+        #filters input[type="number"] { flex: 0 1 74px; min-width: 52px; -moz-appearance: textfield; }
+        #filters input[type="number"]::-webkit-outer-spin-button,
+        #filters input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         .filter-actions { display: flex; gap: 5px; flex: 0 0 auto; }
         /* Scoped to #filters: the `#filters button` rule above carries an id, so a
            plain .filter-actions selector loses to it and never paints. Clear is left
@@ -656,9 +662,10 @@
             /* Filter toggle */
             #filterToggle { display: block; padding: 10px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; text-align: center; font-size: 14px; font-weight: 600; cursor: pointer; margin-bottom: 8px; }
             #filters { flex-direction: column; padding: 0; gap: 0; max-height: 0; overflow: hidden; border: none; background: none; transition: max-height 0.3s ease, padding 0.3s ease; }
-            #filters.open { max-height: 500px; padding: 8px; gap: 6px; border: 1px solid var(--border); background: var(--panel); }
+            #filters.open { max-height: 620px; padding: 8px; gap: 6px; border: 1px solid var(--border); background: var(--panel); }
             #filters input, #filters select { flex: 0 0 auto; width: 100%; min-width: 0; max-width: 100%; font-size: 14px; margin-top: 6px; }
             #filters input[type="date"] { width: 100%; }
+            #filters input[type="number"] { width: 100%; }
             .filter-actions { margin-left: 0; width: 100%; justify-content: stretch; margin-top: 6px; }
             .filter-actions button { flex: 1; }
             .bulk-controls { border-left: none; padding-left: 0; margin-left: 0; border-top: 1px solid var(--border); padding-top: 8px; width: 100%; justify-content: center; }
@@ -830,6 +837,9 @@
 
                 <input type="date" id="filterStartDate" title="From date">
                 <input type="date" id="filterEndDate" title="To date">
+
+                <input type="number" step="0.01" min="0" inputmode="decimal" id="filterMinAmount" placeholder="Min" title="Smallest amount, ignoring sign">
+                <input type="number" step="0.01" min="0" inputmode="decimal" id="filterMaxAmount" placeholder="Max" title="Largest amount, ignoring sign">
 
                 <select id="filterAccount" title="Filter by account"><option value="">All accounts</option></select>
                 <select id="filterCategory" title="Filter by category"><option value="">All categories</option></select>
@@ -1137,7 +1147,8 @@
                         <button type="submit" class="btn-save">Save</button>
                         <button type="button" class="btn-cancel" onclick="closeTransferModal()">Cancel</button>
                         <button type="button" class="btn-save-new" data-new-only onclick="saveTransferAndNew()">Save & New</button>
-                        <button type="button" class="btn-del" data-edit-only style="display:none;grid-column:1/-1;" onclick="deleteFromTransferModal()">Delete</button>
+                        <button type="button" class="btn-dup" data-edit-only style="display:none;" onclick="duplicateFromTransferModal()">Duplicate</button>
+                        <button type="button" class="btn-del" data-edit-only style="display:none;" onclick="deleteFromTransferModal()">Delete</button>
                     </div>
                 </form>
             </div>
@@ -1200,7 +1211,7 @@
         let pendingSplitLines = [];                            // Cross-page split grouping
         let allProjects = [];
         let bulkEditMode = false, selectedTransactions = [], selectedTransfers = [], currentBulkType = null;
-        let activeFilters = { startDate: null, endDate: null, accountId: null, categoryId: null, searchText: null };
+        let activeFilters = { startDate: null, endDate: null, accountId: null, categoryId: null, searchText: null, minAmount: null, maxAmount: null };
         let filtersActive = false;
         let targetTransactionId = null;
         let targetTransferId = null;
@@ -1219,6 +1230,9 @@
         let transactionBatchCount = 0;
         let transferBatchCount = 0;
         let batchAffectedAccounts = new Set();  // Track accounts that need balance recalculation
+        // Set while a recalculation has failed and its work is waiting for another
+        // go. It is what stops the tidy-up below from throwing that work away.
+        let balanceRepairPending = false;
         let batchEarliestDate = null;  // Track earliest date in batch for incremental recalculation
         
         // Custom confirm dialog (replaces browser confirm which may be blocked)
@@ -1364,72 +1378,10 @@
         async function loadMoreTransactionsOnly() {
             if (isLoadingTransactions || !hasMoreTransactions) return;
             isLoadingTransactions = true;
-            
             try {
-                const params = new URLSearchParams({ skip: transactionsSkip, limit: LIMIT });
-                if (filtersActive) {
-                    if (activeFilters.startDate) params.append('start_date', activeFilters.startDate);
-                    if (activeFilters.endDate) params.append('end_date', activeFilters.endDate);
-                    if (activeFilters.accountId) params.append('account_id', activeFilters.accountId);
-                    if (activeFilters.categoryId) params.append('category_id', activeFilters.categoryId);
-                    if (activeFilters.searchText) params.append('search', activeFilters.searchText);
-                }
-
-                const data = await (await fetch(`${API_URL}/transactions?${params.toString()}`)).json();
-                if (data.length < LIMIT) hasMoreTransactions = false;
-
-                const newReg = [], transfersOut = [...pendingTransferOuts], transfersIn = [...pendingTransferIns];
-                pendingTransferOuts = []; pendingTransferIns = [];
-                holdBackTrailingSplit(data).forEach(t => {
-                    if (t.location_name === 'Transfer Out') transfersOut.push(t);
-                    else if (t.location_name === 'Transfer In') transfersIn.push(t);
-                    else newReg.push(t);
-                });
-
-                const paired = new Set();
-
-                // O(n) optimization: index transfersIn by date for fast lookup
-                const transfersInByDate = new Map();
-                transfersIn.forEach(t => {
-                    const key = t.date;
-                    if (!transfersInByDate.has(key)) {
-                        transfersInByDate.set(key, []);
-                    }
-                    transfersInByDate.get(key).push(t);
-                });
-
-                transfersOut.forEach(out => {
-                    // O(1) lookup by date instead of O(n) find
-                    const candidates = transfersInByDate.get(out.date) || [];
-                    const available = candidates.filter(i => i.account_id !== out.account_id && !paired.has(i.id));
-                    const match = available.find(i => Math.abs(out.amount) === i.amount) || available[0];
-                    if (match) {
-                        paired.add(out.id); paired.add(match.id);
-                        transferTransactions.push({
-                            transfer_out_id: out.id, transfer_in_id: match.id, date: out.date,
-                            from_account_name: out.account_name, from_amount: Math.abs(out.amount), from_currency: out.currency,
-                            to_account_name: match.account_name, to_amount: match.amount, to_currency: match.currency,
-                            note: out.note || match.note, from_balance: out.account_balance_after, to_balance: match.account_balance_after
-                        });
-                    } else {
-                        if (hasMoreTransactions) pendingTransferOuts.push(out);
-                        else newReg.push(out);
-                    }
-                });
-                transfersIn.forEach(i => {
-                    if (!paired.has(i.id)) {
-                        if (hasMoreTransactions) pendingTransferIns.push(i);
-                        else newReg.push(i);
-                    }
-                });
-                if (!hasMoreTransactions) {
-                    newReg.push(...pendingTransferOuts, ...pendingTransferIns);
-                    pendingTransferOuts = []; pendingTransferIns = [];
-                }
-                
-                regularTransactions.push(...newReg);
-                transactionsSkip += LIMIT;
-                displayCombinedTransactionsNoScroll();
+                const data = await fetchTransactionPage();
+                // Scrolling to a target row: leave the viewport where it is.
+                await absorbTransactionPage(data, { scroll: false });
             } catch (e) { console.error(e); } finally { isLoadingTransactions = false; }
         }
         
@@ -1674,13 +1626,20 @@
             // the unfiltered list would be drawn and then thrown away.
             const accountParam = new URLSearchParams(location.search).get('account');
             if (accountParam) {
-                activeFilters = { startDate: null, endDate: null, accountId: accountParam, categoryId: null, searchText: null };
+                activeFilters = { startDate: null, endDate: null, accountId: accountParam, categoryId: null, searchText: null, minAmount: null, maxAmount: null };
                 filtersActive = true;
             }
 
             // Load ALL data in parallel for faster initial load
             // Transaction fetch doesn't depend on dropdown data - they're used only for rendering
-            const [, , , , , , transactionsData] = await Promise.all([
+            // Settled rather than all: half of these loaders have no catch of
+            // their own, and this await sits in front of every piece of setup
+            // below it -- the submit handlers included. One dropped request on a
+            // patchy connection therefore left a page that looked merely empty
+            // but had no working Save button and no infinite scroll, until it was
+            // reloaded by hand. Now whatever arrives is used, and what did not is
+            // said out loud.
+            const loaded = await Promise.allSettled([
                 loadAccounts(),
                 loadCategories(),
                 loadPayees(),
@@ -1697,8 +1656,17 @@
                 updateTransactionsSummary()
             ]);
 
+            const transactionsData = loaded[6].status === 'fulfilled' ? loaded[6].value : null;
+            if (loaded.some(r => r.status === 'rejected')) {
+                loaded.filter(r => r.status === 'rejected')
+                      .forEach(r => console.error('Load failed:', r.reason));
+                showConnectionNotice(transactionsData
+                    ? 'Some of this page could not be loaded. Menus may be short of entries; your data is untouched.'
+                    : 'Your transactions could not be loaded. Check the connection and refresh.');
+            }
+
             // Now render transactions (dropdowns are already populated)
-            processAndDisplayTransactions(transactionsData);
+            if (transactionsData) processAndDisplayTransactions(transactionsData);
 
             // Show the incoming filter in the panel, so it reads as a filtered view
             // and can be changed or cleared like any other. On a phone the panel is
@@ -1754,58 +1722,22 @@
             if (cur) sel.value = cur;
         }
 
-        // Helper to fetch transaction data without processing (for parallel loading)
+        // The first page, fetched without processing so it can go in parallel with
+        // the dropdowns. Paging state is still at zero here.
         async function fetchTransactionsData() {
-            const params = currentFilterParams();
-            params.append('skip', 0);
-            params.append('limit', LIMIT);
-            return await (await fetch(`${API_URL}/transactions?${params.toString()}`)).json();
+            return fetchTransactionPage();
         }
         
         // Process fetched transaction data and display
-        function processAndDisplayTransactions(data) {
-            if (data.length < LIMIT) hasMoreTransactions = false;
-            
-            const newReg = [], transfersOut = [], transfersIn = [];
-            holdBackTrailingSplit(data).forEach(t => {
-                if (t.location_name === 'Transfer Out') transfersOut.push(t);
-                else if (t.location_name === 'Transfer In') transfersIn.push(t);
-                else newReg.push(t);
-            });
-
-            const paired = new Set();
-            
-            // O(n) optimization: index transfersIn by date
-            const transfersInByDate = new Map();
-            transfersIn.forEach(t => {
-                const key = t.date;
-                if (!transfersInByDate.has(key)) {
-                    transfersInByDate.set(key, []);
-                }
-                transfersInByDate.get(key).push(t);
-            });
-            
-            transfersOut.forEach(out => {
-                const candidates = transfersInByDate.get(out.date) || [];
-                const available = candidates.filter(i => i.account_id !== out.account_id && !paired.has(i.id));
-                const match = available.find(i => Math.abs(out.amount) === i.amount) || available[0];
-                if (match) {
-                    paired.add(out.id); paired.add(match.id);
-                    transferTransactions.push({
-                        transfer_out_id: out.id, transfer_in_id: match.id, date: out.date,
-                        from_account_name: out.account_name, from_amount: Math.abs(out.amount), from_currency: out.currency,
-                        to_account_name: match.account_name, to_amount: match.amount, to_currency: match.currency,
-                        note: out.note || match.note, from_balance: out.account_balance_after, to_balance: match.account_balance_after
-                    });
-                } else {
-                    newReg.push(out);
-                }
-            });
-            transfersIn.forEach(i => { if (!paired.has(i.id)) newReg.push(i); });
-            
-            regularTransactions.push(...newReg);
-            transactionsSkip = LIMIT;
-            displayCombinedTransactions();
+        // The first page, whose data was fetched in parallel with the dropdowns
+        // rather than by the list itself. Not awaited by its caller -- the rest of
+        // the page's setup must not wait on a transfer-partner lookup -- so it
+        // holds the loading flag itself to keep a quick scroll from racing it.
+        async function processAndDisplayTransactions(data) {
+            isLoadingTransactions = true;
+            try {
+                await absorbTransactionPage(data);
+            } catch (e) { console.error(e); } finally { isLoadingTransactions = false; }
         }
 
         function setupEventListeners() {
@@ -1985,6 +1917,15 @@
             if (splitMode) renderSplitLines();
         }
 
+        // The page has carried an error bar in its markup all along without ever
+        // filling it in. Called with nothing, it stands down again.
+        function showConnectionNotice(message) {
+            const el = document.getElementById('errorMessage');
+            if (!el) return;
+            el.textContent = message || '';
+            el.style.display = message ? 'block' : 'none';
+        }
+
         // --- Transactions ---
         // Filter params shared by the transactions list and the summary strip.
         function currentFilterParams() {
@@ -1995,6 +1936,8 @@
                 if (activeFilters.accountId) params.append('account_id', activeFilters.accountId);
                 if (activeFilters.categoryId) params.append('category_id', activeFilters.categoryId);
                 if (activeFilters.searchText) params.append('search', activeFilters.searchText);
+                if (activeFilters.minAmount) params.append('min_amount', activeFilters.minAmount);
+                if (activeFilters.maxAmount) params.append('max_amount', activeFilters.maxAmount);
             }
             return params;
         }
@@ -2035,6 +1978,197 @@
         // `isFilterChange` marks the two callers that only re-read the list.
         // Marking those as a data change threw the whole dashboard cache away
         // every time you touched a filter, so the next visit rebuilt it all.
+        // One page of transactions turned into rows: transfers paired with their
+        // other leg, splits grouped, and whatever is still unmatched held back for
+        // the next page. All three callers used to carry a copy of this and the
+        // copies had drifted apart -- the one the first page went through had lost
+        // the partner lookup altogether, so arriving with an account filter showed
+        // every transfer as two loose rows until you touched a filter.
+        async function absorbTransactionPage(data, { scroll = true } = {}) {
+            if (data.length < LIMIT) hasMoreTransactions = false;
+
+            const newReg = [], transfersOut = [...pendingTransferOuts], transfersIn = [...pendingTransferIns];
+            pendingTransferOuts = []; pendingTransferIns = [];
+            holdBackTrailingSplit(data).forEach(t => {
+                if (t.location_name === 'Transfer Out') transfersOut.push(t);
+                else if (t.location_name === 'Transfer In') transfersIn.push(t);
+                else newReg.push(t);
+            });
+
+            const paired = new Set();
+            const pendingTransfers = [];
+
+            // O(n) optimization: index transfersIn by date for fast lookup
+            const transfersInByDate = new Map();
+            transfersIn.forEach(t => {
+                const key = t.date;
+                if (!transfersInByDate.has(key)) {
+                    transfersInByDate.set(key, []);
+                }
+                transfersInByDate.get(key).push(t);
+            });
+
+            transfersOut.forEach(out => {
+                // O(1) lookup by date instead of O(n) find
+                const candidates = transfersInByDate.get(out.date) || [];
+                const available = candidates.filter(i => i.account_id !== out.account_id && !paired.has(i.id));
+                // Prefer matching by amount (disambiguates multiple transfers on same date)
+                const match = available.find(i => Math.abs(out.amount) === i.amount) || available[0];
+                if (match) {
+                    paired.add(out.id); paired.add(match.id);
+                    transferTransactions.push({
+                        transfer_out_id: out.id, transfer_in_id: match.id, date: out.date,
+                        from_account_name: out.account_name, from_amount: Math.abs(out.amount), from_currency: out.currency,
+                        to_account_name: match.account_name, to_amount: match.amount, to_currency: match.currency,
+                        note: out.note || match.note, from_balance: out.account_balance_after, to_balance: match.account_balance_after
+                    });
+                } else if (filtersActive) {
+                    // Under any filter the other leg may not be in the filtered set
+                    // at all, so no later page will bring it: it has to be looked
+                    // up. This used to ask only when filtering by account, because
+                    // that is the obvious way to separate two legs -- but it is not
+                    // the only one. A filter on amount separates the two halves of a
+                    // cross-currency transfer, whose legs are different numbers by
+                    // definition, and those were left on the page as two loose rows.
+                    pendingTransfers.push({type: 'out', data: out});
+                } else {
+                    // Unfiltered, the partner is genuinely on a neighbouring page:
+                    // both legs share a date and the list is in date order, so
+                    // waiting for it costs nothing and asking would be a wasted
+                    // request.
+                    if (hasMoreTransactions) pendingTransferOuts.push(out);
+                    else newReg.push(out);
+                }
+            });
+            transfersIn.forEach(i => {
+                if (!paired.has(i.id)) {
+                    if (filtersActive) {
+                        pendingTransfers.push({type: 'in', data: i});
+                    } else {
+                        if (hasMoreTransactions) pendingTransferIns.push(i);
+                        else newReg.push(i);
+                    }
+                }
+            });
+            
+            // Fetch the partners of any transfer left unmatched on this page.
+            //
+            // These used to be asked for a date at a time, one or two requests
+            // each: a page holding transfers on twenty dates opened forty
+            // connections, which on a slow link is most of the wait. The
+            // partners can only sit on those same dates, so one request per
+            // side across the whole span brings back a superset of the same
+            // rows. They are bucketed by date again below, leaving the
+            // matching underneath untouched.
+            if (pendingTransfers.length > 0) {
+                const dateKeys = pendingTransfers.map(p => p.data.date.split('T')[0]);
+                const firstDate = dateKeys.reduce((a, b) => (a < b ? a : b));
+                const lastDate = dateKeys.reduce((a, b) => (a > b ? a : b));
+                const wantedDates = new Set(dateKeys);
+
+                // Find Transfer In/Out location IDs to filter the fetch
+                const transferInLoc = allLocations.find(l => l.name === 'Transfer In');
+                const transferOutLoc = allLocations.find(l => l.name === 'Transfer Out');
+                const needsIn = pendingTransfers.some(p => p.type === 'out');
+                const needsOut = pendingTransfers.some(p => p.type === 'in');
+
+                // A span holds more rows than a single day, so it is read to
+                // the end rather than capped: a truncated answer would drop
+                // partners and split those transfers back into two rows. One
+                // page covers it in practice; the loop is what makes that a
+                // fact rather than a hope.
+                const SPAN_PAGE = 1000;
+                const fetchSide = async (locationId) => {
+                    const rows = [];
+                    for (let skip = 0; ; skip += SPAN_PAGE) {
+                        const page = await (await fetch(
+                            `${API_URL}/transactions?start_date=${firstDate}&end_date=${lastDate}`
+                            + `&location_id=${locationId}&skip=${skip}&limit=${SPAN_PAGE}`)).json();
+                        rows.push(...page);
+                        if (page.length < SPAN_PAGE) return rows;
+                    }
+                };
+
+                const sides = [];
+                if (needsIn && transferInLoc) sides.push(fetchSide(transferInLoc.id));
+                if (needsOut && transferOutLoc) sides.push(fetchSide(transferOutLoc.id));
+
+                const relatedDataByDate = new Map();
+                (await Promise.all(sides)).flat().forEach(t => {
+                    const dateKey = t.date.split('T')[0];
+                    if (!wantedDates.has(dateKey)) return;   // no orphan waiting on this day
+                    if (!relatedDataByDate.has(dateKey)) relatedDataByDate.set(dateKey, []);
+                    relatedDataByDate.get(dateKey).push(t);
+                });
+                const usedPartners = new Set();
+
+                for (const pending of pendingTransfers) {
+                    const dateKey = pending.data.date.split('T')[0];
+                    const relatedData = relatedDataByDate.get(dateKey) || [];
+
+                    let partner = null;
+                    if (pending.type === 'out') {
+                        const available = relatedData.filter(t =>
+                            t.location_name === 'Transfer In' &&
+                            t.date === pending.data.date &&
+                            t.account_id !== pending.data.account_id &&
+                            !usedPartners.has(t.id)
+                        );
+                        partner = available.find(t => Math.abs(pending.data.amount) === t.amount) || available[0];
+                        if (partner) {
+                            usedPartners.add(partner.id);
+                            transferTransactions.push({
+                                transfer_out_id: pending.data.id, transfer_in_id: partner.id, date: pending.data.date,
+                                from_account_name: pending.data.account_name, from_amount: Math.abs(pending.data.amount), from_currency: pending.data.currency,
+                                to_account_name: partner.account_name, to_amount: partner.amount, to_currency: partner.currency,
+                                note: pending.data.note || partner.note, from_balance: pending.data.account_balance_after, to_balance: partner.account_balance_after
+                            });
+                        } else {
+                            newReg.push(pending.data);
+                        }
+                    } else {
+                        const available = relatedData.filter(t =>
+                            t.location_name === 'Transfer Out' &&
+                            t.date === pending.data.date &&
+                            t.account_id !== pending.data.account_id &&
+                            !usedPartners.has(t.id)
+                        );
+                        partner = available.find(t => Math.abs(t.amount) === pending.data.amount) || available[0];
+                        if (partner) {
+                            usedPartners.add(partner.id);
+                            transferTransactions.push({
+                                transfer_out_id: partner.id, transfer_in_id: pending.data.id, date: pending.data.date,
+                                from_account_name: partner.account_name, from_amount: Math.abs(partner.amount), from_currency: partner.currency,
+                                to_account_name: pending.data.account_name, to_amount: pending.data.amount, to_currency: pending.data.currency,
+                                note: partner.note || pending.data.note, from_balance: partner.account_balance_after, to_balance: pending.data.account_balance_after
+                            });
+                        } else {
+                            newReg.push(pending.data);
+                        }
+                    }
+                }
+            }
+            
+            // If no more pages, flush any remaining unmatched transfers as regular transactions
+            if (!hasMoreTransactions) {
+                newReg.push(...pendingTransferOuts, ...pendingTransferIns);
+                pendingTransferOuts = []; pendingTransferIns = [];
+            }
+            regularTransactions.push(...newReg);
+            transactionsSkip += LIMIT;
+            (scroll ? displayCombinedTransactions : displayCombinedTransactionsNoScroll)();
+        }
+
+        // The list's page fetch. The paging is the only thing these callers differ
+        // on; the filters come from the one place that knows them, which is what
+        // stops a newly added filter reaching two of the three call sites.
+        async function fetchTransactionPage() {
+            const params = currentFilterParams();
+            params.append('skip', transactionsSkip);
+            params.append('limit', LIMIT);
+            return await (await fetch(`${API_URL}/transactions?${params.toString()}`)).json();
+        }
+
         async function loadRecentTransactions(reset = false, isFilterChange = false) {
             if (reset && !isFilterChange) DelfinCache.markDirty('transactions');
             if (isLoadingTransactions || (!hasMoreTransactions && !reset)) return;
@@ -2042,159 +2176,8 @@
             if (reset) { transactionsSkip = 0; hasMoreTransactions = true; regularTransactions = []; transferTransactions = []; pendingTransferOuts = []; pendingTransferIns = []; pendingSplitLines = []; updateTransactionsSummary(); }
             
             try {
-                const params = new URLSearchParams({ skip: transactionsSkip, limit: LIMIT });
-                if (filtersActive) {
-                    if (activeFilters.startDate) params.append('start_date', activeFilters.startDate);
-                    if (activeFilters.endDate) params.append('end_date', activeFilters.endDate);
-                    if (activeFilters.accountId) params.append('account_id', activeFilters.accountId);
-                    if (activeFilters.categoryId) params.append('category_id', activeFilters.categoryId);
-                    if (activeFilters.searchText) params.append('search', activeFilters.searchText);
-                }
-
-                const data = await (await fetch(`${API_URL}/transactions?${params.toString()}`)).json();
-                if (data.length < LIMIT) hasMoreTransactions = false;
-
-                const newReg = [], transfersOut = [...pendingTransferOuts], transfersIn = [...pendingTransferIns];
-                pendingTransferOuts = []; pendingTransferIns = [];
-                holdBackTrailingSplit(data).forEach(t => {
-                    if (t.location_name === 'Transfer Out') transfersOut.push(t);
-                    else if (t.location_name === 'Transfer In') transfersIn.push(t);
-                    else newReg.push(t);
-                });
-
-                const paired = new Set();
-                const pendingTransfers = [];
-
-                // O(n) optimization: index transfersIn by date for fast lookup
-                const transfersInByDate = new Map();
-                transfersIn.forEach(t => {
-                    const key = t.date;
-                    if (!transfersInByDate.has(key)) {
-                        transfersInByDate.set(key, []);
-                    }
-                    transfersInByDate.get(key).push(t);
-                });
-
-                transfersOut.forEach(out => {
-                    // O(1) lookup by date instead of O(n) find
-                    const candidates = transfersInByDate.get(out.date) || [];
-                    const available = candidates.filter(i => i.account_id !== out.account_id && !paired.has(i.id));
-                    // Prefer matching by amount (disambiguates multiple transfers on same date)
-                    const match = available.find(i => Math.abs(out.amount) === i.amount) || available[0];
-                    if (match) {
-                        paired.add(out.id); paired.add(match.id);
-                        transferTransactions.push({
-                            transfer_out_id: out.id, transfer_in_id: match.id, date: out.date,
-                            from_account_name: out.account_name, from_amount: Math.abs(out.amount), from_currency: out.currency,
-                            to_account_name: match.account_name, to_amount: match.amount, to_currency: match.currency,
-                            note: out.note || match.note, from_balance: out.account_balance_after, to_balance: match.account_balance_after
-                        });
-                    } else if (filtersActive && activeFilters.accountId) {
-                        pendingTransfers.push({type: 'out', data: out});
-                    } else {
-                        // Save for cross-page matching if more pages remain
-                        if (hasMoreTransactions) pendingTransferOuts.push(out);
-                        else newReg.push(out);
-                    }
-                });
-                transfersIn.forEach(i => {
-                    if (!paired.has(i.id)) {
-                        if (filtersActive && activeFilters.accountId) {
-                            pendingTransfers.push({type: 'in', data: i});
-                        } else {
-                            if (hasMoreTransactions) pendingTransferIns.push(i);
-                            else newReg.push(i);
-                        }
-                    }
-                });
-                
-                // Batch fetch transfer partners grouped by date
-                if (pendingTransfers.length > 0) {
-                    const dateGroups = new Map();
-                    pendingTransfers.forEach(p => {
-                        const dateKey = p.data.date.split('T')[0];
-                        if (!dateGroups.has(dateKey)) dateGroups.set(dateKey, []);
-                        dateGroups.get(dateKey).push(p);
-                    });
-
-                    // Find Transfer In/Out location IDs to filter the fetch
-                    const transferInLoc = allLocations.find(l => l.name === 'Transfer In');
-                    const transferOutLoc = allLocations.find(l => l.name === 'Transfer Out');
-
-                    const datePromises = Array.from(dateGroups.entries()).map(async ([dateKey, pending]) => {
-                        // Determine which location to search for (the opposite side)
-                        const needsIn = pending.some(p => p.type === 'out');
-                        const needsOut = pending.some(p => p.type === 'in');
-                        const fetches = [];
-                        if (needsIn && transferInLoc) {
-                            fetches.push(fetch(`${API_URL}/transactions?start_date=${dateKey}&end_date=${dateKey}&location_id=${transferInLoc.id}&limit=1000`).then(r => r.json()));
-                        }
-                        if (needsOut && transferOutLoc) {
-                            fetches.push(fetch(`${API_URL}/transactions?start_date=${dateKey}&end_date=${dateKey}&location_id=${transferOutLoc.id}&limit=1000`).then(r => r.json()));
-                        }
-                        const results = await Promise.all(fetches);
-                        return { dateKey, data: results.flat() };
-                    });
-                    
-                    const dateResults = await Promise.all(datePromises);
-                    const relatedDataByDate = new Map(dateResults.map(r => [r.dateKey, r.data]));
-                    const usedPartners = new Set();
-
-                    for (const pending of pendingTransfers) {
-                        const dateKey = pending.data.date.split('T')[0];
-                        const relatedData = relatedDataByDate.get(dateKey) || [];
-
-                        let partner = null;
-                        if (pending.type === 'out') {
-                            const available = relatedData.filter(t =>
-                                t.location_name === 'Transfer In' &&
-                                t.date === pending.data.date &&
-                                t.account_id !== pending.data.account_id &&
-                                !usedPartners.has(t.id)
-                            );
-                            partner = available.find(t => Math.abs(pending.data.amount) === t.amount) || available[0];
-                            if (partner) {
-                                usedPartners.add(partner.id);
-                                transferTransactions.push({
-                                    transfer_out_id: pending.data.id, transfer_in_id: partner.id, date: pending.data.date,
-                                    from_account_name: pending.data.account_name, from_amount: Math.abs(pending.data.amount), from_currency: pending.data.currency,
-                                    to_account_name: partner.account_name, to_amount: partner.amount, to_currency: partner.currency,
-                                    note: pending.data.note || partner.note, from_balance: pending.data.account_balance_after, to_balance: partner.account_balance_after
-                                });
-                            } else {
-                                newReg.push(pending.data);
-                            }
-                        } else {
-                            const available = relatedData.filter(t =>
-                                t.location_name === 'Transfer Out' &&
-                                t.date === pending.data.date &&
-                                t.account_id !== pending.data.account_id &&
-                                !usedPartners.has(t.id)
-                            );
-                            partner = available.find(t => Math.abs(t.amount) === pending.data.amount) || available[0];
-                            if (partner) {
-                                usedPartners.add(partner.id);
-                                transferTransactions.push({
-                                    transfer_out_id: partner.id, transfer_in_id: pending.data.id, date: pending.data.date,
-                                    from_account_name: partner.account_name, from_amount: Math.abs(partner.amount), from_currency: partner.currency,
-                                    to_account_name: pending.data.account_name, to_amount: pending.data.amount, to_currency: pending.data.currency,
-                                    note: partner.note || pending.data.note, from_balance: partner.account_balance_after, to_balance: pending.data.account_balance_after
-                                });
-                            } else {
-                                newReg.push(pending.data);
-                            }
-                        }
-                    }
-                }
-                
-                // If no more pages, flush any remaining unmatched transfers as regular transactions
-                if (!hasMoreTransactions) {
-                    newReg.push(...pendingTransferOuts, ...pendingTransferIns);
-                    pendingTransferOuts = []; pendingTransferIns = [];
-                }
-                regularTransactions.push(...newReg);
-                transactionsSkip += LIMIT;
-                displayCombinedTransactions();
+                const data = await fetchTransactionPage();
+                await absorbTransactionPage(data);
             } catch (e) { console.error(e); } finally { isLoadingTransactions = false; }
         }
 
@@ -2325,6 +2308,7 @@
                 <div class="mobile-detail">
                     <div class="mobile-detail-grid">${detailHtml}</div>
                     <div class="mobile-detail-actions">
+                        <button onclick="event.stopPropagation(); duplicateSplit(${gid})">Duplicate</button>
                         <button onclick="event.stopPropagation(); editSplit(${gid})">Edit</button>
                         <button onclick="event.stopPropagation(); deleteSplit(${gid})" style="color:var(--red);border-color:var(--red)">Delete</button>
                     </div>
@@ -2365,7 +2349,7 @@
             const trDetails = [];
             if (t.note) trDetails.push(['Note', t.note]);
             if (diffCurr) trDetails.push(['Rate', `1 ${t.from_currency} = ${(t.to_amount / t.from_amount).toFixed(4)} ${t.to_currency}`]);
-            if (diffCurr) trDetails.push(['Received', `<span style="color:#059669">+${formatMoneyWithSymbol(t.to_amount, t.to_currency)}</span>`]);
+            if (diffCurr) trDetails.push(['Received', `<span style="color:#059669">${formatMoneyWithSymbol(t.to_amount, t.to_currency)}</span>`]);
             trDetails.push([`Bal. ${t.from_account_name}`, `<span style="color:${fromBalanceColor}">${formatMoneyWithSymbol(t.from_balance, t.from_currency)}</span>`]);
             trDetails.push([`Bal. ${t.to_account_name}`, `<span style="color:${toBalanceColor}">${formatMoneyWithSymbol(t.to_balance, t.to_currency)}</span>`]);
 
@@ -2393,6 +2377,7 @@
                 <div class="mobile-detail">
                     <div class="mobile-detail-grid">${trDetailHtml}</div>
                     <div class="mobile-detail-actions">
+                        <button onclick="event.stopPropagation(); duplicateTransfer(${t.transfer_out_id}, ${t.transfer_in_id})">Duplicate</button>
                         <button onclick="event.stopPropagation(); editTransfer(${t.transfer_out_id}, ${t.transfer_in_id})">Edit</button>
                         <button onclick="event.stopPropagation(); deleteTransfer(${t.transfer_out_id}, ${t.transfer_in_id})" style="color:var(--red);border-color:var(--red)">Delete</button>
                     </div>
@@ -2413,13 +2398,15 @@
                 endDate: document.getElementById('filterEndDate').value,
                 accountId: document.getElementById('filterAccount').value,
                 categoryId: document.getElementById('filterCategory').value,
-                searchText: document.getElementById('filterSearch').value
+                searchText: document.getElementById('filterSearch').value,
+                minAmount: document.getElementById('filterMinAmount').value,
+                maxAmount: document.getElementById('filterMaxAmount').value
             };
             filtersActive = Object.values(activeFilters).some(v => v);
             loadRecentTransactions(true, true);
         }
         function clearFilters() {
-            ['filterStartDate','filterEndDate','filterAccount','filterCategory','filterSearch'].forEach(id=>document.getElementById(id).value='');
+            ['filterStartDate','filterEndDate','filterAccount','filterCategory','filterSearch','filterMinAmount','filterMaxAmount'].forEach(id=>document.getElementById(id).value='');
             activeFilters = { startDate: null }; filtersActive = false; loadRecentTransactions(true, true);
         }
 
@@ -2745,8 +2732,6 @@
             f.querySelector('button[type="submit"]').textContent = 'Update';
             setModalMode('transactionModal', true);
             document.querySelectorAll('#transactionModal [data-new-only]').forEach(b => b.style.display = 'none');
-            // Duplicating a split is not the same operation as duplicating a row.
-            document.querySelector('#transactionModal .btn-dup').style.display = 'none';
         }
 
         async function deleteSplit(groupId) {
@@ -2779,9 +2764,33 @@
             updateBulkUI();
         }
 
+        // Every way into a save goes through here. Two things it settles that the
+        // save functions themselves never did:
+        //
+        //  - A slow connection makes it natural to press Save again, and the
+        //    second press used to file a second transaction.
+        //  - A save that fails on the network rather than on the server threw out
+        //    of these handlers and was never caught, so the request vanished
+        //    without a word and the form sat there looking as though it had gone.
+        let saveInFlight = false;
+        async function guardedSave(save) {
+            if (saveInFlight) return false;
+            saveInFlight = true;
+            try {
+                return await save();
+            } catch (error) {
+                console.error('Save failed:', error);
+                alert('Could not reach the server, so nothing was saved. '
+                    + 'Check your connection and try again — what you typed is still here.');
+                return false;
+            } finally {
+                saveInFlight = false;
+            }
+        }
+
         async function handleTransactionSubmit(e) {
             e.preventDefault();
-            await saveTransaction(false);  // false = no es "save and new", debe cerrar y recalcular
+            await guardedSave(() => saveTransaction(false));  // false = no es "save and new", debe cerrar y recalcular
         }
         
         // Core function to save a transaction
@@ -2848,8 +2857,9 @@
                 loadPayees(); // background
                 return true;
             } else {
-                // Close modal immediately — user perceives instant save
-                closeTransactionModal();
+                // Closes at once — the save reads as instant — while the promise
+                // marks when a deferred run's balances are final.
+                const balancesReady = closeTransactionModal();
 
                 // Optimistic UI: insert transaction into list without full reload
                 if (!isEdit) {
@@ -2866,9 +2876,10 @@
                     displayCombinedTransactions();
                 }
 
-                // Background: refresh display (balances already recalculated by backend)
+                // Background: refresh display once the balances are settled
                 (async () => {
                     try {
+                        await balancesReady;
                         await loadRecentTransactions(true);
                         loadPayees();
                     } catch(e) { console.error(e); }
@@ -2879,7 +2890,7 @@
         
         // Save and prepare form for new transaction
         async function saveTransactionAndNew() {
-            await saveTransaction(true);
+            await guardedSave(() => saveTransaction(true));
         }
         
         // Reset form for new entry while keeping date and account
@@ -2917,7 +2928,7 @@
 
         async function handleTransferSubmit(e) {
             e.preventDefault();
-            await saveTransfer(false);  // false = no es "save and new"
+            await guardedSave(() => saveTransfer(false));  // false = no es "save and new"
         }
         
         // Core function to save a transfer
@@ -2978,8 +2989,9 @@
                 resetTransferFormForNew();
                 return true;
             } else {
-                // Close modal immediately
-                closeTransferModal();
+                // Closes at once; the promise marks when a deferred run's
+                // balances are final.
+                const balancesReady = closeTransferModal();
 
                 // Optimistic UI: insert transfer into list
                 if (!isEdit) {
@@ -3002,9 +3014,10 @@
                     displayCombinedTransactions();
                 }
 
-                // Background: refresh display (balances already recalculated by backend)
+                // Background: refresh display once the balances are settled
                 (async () => {
                     try {
+                        await balancesReady;
                         await loadRecentTransactions(true);
                     } catch(e) { console.error(e); }
                 })();
@@ -3014,7 +3027,7 @@
         
         // Save and prepare form for new transfer
         async function saveTransferAndNew() {
-            await saveTransfer(true);
+            await guardedSave(() => saveTransfer(true));
         }
         
         // Reset form for new transfer while keeping date and accounts
@@ -3043,8 +3056,13 @@
             }
         }
         
-        // Recalculate balances for all affected accounts (runs in background)
-        async function recalculateAffectedBalances() {
+        // The repair every deferred run depends on: the rows entered through Save
+        // & New are written with no balance at all, and this is what fills them
+        // in. Losing it to a dropped connection used to leave blank figures and a
+        // console message nobody has open, so the work is now put back for
+        // another attempt rather than thrown away, retried as the connection
+        // recovers, and said out loud if it never does.
+        async function recalculateAffectedBalances(attempt = 0) {
             if (batchAffectedAccounts.size === 0) return;
 
             const accountIds = Array.from(batchAffectedAccounts);
@@ -3052,29 +3070,70 @@
             batchAffectedAccounts.clear();
             batchEarliestDate = null;
 
+            const body = { account_ids: accountIds };
+            if (since) body.since = since;
+
             try {
-                const body = { account_ids: accountIds };
-                if (since) body.since = since;
-                await fetch(`${API_URL}/admin/recalculate-balances-for-accounts`, {
+                const res = await fetch(`${API_URL}/admin/recalculate-balances-for-accounts`, {
                     method: 'POST',
                     body: JSON.stringify(body),
                     headers: { 'Content-Type': 'application/json' }
                 });
+                // A 500 here is as damaging as no connection at all, and this
+                // never used to look at the answer.
+                if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+                balanceRepairPending = false;
+                showConnectionNotice('');
             } catch (error) {
                 console.error('Error recalculating balances:', error);
+                accountIds.forEach(id => batchAffectedAccounts.add(id));
+                if (since && (!batchEarliestDate || since < batchEarliestDate)) batchEarliestDate = since;
+                balanceRepairPending = true;
+
+                if (attempt < 2) {
+                    await new Promise(r => setTimeout(r, 1200 * (attempt + 1)));
+                    return recalculateAffectedBalances(attempt + 1);
+                }
+                showConnectionNotice('Your entries were saved, but their balances could not be brought '
+                    + 'up to date, so some figures below will be blank or stale. They will be put right '
+                    + 'as soon as the connection is back.');
             }
         }
+
+        // The work above is kept in memory, so the moment the browser says the
+        // connection is back is the moment to spend it.
+        addEventListener('online', () => {
+            showConnectionNotice('');
+            if (batchAffectedAccounts.size > 0) {
+                recalculateAffectedBalances().then(() => loadRecentTransactions(true));
+            }
+        });
+
+        // Said before a request has to fail to prove it. Reading carries on from
+        // what is already on the page; it is saving that will not work.
+        addEventListener('offline', () => showConnectionNotice(
+            'You are offline. What is already loaded stays readable, but nothing '
+            + 'can be saved until the connection is back.'));
         
         // Reset batch state when modal is closed
         function resetTransactionBatchState() {
             transactionBatchCount = 0;
-            batchEarliestDate = null;
+            // Left behind, these accumulate across every save the modal ever makes
+            // and widen the next run's recalculation to accounts it never touched.
+            // Unless a repair is still owed, in which case this is that work.
+            if (!balanceRepairPending) {
+                batchAffectedAccounts.clear();
+                batchEarliestDate = null;
+            }
             updateTransactionBatchIndicator();
         }
         
         function resetTransferBatchState() {
             transferBatchCount = 0;
-            batchEarliestDate = null;
+            if (!balanceRepairPending) {
+                batchAffectedAccounts.clear();
+                batchEarliestDate = null;
+            }
             updateTransferBatchIndicator();
         }
 
@@ -3145,6 +3204,12 @@
             m.querySelectorAll('[data-new-only]').forEach(b => b.style.display = isEdit ? 'none' : '');
         }
         function duplicateFromModal() {
+            if (editingSplitGroup) {
+                const groupId = editingSplitGroup;
+                closeTransactionModal();
+                duplicateSplit(groupId);
+                return;
+            }
             const id = document.getElementById('transactionForm').dataset.editingId;
             if (!id) return;
             closeTransactionModal();
@@ -3161,6 +3226,13 @@
             if (!id) return;
             closeTransactionModal();
             deleteTransaction(+id);
+        }
+        function duplicateFromTransferModal() {
+            const f = document.getElementById('transferForm');
+            const out = f.dataset.editingOutId, inn = f.dataset.editingInId;
+            if (!out || !inn) return;
+            closeTransferModal();
+            duplicateTransfer(+out, +inn);
         }
         function deleteFromTransferModal() {
             const f = document.getElementById('transferForm');
@@ -3191,13 +3263,22 @@
             setModalMode('transactionModal', true);
         }
 
+        // Now, written the way the rest of the app writes dates: local wall clock,
+        // no zone. `toISOString()` hands the backend UTC and the offset is dropped
+        // on the way into the column, so a duplicate made in summer landed an hour
+        // early.
+        function localNowISO() {
+            const n = new Date();
+            const p = v => String(v).padStart(2, '0');
+            return `${n.getFullYear()}-${p(n.getMonth() + 1)}-${p(n.getDate())}T${p(n.getHours())}:${p(n.getMinutes())}:${p(n.getSeconds())}`;
+        }
+
         async function duplicateTransaction(id) {
             const t = await (await fetch(`${API_URL}/transactions/${id}`)).json();
             
             // Create new transaction with today's date/time
-            const now = new Date();
             const data = {
-                date: now.toISOString(),
+                date: localNowISO(),
                 amount: t.amount,
                 currency: t.currency,
                 account_id: t.account_id,
@@ -3218,6 +3299,72 @@
                 loadRecentTransactions(true);
             } else {
                 alert('Error duplicating transaction');
+            }
+        }
+
+        // The transfer counterpart of duplicateTransaction. Both legs are read:
+        // the amount received only differs from the amount sent on a
+        // cross-currency transfer, and stating it otherwise would pin a rate the
+        // copy should not carry.
+        async function duplicateTransfer(outId, inId) {
+            const [o, i] = await Promise.all([
+                fetch(`${API_URL}/transactions/${outId}`).then(r => r.json()),
+                fetch(`${API_URL}/transactions/${inId}`).then(r => r.json())
+            ]);
+
+            const data = {
+                date: localNowISO(),
+                from_account_id: o.account_id,
+                to_account_id: i.account_id,
+                from_amount: Math.abs(o.amount),
+                to_amount: o.currency !== i.currency ? Math.abs(i.amount) : null,
+                note: o.note
+            };
+
+            const res = await fetch(`${API_URL}/transactions/transfers`, {
+                method: 'POST',
+                body: JSON.stringify(data),
+                headers: {'Content-Type': 'application/json'}
+            });
+
+            if (res.ok) {
+                loadRecentTransactions(true);
+            } else {
+                alert('Error duplicating transfer');
+            }
+        }
+
+        // A split copies as a whole: the purchase keeps its account, payee and
+        // location, and every line its own slice, category, project and note. The
+        // line ids are dropped, since they name the rows being copied from and the
+        // copy is asking for new ones.
+        async function duplicateSplit(groupId) {
+            const g = await (await fetch(`${API_URL}/transactions/split/${groupId}`)).json();
+
+            const data = {
+                date: localNowISO(),
+                account_id: g.account_id,
+                currency: g.currency,
+                payee_id: g.payee_id,
+                location_id: g.location_id,
+                lines: g.lines.map(l => ({
+                    amount: l.amount,
+                    category_id: l.category_id,
+                    project_id: l.project_id,
+                    note: l.note
+                }))
+            };
+
+            const res = await fetch(`${API_URL}/transactions/split`, {
+                method: 'POST',
+                body: JSON.stringify(data),
+                headers: {'Content-Type': 'application/json'}
+            });
+
+            if (res.ok) {
+                loadRecentTransactions(true);
+            } else {
+                alert('Error duplicating split transaction');
             }
         }
 
@@ -3480,17 +3627,23 @@
                 document.getElementById('account').value = activeFilters.accountId;
             }
         }
-        async function closeTransactionModal() { 
-            // If there are pending batch transactions, recalculate balances
+        // Closes at once, and hands back a promise for the repair a deferred run
+        // still needs. Awaiting the whole thing kept the modal on screen until the
+        // server had finished; not awaiting it at all let the list be reloaded
+        // while the balances were still half-written, which is what showed the
+        // wrong figures after a Save & New run.
+        function closeTransactionModal() { 
+            let balancesReady = Promise.resolve();
             if (transactionBatchCount > 0) {
-                await recalculateAffectedBalances();
-                loadRecentTransactions(true);
+                balancesReady = recalculateAffectedBalances()
+                    .then(() => loadRecentTransactions(true));
             }
             resetTransactionBatchState();
             closeModal('transactionModal');
             exitSplitMode();
             delete document.getElementById('transactionForm').dataset.editingId;
             document.getElementById('transactionForm').querySelector('button[type="submit"]').textContent='Save';
+            return balancesReady;
         }
         function openTransferModal() {
             openModal('transferModal');
@@ -3501,16 +3654,17 @@
             document.getElementById('transferDate').value = dateStr;
             document.getElementById('transferTime').value = timeStr;
         }
-        async function closeTransferModal() { 
-            // If there are pending batch transfers, recalculate balances
+        function closeTransferModal() { 
+            let balancesReady = Promise.resolve();
             if (transferBatchCount > 0) {
-                await recalculateAffectedBalances();
-                loadRecentTransactions(true);
+                balancesReady = recalculateAffectedBalances()
+                    .then(() => loadRecentTransactions(true));
             }
             resetTransferBatchState();
             closeModal('transferModal'); 
             delete document.getElementById('transferForm').dataset.editingOutId; 
             document.getElementById('transferForm').querySelector('button[type="submit"]').textContent='Save'; 
+            return balancesReady;
         }
         
         async function saveNewCategory(){ 

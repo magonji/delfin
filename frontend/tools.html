@@ -224,6 +224,19 @@
         tr.skipped td { opacity:.4; filter:grayscale(100%); background:#f5efe4; }
         tr.skipped:hover td { opacity:.6; }
         .gap-small { display:flex; flex-direction:column; gap:4px; }
+        .import-preview-wrap { max-height:500px; overflow-y:auto; }
+        .import-modal-body { padding:25px; }
+        .preview-summary { background:var(--panel); border:1px solid var(--border); border-radius:8px;
+            padding:12px 20px; margin-bottom:20px; display:flex; justify-content:space-between;
+            align-items:center; gap:12px; flex-wrap:wrap; }
+        .preview-summary-count { font-family:'IBM Plex Sans',sans-serif; font-size:14px; font-weight:500; }
+        .preview-summary-tally { font-size:12px; display:flex; gap:15px; align-items:center; }
+        .preview-summary-tally button { font-size:12px; padding:6px 12px; height:auto; }
+        .profile-row { display:flex; gap:10px; align-items:flex-end; margin-bottom:16px; }
+        .profile-row .form-group { flex:1; }
+        .profile-row button { height:40px; }
+        .map-field { flex:1; min-width:130px; }
+        .hint-touch { display:none; }
 
         /* ── Splitting a statement line into several concepts ── */
         .split-toggle { margin-top:4px; padding:3px 8px; font-size:10px; font-weight:700; letter-spacing:.5px;
@@ -292,7 +305,74 @@
             .form-group { padding:0 16px; }
             .search-box { padding:14px 16px 0; }
             .import-table-container { overflow-x:auto; -webkit-overflow-scrolling:touch; }
-            .import-table { min-width:600px; }
+            /* The mapping preview stays a table: reading raw CSV columns side
+               by side is the whole point of it, so it scrolls sideways. */
+            .import-table:not(.import-preview) { min-width:600px; }
+            .hint-keyboard { display:none; }
+            .hint-touch { display:inline; }
+            .map-field { flex:1 1 100%; min-width:0; }
+            .import-modal-body { padding:16px; }
+
+            /* The preview is a form, not a spreadsheet. Ten columns of selects
+               could only be reached by pinching, so each statement line becomes
+               a card with its fields labelled and stacked. */
+            /* The modal body already provides the gutter; the global rule below
+               would indent every field a second time inside it. */
+            .import-modal-body .form-group { padding:0; }
+            .profile-row { flex-wrap:wrap; }
+            .profile-row .form-group { flex:1 0 100%; }
+            .profile-row button { flex:1; height:auto; }
+            .preview-summary { padding:12px 14px; }
+            .preview-summary-tally { flex-wrap:wrap; width:100%; gap:10px; }
+            .preview-summary-tally button { flex:1 0 100%; min-height:44px; font-size:13px; }
+            .import-preview-wrap { max-height:none; overflow:visible;
+                border:none; background:none; box-shadow:none; }
+            .import-preview, .import-preview tbody, .import-preview tr, .import-preview td
+                { display:block; width:auto; }
+            .import-preview thead { display:none; }
+            .import-preview tr { display:flex; flex-wrap:wrap; align-items:stretch;
+                border:1px solid var(--border); border-radius:10px; background:#fff;
+                padding:10px 12px; margin-bottom:10px; }
+            .import-preview tr:hover td { background:none; }
+            .import-preview td { flex:0 0 100%; order:3; border:none; padding:8px 0 0; }
+            .import-preview td::before { content:attr(data-label); display:block; margin-bottom:4px;
+                font-family:'IBM Plex Sans',sans-serif; font-size:10px; font-weight:700;
+                text-transform:uppercase; letter-spacing:1px; color:var(--muted); }
+            /* A cell that stands down while the line is split takes its label with it. */
+            .import-preview td.label-off { display:none; }
+
+            /* Skip and the New/Dup badge share the card's top line. */
+            .import-preview .col-skip, .import-preview .col-status { flex:1 1 auto; width:auto;
+                display:flex; align-items:center; gap:8px; padding:0 0 8px; margin-bottom:4px;
+                border-bottom:1px solid var(--hair); }
+            .import-preview .col-skip { order:1; }
+            .import-preview .col-status { order:2; justify-content:flex-end; }
+            .import-preview .col-skip::before { margin:0; }
+            .import-preview .col-status::before { content:none; }
+            .import-preview .custom-checkbox { width:22px; height:22px; }
+
+            /* Freed of its column, the description no longer needs clipping. */
+            .import-preview .col-desc { max-width:none; white-space:normal; overflow:visible;
+                font-size:14px; color:var(--ink); }
+            .import-preview .col-date > div { display:inline-block; }
+            .import-preview .col-date > div + div { margin-left:6px; }
+            .import-preview .col-amount { text-align:left; font-size:17px; }
+
+            /* 12px controls sized for a dense table are too small to hit. */
+            .import-preview .import-input, .import-preview .import-select,
+            .import-preview .import-textarea { font-size:16px; padding:10px; min-height:44px; }
+            .import-preview .import-textarea { height:auto; }
+            .import-preview .split-toggle { min-height:38px; font-size:11px; }
+            .import-preview .gap-small { gap:6px; }
+
+            /* The split editor is a panel under its card, not a table row. */
+            .import-preview tr.split-row { padding:0; border:none; margin:-6px 0 10px; }
+            .import-preview tr.split-row td { padding:12px 14px; background:#FBF4EA;
+                border:1px solid var(--border); border-radius:10px; }
+            .import-preview tr.split-row td::before { content:none; }
+            .split-line-row { grid-template-columns:minmax(0,1fr) 34px; }
+            .split-line-row > :not(.split-line-x) { grid-column:1; }
+            .split-line-row > .split-line-x { grid-column:2; grid-row:1; font-size:22px; }
             #toast-container { top:10px; right:10px; left:10px; }
             .toast { min-width:unset; }
         }
@@ -493,7 +573,7 @@
     <div id="importModal" class="modal">
         <div class="modal-content" style="max-width: 95%;">
             <div class="modal-header"><h3>Import Statements</h3><button class="close-btn" onclick="closeModal('importModal')">&times;</button></div>
-            <div style="padding: 25px;">
+            <div class="import-modal-body">
                 <div id="importSuccessMessage" class="success-message"></div>
                 <div id="importErrorMessage" class="error-message"></div>
                 <div id="uploadSection">
@@ -521,25 +601,25 @@
                         <select id="mapProfileSelect" onchange="onMapProfileChange()"></select>
                     </div>
                     <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 8px;">
-                        <div class="form-group" style="flex: 1; min-width: 130px;"><label>Delimiter</label>
+                        <div class="form-group map-field"><label>Delimiter</label>
                             <select id="mapDelimiter" onchange="refreshMapping()">
                                 <option value=",">, (comma)</option>
                                 <option value=";">; (semicolon)</option>
                                 <option value="tab">Tab</option>
                             </select></div>
-                        <div class="form-group" style="flex: 1; min-width: 130px;"><label>Encoding</label>
+                        <div class="form-group map-field"><label>Encoding</label>
                             <select id="mapEncoding" onchange="refreshMapping()">
                                 <option value="auto">Auto-detect</option>
                                 <option value="utf-8">UTF-8</option>
                                 <option value="windows-1252">Windows-1252</option>
                                 <option value="iso-8859-1">ISO-8859-1</option>
                             </select></div>
-                        <div class="form-group" style="flex: 1; min-width: 130px;"><label>Decimal</label>
+                        <div class="form-group map-field"><label>Decimal</label>
                             <select id="mapDecimal">
                                 <option value=".">. (point)</option>
                                 <option value=",">, (comma)</option>
                             </select></div>
-                        <div class="form-group" style="flex: 1; min-width: 130px;"><label>Date format</label>
+                        <div class="form-group map-field"><label>Date format</label>
                             <select id="mapDateFormat">
                                 <option value="DD/MM/YYYY">DD/MM/YYYY</option>
                                 <option value="MM/DD/YYYY">MM/DD/YYYY</option>
@@ -549,32 +629,32 @@
                             </select></div>
                     </div>
                     <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 8px;">
-                        <div class="form-group" style="flex: 1; min-width: 130px;"><label>Date column</label>
+                        <div class="form-group map-field"><label>Date column</label>
                             <select id="mapColDate"></select></div>
-                        <div class="form-group" style="flex: 1; min-width: 130px;"><label>Time column (optional)</label>
+                        <div class="form-group map-field"><label>Time column (optional)</label>
                             <select id="mapColTime"></select></div>
-                        <div class="form-group" style="flex: 1; min-width: 130px;"><label>Amount type</label>
+                        <div class="form-group map-field"><label>Amount type</label>
                             <select id="mapAmountMode" onchange="toggleAmountMode()">
                                 <option value="single">Single column (signed)</option>
                                 <option value="debitcredit">Debit / Credit</option>
                                 <option value="indicator">Amount + sign column</option>
                             </select></div>
-                        <div class="form-group" id="mapSingleWrap" style="flex: 1; min-width: 130px;"><label>Amount column</label>
+                        <div class="form-group map-field" id="mapSingleWrap"><label>Amount column</label>
                             <select id="mapColAmount"></select></div>
-                        <div class="form-group" id="mapDebitWrap" style="flex: 1; min-width: 130px; display: none;"><label>Debit (expense)</label>
+                        <div class="form-group map-field" id="mapDebitWrap" style="display: none;"><label>Debit (expense)</label>
                             <select id="mapColDebit" onchange="updateAmountWarning()"></select></div>
-                        <div class="form-group" id="mapCreditWrap" style="flex: 1; min-width: 130px; display: none;"><label>Credit (income)</label>
+                        <div class="form-group map-field" id="mapCreditWrap" style="display: none;"><label>Credit (income)</label>
                             <select id="mapColCredit" onchange="updateAmountWarning()"></select></div>
-                        <div class="form-group" id="mapIndicatorWrap" style="flex: 1; min-width: 130px; display: none;"><label>Sign column</label>
+                        <div class="form-group map-field" id="mapIndicatorWrap" style="display: none;"><label>Sign column</label>
                             <select id="mapColIndicator"></select></div>
-                        <div class="form-group" id="mapIndicatorDebitWrap" style="flex: 1; min-width: 130px; display: none;"><label>Debit value(s)</label>
+                        <div class="form-group map-field" id="mapIndicatorDebitWrap" style="display: none;"><label>Debit value(s)</label>
                             <input type="text" id="mapIndicatorDebit" placeholder="e.g. DBIT, DR, D" title="Comma-separated values in the sign column that mean an expense; anything else is treated as income."></div>
-                        <div class="form-group" style="flex: 1; min-width: 130px;"><label>Sign</label>
+                        <div class="form-group map-field"><label>Sign</label>
                             <select id="mapSign">
                                 <option value="asis">As-is</option>
                                 <option value="flip">Flip (expenses positive in file)</option>
                             </select></div>
-                        <div class="form-group" style="flex: 1; min-width: 130px;"><label>Note column (optional)</label>
+                        <div class="form-group map-field"><label>Note column (optional)</label>
                             <select id="mapColNote"></select></div>
                     </div>
                     <div id="mapAmountWarning" style="display: none; margin-bottom: 16px; padding: 10px 14px; border-radius: 8px;
@@ -584,7 +664,7 @@
                         <strong>0.00</strong>. If your file has one amount column plus a separate column that flags each row
                         as debit or credit, switch <em>Amount type</em> to <strong>“Amount + sign column”</strong>.
                     </div>
-                    <div class="form-group" style="margin-bottom: 16px;"><label>Description column(s) — hold Ctrl/Cmd to pick several</label>
+                    <div class="form-group" style="margin-bottom: 16px;"><label>Description column(s)<span class="hint-keyboard"> — hold Ctrl/Cmd to pick several</span><span class="hint-touch"> — tap to pick several</span></label>
                         <select id="mapColDescription" multiple size="4"></select></div>
                     <div class="import-table-container" style="max-height: 220px; overflow: auto; margin-bottom: 16px;">
                         <table class="import-table">
@@ -592,11 +672,11 @@
                             <tbody id="mapPreviewBody"></tbody>
                         </table>
                     </div>
-                    <div style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 16px;">
-                        <div class="form-group" style="flex: 1;"><label>Profile name (to save / reuse)</label>
+                    <div class="profile-row">
+                        <div class="form-group"><label>Profile name (to save / reuse)</label>
                             <input type="text" id="mapProfileName" placeholder="e.g. BBVA"></div>
-                        <button onclick="saveImportProfile()" class="secondary" style="height: 40px;">Save profile</button>
-                        <button onclick="deleteImportProfile()" class="secondary" style="height: 40px;">Delete</button>
+                        <button onclick="saveImportProfile()" class="secondary">Save profile</button>
+                        <button onclick="deleteImportProfile()" class="secondary">Delete</button>
                     </div>
                     <div style="display: flex; gap: 10px; padding-top: 16px; border-top: 1px solid var(--border);">
                         <button onclick="continueFromMapping()" style="flex: 1; height: 44px; font-size: 15px;">Continue →</button>
@@ -604,21 +684,20 @@
                     </div>
                 </div>
                 <div id="previewSection" style="display: none;">
-                    <div style="background: var(--panel); padding: 12px 20px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; border: 1px solid var(--border);">
-                        <div style="font-family: 'IBM Plex Sans', sans-serif; font-size: 14px; font-weight: 500;">
+                    <div class="preview-summary">
+                        <div class="preview-summary-count">
                             Found <strong id="totalTransactions">0</strong> transactions
                             <span id="activeProfileLabel" style="font-weight: 400; color: var(--muted); font-size: 12px;"></span>
                         </div>
-                        <div style="font-size: 12px; display: flex; gap: 15px; align-items: center;">
+                        <div class="preview-summary-tally">
                             <span class="badge badge-dup">Duplicates: <span id="duplicateCount">0</span></span>
                             <span class="badge badge-new">New: <span id="newCount">0</span></span>
-                            <button type="button" onclick="editMappingFromPreview()" class="secondary"
-                                style="font-size: 12px; padding: 6px 12px; height: auto;">Edit column mapping</button>
+                            <button type="button" onclick="editMappingFromPreview()" class="secondary">Edit column mapping</button>
                         </div>
                     </div>
 
-                    <div class="import-table-container" style="max-height: 500px; overflow-y: auto;">
-                        <table class="import-table">
+                    <div class="import-table-container import-preview-wrap">
+                        <table class="import-table import-preview">
                             <thead>
                                 <tr>
                                     <th class="col-skip">Skip</th>
@@ -2870,26 +2949,26 @@
                 const timeStr = dateObj.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 
                 row.innerHTML = `
-                    <td class="col-skip">
+                    <td class="col-skip" data-label="Skip">
                         <input type="checkbox" id="skip_${index}" class="custom-checkbox" onchange="handleSkipChange(${index})" ${trans.skip ? 'checked' : ''}>
                     </td>
-                    <td class="col-date">
+                    <td class="col-date" data-label="Date">
                         <div>${dateStr}</div>
                         <div style="font-size: 10px; opacity: 0.7;">${timeStr}</div>
                     </td>
-                    <td class="col-desc" title="${trans.description || ''}">
+                    <td class="col-desc" data-label="Description" title="${trans.description || ''}">
                         ${trans.description || '-'}
                     </td>
-                    <td class="col-amount" style="color: ${trans.amount < 0 ? 'var(--red)' : 'var(--green)'};">
+                    <td class="col-amount" data-label="Amount" style="color: ${trans.amount < 0 ? 'var(--red)' : 'var(--green)'};">
                         ${fmtMoney(Math.abs(trans.amount), (allAccountsForImport.find(a => a.id === trans.account_id) || {}).currency || 'GBP')}
                     </td>
-                    <td>
+                    <td data-label="Type">
                         <select id="type_${index}" class="import-select" onchange="handleTypeChange(${index})">
                             <option value="transaction" ${trans.type === 'transaction' ? 'selected' : ''}>Transac.</option>
                             <option value="transfer" ${trans.type === 'transfer' ? 'selected' : ''}>Transfer</option>
                         </select>
                     </td>
-                    <td>
+                    <td data-label="Payee">
                         <div id="payee_container_${index}" class="gap-small" style="display: ${trans.type === 'transfer' ? 'none' : 'flex'};">
                             <input list="payees_${index}" id="payee_${index}" 
                                 class="import-input"
@@ -2905,7 +2984,7 @@
                             ${allAccountsForImport.map(acc => `<option value="${acc.id}">${acc.name}</option>`).join('')}
                         </select>
                     </td>
-                    <td>
+                    <td data-label="Category">
                         <div class="gap-small" id="catCell_${index}">
                             <select id="parentCategory_${index}" class="import-select" onchange="handleParentCategoryChange(${index})" ${trans.type === 'transfer' ? 'disabled' : ''}>
                                 <option value="">Parent...</option>
@@ -2922,7 +3001,7 @@
                                 title="Spend one statement line across several categories"
                                 ${trans.type === 'transfer' ? 'disabled' : ''}>Split</button>
                     </td>
-                    <td>
+                    <td data-label="Location / project">
                         <div class="gap-small" id="locProjCell_${index}">
                             <select id="location_${index}" class="import-select" onchange="handleLocationChange(${index})" ${trans.type === 'transfer' ? 'disabled' : ''}>
                                 <option value="">Loc...</option>
@@ -2935,7 +3014,7 @@
                             </select>
                         </div>
                     </td>
-                    <td>
+                    <td data-label="Note">
                         <div id="noteCell_${index}">
                             <textarea id="note_${index}" class="import-textarea"
                                     placeholder="Note..."
@@ -3036,6 +3115,12 @@
             document.getElementById(`catCell_${index}`).style.display = on ? 'none' : '';
             document.getElementById(`locProjCell_${index}`).style.display = on ? 'none' : '';
             document.getElementById(`noteCell_${index}`).style.display = on ? 'none' : '';
+            // On a phone each cell prints its own label, so an emptied cell has to
+            // take that label with it rather than leave a heading over nothing.
+            [`locProjCell_${index}`, `noteCell_${index}`].forEach(id => {
+                const cell = document.getElementById(id).closest('td');
+                if (cell) cell.classList.toggle('label-off', on);
+            });
             document.getElementById(`splitSummary_${index}`).style.display = on ? 'block' : 'none';
 
             const button = document.getElementById(`splitBtn_${index}`);
@@ -3219,6 +3304,10 @@
             const projectSelect = document.getElementById(`project_${index}`);
             
             const splitButton = document.getElementById(`splitBtn_${index}`);
+
+            // Same cell, two different fields: the card layout labels it from here.
+            const payeeCell = accountSelect.closest('td');
+            if (payeeCell) payeeCell.dataset.label = type === 'transfer' ? 'To account' : 'Payee';
 
             if (type === 'transfer') {
                 if(payeeContainer) payeeContainer.style.display = 'none';
