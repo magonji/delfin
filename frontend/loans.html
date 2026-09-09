@@ -190,8 +190,18 @@
             font-variant-numeric: tabular-nums; min-width: 38px; text-align: right; }
         .progress-bar { height: 100%; border-radius: 99px; transition: width 0.5s ease; }
         .progress-bar.loan { background: var(--red); }
-        .progress-bar.credit-card { background: var(--yellow); }
+        /* A card with no limit entered. Deliberately outside the three bands below:
+           what its bar shows is not a share of anything agreed, so it must not be
+           read as the middle of a scale. Slate is the colour this app already uses
+           for a movement rather than a verdict. */
+        .progress-bar.credit-card { background: var(--ink-blue); }
         .progress-bar.completed { background: var(--green); }
+        /* How much of the card is spoken for, at a glance and before reading the
+           figure: comfortable under a quarter, worth watching in the middle,
+           close to the ceiling above three quarters. */
+        .progress-bar.use-low { background: var(--green); }
+        .progress-bar.use-mid { background: var(--yellow); }
+        .progress-bar.use-high { background: var(--red); }
         .loan-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; }
         .loan-stats > div { padding: 0 16px; border-left: 1px solid var(--hair); }
         .loan-stats > div:first-child { padding-left: 0; border-left: none; }
@@ -716,6 +726,9 @@
         
         // Calculate progress percentage
         let progress;
+        // Set only when the figure really is a share of a limit, which is the only
+        // reading the bands below mean anything against.
+        let usageBand = null;
         if (isCard) {
             const currentDebt = Math.max(0, -(debt.current_balance || 0));
             const limit = debt.account.credit_limit;
@@ -723,6 +736,7 @@
                 // How much of the card is used up. This is what a limit is for, and
                 // the only figure here anybody is given by their bank.
                 progress = (currentDebt / limit) * 100;
+                usageBand = progress < 25 ? 'use-low' : (progress > 75 ? 'use-high' : 'use-mid');
             } else {
                 // No limit recorded, so the worst the card has ever been is the only
                 // yardstick there is. It is a poor one -- it can only ratchet up, and
@@ -812,8 +826,13 @@
                 : 'Current debt against the most this card has ever owed')
             : 'Share of what this loan will cost in total that has been repaid';
 
-        // Determine progress bar colour based on status
-        const barClass = isCompleted ? 'completed' : (isCard ? 'credit-card' : 'loan');
+        // Determine progress bar colour based on status. A card with a limit is
+        // coloured by how much of it is used; one without gets a colour of its own,
+        // outside the three bands, since what its bar shows is not a share of
+        // anything agreed -- and painting a brand new card red for its first charge
+        // would be an alarm about nothing.
+        const barClass = isCompleted ? 'completed'
+            : (isCard ? (usageBand || 'credit-card') : 'loan');
         
         // Format balance display with appropriate colour
         const s = sym(debt.account.currency);
