@@ -182,7 +182,12 @@
         .loan-toggle { font-size: 12px; transition: transform 0.2s; color: #A2937E; }
         .badge { padding: 2px 9px; border-radius: 99px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: .5px; text-transform: uppercase; background: var(--panel); border: 1px solid var(--hair); color: var(--muted); }
         .loan-info { display: flex; gap: 16px; flex-wrap: wrap; margin: 10px 0 16px; font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: var(--muted); }
-        .progress-bar-container { width: 100%; height: 10px; background: #EDE0CD; border-radius: 99px; overflow: hidden; margin-bottom: 16px; }
+        /* The bar and its figure share a line: a bar alone says "some of it" and
+           leaves you estimating, which is the one thing a number does better. */
+        .progress-row { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+        .progress-bar-container { flex: 1; height: 10px; background: #EDE0CD; border-radius: 99px; overflow: hidden; }
+        .progress-pct { font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: var(--muted);
+            font-variant-numeric: tabular-nums; min-width: 38px; text-align: right; }
         .progress-bar { height: 100%; border-radius: 99px; transition: width 0.5s ease; }
         .progress-bar.loan { background: var(--red); }
         .progress-bar.credit-card { background: var(--yellow); }
@@ -798,11 +803,32 @@
             }
         }
 
+        // The two bars measure opposite things -- a full loan is paid off, a full
+        // card is used up -- and the figure beside them is just a number. This is
+        // what says which is which to anyone who hovers.
+        const progressMeaning = isCard
+            ? (debt.account.credit_limit > 0
+                ? 'Share of the credit limit currently used'
+                : 'Current debt against the most this card has ever owed')
+            : 'Share of what this loan will cost in total that has been repaid';
+
         // Determine progress bar colour based on status
         const barClass = isCompleted ? 'completed' : (isCard ? 'credit-card' : 'loan');
         
         // Format balance display with appropriate colour
         const s = sym(debt.account.currency);
+
+        // What the card is measured against, said once. With a limit entered that
+        // is the limit -- the figure the bar and its percentage are a share of, and
+        // the one the bank puts on the statement. Without one the peak stands in,
+        // because it is then the only yardstick the bar has, and saying so is what
+        // explains a reading that would otherwise look like an alarm.
+        const cardCeiling = isCard
+            ? (debt.account.credit_limit > 0
+                ? `<span>Limit ${s}${formatNum(debt.account.credit_limit)}</span>`
+                : (debt.max_debt > 0 ? `<span>Peak debt ${s}${formatNum(debt.max_debt)}</span>` : ''))
+            : '';
+
         let balanceDisplay;
         if (isCard) {
             const bal = debt.current_balance;
@@ -831,7 +857,7 @@
                     ${debt.terms && debt.schedule && debt.schedule.effective_rate != null
                         ? `<span>${formatApr(debt.schedule.effective_rate)}% effective</span>` : ''}
                     ${!isCard && estimatedRate ? `<span>${estimatedRate}% est. APR</span>` : ''}
-                    ${isCard && debt.max_debt > 0 ? `<span>Peak debt ${s}${formatNum(debt.max_debt)}</span>` : ''}
+                    ${isCard ? cardCeiling : ''}
                     ${isCard ? `<span>${debt.unique_payees} payees</span>` : ''}
                     ${debt.close_date ? `<span>Closed ${formatDate(debt.close_date)}</span>` : ''}
                     <span>${debt.lender_name}</span>
@@ -839,8 +865,11 @@
 
                 ${renderTerms(debt)}
 
-                <div class="progress-bar-container">
-                    <div class="progress-bar ${barClass}" style="width: ${Math.min(progress, 100)}%"></div>
+                <div class="progress-row">
+                    <div class="progress-bar-container" title="${progressMeaning}">
+                        <div class="progress-bar ${barClass}" style="width: ${Math.min(progress, 100)}%"></div>
+                    </div>
+                    <span class="progress-pct" title="${progressMeaning}">${Math.round(progress)}%</span>
                 </div>
                 
                 <div class="loan-stats">
