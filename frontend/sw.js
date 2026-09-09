@@ -1,4 +1,4 @@
-const CACHE_NAME = 'delfin-v39';
+const CACHE_NAME = 'delfin-v40';
 const STATIC_ASSETS = [
   '/app/index.html',
   '/app/transactions.html',
@@ -6,6 +6,7 @@ const STATIC_ASSETS = [
   '/app/budget.html',
   '/app/tools.html',
   '/app/cache.js',
+  '/app/loan-form.js',
   '/app/manifest.json',
   '/app/icons/icon-180.png',
   '/app/icons/icon-192.png',

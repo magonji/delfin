@@ -13,6 +13,8 @@
     <link rel="manifest" href="manifest.json" />
     <!-- Shared cache: loaded before the page script so DelfinCache exists. -->
     <script src="/app/cache.js"></script>
+    <!-- The loan terms form, shared with Tools. -->
+    <script src="/app/loan-form.js"></script>
     <title>Delfin · Loans and Credit Cards</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -104,44 +106,11 @@
         .page-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 22px; }
         .page-title { margin: 0; font-family: 'Playfair Display', serif; font-size: 34px; font-weight: 800; line-height: 1; padding-left: 18px; border-left: 3px solid var(--accent); }
 
-        /* Buttons and forms (shared vocabulary with the budget page) */
-        .btn { padding: 0 18px; height: 44px; border-radius: 9px; border: 1px solid var(--field); cursor: pointer; font-family: 'Playfair Display', serif; font-weight: 500; font-size: 14px; background: #fff; color: #3A342C; -webkit-appearance: none; appearance: none; }
-        .btn-primary { background: #2B2621; color: #F6EFE3; border-color: #2B2621; }
-        .btn-secondary { background: var(--panel); border-color: var(--panel); }
-        .btn-danger { background: #FBEDE9; color: var(--red); border-color: #E7C3B8; }
-        .modal-footer .btn-danger { margin-right: auto; }
         /* Edit affordance on a loan that has terms */
         .terms-edit { background: none; border: none; padding: 2px 6px; cursor: pointer; font-family: 'IBM Plex Mono', monospace;
                       font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); border-radius: 6px; }
         .terms-edit:hover { color: var(--ink); background: var(--panel); }
-        .btn:hover { filter: brightness(1.06); }
-        .btn:disabled { opacity: .55; cursor: default; }
 
-        .form-group { margin-bottom: 16px; }
-        .form-group label { display: block; margin-bottom: 6px; font-weight: 600; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
-        .form-group input, .form-group select { width: 100%; padding: 11px 12px; border: 1px solid var(--field); border-radius: 9px; font-size: 14px; background: #fff; color: var(--ink); -webkit-appearance: none; appearance: none; }
-        .form-group select { background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%238A7D6C'/%3E%3C/svg%3E") no-repeat right 12px center; padding-right: 28px; }
-        .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--accent); }
-        .form-hint { font-size: 11.5px; color: var(--muted); margin-top: -10px; margin-bottom: 16px; line-height: 1.45; }
-        .form-row { display: grid; grid-template-columns: 100px 1fr; gap: 10px; }
-        .form-error { color: var(--red); font-size: 12.5px; margin-bottom: 12px; display: none; }
-
-        /* Modal */
-        .modal { display: none; position: fixed; z-index: 1000; inset: 0; background-color: rgba(35,32,28,.4); backdrop-filter: blur(3px); align-items: center; justify-content: center; padding: 18px; }
-        .modal.active { display: flex; }
-        .modal-content { background-color: var(--paper); border-radius: 16px; width: 100%; max-width: 460px; max-height: 90vh; overflow-y: auto; box-shadow: 0 24px 60px rgba(40,28,14,.35); border: 1px solid var(--hair); }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 18px 22px; border-bottom: 1px solid var(--hair); }
-        .modal-header h3 { margin: 0; font-family: 'Playfair Display', serif; font-size: 21px; font-weight: 700; padding-left: 12px; border-left: 3px solid var(--accent); }
-        .modal-close { background: var(--field); border: none; border-radius: 8px; width: 32px; height: 32px; font-size: 18px; line-height: 1; cursor: pointer; color: #3A342C; flex: 0 0 auto; }
-        .modal-close:hover { background: var(--card); }
-        .modal-body { padding: 18px 22px; }
-        .modal-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 16px 22px; border-top: 1px solid var(--hair); }
-
-        /* The instalment the terms imply, shown live as the form is filled in */
-        .quote { background: var(--panel); border: 1px solid var(--hair); border-radius: 10px; padding: 12px 14px; margin-bottom: 16px; }
-        .quote-label { font-size: 10px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
-        .quote-value { font-family: 'IBM Plex Mono', monospace; font-size: 19px; font-weight: 600; margin-top: 4px; }
-        .quote-sub { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--muted); margin-top: 4px; }
 
         /* Contracted terms on a loan card */
         .terms-note { font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: var(--muted); margin: -6px 0 14px; }
@@ -284,7 +253,6 @@
     <div class="content">
         <div class="page-head">
             <h1 class="page-title">Loans &amp; Credit Cards</h1>
-            <button class="btn btn-primary" onclick="openLoanModal()">Add loan</button>
         </div>
         <div class="kpi-grid">
             <div class="kpi-cell"><div class="kpi-label">Total Owed</div><div class="kpi-val" id="totalOwed" style="color:var(--red)">—</div><div class="kpi-sub" id="owedSub"></div></div>
@@ -320,192 +288,13 @@
                 <p>This page shows the accounts you have given a type of <strong>liability</strong>
                    or <strong>credit card</strong>, and any account with agreed loan terms.</p>
                 <p>Set the type of an account under <a href="tools.html">Tools → Accounts</a>,
-                   or use <strong>Add loan</strong> above to have its account opened for you.</p>
+                <p>Set the type of an account under <a href="tools.html">Tools → Accounts</a>, which is also where a new loan is opened — with its rate, term and fees.</p>
             </div>
         </section>
 
         <div class="footer" id="footerNote">Delfin · balances in GBP at historical rates</div>
     </div>
 
-    <!-- Add loan: the terms a schedule can be computed from -->
-    <div id="loanModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 id="loanModalTitle">Add loan</h3>
-                <button class="modal-close" onclick="closeLoanModal()">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="form-error" id="loanError"></div>
-                <div class="form-hint" id="loanEditHint" style="display:none;">
-                    Editing the terms leaves the account and its movements exactly as they are. If the amount borrowed was wrong, correct the drawdown from the Transactions page too.
-                </div>
-
-                <div class="form-group" id="loanModeGroup">
-                    <label>This loan</label>
-                    <select id="loanMode" onchange="onLoanModeChange()">
-                        <option value="new">is new — open an account for it</option>
-                        <option value="existing">already exists — add its terms</option>
-                    </select>
-                </div>
-                <div class="form-group" id="loanExistingGroup" style="display:none;">
-                    <label>Which account</label>
-                    <select id="loanExistingAccount" onchange="onExistingAccountChange()"></select>
-                </div>
-                <div class="form-hint" id="loanExistingHint" style="display:none;">
-                    Its movements stay exactly as they are — the terms only replace the estimate with the real schedule.
-                </div>
-
-                <div class="form-group">
-                    <label>Name</label>
-                    <input type="text" id="loanName" placeholder="e.g., Flat mortgage, Car loan" oninput="quoteLoan()">
-                </div>
-                <div class="form-group">
-                    <label>Amount borrowed</label>
-                    <input type="number" id="loanPrincipal" step="0.01" min="0" inputmode="decimal" oninput="quoteLoan()">
-                </div>
-                <div class="form-group">
-                    <label>Annual interest rate (%)</label>
-                    <input type="number" id="loanRate" step="0.01" min="0" value="0" inputmode="decimal" oninput="quoteLoan()">
-                </div>
-                <div class="form-group">
-                    <label>Arrangement fee</label>
-                    <input type="number" id="loanFee" step="0.01" min="0" value="0" inputmode="decimal" oninput="onLoanFeeChange()">
-                </div>
-                <div class="form-group" id="loanFeeTreatmentGroup" style="display:none;">
-                    <label>The fee was</label>
-                    <select id="loanFeeTreatment" onchange="quoteLoan()">
-                        <option value="upfront">paid at the outset, out of the money received</option>
-                        <option value="capitalised">added to the loan and repaid with it</option>
-                    </select>
-                </div>
-                <div class="form-hint" id="loanFeeHint" style="display:none;">
-                    Any product, arrangement or broker fee. It is not interest, so it leaves the rate above alone — but it does raise what the loan really costs, which is what the effective rate below shows.
-                </div>
-                <div class="form-group">
-                    <label>Standing fee</label>
-                    <div class="form-row">
-                        <input type="number" id="loanRecurringFee" step="0.01" min="0" value="0" inputmode="decimal" oninput="onLoanFeeChange()">
-                        <select id="loanRecurringFeeMonths" onchange="quoteLoan()">
-                            <option value="1" selected>monthly</option>
-                            <option value="3">quarterly</option>
-                            <option value="6">every six months</option>
-                            <option value="12">annually</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="form-hint" id="loanRecurringFeeHint" style="display:none;">
-                    An administration or account fee charged for as long as the loan runs. It counts towards the effective rate too, and needn't share the instalments' rhythm.
-                </div>
-                <div class="form-group">
-                    <label>Early repayment charge (% of the capital outstanding)</label>
-                    <input type="number" id="loanEarlyFee" step="0.01" min="0" value="0" inputmode="decimal" oninput="onLoanFeeChange()">
-                </div>
-                <div class="form-hint" id="loanEarlyFeeHint" style="display:none;">
-                    Charged only if the loan is settled before the end of its term, so it stays out of the schedule and out of the effective rate. It prices one thing: clearing the loan today.
-                </div>
-                <div class="form-group">
-                    <label>Opening date</label>
-                    <input type="date" id="loanOpenDate" onchange="quoteLoan()">
-                </div>
-                <div class="form-hint">Interest starts here, on the day the money is drawn down.</div>
-                <div class="form-group">
-                    <label>First payment date <span style="text-transform:none;letter-spacing:0">— optional</span></label>
-                    <input type="date" id="loanFirstPayment" onchange="quoteLoan()">
-                </div>
-                <div class="form-hint">
-                    Leave it empty and the first instalment falls one period after the opening date, on the day chosen below. Set it when it doesn't — the first instalment then carries only the interest that has actually accrued, which is more or less than a full one.
-                </div>
-                <div class="form-group">
-                    <label>Duration</label>
-                    <div class="form-row">
-                        <input type="number" id="loanTermCount" min="1" step="1" value="25" inputmode="numeric" oninput="quoteLoan()">
-                        <select id="loanTermUnit" onchange="quoteLoan()">
-                            <option value="year" selected>years</option>
-                            <option value="month">months</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label>Repayment</label>
-                    <select id="loanRepaymentType" onchange="quoteLoan()">
-                        <option value="french">constant instalment (capital and interest)</option>
-                        <option value="interest_only">interest only, capital at the end</option>
-                        <option value="constant_principal">constant capital, falling instalment</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Interest is charged</label>
-                    <select id="loanInterestFrequency" onchange="onLoanInterestFrequencyChange()">
-                        <option value="day">daily</option>
-                        <option value="1" selected>monthly</option>
-                        <option value="3">quarterly</option>
-                        <option value="6">every six months</option>
-                        <option value="12">annually</option>
-                    </select>
-                </div>
-                <div class="form-hint" id="loanDailyHint" style="display:none;">
-                    Interest follows the real days of each period, so a February instalment carries less than a March one and a leap year costs a day more. The instalment itself stays level — the difference lands in the final payment.
-                </div>
-                <div class="form-group">
-                    <label>Instalments are paid</label>
-                    <select id="loanPaymentMonths" onchange="quoteLoan()">
-                        <option value="1" selected>monthly</option>
-                        <option value="3">quarterly</option>
-                        <option value="6">every six months</option>
-                        <option value="12">annually</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Falls on</label>
-                    <select id="loanDayRule" onchange="onLoanDayRuleChange()">
-                        <option value="exact">a fixed day of the month</option>
-                        <option value="working_from_start">a working day counted from the 1st</option>
-                        <option value="working_from_end">a working day counted from the end</option>
-                    </select>
-                </div>
-                <div class="form-group" id="loanDayOfMonthGroup">
-                    <label>Day of the month</label>
-                    <select id="loanDayOfMonth" onchange="quoteLoan()"></select>
-                </div>
-                <div class="form-group" id="loanDayOrdinalGroup" style="display:none;">
-                    <label id="loanDayOrdinalLabel">Which working day</label>
-                    <select id="loanDayOrdinal" onchange="quoteLoan()">
-                        <option value="1">1st</option>
-                        <option value="2">2nd</option>
-                        <option value="3">3rd</option>
-                        <option value="4">4th</option>
-                        <option value="5">5th</option>
-                    </select>
-                </div>
-                <div class="form-hint" id="loanDayHint" style="display:none;">
-                    Working means Monday to Friday — bank holidays aren't known, so a real payment may shift by a day.
-                </div>
-                <div class="form-group">
-                    <label>Lender</label>
-                    <input type="text" id="loanLender" list="loanLenderList" placeholder="e.g., Santander" autocomplete="off">
-                    <datalist id="loanLenderList"></datalist>
-                </div>
-                <div class="form-group" id="loanDestinationGroup">
-                    <label>Paid into</label>
-                    <select id="loanDestination" onchange="quoteLoan()"></select>
-                </div>
-                <div class="form-hint" id="loanDestinationHint">
-                    The drawdown is booked as a transfer from the new loan account into this one, dated the opening date.
-                </div>
-
-                <div class="quote" id="loanQuote" style="display:none;">
-                    <div class="quote-label" id="loanQuoteLabel">Instalment</div>
-                    <div class="quote-value" id="loanQuoteValue">—</div>
-                    <div class="quote-sub" id="loanQuoteSub"></div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-danger" id="loanDeleteBtn" onclick="deleteLoanTerms()" style="display:none;">Delete terms</button>
-                <button class="btn btn-secondary" onclick="closeLoanModal()">Cancel</button>
-                <button class="btn btn-primary" id="loanSaveBtn" onclick="saveLoan()">Save</button>
-            </div>
-        </div>
-    </div>
 
 
 <script>
@@ -565,8 +354,7 @@
     let globalCurrency = 'GBP';
     let globalSymbol = '£';
 
-    // The last payload drawn, so the Add loan form knows which debt accounts are
-    // still waiting for their terms.
+    // The last payload drawn, so a card knows the terms it is asking to edit.
     let _lastDetails = {};
 
     // =============================================================================
@@ -1120,416 +908,40 @@
     }
 
     // =============================================================================
-    // ADD LOAN
+    // LOAN TERMS
     //
-    // The terms the amortisation is computed from. Everything the form collects
-    // is stored; the instalment shown while typing is a client-side mirror of
-    // backend/loan_engine.py, so the figure on screen is the one that gets saved.
+    // The form itself lives in loan-form.js: opening a loan is opening an account,
+    // which now happens under Tools, while correcting terms still happens here.
     // =============================================================================
 
-    let _accounts = [];       // accounts money can be paid into
-    let _loanAccounts = [];   // debt accounts detected but without agreed terms
-    let _editingLoanId = null;  // set while the modal is correcting existing terms
-    let _editingCurrency = null; // that loan's currency, for the live quote
+    DelfinLoanForm.configure({
+        apiBase: API_BASE,
+        formatMoney: (n, currency) => `${sym(currency)}${formatNum(n)}`,
+        formatApr,
+        formatRate,
+        noteCurrencies: noteCurrenciesInUse,
+        onSaved: loadData,
+        onSuccess: showSuccess,
+    });
 
     /**
-     * Reads the form into the shape the API expects. The one interest select
-     * covers both a monthly rhythm and daily accrual, since to the person
-     * filling it in they are answers to the same question.
-     */
-    function readLoanForm() {
-        const frequency = q('#loanInterestFrequency').value;
-        const openDate = q('#loanOpenDate').value;
-        const firstPayment = q('#loanFirstPayment').value;
-        const rule = q('#loanDayRule').value;
-        return {
-            name: q('#loanName').value.trim() || 'Loan',
-            principal: parseFloat(q('#loanPrincipal').value) || 0,
-            annual_rate: parseFloat(q('#loanRate').value) || 0,
-            open_date: openDate ? `${openDate}T00:00:00` : null,
-            first_payment_date: firstPayment ? `${firstPayment}T00:00:00` : null,
-            term_count: parseInt(q('#loanTermCount').value) || 1,
-            term_unit: q('#loanTermUnit').value,
-            repayment_type: q('#loanRepaymentType').value,
-            interest_unit: frequency === 'day' ? 'day' : 'month',
-            interest_months: frequency === 'day' ? 1 : (parseInt(frequency) || 1),
-            payment_months: parseInt(q('#loanPaymentMonths').value) || 1,
-            day_rule: rule,
-            day_ordinal: rule === 'exact' ? null : parseInt(q('#loanDayOrdinal').value) || 1,
-            day_of_month: rule === 'exact' ? parseInt(q('#loanDayOfMonth').value) || null : null,
-            opening_fee: Math.max(0, parseFloat(q('#loanFee').value) || 0),
-            fee_treatment: q('#loanFeeTreatment').value,
-            recurring_fee: Math.max(0, parseFloat(q('#loanRecurringFee').value) || 0),
-            recurring_fee_months: parseInt(q('#loanRecurringFeeMonths').value) || 1,
-            early_repayment_fee_pct: Math.max(0, parseFloat(q('#loanEarlyFee').value) || 0),
-            lender_name: q('#loanLender').value.trim() || null,
-        };
-    }
-
-    /** Daily accrual behaves differently enough to say so. */
-    function onLoanInterestFrequencyChange() {
-        q('#loanDailyHint').style.display =
-            q('#loanInterestFrequency').value === 'day' ? 'block' : 'none';
-        quoteLoan();
-    }
-
-    // The quote comes from the same engine that draws the card, so the two can
-    // never disagree — which a mirror of the arithmetic in here could not
-    // promise once an odd first period started moving every row of the
-    // schedule. Typing is faster than a round trip, so it is debounced and late
-    // answers are dropped.
-    let _quoteTimer = null;
-    let _quoteToken = 0;
-
-    /** Shows what the terms work out to, or hides the box while they can't. */
-    function quoteLoan() {
-        clearTimeout(_quoteTimer);
-        _quoteTimer = setTimeout(runQuote, 250);
-    }
-
-    async function runQuote() {
-        const box = q('#loanQuote');
-        const body = readLoanForm();
-        if (!(body.principal > 0) || !body.open_date) {
-            box.style.display = 'none';
-            return;
-        }
-
-        const token = ++_quoteToken;
-        let sc;
-        try {
-            sc = (await loanRequest('/loans/preview', 'POST', body)).schedule;
-        } catch (e) {
-            box.style.display = 'none';
-            return;
-        }
-        if (token !== _quoteToken) return;  // a later keystroke has overtaken this
-        if (!sc || !sc.payments_total) {
-            box.style.display = 'none';
-            return;
-        }
-
-        const s = sym(currencyForLoan());
-        const every = { 1: 'monthly', 3: 'quarterly', 6: 'every six months', 12: 'annually' };
-        box.style.display = 'block';
-        q('#loanQuoteLabel').textContent =
-            body.repayment_type === 'constant_principal' ? 'First instalment' : 'Instalment';
-        q('#loanQuoteValue').textContent =
-            `${s}${formatNum(sc.instalment)} ${every[body.payment_months] || ''}`;
-
-        const bits = [`${sc.payments_total} payment${sc.payments_total === 1 ? '' : 's'}`];
-        if (sc.recurring_fee > 0) bits.push(`plus ${s}${formatNum(sc.recurring_fee)} standing fee`);
-        if (body.repayment_type === 'interest_only') {
-            bits.push(`then ${s}${formatNum(sc.financed_principal)} at the end`);
-        } else {
-            bits.push(`${s}${formatNum(sc.total_interest)} interest in total`);
-        }
-        if (sc.effective_rate != null) bits.push(`${formatApr(sc.effective_rate)}% effective`);
-        if (sc.first_period_is_stub) {
-            bits.push(`first period ${sc.first_period_days} days`
-                + ` (${s}${formatNum(sc.first_period_interest)} interest,`
-                + ` ${sc.first_period_days > sc.period_days ? 'more' : 'less'} than a full one)`);
-        }
-        // The early repayment charge prices leaving, not staying: it belongs
-        // nowhere near the rate above.
-        if (sc.early_repayment_fee_pct > 0) {
-            bits.push(`${formatRate(sc.early_repayment_fee_pct)}% to settle early`);
-        }
-        q('#loanQuoteSub').textContent = bits.join(' · ');
-    }
-
-    /** Each fee explains itself only once there is a fee to explain. */
-    function onLoanFeeChange() {
-        const hasFee = (parseFloat(q('#loanFee').value) || 0) > 0;
-        q('#loanFeeTreatmentGroup').style.display = hasFee ? 'block' : 'none';
-        q('#loanFeeHint').style.display = hasFee ? 'block' : 'none';
-        q('#loanRecurringFeeHint').style.display =
-            (parseFloat(q('#loanRecurringFee').value) || 0) > 0 ? 'block' : 'none';
-        q('#loanEarlyFeeHint').style.display =
-            (parseFloat(q('#loanEarlyFee').value) || 0) > 0 ? 'block' : 'none';
-        quoteLoan();
-    }
-
-    /** The currency the loan is in: the account it is paid into, or its own. */
-    function currencyForLoan() {
-        if (_editingLoanId !== null) return _editingCurrency || globalCurrency;
-        if (q('#loanMode').value === 'existing') {
-            const acc = _loanAccounts.find(a => String(a.id) === q('#loanExistingAccount').value);
-            return (acc && acc.currency) || globalCurrency;
-        }
-        const acc = _accounts.find(a => String(a.id) === q('#loanDestination').value);
-        return (acc && acc.currency) || globalCurrency;
-    }
-
-    /** New loan or existing account: the two paths need different fields. */
-    function onLoanModeChange() {
-        // Editing settles the account question by having answered it already.
-        const editing = _editingLoanId !== null;
-        const existing = !editing && q('#loanMode').value === 'existing';
-        q('#loanExistingGroup').style.display = existing ? 'block' : 'none';
-        q('#loanExistingHint').style.display = existing ? 'block' : 'none';
-        // An account that already carries its drawdown must not be given a second one.
-        const wantsDestination = !editing && !existing;
-        q('#loanDestinationGroup').style.display = wantsDestination ? 'block' : 'none';
-        q('#loanDestinationHint').style.display = wantsDestination ? 'block' : 'none';
-        if (existing) onExistingAccountChange();
-        quoteLoan();
-    }
-
-    /** Borrow the account's own name and opening date as a starting point. */
-    function onExistingAccountChange() {
-        const acc = _loanAccounts.find(a => String(a.id) === q('#loanExistingAccount').value);
-        if (!acc) return;
-        if (!q('#loanName').value) q('#loanName').value = acc.name;
-        if (acc.open_date) q('#loanOpenDate').value = acc.open_date.slice(0, 10);
-        if (acc.borrowed > 0 && !q('#loanPrincipal').value) q('#loanPrincipal').value = acc.borrowed;
-        quoteLoan();
-    }
-
-    /** A fixed day and a working-day count are alternatives, never both. */
-    function onLoanDayRuleChange() {
-        const rule = q('#loanDayRule').value;
-        const working = rule !== 'exact';
-        q('#loanDayOfMonthGroup').style.display = working ? 'none' : 'block';
-        q('#loanDayOrdinalGroup').style.display = working ? 'block' : 'none';
-        q('#loanDayHint').style.display = working ? 'block' : 'none';
-        q('#loanDayOrdinalLabel').textContent = rule === 'working_from_end'
-            ? 'Which working day, counting back' : 'Which working day';
-        quoteLoan();
-    }
-
-    /**
-     * Opens the modal on a loan that already has terms, filled in and ready to
-     * correct. The account and the mode picker go away: which account this is was
-     * settled when the loan was opened and is not up for revision here.
+     * Opens the form on a loan that already has terms, ready to correct. Which
+     * account it is was settled when the loan was opened and is not up for
+     * revision here.
      *
      * @param {Event} ev - Click event, kept from folding the card open
      * @param {number} accountId - Account whose terms are being edited
      */
-    async function editLoan(ev, accountId) {
+    function editLoan(ev, accountId) {
         ev.stopPropagation();
         const debt = (_lastDetails.loans || []).concat(_lastDetails.completed || [])
             .find(d => d.account.id === accountId);
         if (!debt || !debt.terms) return;
-        const t = debt.terms;
-        _editingCurrency = debt.account.currency;
-
-        await openLoanModal(t.id);
-        q('#loanName').value = t.name || '';
-        q('#loanPrincipal').value = t.principal;
-        q('#loanRate').value = t.annual_rate || 0;
-        q('#loanOpenDate').value = (t.open_date || '').slice(0, 10);
-        // Blank when it was derived, so it stays derived unless it is set here.
-        q('#loanFirstPayment').value = (t.first_payment_date || '').slice(0, 10);
-        q('#loanTermCount').value = t.term_count || 1;
-        q('#loanTermUnit').value = t.term_unit || 'year';
-        q('#loanRepaymentType').value = t.repayment_type || 'french';
-        q('#loanInterestFrequency').value =
-            t.interest_unit === 'day' ? 'day' : String(t.interest_months || 1);
-        q('#loanPaymentMonths').value = String(t.payment_months || 1);
-        q('#loanDayRule').value = t.day_rule || 'exact';
-        q('#loanDayOrdinal').value = String(t.day_ordinal || 1);
-        q('#loanDayOfMonth').value = String(t.day_of_month || 1);
-        q('#loanFee').value = t.opening_fee || 0;
-        q('#loanFeeTreatment').value = t.fee_treatment || 'upfront';
-        q('#loanRecurringFee').value = t.recurring_fee || 0;
-        q('#loanRecurringFeeMonths').value = String(t.recurring_fee_months || 1);
-        q('#loanEarlyFee').value = t.early_repayment_fee_pct || 0;
-        q('#loanLender').value = t.lender_name || '';
-
-        onLoanDayRuleChange();
-        onLoanFeeChange();
-        onLoanInterestFrequencyChange();
-    }
-
-    /**
-     * @param {number|null} editingId - Loan being corrected, or null to add one
-     */
-    async function openLoanModal(editingId = null) {
-        _editingLoanId = editingId;
-        const editing = editingId !== null;
-        q('#loanError').style.display = 'none';
-        q('#loanModal').classList.add('active');
-        q('#loanModalTitle').textContent = editing ? 'Edit loan' : 'Add loan';
-        q('#loanEditHint').style.display = editing ? 'block' : 'none';
-        q('#loanDeleteBtn').style.display = editing ? 'inline-block' : 'none';
-        q('#loanModeGroup').style.display = editing ? 'none' : 'block';
-
-        const dayPicker = q('#loanDayOfMonth');
-        if (!dayPicker.options.length) {
-            dayPicker.innerHTML = Array.from({ length: 31 }, (_, i) =>
-                `<option value="${i + 1}">${i + 1}</option>`).join('');
-        }
-        if (!q('#loanOpenDate').value) {
-            const today = new Date();
-            q('#loanOpenDate').value = today.toISOString().slice(0, 10);
-            dayPicker.value = String(today.getDate());
-        }
-
-        try {
-            const [accounts, loanIds, payees] = await Promise.all([
-                api('/accounts'), api('/loans/account-ids'), api('/payees')
-            ]);
-            // Money is paid into an ordinary account, never into another debt.
-            const debtIds = new Set(loanIds.loan_account_ids || []);
-            _accounts = accounts.filter(a => !debtIds.has(a.id));
-            noteCurrenciesInUse(_accounts.map(a => a.currency));
-            q('#loanDestination').innerHTML = _accounts
-                .map(a => `<option value="${a.id}">${a.name} (${a.currency})</option>`).join('');
-
-            q('#loanLenderList').innerHTML = (payees || [])
-                .map(p => `<option value="${escapeHtml(p.name)}"></option>`).join('');
-        } catch (e) {
-            showLoanError('Could not load accounts: ' + e.message);
-        }
-
-        // Only debt accounts that have no terms yet can be given some.
-        _loanAccounts = ((_lastDetails.loans || []).concat(_lastDetails.completed || []))
-            .filter(d => !d.terms && d.account.type !== 'CREDIT_CARD')
-            .map(d => ({
-                id: d.account.id, name: d.account.name, currency: d.account.currency,
-                open_date: d.open_date, borrowed: d.borrowed,
-            }));
-        const picker = q('#loanExistingAccount');
-        picker.innerHTML = _loanAccounts.length
-            ? _loanAccounts.map(a => `<option value="${a.id}">${escapeHtml(a.name)}</option>`).join('')
-            : '<option value="">No loan without terms</option>';
-        const mode = q('#loanMode');
-        mode.querySelector('option[value="existing"]').disabled = !_loanAccounts.length;
-        if (!_loanAccounts.length) mode.value = 'new';
-
-        onLoanModeChange();
-        onLoanDayRuleChange();
-        onLoanFeeChange();
-        onLoanInterestFrequencyChange();
-    }
-
-    function closeLoanModal() {
-        q('#loanModal').classList.remove('active');
-        _editingLoanId = null;
-        _editingCurrency = null;
-    }
-
-    function showLoanError(msg) {
-        const el = q('#loanError');
-        el.textContent = msg;
-        el.style.display = 'block';
-    }
-
-    async function saveLoan() {
-        const editing = _editingLoanId !== null;
-        const existing = !editing && q('#loanMode').value === 'existing';
-        const name = q('#loanName').value.trim();
-        const principal = parseFloat(q('#loanPrincipal').value);
-        const openDate = q('#loanOpenDate').value;
-        const firstPayment = q('#loanFirstPayment').value;
-        const destination = q('#loanDestination').value;
-
-        if (!name) return showLoanError('The loan needs a name.');
-        if (!(principal > 0)) return showLoanError('Enter the amount borrowed.');
-        if (!openDate) return showLoanError('Enter the opening date.');
-        if (firstPayment && firstPayment <= openDate) {
-            return showLoanError('The first payment must come after the opening date.');
-        }
-        if (existing && !q('#loanExistingAccount').value) return showLoanError('Choose the account.');
-        if (!editing && !existing && !destination) return showLoanError('Choose the account the money was paid into.');
-
-        // Exactly the terms the quote was computed from, so what was on screen
-        // is what gets saved.
-        const body = readLoanForm();
-        // Which account this is belongs to opening a loan, not to correcting one.
-        if (!editing) {
-            body.account_id = existing ? parseInt(q('#loanExistingAccount').value) : null;
-            body.disbursement_account_id = existing ? null : parseInt(destination);
-        }
-
-        const btn = q('#loanSaveBtn');
-        btn.disabled = true;
-        try {
-            await loanRequest(
-                editing ? `/loans/${_editingLoanId}` : '/loans',
-                editing ? 'PUT' : 'POST',
-                body,
-            );
-            closeLoanModal();
-            resetLoanForm();
-            // The drawdown moves a balance, so every page that caches one is stale.
-            DelfinCache.clear();
-            DelfinCache.markDirty('loans');
-            await loadData();
-            showSuccess(editing ? `${name} updated.` : `${name} added.`);
-        } catch (e) {
-            showLoanError(e.message);
-        } finally {
-            btn.disabled = false;
-        }
-    }
-
-    /**
-     * Forgets the terms, leaving the account and every transaction on it alone.
-     * The loan goes back to being estimated from its movements.
-     */
-    async function deleteLoanTerms() {
-        if (_editingLoanId === null) return;
-        const name = q('#loanName').value.trim();
-        const ok = confirm(
-            `Forget the terms of "${name}"?\n\n`
-            + 'The account and its transactions are kept — only the agreed rate, '
-            + 'term and fees are removed, so the loan goes back to being estimated '
-            + 'from its movements.'
-        );
-        if (!ok) return;
-
-        const btn = q('#loanDeleteBtn');
-        btn.disabled = true;
-        try {
-            await loanRequest(`/loans/${_editingLoanId}`, 'DELETE');
-            closeLoanModal();
-            resetLoanForm();
-            DelfinCache.clear();
-            DelfinCache.markDirty('loans');
-            await loadData();
-            showSuccess(`Terms for ${name} removed.`);
-        } catch (e) {
-            showLoanError(e.message);
-        } finally {
-            btn.disabled = false;
-        }
-    }
-
-    /**
-     * One request path for the three that write, so a rejected field reads the
-     * same however it was rejected.
-     *
-     * @param {string} path - API path
-     * @param {string} method - POST, PUT or DELETE
-     * @param {object} [body] - JSON body, omitted for DELETE
-     * @returns {Promise<object>} - Parsed response
-     */
-    async function loanRequest(path, method, body) {
-        const res = await fetch(`${API_BASE}${path}`, {
-            method,
-            headers: { 'Content-Type': 'application/json' },
-            ...(body ? { body: JSON.stringify(body) } : {}),
+        DelfinLoanForm.open({
+            editingId: debt.terms.id,
+            currency: debt.account.currency,
+            terms: debt.terms,
         });
-        if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            // A rejected field comes back as a list of problems, not a sentence.
-            const detail = Array.isArray(err.detail)
-                ? err.detail.map(d => d.msg).join('; ')
-                : err.detail;
-            throw new Error(detail || `${res.status} ${res.statusText}`);
-        }
-        return res.json();
-    }
-
-    /** Clears the form so the next Add loan doesn't inherit the last one. */
-    function resetLoanForm() {
-        ['loanName', 'loanPrincipal', 'loanLender', 'loanFirstPayment'].forEach(id => { q(`#${id}`).value = ''; });
-        ['loanRate', 'loanFee', 'loanRecurringFee', 'loanEarlyFee'].forEach(id => { q(`#${id}`).value = '0'; });
-        _editingLoanId = null;
-        _editingCurrency = null;
-        onLoanFeeChange();
     }
 
     // =============================================================================
@@ -1653,11 +1065,9 @@
         }
     });
 
-    // Close dropdown when clicking outside; the same click on a modal's backdrop
-    // (the overlay itself, never its content) closes the modal.
+    // Close dropdown when clicking outside.
     window.onclick = (e) => {
         if (!e.target.matches('#navBtn')) q('#navDropdown').classList.remove('open');
-        if (e.target === q('#loanModal')) closeLoanModal();
     }
     
     // Load data when DOM is ready

@@ -13,6 +13,8 @@
     <link rel="manifest" href="manifest.json" />
     <!-- Shared cache: loaded before the page script so DelfinCache exists. -->
     <script src="/app/cache.js"></script>
+    <!-- The loan terms form, shared with the Loans page. -->
+    <script src="/app/loan-form.js"></script>
     <title>Delfin · Tools</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -567,11 +569,11 @@
          place to keep the front door. -->
     <div id="newAccountModal" class="modal">
         <div class="modal-content">
-            <div class="modal-header"><h3>Add Account</h3><button class="close-btn" onclick="closeModal('newAccountModal')">&times;</button></div>
+            <div class="modal-header"><h3>Add Account</h3><button class="close-btn" onclick="cancelNewAccount()">&times;</button></div>
             <div class="form-group"><label>Name</label><input type="text" id="newAccName" placeholder="Current account, Visa, Cash…"></div>
-            <div class="form-group"><label>Currency</label><select id="newAccCurrency"></select></div>
+            <div class="form-group" id="newAccCurrencyGroup"><label>Currency</label><select id="newAccCurrency"></select></div>
             <div class="form-group"><label>Type</label><select id="newAccType"></select></div>
-            <div class="form-group">
+            <div class="form-group" id="newAccOpeningGroup">
                 <label>Opening balance</label>
                 <input type="number" id="newAccOpening" step="0.01" inputmode="decimal" placeholder="What is in it now">
                 <div class="form-hint">What the account holds before anything Delfin knows about. Leave it empty for zero.</div>
@@ -580,9 +582,20 @@
                 <label>Credit limit</label>
                 <input type="number" id="newAccLimit" step="0.01" min="0" inputmode="decimal" placeholder="Leave empty if there is none">
             </div>
+            <div class="form-group" id="newAccTermsGroup" style="display: none;">
+                <label>Repayment</label>
+                <select id="newAccTerms" onchange="onNewAccountTermsChange()">
+                    <option value="none">no agreed schedule — just track what is owed</option>
+                    <option value="terms">on agreed terms — rate, duration and instalments</option>
+                </select>
+                <div class="form-hint" id="newAccTermsHint">Choose the second and the instalments,
+                    interest and full schedule are worked out here.</div>
+            </div>
+            <!-- Where the shared loan form sits while this account is a loan. -->
+            <div id="newAccTermsHost" style="padding: 0 25px;"></div>
             <div style="display: flex; gap: 10px; padding: 0 25px 4px;">
                 <button onclick="createAccount()" style="flex: 1;">Create</button>
-                <button onclick="closeModal('newAccountModal')" class="secondary" style="flex: 1;">Cancel</button>
+                <button onclick="cancelNewAccount()" class="secondary" style="flex: 1;">Cancel</button>
             </div>
         </div>
     </div>
@@ -635,6 +648,11 @@
                     <input type="number" id="editCreditLimit" step="0.01" min="0" inputmode="decimal" placeholder="Leave empty if there is none">
                 </div>
                 <div class="form-group" id="editParentGroup" style="display: none;"><label>Parent Category</label><input type="text" id="editParent" readonly style="background: #f0f0f0;"></div>
+                <div class="form-group" id="editTermsGroup" style="display: none;">
+                    <label>Loan terms</label>
+                    <button type="button" class="secondary" id="editTermsBtn" onclick="editAccountTerms()" style="width: 100%;">Add terms</button>
+                    <div class="form-hint" id="editTermsHint"></div>
+                </div>
                 <div style="display: flex; gap: 10px; padding: 0 25px;">
                     <button onclick="saveEdit()" style="flex: 1;">Save</button>
                     <button onclick="closeModal('editModal')" class="secondary" style="flex: 1;">Cancel</button>
@@ -1903,10 +1921,107 @@
         // account that borrow: a card, and a line of credit. Asking a savings
         // account for its credit limit would be a question with no answer.
         const BORROWING_TYPES = ['CREDIT_CARD', 'LIABILITY'];
+        // What can carry a repayment schedule. A card is revolving credit, with
+        // nothing agreed to amortise; LOAN is what older accounts were typed as.
+        const SCHEDULABLE_TYPES = ['LIABILITY', 'LOAN'];
         function showCreditLimitFor(type) {
             const canonical = DelfinAccountTypes.canonical(type);
             document.getElementById('editLimitGroup').style.display =
                 BORROWING_TYPES.includes(canonical) ? 'block' : 'none';
+            document.getElementById('editTermsGroup').style.display =
+                SCHEDULABLE_TYPES.includes(canonical) ? 'block' : 'none';
+        }
+
+        // The contract of the account being edited, once looked up, so the button
+        // knows whether it is adding terms or correcting them.
+        let _termsForAccount = null;
+
+        async function describeAccountTerms(accountId) {
+            const btn = document.getElementById('editTermsBtn');
+            const hint = document.getElementById('editTermsHint');
+            _termsForAccount = null;
+            btn.disabled = true;
+            btn.textContent = 'Loan terms';
+            hint.textContent = 'Checking…';
+            try {
+                const res = await fetch(`${API_URL}/loans/details?include_completed=true`);
+                if (!res.ok) throw new Error(res.statusText);
+                const data = await res.json();
+                const debt = (data.loans || []).concat(data.completed || [])
+                    .find(d => d.account.id === accountId);
+                _termsForAccount = (debt && debt.terms) ? debt.terms : null;
+            } catch (e) {
+                hint.textContent = 'Could not check whether this loan has terms.';
+                btn.disabled = false;
+                return;
+            }
+            btn.disabled = false;
+            btn.textContent = _termsForAccount ? 'Edit terms' : 'Add terms';
+            hint.textContent = _termsForAccount
+                ? 'The agreed rate, duration and fees this loan is amortised from.'
+                : 'Declare the rate, duration and instalments, and the schedule is worked out from them.';
+        }
+
+        /**
+         * The same form as everywhere else, opened on this account. Its movements
+         * stay as they are: the terms only replace the estimate with the schedule.
+         */
+        function editAccountTerms() {
+            if (!currentEditItem) return;
+            DelfinLoanForm.open(_termsForAccount
+                ? {
+                    editingId: _termsForAccount.id,
+                    terms: _termsForAccount,
+                    currency: currentEditItem.currency,
+                  }
+                : { accountId: currentEditItem.id, currency: currentEditItem.currency });
+        }
+
+        // The loan terms form is shared with the Loans page; it only needs to be
+        // told how this page writes money and what to refresh once it has saved.
+        DelfinLoanForm.configure({
+            apiBase: API_URL,
+            formatMoney: (n, currency) => {
+                try {
+                    return new Intl.NumberFormat(undefined, {
+                        style: 'currency', currency, currencyDisplay: 'narrowSymbol',
+                    }).format(Math.abs(n));
+                } catch (e) {
+                    // An unknown code is still worth showing, just spelled out.
+                    return `${currency} ${Math.abs(n).toFixed(2)}`;
+                }
+            },
+            onSaved: async () => { await loadAccounts(); displayAccounts(); },
+            onSuccess: showSuccess,
+        });
+
+        /**
+         * A loan is an account with a contract attached, so the terms are asked for
+         * here rather than on a second page. Choosing them hides what the contract
+         * supersedes: the amount borrowed is the opening balance, and the currency
+         * follows the account the money was paid into.
+         */
+        async function onNewAccountTermsChange() {
+            const wanted = document.getElementById('newAccTerms').value === 'terms';
+            const el = (id) => document.getElementById(id);
+            el('newAccCurrencyGroup').style.display = wanted ? 'none' : 'block';
+            el('newAccOpeningGroup').style.display = wanted ? 'none' : 'block';
+            el('newAccTermsHint').style.display = wanted ? 'none' : 'block';
+            // A limit belongs to revolving credit; a schedule replaces it outright.
+            const kind = DelfinAccountTypes.canonical(el('newAccType').value);
+            el('newAccLimitGroup').style.display =
+                (!wanted && BORROWING_TYPES.includes(kind)) ? 'block' : 'none';
+            if (wanted) {
+                await DelfinLoanForm.attach(el('newAccTermsHost'));
+            } else {
+                DelfinLoanForm.detach();
+            }
+        }
+
+        /** Closing the dialog gives the shared form back before it disappears. */
+        function cancelNewAccount() {
+            DelfinLoanForm.detach();
+            closeModal('newAccountModal');
         }
 
         async function openNewAccount() {
@@ -1916,9 +2031,21 @@
             document.getElementById('newAccType').innerHTML =
                 '<option value="">Select...</option>' + DelfinAccountTypes.options();
             document.getElementById('newAccLimitGroup').style.display = 'none';
+            document.getElementById('newAccTermsGroup').style.display = 'none';
+            document.getElementById('newAccTerms').value = 'none';
+            DelfinLoanForm.detach();
+            document.getElementById('newAccCurrencyGroup').style.display = 'block';
+            document.getElementById('newAccOpeningGroup').style.display = 'block';
             document.getElementById('newAccType').onchange = (e) => {
+                const kind = DelfinAccountTypes.canonical(e.target.value);
                 document.getElementById('newAccLimitGroup').style.display =
-                    BORROWING_TYPES.includes(DelfinAccountTypes.canonical(e.target.value)) ? 'block' : 'none';
+                    BORROWING_TYPES.includes(kind) ? 'block' : 'none';
+                const lending = SCHEDULABLE_TYPES.includes(kind);
+                document.getElementById('newAccTermsGroup').style.display = lending ? 'block' : 'none';
+                if (!lending) {
+                    document.getElementById('newAccTerms').value = 'none';
+                    onNewAccountTermsChange();
+                }
             };
             await populateCurrencies('newAccCurrency');
             openModal('newAccountModal');
@@ -1929,6 +2056,14 @@
             const type = document.getElementById('newAccType').value;
             if (!name) { showError('The account needs a name'); return; }
             if (!type) { showError('Choose what kind of account this is'); return; }
+
+            // With terms it is the loan that is created, and the account comes with
+            // it — along with the drawdown into whichever account received the money.
+            if (document.getElementById('newAccTerms').value === 'terms') {
+                const saved = await DelfinLoanForm.submit({ name });
+                if (saved) closeModal('newAccountModal');
+                return;
+            }
 
             const opening = document.getElementById('newAccOpening').value.trim();
             const limit = document.getElementById('newAccLimit').value.trim();
@@ -1964,6 +2099,7 @@
             document.getElementById('editTypeGroup').style.display = 'none';
             document.getElementById('editLimitGroup').style.display = 'none';
             document.getElementById('editOpeningGroup').style.display = 'none';
+            document.getElementById('editTermsGroup').style.display = 'none';
 
             switch(type) {
                 case 'category':
@@ -1989,6 +2125,9 @@
                     document.getElementById('editCreditLimit').value =
                         item.credit_limit == null ? '' : item.credit_limit;
                     showCreditLimitFor(item.type);
+                    if (SCHEDULABLE_TYPES.includes(DelfinAccountTypes.canonical(item.type))) {
+                        describeAccountTerms(item.id);
+                    }
                     // Changing the type changes whether a limit means anything, so
                     // the field follows the picker rather than the saved value.
                     document.getElementById('editType').onchange = (e) => showCreditLimitFor(e.target.value);

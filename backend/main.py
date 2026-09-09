@@ -3550,7 +3550,12 @@ def get_loans_summary(db: Session = Depends(get_db)):
             Transaction.account_id == account.id
         ).order_by(Transaction.date, Transaction.id).all()
 
-        if not transactions:
+        # A debt with nothing recorded against it yet is still a debt: what it
+        # opened with is the whole of it. Skipping these hid an account whose
+        # balance was entered as its opening figure -- which, until accounts could
+        # be given one, could not happen.
+        opening = float(account.initial_balance or 0.0)
+        if not transactions and abs(opening) < 0.005:
             continue
 
         # Identify transfer transactions
@@ -3560,10 +3565,13 @@ def get_loans_summary(db: Session = Depends(get_db)):
                 transfer_ids.add(tx.id)
 
         # Calculate metrics in account's original currency, then convert to base
-        borrowed = 0
+        # What the account opened owing is capital already drawn: the balance
+        # starts from it, and it counts as borrowed. Starting from zero read a
+        # part-repaid loan as one that had been paid off.
+        borrowed = abs(opening) if opening < 0 else 0
         repaid = 0
         interest = 0
-        balance = 0
+        balance = opening
         
         # Keep track of negative transfer amounts for loans (initial disbursements)
         negative_transfers = []
@@ -3681,7 +3689,12 @@ def get_loans_details(
             Transaction.account_id == account.id
         ).order_by(Transaction.date, Transaction.id).all()
 
-        if not transactions:
+        # A debt with nothing recorded against it yet is still a debt: what it
+        # opened with is the whole of it. Skipping these hid an account whose
+        # balance was entered as its opening figure -- which, until accounts could
+        # be given one, could not happen.
+        opening = float(account.initial_balance or 0.0)
+        if not transactions and abs(opening) < 0.005:
             continue
 
         # Identify transfer transactions
@@ -3701,11 +3714,13 @@ def get_loans_details(
                 if tx.payee and tx.payee.name:
                     payee_names.append(tx.payee.name)
 
-        # Calculate metrics IN ACCOUNT'S ORIGINAL CURRENCY
-        borrowed = 0
+        # Calculate metrics IN ACCOUNT'S ORIGINAL CURRENCY. What the account
+        # opened owing is capital already drawn, so it seeds both the running
+        # balance and the borrowed figure; see the note above the skip.
+        borrowed = abs(opening) if opening < 0 else 0
         repaid = 0
         interest = 0
-        balance = 0
+        balance = opening
         close_date = None
         
         # Get lender name
@@ -3715,7 +3730,9 @@ def get_loans_details(
         
         # Keep track of negative transfer amounts for loans (initial disbursements)
         negative_transfers = []
-        max_debt = 0  # Track maximum amount owed (most negative balance)
+        # The opening figure is part of the history too, so the worst the account
+        # has ever been starts there rather than at nothing.
+        max_debt = abs(opening) if opening < 0 else 0
 
         tx_list = []
         for tx in transactions:
@@ -3789,7 +3806,12 @@ def get_loans_details(
         # For credit cards, get the actual current balance
         current_balance = round(balance, 2) if is_credit_card else None
         
-        open_date = transactions[0].date
+        # When it was opened: the first thing recorded against it, or -- for an
+        # account whose debt is only its opening figure -- the day the terms say
+        # it started, failing that the day the account was made.
+        open_date = (transactions[0].date if transactions
+                     else (declared.open_date if declared and declared.open_date
+                           else account.created_at))
         
         debt_data = {
             "account": {

@@ -55,7 +55,7 @@ month rather than a £600 spike.
 
 - **Automatic detection**: Distinguishes credit cards (3+ unique payees) from traditional loans
 - **Loan tracking**: Borrowed amount, repaid, interest, remaining balance, and estimated APR via XIRR calculation
-- **Add loan**: Records the agreed terms — rate, duration, repayment type, how often interest is charged and instalments paid, and which day of the month they land on (a fixed day, or a working day counted from either end). Opens an account for the loan and books the drawdown as a transfer into the account the money was paid into; terms can also be attached to a loan that already exists
+- **Loan terms**: Rate, duration, repayment type, how often interest is charged and instalments paid, and which day of the month they land on (a fixed day, or a working day counted from either end). A loan is opened where every other account is, under **Tools → Add account**: choose *Liability* and *on agreed terms* and the whole schedule is worked out as you type, with the drawdown booked as a transfer into the account the money was paid into. Terms can also be attached to a loan that already exists, from the account's editor or from the card on this page
 - **Daily interest**: Interest can accrue daily rather than monthly, as most mortgages do. The schedule then follows the real days of each period (ACT/365F), so a February instalment carries less interest than a March one and a leap year costs a day more, while the instalment itself stays level and the difference lands in the final payment
 - **Odd first period**: Interest runs from the drawdown, not from the first payment date, and the two are rarely a whole period apart. The first payment date can be given outright, and the first instalment is charged for the time that actually elapsed — a fortnight, or nearly two months — instead of being rounded to a full period. A whole period is judged by the calendar, so a month is a month whether it has 28 days or 31
 - **Amortisation schedule**: With terms in hand the schedule is computed exactly instead of estimated — constant instalment, interest only, or constant capital — and the card shows the instalment, the next payment, and how far the real balance is ahead of or behind schedule
@@ -68,6 +68,7 @@ month rather than a £600 spike.
 
 ### Tools (`tools.html`)
 
+- **Add account**: Opens an account of any kind, with its opening balance and — for a card or a line of credit — its credit limit. A liability can be opened *on agreed terms*, which asks for the loan's rate, duration and instalments and shows the schedule it implies before anything is saved
 - **Entity management**: Edit and merge categories, accounts, payees, locations, and projects. Includes one-click **detect & merge duplicate categories** (reassigns all references)
 - **CSV import**: Import any bank statement CSV via a generic column-mapping step (delimiter, decimal, encoding, debit/credit), with reusable per-bank profiles, duplicate detection, and inline entity creation. A statement line that was several things at once can be **split** in the preview into lines with their own category, project and note; they must add up to the amount the bank charged, and the result is one split transaction rather than several separate ones
 - **CSV export**: Export transactions with date, account, and category filters in standard or detailed format
