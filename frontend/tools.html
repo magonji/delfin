@@ -1884,6 +1884,9 @@
                 });
                 
                 if (response.ok) {
+                    // Its transactions lose their category, which every breakdown
+                    // on the dashboard counts.
+                    DelfinCache.markDirty('tools');
                     showSuccess(`Category "${name}" deleted successfully`);
                     await loadCategories();
                     displayCategories();
@@ -2119,6 +2122,11 @@
                 });
                 
                 if (response.ok) {
+                    // The dashboard and the loans page keep their own copy of the
+                    // figures for hours. Editing an account changes what they show
+                    // -- its type, its opening balance, its credit limit -- so they
+                    // have to be told, or they go on drawing the old answer.
+                    DelfinCache.markDirty('tools');
                     showSuccess('Item updated successfully!');
                     closeModal('editModal');
                     
@@ -2175,6 +2183,7 @@
                 
                 if (response.ok) {
                     const result = await response.json();
+                    DelfinCache.markDirty('tools');
                     showSuccess(result.message);
                     await loadAccounts();
                     displayAccounts();
@@ -2203,6 +2212,7 @@
                 
                 if (response.ok) {
                     const result = await response.json();
+                    DelfinCache.markDirty('tools');
                     showSuccess(result.message);
                     await loadAccounts();
                     displayAccounts();
