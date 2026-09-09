@@ -712,9 +712,19 @@
         // Calculate progress percentage
         let progress;
         if (isCard) {
-            // Credit cards: ratio of current debt to max historical debt
             const currentDebt = Math.max(0, -(debt.current_balance || 0));
-            progress = debt.max_debt > 0 ? (currentDebt / debt.max_debt) * 100 : 0;
+            const limit = debt.account.credit_limit;
+            if (limit > 0) {
+                // How much of the card is used up. This is what a limit is for, and
+                // the only figure here anybody is given by their bank.
+                progress = (currentDebt / limit) * 100;
+            } else {
+                // No limit recorded, so the worst the card has ever been is the only
+                // yardstick there is. It is a poor one -- it can only ratchet up, and
+                // a brand new card sits at 100% on its first charge -- which is the
+                // argument for entering the limit rather than for this line.
+                progress = debt.max_debt > 0 ? (currentDebt / debt.max_debt) * 100 : 0;
+            }
         } else if (isCompleted) {
             // The debt is gone, however much of the interest was saved by getting
             // there early. Measured against the full cost a settled loan would

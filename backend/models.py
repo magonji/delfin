@@ -16,6 +16,11 @@ class Account(Base):
     type = Column(String)
     currency = Column(String, default="GBP", index=True)
     initial_balance = Column(Float, default=0.0)
+    # What the lender lets this account run to, on the accounts where that is
+    # a real number: a credit card, or a line of credit. NULL everywhere else,
+    # and NULL on a card whose limit has simply never been entered -- which is
+    # not the same as a limit of zero, and is why this is nullable.
+    credit_limit = Column(Float, nullable=True)
     current_balance = Column(Float, default=0.0)
     is_active = Column(Integer, default=1, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)

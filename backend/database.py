@@ -62,6 +62,11 @@ _ADDED_COLUMNS = {
         # date, the amount and the accounts.
         "transfer_group_id": "INTEGER",
     },
+    "accounts": {
+        # What the lender lets the account run to. Only ever set on the kinds of
+        # account that have one.
+        "credit_limit": "FLOAT",
+    },
     "loans": {
         # What the loan cost to arrange, and whether it was paid at the outset
         # or added to the debt.

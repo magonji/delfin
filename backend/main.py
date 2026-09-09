@@ -347,6 +347,7 @@ def get_accounts_with_balances(
             "type": account.type,
             "currency": account.currency,
             "initial_balance": account.initial_balance,
+            "credit_limit": account.credit_limit,
             "current_balance": current_balance,
             "balance_as_of": balance_as_of,
             "is_active": account.is_active,
@@ -3770,6 +3771,9 @@ def get_loans_details(
                 "name": account.name,
                 "type": "CREDIT_CARD" if is_credit_card else "LOAN",
                 "currency": account.currency,
+                # What the card is allowed to run to, where it has been entered:
+                # the only honest denominator for how used up it is.
+                "credit_limit": account.credit_limit,
                 "is_active": account.is_active
             },
             "borrowed": round(borrowed, 2),

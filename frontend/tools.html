@@ -596,6 +596,10 @@
                     <label>Type</label>
                     <select id="editType"></select>
                 </div>
+                <div class="form-group" id="editLimitGroup" style="display: none;">
+                    <label>Credit limit</label>
+                    <input type="number" id="editCreditLimit" step="0.01" min="0" inputmode="decimal" placeholder="Leave empty if there is none">
+                </div>
                 <div class="form-group" id="editParentGroup" style="display: none;"><label>Parent Category</label><input type="text" id="editParent" readonly style="background: #f0f0f0;"></div>
                 <div style="display: flex; gap: 10px; padding: 0 25px;">
                     <button onclick="saveEdit()" style="flex: 1;">Save</button>
@@ -1849,6 +1853,16 @@
             }
         }
 
+        // A limit is something a lender grants, so it is offered on the kinds of
+        // account that borrow: a card, and a line of credit. Asking a savings
+        // account for its credit limit would be a question with no answer.
+        const BORROWING_TYPES = ['CREDIT_CARD', 'LIABILITY'];
+        function showCreditLimitFor(type) {
+            const canonical = DelfinAccountTypes.canonical(type);
+            document.getElementById('editLimitGroup').style.display =
+                BORROWING_TYPES.includes(canonical) ? 'block' : 'none';
+        }
+
         function editItem(type, id) {
             currentEditType = type;
             let item;
@@ -1856,6 +1870,7 @@
             // Only accounts have one, so it is hidden here rather than in each of
             // the five branches below.
             document.getElementById('editTypeGroup').style.display = 'none';
+            document.getElementById('editLimitGroup').style.display = 'none';
 
             switch(type) {
                 case 'category':
@@ -1876,6 +1891,12 @@
                     document.getElementById('editCurrency').value = item.currency;
                     document.getElementById('editTypeGroup').style.display = 'block';
                     document.getElementById('editType').innerHTML = DelfinAccountTypes.options(item.type);
+                    document.getElementById('editCreditLimit').value =
+                        item.credit_limit == null ? '' : item.credit_limit;
+                    showCreditLimitFor(item.type);
+                    // Changing the type changes whether a limit means anything, so
+                    // the field follows the picker rather than the saved value.
+                    document.getElementById('editType').onchange = (e) => showCreditLimitFor(e.target.value);
                     document.getElementById('editParentGroup').style.display = 'none';
                     break;
                 case 'payee':
@@ -1972,11 +1993,17 @@
                         break;
                     case 'account':
                         endpoint = `${API_URL}/accounts/${currentEditItem.id}`;
+                        const limitField = document.getElementById('editCreditLimit').value.trim();
+                        const limitApplies = BORROWING_TYPES.includes(
+                            DelfinAccountTypes.canonical(document.getElementById('editType').value));
                         body = {
                             name: newName,
                             currency: document.getElementById('editCurrency').value,
                             type: document.getElementById('editType').value,
-                            initial_balance: currentEditItem.initial_balance
+                            initial_balance: currentEditItem.initial_balance,
+                            // Retyped as something that cannot borrow, the limit goes
+                            // with it rather than lingering as a number nothing reads.
+                            credit_limit: (limitApplies && limitField) ? parseFloat(limitField) : null
                         };
                         break;
                     case 'payee':

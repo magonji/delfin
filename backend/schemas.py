@@ -23,11 +23,23 @@ class AccountBase(BaseModel):
     type: Optional[str] = None
     currency: str = "GBP"
     initial_balance: float = 0.0
+    # Only meaningful where the account has one; left out or null otherwise.
+    credit_limit: Optional[float] = None
 
     @field_validator('initial_balance')
     @classmethod
     def round_initial_balance(cls, v):
         return round(v, 2)
+
+    @field_validator('credit_limit')
+    @classmethod
+    def round_credit_limit(cls, v):
+        # A limit is a positive figure however it arrives: a card at -1500 is
+        # describing its balance, not its ceiling. Zero means no limit set.
+        if v is None:
+            return None
+        v = round(abs(float(v)), 2)
+        return v or None
 
 
 class AccountCreate(AccountBase):
