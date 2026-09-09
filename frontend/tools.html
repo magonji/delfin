@@ -1612,7 +1612,7 @@
         }
         
         function displayLocations(filtered = null) {
-            const locations = (filtered || allLocations).filter(l => l.name !== 'Transfer In' && l.name !== 'Transfer Out');
+            const locations = (filtered || allLocations);
             const list = document.getElementById('locationsList');
 
             list.innerHTML = locations.map(loc => {

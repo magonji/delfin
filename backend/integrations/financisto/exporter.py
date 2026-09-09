@@ -5,8 +5,8 @@ Produces either the native ``.backup`` (gzipped entity dump that Financisto can
 restore directly) or the Financisto CSV export layout.
 
 The three structural inversions of the importer:
-    * Delfin's two-transaction transfers (paired by "Transfer In"/"Transfer Out"
-      locations) are collapsed back into a single Financisto transfer row.
+    * Delfin's two-transaction transfers (paired by the id their legs share)
+      are collapsed back into a single Financisto transfer row.
     * Delfin's split transactions (one row per line, sharing a split_group_id)
       are rebuilt into a Financisto parent envelope plus its children.
     * Delfin's (parent, name) categories are rebuilt into a Financisto nested set.
@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import csv
 import io
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 
 from sqlalchemy.orm import Session
 
@@ -108,12 +108,10 @@ def export_backup(db: Session, gzip_output: bool = True) -> bytes:
         project_fin_id[pr.id] = i
         entities.append((fz.T_PROJECT, {"_id": i, "title": pr.name, "is_active": 1}))
 
-    # -- locations (excluding transfer markers) ----------------------------
+    # -- locations --------------------------------------------------------
     location_fin_id: Dict[int, int] = {}
     i = 0
     for loc in db.query(models.Location).order_by(models.Location.id).all():
-        if loc.name in (TRANSFER_IN, TRANSFER_OUT):
-            continue
         i += 1
         location_fin_id[loc.id] = i
         entities.append((fz.T_LOCATIONS, {
@@ -219,34 +217,32 @@ def _build_transaction_entities(
         models.Transaction.date.asc(), models.Transaction.id.asc()
     ).all()
 
-    out_loc = db.query(models.Location).filter(models.Location.name == TRANSFER_OUT).first()
-    in_loc = db.query(models.Location).filter(models.Location.name == TRANSFER_IN).first()
-    out_id = out_loc.id if out_loc else None
-    in_id = in_loc.id if in_loc else None
-
-    # Index incoming legs by day for pairing.
-    transfers_in_by_day: Dict[str, List[models.Transaction]] = {}
+    # Sort the legs by the id they share. This used to be worked out here all over
+    # again -- same day, prefer the same figure -- a third reading of the same
+    # question, free to disagree with the ledger and the transfers endpoint about
+    # which leg went with which. The pair is recorded now, so all three agree.
+    # A group holds at most one leg of each kind, but the lists guard against a
+    # damaged database putting two on the same side: an extra leg then falls
+    # through to the leftovers below and is exported as an ordinary movement,
+    # rather than being quietly dropped by a dictionary that can only hold one.
+    incoming: Dict[Optional[int], List[models.Transaction]] = {}
+    outgoing: List[models.Transaction] = []
     regular: List[models.Transaction] = []
-    transfers_out: List[models.Transaction] = []
     for t in txns:
-        if in_id and t.location_id == in_id:
-            transfers_in_by_day.setdefault(_day(t.date), []).append(t)
-        elif out_id and t.location_id == out_id:
-            transfers_out.append(t)
-        else:
+        if t.transfer_group_id is None:
             regular.append(t)
+        elif (t.amount or 0.0) < 0:
+            outgoing.append(t)
+        else:
+            incoming.setdefault(t.transfer_group_id, []).append(t)
 
     entities: List[backup_format.Entity] = []
     fin_id = 0
 
     used_in_ids = set()
-    # Match each outgoing leg with an incoming leg (same day, prefer same |amount|).
-    for t_out in transfers_out:
-        candidates = [c for c in transfers_in_by_day.get(_day(t_out.date), [])
-                      if c.id not in used_in_ids and c.account_id != t_out.account_id]
-        match = next((c for c in candidates if abs(c.amount) == abs(t_out.amount)), None)
-        if match is None and candidates:
-            match = candidates[0]
+    for t_out in outgoing:
+        waiting = incoming.get(t_out.transfer_group_id) if t_out.transfer_group_id else None
+        match = waiting.pop(0) if waiting else None
         fin_id += 1
         if match is not None:
             used_in_ids.add(match.id)
@@ -259,7 +255,7 @@ def _build_transaction_entities(
                 project_fin_id, location_fin_id, skip_location=True)))
 
     # Any incoming legs that never matched -> regular inflow.
-    for legs in transfers_in_by_day.values():
+    for legs in incoming.values():
         for t_in in legs:
             if t_in.id in used_in_ids:
                 continue
@@ -389,9 +385,6 @@ def _regular_entity(fin_id, t, account_fin_id, category_fin_id, payee_fin_id,
     }
 
 
-def _day(dt) -> str:
-    return dt.strftime("%Y-%m-%d") if dt else ""
-
 
 # ---------------------------------------------------------------------------
 # CSV export (Financisto layout)
@@ -428,10 +421,11 @@ def export_csv(db: Session) -> bytes:
         cat_name, cat_parent = cat.get(t.category_id, (None, None))
         location_name = loc.get(t.location_id)
         payee_name = payee.get(t.payee_id)
-        # Map Delfin transfer legs back to Financisto's CSV transfer payee marker.
-        if location_name in (TRANSFER_IN, TRANSFER_OUT):
-            payee_name = location_name
-            location_name = None
+        # Financisto's CSV marks each half of a transfer with a payee of its own.
+        # Which half is the sign of the amount, the same thing that wrote the two
+        # legs; it used to be the name of the location they were filed under.
+        if t.transfer_group_id is not None:
+            payee_name = TRANSFER_OUT if (t.amount or 0.0) < 0 else TRANSFER_IN
         return [
             "~" if as_line else (dt.strftime("%Y-%m-%d") if dt else "~"),
             "" if as_line else (dt.strftime("%H:%M:%S") if dt else ""),

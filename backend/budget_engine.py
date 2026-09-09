@@ -27,7 +27,7 @@ from sqlalchemy.orm import Session
 
 from backend.helpers import get_base_currency, get_latest_rates, get_rates_bulk
 from backend.models import (
-    Account, BudgetItem, BudgetMonthLine, Category, CategoryBucket, Loan, Location,
+    Account, BudgetItem, BudgetMonthLine, Category, CategoryBucket, Loan,
     Payee, Transaction,
 )
 
@@ -511,13 +511,6 @@ def _loads(raw) -> List[int]:
         return []
 
 
-def _transfer_location_ids(db: Session) -> List[int]:
-    return [
-        row[0] for row in
-        db.query(Location.id).filter(Location.name.in_(["Transfer In", "Transfer Out"])).all()
-    ]
-
-
 def normalise_name(name: Optional[str]) -> str:
     """
     Key a category name for matching. Subcategories point at their parent by
@@ -580,7 +573,6 @@ def month_snapshot(db: Session, ym: str) -> Dict:
     ensure_month(db, ym)
 
     lines = db.query(BudgetMonthLine).filter(BudgetMonthLine.year_month == ym).all()
-    transfer_ids = _transfer_location_ids(db)
     latest_rates = get_latest_rates(db)
 
     def to_base(amount: float, currency: str, rates: Dict[str, float]) -> float:
@@ -602,7 +594,8 @@ def month_snapshot(db: Session, ym: str) -> Dict:
 
     expenses, incomes, transfers_in = [], [], []
     for tx in transactions:
-        is_transfer = bool(transfer_ids) and tx.location_id in transfer_ids
+        # A leg of a transfer carries the id it shares with its other half.
+        is_transfer = tx.transfer_group_id is not None
         if is_transfer:
             if tx.amount > 0:
                 transfers_in.append(tx)
@@ -1137,7 +1130,6 @@ def suggest_candidates(db: Session, kind: str = "fixed", min_occurrences: int = 
             BudgetItem.set_aside_account_id.isnot(None)).all()
     }
 
-    transfer_ids = _transfer_location_ids(db)
     transactions = db.query(Transaction).filter(
         Transaction.date >= datetime.combine(cutoff, time.min)
     ).all()
@@ -1145,7 +1137,8 @@ def suggest_candidates(db: Session, kind: str = "fixed", min_occurrences: int = 
     by_payee: Dict[int, List[Transaction]] = {}
     by_account: Dict[int, List[Transaction]] = {}
     for tx in transactions:
-        is_transfer = bool(transfer_ids) and tx.location_id in transfer_ids
+        # A leg of a transfer carries the id it shares with its other half.
+        is_transfer = tx.transfer_group_id is not None
         if is_transfer:
             # Money moved between your own accounts is never income.
             if tx.amount > 0 and tx.account_id and not wants_income:

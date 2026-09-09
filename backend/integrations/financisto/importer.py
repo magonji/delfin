@@ -58,6 +58,10 @@ class NormalizedTxn:
     project_name: Optional[str] = None
     # Transactions sharing a split key are lines of one split transaction.
     split_key: Optional[str] = None
+    # The two transactions a Financisto transfer row becomes share a transfer key,
+    # which is what pairs them once they have ids. They used to be recognised
+    # afterwards by the location each was filed under.
+    transfer_key: Optional[str] = None
 
 
 @dataclass
@@ -81,7 +85,7 @@ class NormalizedData:
 
     def summary(self) -> dict:
         transfers = sum(
-            1 for t in self.transactions if t.location_name == TRANSFER_OUT
+            1 for t in self.transactions if t.transfer_key and t.amount < 0
         )
         splits = {t.split_key for t in self.transactions if t.split_key}
         return {
@@ -278,16 +282,15 @@ def _normalize_backup_txn(t, data, report, accounts, cat_by_id, payees,
         to_name, to_code, to_dec = to_acc
         from_amt = fz.minor_to_major(t.get("from_amount"), from_dec)
         to_amt = fz.minor_to_major(t.get("to_amount"), to_dec)
+        transfer_key = f"tr{t.get('_id')}-{dt.isoformat()}-{from_name}-{to_name}"
         data.transactions.append(NormalizedTxn(
             date=dt, amount=-abs(from_amt), currency=from_code, note=note,
-            account_name=from_name, location_name=TRANSFER_OUT,
+            account_name=from_name, transfer_key=transfer_key,
         ))
         data.transactions.append(NormalizedTxn(
             date=dt, amount=abs(to_amt), currency=to_code, note=note,
-            account_name=to_name, location_name=TRANSFER_IN,
+            account_name=to_name, transfer_key=transfer_key,
         ))
-        data.locations.add(TRANSFER_IN)
-        data.locations.add(TRANSFER_OUT)
         report.add("transfers_expanded", Severity.INFO,
                    "Transfers expanded into transaction pairs",
                    "Each Financisto transfer became an outgoing + incoming "
@@ -478,17 +481,17 @@ def normalize_csv(raw: bytes, report: CompatibilityReport) -> NormalizedData:
             report.add("original_amount", Severity.INFO, "Foreign original amounts simplified",
                        "Only the account-currency amount was kept.")
 
-        # Transfers appear as two rows with payee "Transfer In/Out". Map them to
-        # Delfin's transfer locations so the transfer view groups them. Best
-        # effort: the CSV does not carry the counterpart account.
+        # Financisto's CSV marks each half of a transfer with the payee "Transfer
+        # In"/"Transfer Out" and says nothing about the other account, so there is
+        # no pair to be made: the two halves come in as the ordinary movements they
+        # look like. Guessing a partner from the date and the figure is exactly the
+        # guesswork a recorded pair replaced.
         if payee in (TRANSFER_IN, TRANSFER_OUT):
-            location = payee
             payee = None
-            data.locations.add(location)
-            report.add("csv_transfer", Severity.PARTIAL, "CSV transfers reconstructed best-effort",
-                       "Financisto CSV exports transfers as two rows without the "
-                       "counterpart account; they were mapped to Delfin transfer "
-                       "legs by direction. Use the .backup format for exact transfers.")
+            report.add("csv_transfer", Severity.PARTIAL, "CSV transfers arrive unpaired",
+                       "Financisto CSV exports a transfer as two rows without the "
+                       "counterpart account, so each half was imported as a separate "
+                       "movement. Use the .backup format to keep transfers whole.")
 
         if account:
             data.accounts.setdefault(account, {"currency": currency, "type": None})
@@ -709,6 +712,7 @@ def apply_to_database(
     # Lines of an incoming split, collected so they can be keyed together once
     # the database has handed out their ids.
     split_rows: Dict[str, List[models.Transaction]] = {}
+    transfer_rows: Dict[str, List[models.Transaction]] = {}
     incoming_line_no: Dict[str, int] = {}
 
     inserted = 0
@@ -758,6 +762,8 @@ def apply_to_database(
         db.add(row)
         if ntx.split_key:
             split_rows.setdefault(ntx.split_key, []).append(row)
+        if ntx.transfer_key:
+            transfer_rows.setdefault(ntx.transfer_key, []).append(row)
         inserted += 1
 
     db.flush()
@@ -772,6 +778,16 @@ def apply_to_database(
         for r in rows:
             r.split_group_id = group_id
         splits_imported += 1
+    db.flush()
+
+    # The two legs of a transfer, keyed the same way a split's lines are: on the
+    # lowest id of the pair. A leg whose partner was skipped as a duplicate keeps
+    # a group of its own, which is what says it is a transfer leg with nothing to
+    # pair to.
+    for rows in transfer_rows.values():
+        group_id = min(r.id for r in rows)
+        for r in rows:
+            r.transfer_group_id = group_id
     db.flush()
 
     initialise_all_balances(db)

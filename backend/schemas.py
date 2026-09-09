@@ -187,6 +187,10 @@ class TransactionResponse(TransactionBase):
     # Deliberately absent from TransactionBase so an ordinary update of a single
     # line cannot detach it from its split by simply not mentioning it.
     split_group_id: Optional[int] = None
+    # Set on both legs of a transfer, and shared only by those two. Absent
+    # from TransactionBase for the same reason as the line above: editing one
+    # leg must not be able to unhitch it from the other by omission.
+    transfer_group_id: Optional[int] = None
 
     class Config:
         from_attributes = True

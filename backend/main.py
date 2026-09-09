@@ -729,7 +729,9 @@ def create_location(
     return db_location
 
 
-_SYSTEM_LOCATIONS = ("Transfer In", "Transfer Out")
+# Nothing is reserved any more: the two markers a transfer used to be recognised
+# by are gone, and a location is once again only ever a place.
+_SYSTEM_LOCATIONS = ()
 
 
 @app.delete("/locations/{location_id}")
@@ -1136,6 +1138,7 @@ def get_transactions(
     search: Optional[str] = None,                # text search (payee.name or note)
     min_amount: Optional[float] = None,          # smallest size, ignoring sign
     max_amount: Optional[float] = None,          # largest size, ignoring sign
+    transfer_group_ids: Optional[str] = None,    # comma-separated; ignores the filters
     db: Session = Depends(get_db)
 ):
     """
@@ -1185,6 +1188,21 @@ def get_transactions(
             )
         )
 
+    # Naming groups outright is how the ledger fetches the far leg of a transfer
+    # whose near leg it is showing. That is a lookup by identity rather than a
+    # search, so it replaces the filters instead of narrowing them: the very
+    # filter that hid the far leg is the reason it has to be asked for by name.
+    # Paging goes with them -- the set is two rows per group named.
+    naming_groups = False
+    if transfer_group_ids:
+        wanted = [int(g) for g in transfer_group_ids.split(",") if g.strip().isdigit()]
+        if not wanted:
+            return []
+        naming_groups = True
+        query = db.query(models.Transaction).filter(
+            models.Transaction.transfer_group_id.in_(wanted)
+        )
+
     # Avoid N+1: eager-load related objects that you later access (account, category, payee, location, project)
     query = query.options(
         joinedload(models.Transaction.account),
@@ -1198,7 +1216,7 @@ def get_transactions(
     query = query.order_by(models.Transaction.date.desc(), models.Transaction.id.desc())
 
     # Pagination (offset/limit)
-    transactions = query.offset(skip).limit(limit).all()
+    transactions = query.all() if naming_groups else query.offset(skip).limit(limit).all()
 
     # Enrich with entity names (no extra queries because of joinedload)
     enriched_transactions = []
@@ -1220,6 +1238,7 @@ def get_transactions(
             "location_id": trans.location_id,
             "project_id": trans.project_id,
             "split_group_id": trans.split_group_id,
+            "transfer_group_id": trans.transfer_group_id,
             "account_balance_after": trans.account_balance_after,
             "total_balance_after": trans.total_balance_after,
             "created_at": trans.created_at.isoformat() if hasattr(trans.created_at, "isoformat") else trans.created_at,
@@ -1259,12 +1278,6 @@ def get_transactions_summary(
     """
     base_currency = get_base_currency(db)
 
-    transfer_ids = [
-        r.id for r in db.query(models.Location.id)
-        .filter(models.Location.name.in_(["Transfer In", "Transfer Out"]))
-        .all()
-    ]
-
     query = db.query(models.Transaction)
     if account_id:
         query = query.filter(models.Transaction.account_id == account_id)
@@ -1286,11 +1299,10 @@ def get_transactions_summary(
         query = query.filter(func.abs(models.Transaction.amount) >= min_amount)
     if max_amount is not None:
         query = query.filter(func.abs(models.Transaction.amount) <= max_amount)
-    if transfer_ids:
-        # A transaction with no location must still count: SQL evaluates
-        # "NOT IN" as NULL, not true, when the column itself is NULL.
-        query = query.filter(or_(models.Transaction.location_id.is_(None),
-                                 ~models.Transaction.location_id.in_(transfer_ids)))
+    # A transfer is money moved between your own accounts, not income or
+    # spending, so it is left out. Carrying a group id is what makes a row a
+    # leg of one; it used to be read off a location named "Transfer In".
+    query = query.filter(models.Transaction.transfer_group_id.is_(None))
     if search:
         pattern = f"%{search}%"
         query = query.outerjoin(models.Payee).filter(
@@ -1337,93 +1349,56 @@ def get_transfers(
     db: Session = Depends(get_db)
 ):
     """
-    Get transfer transactions grouped together.
-    Identifies Transfer In/Out pairs and groups them.
-    Supports pagination with skip & limit.
-    
-    Optimized: Uses O(n) algorithm with hash map instead of O(n²) nested loop.
+    Transfers, each as a single entry.
+
+    The two legs are joined by the ``transfer_group_id`` they were given when the
+    transfer was made. This used to be worked out afresh on every call from the
+    date, the amount and the accounts, which left two transfers sharing an instant
+    and a figure to be paired either way round -- and each reader free to reach a
+    different answer.
+
+    Which leg is which is the sign of the amount, which is what wrote the two of
+    them. A leg left on its own -- its partner deleted -- is not a transfer and is
+    left out, exactly as the guesswork left it out before.
     """
-
-    # Get all transactions with Transfer locations
-    transfer_in_location = db.query(models.Location).filter(
-        models.Location.name == "Transfer In"
-    ).first()
-    transfer_out_location = db.query(models.Location).filter(
-        models.Location.name == "Transfer Out"
-    ).first()
-
-    if not transfer_in_location or not transfer_out_location:
-        return []
-
-    # Get all transfer transactions with eager loading
-    transfers = db.query(models.Transaction).options(
+    legs = db.query(models.Transaction).options(
         joinedload(models.Transaction.account)
     ).filter(
-        or_(
-            models.Transaction.location_id == transfer_in_location.id,
-            models.Transaction.location_id == transfer_out_location.id
-        )
-    ).order_by(models.Transaction.date.desc()).all()
+        models.Transaction.transfer_group_id.isnot(None),
+    ).order_by(
+        models.Transaction.date.desc(), models.Transaction.id.asc()
+    ).all()
 
-    # O(n) optimization: separate into ins and outs, index by date
-    transfers_in = []
-    transfers_out = []
-    
-    for trans in transfers:
-        if trans.location_id == transfer_in_location.id:
-            transfers_in.append(trans)
-        else:
-            transfers_out.append(trans)
-    
-    # Index transfers_in by date for O(1) lookup
-    transfers_in_by_date = {}
-    for trans in transfers_in:
-        date_key = str(trans.date)
-        if date_key not in transfers_in_by_date:
-            transfers_in_by_date[date_key] = []
-        transfers_in_by_date[date_key].append(trans)
-    
-    # Match transfers - O(n) instead of O(n²)
+    groups = {}
+    for leg in legs:
+        groups.setdefault(leg.transfer_group_id, []).append(leg)
+
     grouped_transfers = []
-    processed_ids = set()
-
-    for trans_out in transfers_out:
-        if trans_out.id in processed_ids:
+    for group_id, pair in groups.items():
+        if len(pair) != 2:
             continue
+        # Money out is the negative leg. Ordering the pair by amount picks it out
+        # whichever way round the two rows arrived, and settles a transfer of
+        # nothing on the leg written first.
+        trans_out, matching = sorted(pair, key=lambda t: ((t.amount or 0.0), t.id))
+        if (matching.amount or 0.0) < 0:
+            continue    # two outgoing legs: not a transfer
 
-        date_key = str(trans_out.date)
-        candidates = transfers_in_by_date.get(date_key, [])
-
-        # Find matching transfer_in (same date, different account, not yet processed).
-        # Prefer one with matching amount to disambiguate multiple transfers on the same date.
-        available = [
-            t for t in candidates
-            if t.id not in processed_ids and t.account_id != trans_out.account_id
-        ]
-        matching = next(
-            (t for t in available if abs(trans_out.amount) == t.amount),
-            None
-        ) or (available[0] if available else None)
-        
-        if matching:
-            grouped_transfers.append({
-                "id": f"transfer_{trans_out.id}_{matching.id}",
-                "date": date_key,
-                "from_account_id": trans_out.account_id,
-                "from_account_name": trans_out.account.name if trans_out.account else None,
-                "from_amount": abs(trans_out.amount),
-                "from_currency": trans_out.currency,
-                "to_account_id": matching.account_id,
-                "to_account_name": matching.account.name if matching.account else None,
-                "to_amount": matching.amount,
-                "to_currency": matching.currency,
-                "note": trans_out.note or matching.note,
-                "transfer_out_id": trans_out.id,
-                "transfer_in_id": matching.id
-            })
-            
-            processed_ids.add(trans_out.id)
-            processed_ids.add(matching.id)
+        grouped_transfers.append({
+            "id": f"transfer_{trans_out.id}_{matching.id}",
+            "date": str(trans_out.date),
+            "from_account_id": trans_out.account_id,
+            "from_account_name": trans_out.account.name if trans_out.account else None,
+            "from_amount": abs(trans_out.amount),
+            "from_currency": trans_out.currency,
+            "to_account_id": matching.account_id,
+            "to_account_name": matching.account.name if matching.account else None,
+            "to_amount": matching.amount,
+            "to_currency": matching.currency,
+            "note": trans_out.note or matching.note,
+            "transfer_out_id": trans_out.id,
+            "transfer_in_id": matching.id
+        })
 
     # Apply pagination to the grouped transfers
     return grouped_transfers[skip:skip + limit]
@@ -2352,23 +2327,6 @@ def create_transfer(
         transfer: Transfer details
         skip_recalculation: If True, skip balance recalculation (useful for batch entry)
     """
-    # Get or create Transfer In and Transfer Out locations
-    transfer_in_loc = db.query(models.Location).filter(
-        models.Location.name == "Transfer In"
-    ).first()
-    if not transfer_in_loc:
-        transfer_in_loc = models.Location(name="Transfer In")
-        db.add(transfer_in_loc)
-        db.flush()
-
-    transfer_out_loc = db.query(models.Location).filter(
-        models.Location.name == "Transfer Out"
-    ).first()
-    if not transfer_out_loc:
-        transfer_out_loc = models.Location(name="Transfer Out")
-        db.add(transfer_out_loc)
-        db.flush()
-
     # Get accounts to determine currencies
     from_account = db.query(models.Account).filter(
         models.Account.id == transfer.from_account_id
@@ -2388,7 +2346,6 @@ def create_transfer(
         amount=-abs(transfer.from_amount),
         currency=from_account.currency,
         account_id=transfer.from_account_id,
-        location_id=transfer_out_loc.id,
         note=transfer.note
     )
     db.add(transaction_out)
@@ -2400,10 +2357,17 @@ def create_transfer(
         amount=abs(to_amount),
         currency=to_account.currency,
         account_id=transfer.to_account_id,
-        location_id=transfer_in_loc.id,
         note=transfer.note
     )
     db.add(transaction_in)
+    db.flush()
+
+    # The two legs are a pair, and this is the only moment that is known for
+    # certain. Everything downstream used to rediscover it from the date and the
+    # amount; now it only has to read it.
+    group_id = min(transaction_out.id, transaction_in.id)
+    transaction_out.transfer_group_id = group_id
+    transaction_in.transfer_group_id = group_id
     db.flush()
 
     # Recalculate balances for both accounts (unless skipped for batch mode)
@@ -2920,21 +2884,14 @@ def _collect_month_expenses(db: Session, start_date, end_date):
     `amount`/`original_amount` are positive and unrounded."""
     base_currency = get_base_currency(db)
 
-    transfer_ids = [
-        r.id for r in db.query(Location.id)
-        .filter(Location.name.in_(["Transfer In", "Transfer Out"]))
-        .all()
-    ]
-
     filters = [
         Transaction.date >= _as_datetime_floor(start_date),
         Transaction.date <= _as_datetime_ceil(end_date)
     ]
-    if transfer_ids:
-        # A transaction with no location must still count: SQL evaluates
-        # "NOT IN" as NULL, not true, when the column itself is NULL.
-        filters.append(or_(Transaction.location_id.is_(None),
-                           ~Transaction.location_id.in_(transfer_ids)))
+    # A transfer is money moved between your own accounts, not income or
+    # spending, so it is left out. Carrying a group id is what makes a row a
+    # leg of one; it used to be read off a location named "Transfer In".
+    filters.append(Transaction.transfer_group_id.is_(None))
 
     transactions = db.query(Transaction).filter(and_(*filters)).all()
     if not transactions:
@@ -3077,10 +3034,7 @@ def get_yearly_summary(
         and_(
             Transaction.date >= _as_datetime_floor(start_date),
             Transaction.date <= _as_datetime_ceil(end_date),
-            or_(
-                Transaction.location_id.is_(None),
-                Transaction.location.has(Location.name.notin_(["Transfer In", "Transfer Out"]))
-            )
+            Transaction.transfer_group_id.is_(None)
         )
     ).all()
 
@@ -3287,17 +3241,10 @@ def get_top_locations(
     if date_to:
         filters.append(Transaction.date <= _as_datetime_ceil(date_to))
 
-    # Exclude transfer locations
-    transfer_ids = [
-        r.id for r in db.query(Location.id)
-        .filter(Location.name.in_(["Transfer In", "Transfer Out"]))
-        .all()
-    ]
-    if transfer_ids:
-        # A transaction with no location must still count: SQL evaluates
-        # "NOT IN" as NULL, not true, when the column itself is NULL.
-        filters.append(or_(Transaction.location_id.is_(None),
-                           ~Transaction.location_id.in_(transfer_ids)))
+    # A transfer is money moved between your own accounts, not income or
+    # spending, so it is left out. Carrying a group id is what makes a row a
+    # leg of one; it used to be read off a location named "Transfer In".
+    filters.append(Transaction.transfer_group_id.is_(None))
 
     # Get transactions
     transactions = db.query(Transaction).filter(and_(*filters)).all()
@@ -3554,11 +3501,6 @@ def get_loans_summary(db: Session = Depends(get_db)):
     rates_dict['GBP'] = 1.0
     base_rate = rates_dict.get(base_currency, 1.0)
     
-    # Get transfer location IDs
-    transfer_locations = db.query(Location.id).filter(
-        Location.name.in_(["Transfer In", "Transfer Out"])
-    ).all()
-    transfer_location_ids = set(loc.id for loc in transfer_locations)
     
     active_credit_cards = 0
     active_loans = 0
@@ -3587,7 +3529,7 @@ def get_loans_summary(db: Session = Depends(get_db)):
         # Identify transfer transactions
         transfer_ids = set()
         for tx in transactions:
-            if tx.location_id and tx.location_id in transfer_location_ids:
+            if tx.transfer_group_id is not None:
                 transfer_ids.add(tx.id)
 
         # Calculate metrics in account's original currency, then convert to base
@@ -3688,11 +3630,6 @@ def get_loans_details(
     
     base_currency = get_base_currency(db)
     
-    # Get transfer location IDs
-    transfer_locations = db.query(Location.id).filter(
-        Location.name.in_(["Transfer In", "Transfer Out"])
-    ).all()
-    transfer_location_ids = set(loc.id for loc in transfer_locations)
     
     result = {
         "credit_cards": [],
@@ -3723,7 +3660,7 @@ def get_loans_details(
         # Identify transfer transactions
         transfer_ids = set()
         for tx in transactions:
-            if tx.location_id and tx.location_id in transfer_location_ids:
+            if tx.transfer_group_id is not None:
                 transfer_ids.add(tx.id)
 
         # Who the money is owed to, for a loan without agreed terms naming them.
@@ -3806,6 +3743,9 @@ def get_loans_details(
                 "payee_name": tx.payee.name if tx.payee else None,
                 "category_name": tx.category.name if tx.category else None,
                 "location_name": tx.location.name if tx.location else None,
+                # What tells the loans page a row is a leg of a transfer; it
+                # used to look for "Transfer" in the location name.
+                "transfer_group_id": tx.transfer_group_id,
                 "note": tx.note if hasattr(tx, 'note') else None
             })
         
@@ -3976,28 +3916,23 @@ def create_loan(payload: schemas.LoanCreate, db: Session = Depends(get_db)):
     # was paid into goes up by the same. Only ever booked for an account opened
     # here — an existing one already carries its own history.
     if created_account and payload.create_disbursement and destination:
-        transfer_out_loc = db.query(Location).filter(Location.name == "Transfer Out").first()
-        if not transfer_out_loc:
-            transfer_out_loc = Location(name="Transfer Out")
-            db.add(transfer_out_loc)
-            db.flush()
-        transfer_in_loc = db.query(Location).filter(Location.name == "Transfer In").first()
-        if not transfer_in_loc:
-            transfer_in_loc = Location(name="Transfer In")
-            db.add(transfer_in_loc)
-            db.flush()
-
         note = f"Loan drawdown — {name}"
         out_tx = Transaction(
             date=payload.open_date, amount=-abs(payload.principal), currency=currency,
-            account_id=account.id, location_id=transfer_out_loc.id, note=note,
+            account_id=account.id, note=note,
         )
         in_tx = Transaction(
             date=payload.open_date, amount=abs(payload.principal), currency=destination.currency,
-            account_id=destination.id, location_id=transfer_in_loc.id, note=note,
+            account_id=destination.id, note=note,
         )
         db.add(out_tx)
         db.add(in_tx)
+        db.flush()
+        # A drawdown is a transfer like any other, and its legs are a pair from
+        # this moment on.
+        drawdown_group = min(out_tx.id, in_tx.id)
+        out_tx.transfer_group_id = drawdown_group
+        in_tx.transfer_group_id = drawdown_group
         db.flush()
         booked = [out_tx.id, in_tx.id]
 
@@ -5260,12 +5195,6 @@ def detect_recurring_expenses(
         .all()
     )
 
-    # Get transfer location IDs to exclude
-    transfer_ids = [
-        r.id for r in db.query(Location.id)
-        .filter(Location.name.in_(["Transfer In", "Transfer Out"]))
-        .all()
-    ]
 
     # Get transactions from recent months only
     filters = [
@@ -5273,11 +5202,10 @@ def detect_recurring_expenses(
         Transaction.amount < 0,  # Only expenses
         Transaction.date >= datetime.combine(cutoff_date, time.min)
     ]
-    if transfer_ids:
-        # A transaction with no location must still count: SQL evaluates
-        # "NOT IN" as NULL, not true, when the column itself is NULL.
-        filters.append(or_(Transaction.location_id.is_(None),
-                           ~Transaction.location_id.in_(transfer_ids)))
+    # A transfer is money moved between your own accounts, not income or
+    # spending, so it is left out. Carrying a group id is what makes a row a
+    # leg of one; it used to be read off a location named "Transfer In".
+    filters.append(Transaction.transfer_group_id.is_(None))
 
     transactions = db.query(Transaction).filter(and_(*filters)).all()
 
@@ -5357,100 +5285,90 @@ def detect_recurring_expenses(
     # PART 2: Detect recurring TRANSFERS (debt payments)
     # ============================================
 
-    # Get Transfer Out location ID
-    transfer_out_loc = db.query(Location).filter(Location.name == "Transfer Out").first()
-    transfer_in_loc = db.query(Location).filter(Location.name == "Transfer In").first()
+    # Where each transfer went, read off the id its two legs share. This used to
+    # look for an incoming leg on the same day within one per cent of the amount,
+    # one query per outgoing leg -- a fourth reading of the same question, with its
+    # own tolerance, free to disagree with the other three. Both legs now come back
+    # in a single pass.
+    transfer_legs = db.query(Transaction).filter(
+        Transaction.transfer_group_id.isnot(None),
+        Transaction.date >= datetime.combine(cutoff_date, time.min),
+    ).all()
 
-    if transfer_out_loc and transfer_in_loc:
-        # Get all Transfer Out transactions from recent months
-        transfer_filters = [
-            Transaction.location_id == transfer_out_loc.id,
-            Transaction.amount < 0,
-            Transaction.date >= datetime.combine(cutoff_date, time.min)
-        ]
-        transfer_outs = db.query(Transaction).filter(and_(*transfer_filters)).all()
+    by_group = {}
+    for leg in transfer_legs:
+        by_group.setdefault(leg.transfer_group_id, []).append(leg)
 
-        # For each transfer out, find the matching transfer in to get destination account
-        transfers_by_dest = {}  # destination_account_id -> list of (amount, date, from_account_id)
+    transfers_by_dest = {}  # destination_account_id -> list of (amount, date, from_account_id)
+    for pair in by_group.values():
+        if len(pair) != 2:
+            continue
+        tx_out, tx_in = sorted(pair, key=lambda t: ((t.amount or 0.0), t.id))
+        if (tx_out.amount or 0.0) >= 0 or (tx_in.amount or 0.0) <= 0:
+            continue
+        tx_date = tx_out.date.date() if isinstance(tx_out.date, datetime) else tx_out.date
+        transfers_by_dest.setdefault(tx_in.account_id, []).append({
+            "amount": abs(tx_out.amount),
+            "date": tx_date,
+            "from_account_id": tx_out.account_id,
+            "currency": tx_out.currency
+        })
 
-        for tx_out in transfer_outs:
-            tx_date = tx_out.date.date() if isinstance(tx_out.date, datetime) else tx_out.date
+    # Analyze each destination account for recurring patterns
+    for dest_account_id, transfers in transfers_by_dest.items():
+        dest_account = db.query(Account).filter(Account.id == dest_account_id).first()
+        if not dest_account:
+            continue
 
-            # Find matching Transfer In on the same day with similar amount
-            matching_in = db.query(Transaction).filter(
-                Transaction.location_id == transfer_in_loc.id,
-                Transaction.amount > 0,
-                func.date(Transaction.date) == tx_date,
-                Transaction.amount >= abs(tx_out.amount) * 0.99,
-                Transaction.amount <= abs(tx_out.amount) * 1.01
-            ).first()
+        # Get unique months
+        months = set()
+        amounts = []
+        days = []
 
-            if matching_in:
-                dest_account_id = matching_in.account_id
-                if dest_account_id not in transfers_by_dest:
-                    transfers_by_dest[dest_account_id] = []
-                transfers_by_dest[dest_account_id].append({
-                    "amount": abs(tx_out.amount),
-                    "date": tx_date,
-                    "from_account_id": tx_out.account_id,
-                    "currency": tx_out.currency
-                })
+        for t in transfers:
+            month_tuple = (t["date"].year, t["date"].month)
+            months.add(month_tuple)
+            amounts.append(t["amount"])
+            days.append(t["date"].day)
 
-        # Analyze each destination account for recurring patterns
-        for dest_account_id, transfers in transfers_by_dest.items():
-            dest_account = db.query(Account).filter(Account.id == dest_account_id).first()
-            if not dest_account:
-                continue
+        # Check minimum occurrences
+        if len(months) < min_occurrences:
+            continue
 
-            # Get unique months
-            months = set()
-            amounts = []
-            days = []
+        # Check recent activity
+        has_recent_activity = bool(months & recent_months)
+        if not has_recent_activity:
+            continue
 
-            for t in transfers:
-                month_tuple = (t["date"].year, t["date"].month)
-                months.add(month_tuple)
-                amounts.append(t["amount"])
-                days.append(t["date"].day)
+        # Check amount consistency
+        avg_amount = sum(amounts) / len(amounts)
+        max_diff = max(abs(a - avg_amount) for a in amounts)
+        variance = max_diff / avg_amount if avg_amount > 0 else 1
 
-            # Check minimum occurrences
-            if len(months) < min_occurrences:
-                continue
+        if variance > max_variance:
+            continue
 
-            # Check recent activity
-            has_recent_activity = bool(months & recent_months)
-            if not has_recent_activity:
-                continue
+        # Calculate average day
+        avg_day = round(sum(days) / len(days))
 
-            # Check amount consistency
-            avg_amount = sum(amounts) / len(amounts)
-            max_diff = max(abs(a - avg_amount) for a in amounts)
-            variance = max_diff / avg_amount if avg_amount > 0 else 1
+        # Use the most common currency
+        currency = transfers[0]["currency"] if transfers else "GBP"
 
-            if variance > max_variance:
-                continue
-
-            # Calculate average day
-            avg_day = round(sum(days) / len(days))
-
-            # Use the most common currency
-            currency = transfers[0]["currency"] if transfers else "GBP"
-
-            candidates.append({
-                "payee_id": None,  # No payee for transfers
-                "payee_name": f"Transfer to {dest_account.name}",
-                "suggested_name": dest_account.name,
-                "average_amount": round(avg_amount, 2),
-                "currency": currency,
-                "occurrences": len(months),
-                "average_day": avg_day,
-                "category_id": None,
-                "category_name": "Transfer / Debt Payment",
-                "variance_percent": round(variance * 100, 1),
-                "is_transfer": True,
-                "destination_account_id": dest_account_id,
-                "destination_account_name": dest_account.name
-            })
+        candidates.append({
+            "payee_id": None,  # No payee for transfers
+            "payee_name": f"Transfer to {dest_account.name}",
+            "suggested_name": dest_account.name,
+            "average_amount": round(avg_amount, 2),
+            "currency": currency,
+            "occurrences": len(months),
+            "average_day": avg_day,
+            "category_id": None,
+            "category_name": "Transfer / Debt Payment",
+            "variance_percent": round(variance * 100, 1),
+            "is_transfer": True,
+            "destination_account_id": dest_account_id,
+            "destination_account_name": dest_account.name
+        })
 
     # Sort by occurrences (most frequent first)
     candidates.sort(key=lambda x: (-x["occurrences"], -x["average_amount"]))

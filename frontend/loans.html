@@ -987,7 +987,10 @@
         return transactions.map(t => {
             const dateObj = new Date(t.date);
             const isInterest = INTEREST_PATTERN.test(t.category_name || '');
-            const isTransfer = t.location_name?.includes('Transfer');
+            // A leg of a transfer is a row that shares an id with another; the
+            // labels below say which way it went. This used to sniff the name of
+            // the location the leg was filed under.
+            const isTransfer = t.transfer_group_id != null;
             
             // Determine transaction type and styling
             let type, typeClass, amountClass;

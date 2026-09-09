@@ -100,6 +100,14 @@ class Transaction(Base):
     # anything about splits. NULL on a plain single-line transaction.
     split_group_id = Column(Integer, nullable=True, index=True)
 
+    # The two legs of a transfer, both carrying the id of the first leg. The legs
+    # stay ordinary transactions -- that is what keeps balances and per-account
+    # reports right without either of them knowing what a transfer is -- but which
+    # leg belongs to which is now recorded here instead of being worked out from
+    # the date and the amount every time a list is drawn. NULL on anything that is
+    # not a transfer, and on a leg whose partner cannot be found.
+    transfer_group_id = Column(Integer, nullable=True, index=True)
+
     account_balance_after = Column(Float, nullable=True, index=True)
     total_balance_after = Column(Float, nullable=True, index=True)
     
@@ -132,6 +140,9 @@ class Transaction(Base):
 
         # Fetching the lines of a split, in entry order
         Index('idx_transaction_split_group', 'split_group_id', 'id'),
+
+        # Fetching both legs of a transfer
+        Index('idx_transaction_transfer_group', 'transfer_group_id', 'id'),
     )
 
 
