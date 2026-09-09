@@ -150,6 +150,22 @@
         .item-actions button.merge:hover { color:var(--ink); }
         .item-actions button.danger { color:var(--danger); }
         .item-actions button.danger:hover { color:#8A2D1C; }
+        /* Marks instead of words. The category list is the long one on this page --
+           nested, and every line ending in the same two verbs -- so the words were
+           mostly repetition, and the width they took pushed the names about. The
+           hover target grows into a soft square, which is what says these are still
+           buttons once the underline is gone. */
+        .item-actions.icons { gap:2px; }
+        .item-actions.icons button { width:26px; height:26px; border-radius:6px;
+            display:flex; align-items:center; justify-content:center; color:var(--muted); }
+        .item-actions.icons button:hover { background:var(--field) !important;
+            text-decoration:none; color:var(--ink); }
+        .item-actions.icons button.danger { color:var(--danger); opacity:.75; }
+        .item-actions.icons button.danger:hover { opacity:1; background:#FBEDE9 !important; }
+        .item-actions.icons svg { width:15px; height:15px; fill:none; stroke:currentColor;
+            stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+        /* With the actions no taller than the name, the row can close up. */
+        .item-row.compact { padding:5px 0; }
 
         /* ── Forms ── */
         .form-group { margin-bottom:18px; padding:0 24px; }
@@ -238,6 +254,17 @@
         .map-field { flex:1; min-width:130px; }
         .hint-touch { display:none; }
 
+        /* The other categories this payee has been filed under. Only the ones not
+           already chosen: what is chosen is in the two selects directly above, and
+           on a sheet of two hundred lines every word repeated is a word in the way.
+           Smaller than the same marks in the transaction modal for the same reason. */
+        .cat-hints { display:flex; flex-wrap:wrap; gap:3px; margin-top:4px; }
+        .cat-hints button { font-family:'IBM Plex Sans',sans-serif; font-size:10.5px;
+            line-height:1.2; padding:3px 7px; border-radius:999px; cursor:pointer;
+            border:1px solid var(--field); background:#fff; color:var(--muted); }
+        .cat-hints button:hover { border-color:var(--btn-primary); color:var(--ink); }
+        .cat-hints button .hint-count { margin-left:4px; opacity:.7; }
+
         /* ── Splitting a statement line into several concepts ── */
         .split-toggle { margin-top:4px; padding:3px 8px; font-size:10px; font-weight:700; letter-spacing:.5px;
             text-transform:uppercase; font-family:'IBM Plex Sans',sans-serif; border:1px solid var(--border);
@@ -302,6 +329,14 @@
             .item-list { padding:12px 16px; }
             .item-row { grid-template-columns:1fr; padding:12px 0; }
             .item-actions { justify-content:flex-start; gap:18px; }
+            /* The global 44px minimum applies to these too; matching the width
+               keeps them square rather than tall and thin. */
+            .item-actions.icons { gap:6px; justify-content:flex-end; }
+            .item-actions.icons button { width:44px; }
+            /* Two marks sit beside a name at any width, so this row keeps its two
+               columns. Stacking them cost a whole line and left the row taller
+               than the words it replaced -- the opposite of the point. */
+            .item-row.compact { grid-template-columns:1fr auto; padding:4px 0; }
             .form-group { padding:0 16px; }
             .search-box { padding:14px 16px 0; }
             .import-table-container { overflow-x:auto; -webkit-overflow-scrolling:touch; }
@@ -1444,6 +1479,22 @@
         }
         
         // Display functions
+        // Drawn on the 24-unit grid and in the stroke weight the rest of the app
+        // uses, so they sit beside the header icons as one family. `aria-hidden`
+        // because the button carries the label these stand in for.
+        const ICON_EDIT = '<svg viewBox="0 0 24 24" aria-hidden="true">'
+            + '<path d="M12 20h9"/>'
+            + '<path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
+        const ICON_DELETE = '<svg viewBox="0 0 24 24" aria-hidden="true">'
+            + '<path d="M3 6h18"/>'
+            + '<path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/>'
+            + '<path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>';
+        // Two heads driven at each other: what merging does, and legible at fifteen
+        // pixels in a way a branching git-merge mark is not.
+        const ICON_MERGE = '<svg viewBox="0 0 24 24" aria-hidden="true">'
+            + '<path d="M2 12h8.5"/><path d="M7 8.5 10.5 12 7 15.5"/>'
+            + '<path d="M22 12h-8.5"/><path d="M17 8.5 13.5 12 17 15.5"/></svg>';
+
         function displayCategories(filtered = null) {
             const categories = filtered || allCategories;
             const list = document.getElementById('categoriesList');
@@ -1470,13 +1521,13 @@
                     subcategories.forEach((cat, index) => {
                         const connector = index === subcategories.length - 1 ? '└─' : '├─';
                         html += `
-                            <div class="item-row" style="margin-left:16px;">
+                            <div class="item-row compact" style="margin-left:16px;">
                                 <div class="item-info">
                                     <div class="item-name"><span style="color:var(--muted); margin-right:8px;">${connector}</span>${cat.name}</div>
                                 </div>
-                                <div class="item-actions">
-                                    <button onclick="editItem('category', ${cat.id})">Edit</button>
-                                    <button class="danger" onclick="deleteCategory(${cat.id}, '${cat.name.replace(/'/g, "\\'")}', '${(cat.parent || '').replace(/'/g, "\\'")}')">Delete</button>
+                                <div class="item-actions icons">
+                                    <button title="Edit ${csvEsc(cat.name)}" aria-label="Edit ${csvEsc(cat.name)}" onclick="editItem('category', ${cat.id})">${ICON_EDIT}</button>
+                                    <button class="danger" title="Delete ${csvEsc(cat.name)}" aria-label="Delete ${csvEsc(cat.name)}" onclick="deleteCategory(${cat.id}, '${cat.name.replace(/'/g, "\\'")}', '${(cat.parent || '').replace(/'/g, "\\'")}')">${ICON_DELETE}</button>
                                 </div>
                             </div>`;
                     });
@@ -1485,14 +1536,14 @@
                     const standaloneCategory = standaloneParents.find(c => c.name === parent);
                     html += `
                         <div style="margin-bottom:26px;">
-                            <div class="item-row">
+                            <div class="item-row compact">
                                 <div class="item-info">
                                     <div class="item-name">${parent}</div>
                                     <div class="item-meta">Parent category · no subcategories</div>
                                 </div>
-                                <div class="item-actions">
-                                    <button onclick="editItem('category', ${standaloneCategory.id})">Edit</button>
-                                    <button class="danger" onclick="deleteCategory(${standaloneCategory.id}, '${parent.replace(/'/g, "\\'")}', null)">Delete</button>
+                                <div class="item-actions icons">
+                                    <button title="Edit ${csvEsc(parent)}" aria-label="Edit ${csvEsc(parent)}" onclick="editItem('category', ${standaloneCategory.id})">${ICON_EDIT}</button>
+                                    <button class="danger" title="Delete ${csvEsc(parent)}" aria-label="Delete ${csvEsc(parent)}" onclick="deleteCategory(${standaloneCategory.id}, '${parent.replace(/'/g, "\\'")}', null)">${ICON_DELETE}</button>
                                 </div>
                             </div>
                         </div>`;
@@ -1539,15 +1590,15 @@
                 const meta = `${count} transaction${count === 1 ? '' : 's'}`
                     + (cats.length ? ` · ${cats.join(' · ')}` : '');
                 return `
-                <div class="item-row">
+                <div class="item-row compact">
                     <div class="item-info">
                         <div class="item-name">${csvEsc(payee.name)}</div>
                         <div class="item-meta">${meta}</div>
                     </div>
-                    <div class="item-actions">
-                        <button onclick="editItem('payee', ${payee.id})">Edit</button>
-                        <button class="merge" onclick="mergePayee(${payee.id})">Merge</button>
-                        <button class="danger" onclick="deletePayee(${payee.id})">Delete</button>
+                    <div class="item-actions icons">
+                        <button title="Edit ${csvEsc(payee.name)}" aria-label="Edit ${csvEsc(payee.name)}" onclick="editItem('payee', ${payee.id})">${ICON_EDIT}</button>
+                        <button class="merge" title="Merge ${csvEsc(payee.name)} into another payee" aria-label="Merge ${csvEsc(payee.name)} into another payee" onclick="mergePayee(${payee.id})">${ICON_MERGE}</button>
+                        <button class="danger" title="Delete ${csvEsc(payee.name)}" aria-label="Delete ${csvEsc(payee.name)}" onclick="deletePayee(${payee.id})">${ICON_DELETE}</button>
                     </div>
                 </div>`;
             }).join('');
@@ -1618,15 +1669,15 @@
             list.innerHTML = locations.map(loc => {
                 const count = loc.transaction_count ?? 0;
                 return `
-                <div class="item-row">
+                <div class="item-row compact">
                     <div class="item-info">
                         <div class="item-name">${csvEsc(loc.name)}</div>
                         <div class="item-meta">${count} transaction${count === 1 ? '' : 's'}</div>
                     </div>
-                    <div class="item-actions">
-                        <button onclick="editItem('location', ${loc.id})">Edit</button>
-                        <button class="merge" onclick="mergeEntity('location', ${loc.id})">Merge</button>
-                        <button class="danger" onclick="deleteEntity('location', ${loc.id})">Delete</button>
+                    <div class="item-actions icons">
+                        <button title="Edit ${csvEsc(loc.name)}" aria-label="Edit ${csvEsc(loc.name)}" onclick="editItem('location', ${loc.id})">${ICON_EDIT}</button>
+                        <button class="merge" title="Merge ${csvEsc(loc.name)} into another location" aria-label="Merge ${csvEsc(loc.name)} into another location" onclick="mergeEntity('location', ${loc.id})">${ICON_MERGE}</button>
+                        <button class="danger" title="Delete ${csvEsc(loc.name)}" aria-label="Delete ${csvEsc(loc.name)}" onclick="deleteEntity('location', ${loc.id})">${ICON_DELETE}</button>
                     </div>
                 </div>`;
             }).join('');
@@ -1639,15 +1690,15 @@
             list.innerHTML = projects.map(proj => {
                 const count = proj.transaction_count ?? 0;
                 return `
-                <div class="item-row">
+                <div class="item-row compact">
                     <div class="item-info">
                         <div class="item-name">${csvEsc(proj.name)}</div>
                         <div class="item-meta">${count} transaction${count === 1 ? '' : 's'}</div>
                     </div>
-                    <div class="item-actions">
-                        <button onclick="editItem('project', ${proj.id})">Edit</button>
-                        <button class="merge" onclick="mergeEntity('project', ${proj.id})">Merge</button>
-                        <button class="danger" onclick="deleteEntity('project', ${proj.id})">Delete</button>
+                    <div class="item-actions icons">
+                        <button title="Edit ${csvEsc(proj.name)}" aria-label="Edit ${csvEsc(proj.name)}" onclick="editItem('project', ${proj.id})">${ICON_EDIT}</button>
+                        <button class="merge" title="Merge ${csvEsc(proj.name)} into another project" aria-label="Merge ${csvEsc(proj.name)} into another project" onclick="mergeEntity('project', ${proj.id})">${ICON_MERGE}</button>
+                        <button class="danger" title="Delete ${csvEsc(proj.name)}" aria-label="Delete ${csvEsc(proj.name)}" onclick="deleteEntity('project', ${proj.id})">${ICON_DELETE}</button>
                     </div>
                 </div>`;
             }).join('');
@@ -2995,6 +3046,7 @@
                                 <option value="">Subcategory...</option>
                             </select>
                         </div>
+                        <div class="cat-hints" id="catHints_${index}" hidden></div>
                         <div class="split-summary" id="splitSummary_${index}"></div>
                         <button type="button" class="split-toggle" id="splitBtn_${index}"
                                 onclick="toggleRowSplit(${index})"
@@ -3113,6 +3165,10 @@
 
             document.getElementById(`splitRow_${index}`).style.display = on ? '' : 'none';
             document.getElementById(`catCell_${index}`).style.display = on ? 'none' : '';
+            // While the line is spread over several categories the row's own is not
+            // in play, so neither are its suggestions.
+            const hints = document.getElementById(`catHints_${index}`);
+            if (hints) hints.style.display = on ? 'none' : '';
             document.getElementById(`locProjCell_${index}`).style.display = on ? 'none' : '';
             document.getElementById(`noteCell_${index}`).style.display = on ? 'none' : '';
             // On a phone each cell prints its own label, so an emptied cell has to
@@ -3327,6 +3383,8 @@
                     applyRowSplitState(index);
                 }
                 if (splitButton) splitButton.disabled = true;
+                // Nothing to file a transfer under, so nothing to suggest.
+                clearRowCategoryHints(index);
 
             } else {
                 if(payeeContainer) payeeContainer.style.display = 'flex';
@@ -3335,6 +3393,11 @@
                 locationSelect.disabled = false;
                 projectSelect.disabled = false;
                 if (splitButton) splitButton.disabled = false;
+                // Back to a transaction: offer them again, against whatever category
+                // the row is carrying rather than filling one in afresh.
+                const named = (document.getElementById(`payee_${index}`) || {}).value;
+                const known = named && allPayees.find(p => p.name.toLowerCase() === named.trim().toLowerCase());
+                if (known) showRowCategoryHints(index, known, parsedTransactions[index].category_id || null);
 
                 parsedTransactions[index].type = 'transaction';
                 
@@ -3437,7 +3500,7 @@
             const payeeInput = document.getElementById(`payee_${index}`);
             const payeeName = payeeInput.value.trim();
             
-            if (!payeeName) return;
+            if (!payeeName) { clearRowCategoryHints(index); return; }
             
             // Find payee
             let payee = allPayees.find(p => p.name.toLowerCase() === payeeName.toLowerCase());
@@ -3458,24 +3521,68 @@
                 }
             } else {
                 parsedTransactions[index].payee_id = null;
+                clearRowCategoryHints(index);
             }
+        }
+
+        // Put a category pair into a row's two selects, and record it on the line.
+        function applyRowCategory(index, categoryId) {
+            const category = allCategories.find(c => c.id === categoryId);
+            if (!category || !category.parent) return false;
+            document.getElementById(`parentCategory_${index}`).value = category.parent;
+            // handleParentCategoryChange only reads what is already in memory, so the
+            // subcategory can be set on the next line rather than after a timer.
+            handleParentCategoryChange(index);
+            document.getElementById(`category_${index}`).value = String(categoryId);
+            parsedTransactions[index].category_id = categoryId;
+            return true;
+        }
+
+        function clearRowCategoryHints(index) {
+            const box = document.getElementById(`catHints_${index}`);
+            if (!box) return;
+            box.innerHTML = '';
+            box.hidden = true;
+        }
+
+        // The other pairs this payee has been filed under, most used first. The one
+        // already chosen is left out: it is showing in the selects just above, and a
+        // long sheet has no room for saying things twice.
+        function showRowCategoryHints(index, payee, appliedId) {
+            const box = document.getElementById(`catHints_${index}`);
+            if (!box) return;
+            const others = (payee.top_categories || []).filter(c =>
+                c.category_id && c.category_id !== appliedId && c.parent &&
+                allCategories.some(x => x.id === c.category_id));
+            if (!others.length) { clearRowCategoryHints(index); return; }
+
+            box.innerHTML = others.map(c =>
+                `<button type="button" data-cat="${c.category_id}"
+                    title="${c.count} transaction${c.count === 1 ? '' : 's'} filed under ${csvEsc(c.parent)} > ${csvEsc(c.name)}"
+                    >${csvEsc(c.name)}<span class="hint-count">${c.count}</span></button>`).join('');
+            box.querySelectorAll('button').forEach(btn => {
+                btn.onclick = () => {
+                    if (applyRowCategory(index, Number(btn.dataset.cat))) {
+                        // Chosen, so it is no longer an alternative; the one it
+                        // replaced becomes one.
+                        showRowCategoryHints(index, payee, Number(btn.dataset.cat));
+                    }
+                };
+            });
+            box.hidden = false;
         }
 
         // Auto-fill fields based on pre-calculated payee statistics
         function autoFillFromPayeeStats(index, payee) {
             try {
-                // Use the pre-calculated most common category
-                if (payee.most_common_category_id) {
-                    const category = allCategories.find(c => c.id === payee.most_common_category_id);
-                    if (category && category.parent) {
-                        document.getElementById(`parentCategory_${index}`).value = category.parent;
-                        handleParentCategoryChange(index);
-                        setTimeout(() => {
-                            document.getElementById(`category_${index}`).value = payee.most_common_category_id;
-                            parsedTransactions[index].category_id = payee.most_common_category_id;
-                        }, 50);
-                    }
+                // The most-used pair fills itself in, as before; the others are
+                // offered underneath, because a shop visited for two reasons has no
+                // single right answer and only this payee's history knows the rest.
+                let applied = null;
+                if (payee.most_common_category_id && applyRowCategory(index, payee.most_common_category_id)) {
+                    applied = payee.most_common_category_id;
                 }
+                showRowCategoryHints(index, payee, applied);
                 
                 // Use the pre-calculated most common location
                 if (payee.most_common_location_id) {

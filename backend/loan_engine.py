@@ -396,6 +396,12 @@ def summary(loan, today: Optional[date] = None) -> Dict:
     upcoming = [r for r in rows if date.fromisoformat(r["date"]) > today]
     total_interest = round(sum(r["interest"] for r in rows), 2)
     total_fees = round(sum(r["fee"] for r in rows), 2)
+    # Everything the contract will take out of the pocket through this account,
+    # capital and interest and standing charges together. An opening fee paid up
+    # front is not in it -- it leaves another account, and never appears among the
+    # repayments this is measured against. A capitalised one is, having been
+    # borrowed and amortised with the rest.
+    total_cost = round(sum(r["outflow"] for r in rows), 2)
 
     # What it would take to be rid of the loan today: the capital still owed,
     # plus the lender's charge for ending it before the term.
@@ -413,6 +419,7 @@ def summary(loan, today: Optional[date] = None) -> Dict:
         # Where the capital should stand today if every instalment was paid on time.
         "expected_balance": expected_balance,
         "total_interest": total_interest,
+        "total_cost": total_cost,
         "interest_paid": round(sum(r["interest"] for r in paid), 2),
         "interest_remaining": round(sum(r["interest"] for r in upcoming), 2),
         "opening_fee": opening_fee(loan),

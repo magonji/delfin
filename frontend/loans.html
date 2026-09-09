@@ -715,10 +715,29 @@
             // Credit cards: ratio of current debt to max historical debt
             const currentDebt = Math.max(0, -(debt.current_balance || 0));
             progress = debt.max_debt > 0 ? (currentDebt / debt.max_debt) * 100 : 0;
+        } else if (isCompleted) {
+            // The debt is gone, however much of the interest was saved by getting
+            // there early. Measured against the full cost a settled loan would
+            // read short of the end, which is arithmetic rather than sense.
+            progress = 100;
         } else {
-            // Loans: repayment progress
-            const totalLiability = debt.borrowed + debt.interest;
-            progress = totalLiability > 0 ? (debt.repaid / totalLiability) * 100 : 0;
+            // Loans: paid against what the loan will cost in total -- capital,
+            // interest and standing charges, all of it, from the agreed schedule.
+            //
+            // This used to be measured against capital plus the interest charged
+            // so far, which flatters badly early on: the future interest is left
+            // out of the denominator while the payments covering it are counted in
+            // the numerator. A year into a 25-year mortgage that read 6.3% against
+            // a true 4.0%.
+            const totalCost = debt.schedule && debt.schedule.total_cost;
+            if (totalCost > 0) {
+                progress = (debt.repaid / totalCost) * 100;
+            } else {
+                // No agreed terms, so what it will cost in the end is not known.
+                // What has been charged so far is the only yardstick there is.
+                const totalLiability = debt.borrowed + debt.interest;
+                progress = totalLiability > 0 ? (debt.repaid / totalLiability) * 100 : 0;
+            }
         }
 
         // -------------------------------------------------------------------------

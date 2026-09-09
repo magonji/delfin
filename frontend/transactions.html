@@ -135,6 +135,23 @@
         #filters .filter-actions button:first-child { background: #E0BE94; color: var(--ink); border-color: #E0BE94; }
         #filterToggle { display: none; }
 
+        /* What this payee is usually filed under. The most-used pair is filled in
+           already, as it always was; these say what the other common answers were,
+           because a shop you visit for two different reasons has no single right
+           one, and remembering which is which is the part that is actually hard. */
+        .cat-hints { display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+            margin: -6px 0 14px; }
+        .cat-hints .hint-lead { font-family: 'IBM Plex Sans', sans-serif; font-size: 11px;
+            text-transform: uppercase; letter-spacing: .8px; color: var(--muted); margin-right: 2px; }
+        .cat-hints button { font-family: 'IBM Plex Sans', sans-serif; font-size: 12px;
+            padding: 5px 11px; border-radius: 999px; cursor: pointer;
+            border: 1px solid var(--field); background: var(--paper); color: var(--text); }
+        .cat-hints button:hover { border-color: var(--btn-primary); color: var(--ink); }
+        .cat-hints button .hint-count { color: var(--muted); margin-left: 5px; }
+        .cat-hints button.is-on { background: var(--field); border-color: var(--btn-primary);
+            color: var(--ink); font-weight: 600; }
+        .cat-hints button.is-on .hint-count { color: var(--text); }
+
         /* Bulk edit mode controls */
         .bulk-controls { display: flex; align-items: center; gap: 5px; padding-left: 10px; border-left: 1px solid var(--border); margin-left: 2px; flex: 0 0 auto; }
         .bulk-actions-inline { display: flex; gap: 5px; max-width: 0; overflow: hidden; opacity: 0; transition: max-width 0.3s ease, opacity 0.3s ease; }
@@ -1080,6 +1097,7 @@
                         <div class="form-group"><label>Parent Category</label><select id="parentCategory"><option value="">Select...</option></select></div>
                         <div class="form-group"><label>Subcategory</label><select id="category" disabled><option value="">Select parent...</option></select></div>
                     </div>
+                    <div id="payeeCategoryHints" class="cat-hints" hidden></div>
                     <div class="form-row">
                         <div class="form-group"><label>Account</label><select id="account" required><option value="">Select...</option></select></div>
                         <div class="form-group"><label>Location</label><select id="location"><option value="">Select...</option></select></div>
@@ -2499,6 +2517,7 @@
                 { id: null, amount: null, parent: null, category_id: null, project_id: null, note: '' },
             ];
             document.getElementById('singleCategoryRow').style.display = 'none';
+            clearPayeeCategoryHints();
             document.getElementById('singleTailFields').style.display = 'none';
             document.getElementById('splitEditor').style.display = '';
             document.getElementById('splitToggleBtn').textContent = 'Back to a single line';
@@ -2833,6 +2852,7 @@
             colorAmountInput(document.getElementById('amount'));
             updateAmountSignToggle();
             document.getElementById('payee').value = '';
+            clearPayeeCategoryHints();
             document.getElementById('parentCategory').value = '';
             document.getElementById('category').value = '';
             document.getElementById('category').disabled = true;
@@ -3447,9 +3467,60 @@
         }
 
         // Payee autofill
+        // Put a category pair into the two selects. The parent list keys a
+        // category with no parent of its own under its own name, so this reads the
+        // same way for both shapes.
+        function applyCategoryPair(categoryId) {
+            const category = allCategories.find(c => c.id === categoryId);
+            if (!category) return false;
+            const parentSelect = document.getElementById('parentCategory');
+            const parentName = category.parent || category.name;
+            const option = Array.from(parentSelect.options).find(o => o.value === parentName);
+            if (!option) return false;
+            parentSelect.value = parentName;
+            // loadSubcategories only reads what is already in memory, so the
+            // subcategory can be set on the next line rather than after a timer.
+            loadSubcategories(parentName);
+            document.getElementById('category').value = category.parent ? String(categoryId) : '';
+            return true;
+        }
+
+        function clearPayeeCategoryHints() {
+            const box = document.getElementById('payeeCategoryHints');
+            box.innerHTML = '';
+            box.hidden = true;
+        }
+
+        // The pairs this payee has been filed under before, most used first. Only
+        // worth drawing when there is a choice to make: with one answer the field
+        // already says it.
+        function showPayeeCategoryHints(payee, appliedId) {
+            const box = document.getElementById('payeeCategoryHints');
+            const options = (payee.top_categories || [])
+                .filter(c => c.category_id && allCategories.some(x => x.id === c.category_id));
+            if (options.length < 2) { clearPayeeCategoryHints(); return; }
+
+            box.innerHTML = '<span class="hint-lead">Usually</span>' + options.map(c => {
+                const label = c.parent ? `${escapeHtml(c.parent)} › ${escapeHtml(c.name)}`
+                                       : escapeHtml(c.name || '');
+                return `<button type="button" data-category-id="${c.category_id}"
+                    class="${c.category_id === appliedId ? 'is-on' : ''}"
+                    title="${c.count} transaction${c.count === 1 ? '' : 's'} filed here">${label}<span class="hint-count">${c.count}</span></button>`;
+            }).join('');
+
+            box.querySelectorAll('button').forEach(btn => {
+                btn.onclick = () => {
+                    const id = Number(btn.dataset.categoryId);
+                    if (!applyCategoryPair(id)) return;
+                    box.querySelectorAll('button').forEach(b => b.classList.toggle('is-on', b === btn));
+                };
+            });
+            box.hidden = false;
+        }
+
         async function handlePayeeBlur() {
             const payeeName = document.getElementById('payee').value.trim();
-            if (!payeeName) return;
+            if (!payeeName) { clearPayeeCategoryHints(); return; }
             
             if (document.getElementById('transactionForm').dataset.editingId) return;
             
@@ -3457,31 +3528,19 @@
                 p.name.toLowerCase() === payeeName.toLowerCase()
             );
             
-            if (!payee) return;
+            if (!payee) { clearPayeeCategoryHints(); return; }
             
             try {
-                if (payee.most_common_category_id) {
-                    const category = allCategories.find(c => c.id === payee.most_common_category_id);
-                    if (category) {
-                        const parentCategorySelect = document.getElementById('parentCategory');
-                        if (!parentCategorySelect.value && category.parent) {
-                            const parentOption = Array.from(parentCategorySelect.options).find(
-                                opt => opt.textContent === category.parent
-                            );
-                            if (parentOption) {
-                                parentCategorySelect.value = parentOption.value;
-                                parentCategorySelect.dispatchEvent(new Event('change'));
-                                
-                                setTimeout(() => {
-                                    const categorySelect = document.getElementById('category');
-                                    if (!categorySelect.value) {
-                                        categorySelect.value = payee.most_common_category_id;
-                                    }
-                                }, 50);
-                            }
-                        }
+                // The most-used pair still fills itself in, and still only into an
+                // empty field: a category you chose yourself is not a guess to be
+                // overruled.
+                let applied = null;
+                if (payee.most_common_category_id && !document.getElementById('parentCategory').value) {
+                    if (applyCategoryPair(payee.most_common_category_id)) {
+                        applied = payee.most_common_category_id;
                     }
                 }
+                showPayeeCategoryHints(payee, applied);
                 
                 if (payee.most_common_location_id) {
                     const locationSelect = document.getElementById('location');
@@ -3543,6 +3602,7 @@
             openModal('transactionModal');
             setModalMode('transactionModal', false);
             exitSplitMode();
+            clearPayeeCategoryHints();
             const now = new Date();
             const dateStr = now.toISOString().split('T')[0];
             const timeStr = now.toTimeString().split(' ')[0].substring(0,5);
