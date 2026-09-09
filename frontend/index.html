@@ -82,6 +82,22 @@
         .head-row { display: flex; align-items: center; justify-content: space-between; gap: 12px;
             padding: 0 0 16px; border-bottom: 1px solid var(--hair); margin-bottom: 20px; flex-wrap: wrap; }
         .sec-title { font-family: 'Playfair Display', serif; font-size: 25px; font-weight: 800; padding-left: 15px; border-left: 3px solid var(--red); }
+        /* Shown only before there is anything to draw. A first visit is a screen of
+           zeroes and empty charts otherwise, which reads as a fault rather than as
+           a beginning, and says nothing about what to do about it. */
+        .empty-state { padding: 40px 20px 44px; text-align: center; max-width: 560px; margin: 0 auto; }
+        .empty-state h2 { margin: 0 0 14px; font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 800; }
+        .empty-state p { margin: 0 0 10px; font-size: 14px; line-height: 1.6; color: var(--muted); }
+        .empty-state a { color: var(--accent); font-weight: 600; }
+        /* Which half of the page is in play. Hiding the first-run block with
+           `display:none` was not enough on its own: it stays the first child, so
+           the rule above kept its top border off and handed one to the KPI band,
+           which then floated under a rule belonging to nothing. */
+        /* Until the accounts have been read there is no answer, so the page waits
+           rather than flashing an invitation at someone who has years of data. */
+        .content:not(.first-run) > #firstRun { display: none; }
+        .content.has-data > #firstRun + * { border-top: none; padding-top: 0; margin-top: 0; }
+        .content.first-run > *:not(#firstRun) { display: none; }
         .tools { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 
         /* ── Controls (chips) ── */
@@ -324,6 +340,20 @@
     </header>
 
     <div class="content">
+
+        <!-- Before the first account there is nothing to total, chart or compare.
+             Everything below stays in the document and is simply hidden, so it
+             comes back the moment there is something in it. -->
+        <section id="firstRun">
+            <div class="empty-state">
+                <h2>Nothing to show yet</h2>
+                <p>Delfin works from the accounts you keep money in — a current account,
+                   a card, cash. Add your first one and say what is in it now, and the
+                   balances and charts on this page start from there.</p>
+                <p>Open <a href="tools.html">Tools → Accounts</a> and press
+                   <strong>Add account</strong>.</p>
+            </div>
+        </section>
 
         <!-- KPI BAND -->
         <div class="kpi-grid">
@@ -877,6 +907,12 @@ async function loadAccounts() {
     let data = await fetchAccounts();
     state.accounts = data.sort((a, b) => (b.current_balance || 0) - (a.current_balance || 0));
     renderExcludeList();
+
+    // A dashboard with no accounts has nothing to say; one with accounts but no
+    // transactions still has balances worth showing, so the test is the accounts.
+    const content = document.querySelector('.content');
+    content.classList.toggle('first-run', state.accounts.length === 0);
+    content.classList.toggle('has-data', state.accounts.length > 0);
 
     const list = q('#accountsList');
     list.innerHTML = '';

@@ -161,7 +161,9 @@ def get_base_currency(db: Session) -> str:
     Currency used to display aggregated totals (dashboard, budgets, etc.).
 
     Honours the user's ``display_currency`` setting: a fixed supported code, or
-    "auto" to use the most commonly used currency across transactions.
+    "auto" to use the most commonly used currency across transactions -- falling
+    back to the accounts before sterling, so that someone who has entered their
+    accounts and not yet a single movement is not told their euros are pounds.
     """
     from backend import settings_store
 
@@ -175,7 +177,16 @@ def get_base_currency(db: Session) -> str:
     ).group_by(Transaction.currency).order_by(
         func.count(Transaction.id).desc()
     ).first()
-    return result[0] if result else "GBP"
+    if result:
+        return result[0]
+
+    by_account = db.query(
+        Account.currency,
+        func.count(Account.id).label('count')
+    ).filter(Account.currency.isnot(None)).group_by(Account.currency).order_by(
+        func.count(Account.id).desc()
+    ).first()
+    return by_account[0] if by_account else "GBP"
 
 
 def convert_to_base_currency(amount: float, currency: str, base_currency: str, rates: dict) -> float:
@@ -347,8 +358,16 @@ def recalculate_balances_from_transaction(
     )
 
     if prev_total_tx is None:
-        total_balance = 0.0
-    elif prev_total_tx.total_balance_after is not None:
+        # Nothing precedes the trigger, so this is the first transaction in the
+        # ledger and the whole column is about to be rewritten from it anyway --
+        # which is exactly what the one definition of the column does, opening
+        # balances and all. Seeding from zero instead is what made the very first
+        # transaction a brand new user entered report a total of minus its own
+        # amount, next to a dashboard showing the money they actually had.
+        rebuild_total_balances(db)
+        db.flush()
+        return
+    if prev_total_tx.total_balance_after is not None:
         total_balance = float(prev_total_tx.total_balance_after)
     else:
         # Same gap as above, and costlier left alone: this figure seeds the total
@@ -361,15 +380,20 @@ def recalculate_balances_from_transaction(
             Transaction.total_balance_after.isnot(None), before_trigger
         ).order_by(Transaction.date.desc(), Transaction.id.desc()).first()
 
-        gap = db.query(Transaction).filter(before_trigger)
         if anchor is None:
-            total_balance = 0.0
-        else:
-            total_balance = float(anchor.total_balance_after)
-            gap = gap.filter(
-                (Transaction.date > anchor.date) |
-                ((Transaction.date == anchor.date) & (Transaction.id > anchor.id))
-            )
+            # Every row before this one is deferred too, so there is no total to
+            # carry on from. Same answer as above: rewrite the column from its one
+            # definition rather than invent a base.
+            rebuild_total_balances(db)
+            db.flush()
+            return
+
+        total_balance = float(anchor.total_balance_after)
+        gap = db.query(Transaction).filter(
+            before_trigger,
+            (Transaction.date > anchor.date) |
+            ((Transaction.date == anchor.date) & (Transaction.id > anchor.id)),
+        )
         for row in gap.order_by(Transaction.date.asc(), Transaction.id.asc()).all():
             total_balance += convert_to_base_currency(
                 float(row.amount or 0.0), row.currency, base_currency, rates

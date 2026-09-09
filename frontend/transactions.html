@@ -152,6 +152,11 @@
             color: var(--ink); font-weight: 600; }
         .cat-hints button.is-on .hint-count { color: var(--text); }
 
+        .list-empty { text-align: center; padding: 34px 20px; color: var(--muted);
+            font-family: 'IBM Plex Sans', sans-serif; font-size: 15px; font-weight: 600; line-height: 1.5; }
+        .list-empty small { display: block; margin-top: 8px; font-size: 13px; font-weight: 400; }
+        .list-empty a { color: var(--accent); font-weight: 600; }
+
         /* Bulk edit mode controls */
         .bulk-controls { display: flex; align-items: center; gap: 5px; padding-left: 10px; border-left: 1px solid var(--border); margin-left: 2px; flex: 0 0 auto; }
         .bulk-actions-inline { display: flex; gap: 5px; max-width: 0; overflow: hidden; opacity: 0; transition: max-width 0.3s ease, opacity 0.3s ease; }
@@ -992,6 +997,11 @@
                         <label>Type</label>
                         <select id="newAccountType"></select>
                     </div>
+                    <div class="form-group">
+                        <label>Opening balance</label>
+                        <input type="number" id="newAccountInitialBalance" step="0.01" inputmode="decimal"
+                               placeholder="What is in it now — leave empty for zero">
+                    </div>
                     <div class="modal-footer">
                         <button class="btn-save" onclick="saveNewAccount()">Save</button>
                         <button class="btn-cancel" onclick="closeModal('newAccountModal')">Cancel</button>
@@ -1403,6 +1413,26 @@
             } catch (e) { console.error(e); } finally { isLoadingTransactions = false; }
         }
         
+        // What an empty list should say depends on why it is empty, and the three
+        // reasons want different answers: nowhere to record anything yet, nothing
+        // recorded yet, or a filter that happens to match nothing. Saying "No
+        // transactions" to all three left a first-time user staring at a page with
+        // no way in.
+        function emptyListMessage() {
+            if (filtersActive) {
+                return '<p class="list-empty">Nothing matches these filters'
+                     + '<br><small>Change them, or press Clear to see everything again.</small></p>';
+            }
+            if (allAccounts.length === 0) {
+                return '<p class="list-empty">Start with an account'
+                     + '<br><small>Add one under <a href="tools.html">Tools → Accounts</a>, saying what is'
+                     + ' in it now — every balance here follows from that.</small></p>';
+            }
+            return '<p class="list-empty">No transactions yet'
+                 + '<br><small>Press <strong>+</strong> below to record one, or bring in a bank statement'
+                 + ' from <a href="tools.html">Tools → Import</a>.</small></p>';
+        }
+
         function displayCombinedTransactionsNoScroll() {
             const combined = [
                 ...groupLedgerItems(regularTransactions),
@@ -1410,7 +1440,7 @@
             ].sort((a, b) => new Date(b.date) - new Date(a.date));
 
             document.getElementById('transactionsList').innerHTML = combined.map(ledgerItemHtml).join('')
-                || '<p style="text-align:center;padding:20px;color:#888">No transactions</p>';
+                || emptyListMessage();
         }
 
         function parseMoneyAmount(value) {
@@ -2136,7 +2166,7 @@
             ].sort((a, b) => new Date(b.date) - new Date(a.date));
 
             document.getElementById('transactionsList').innerHTML = combined.map(ledgerItemHtml).join('')
-                || '<p style="text-align:center;padding:20px;color:#888">No transactions</p>';
+                || emptyListMessage();
 
             if ((targetTransactionId || targetTransferId) && !isScrollingToTarget) {
                 setTimeout(() => scrollToTarget(), 50);
@@ -3698,6 +3728,7 @@
         // value sitting there ready to be accepted is a value nobody reads.
         function openNewAccountModal(){
             document.getElementById('newAccountName').value = '';
+            document.getElementById('newAccountInitialBalance').value = '';
             document.getElementById('newAccountType').innerHTML =
                 '<option value="">Select...</option>' + DelfinAccountTypes.options();
             // The currency list is filled once at start-up, before the base
@@ -3717,8 +3748,17 @@
             const t=document.getElementById('newAccountType').value;
             if(!n){ alert('The account needs a name'); return; }
             if(!t){ alert('Choose what kind of account this is'); return; }
-            const res=await fetch(`${API_URL}/accounts`,{method:'POST',body:JSON.stringify({name:n,currency:c,type:t,initial_balance:0}),headers:{'Content-Type':'application/json'}});
+            // What the account already holds, before anything Delfin knows about.
+            // Without it every balance in the app starts from zero and there is no
+            // way to say otherwise, which is what a new account almost always needs
+            // to say first.
+            const opening=document.getElementById('newAccountInitialBalance').value.trim();
+            const res=await fetch(`${API_URL}/accounts`,{method:'POST',
+                body:JSON.stringify({name:n,currency:c,type:t,
+                                     initial_balance: opening ? parseMoneyAmount(opening) : 0}),
+                headers:{'Content-Type':'application/json'}});
             if(!res.ok){ alert('Error saving the account'); return; }
+            document.getElementById('newAccountInitialBalance').value='';
             closeModal('newAccountModal'); loadAccounts();
         }
         

@@ -25,7 +25,8 @@ from backend.helpers import (
     rebuild_total_balances,
     get_rates_bulk,
     get_latest_rates,
-    get_base_currency
+    get_base_currency,
+    convert_to_base_currency
 )
 from backend import budget_engine
 from backend import loan_engine
@@ -365,6 +366,10 @@ def create_account(
     Create a new account.
     """
     db_account = models.Account(**account.dict())
+    # With nothing recorded against it yet, what the account holds is what it
+    # opened with. Leaving the running figure at zero made a new account read as
+    # empty on the dashboard until its first transaction.
+    db_account.current_balance = db_account.initial_balance or 0.0
     db.add(db_account)
     db.commit()
     db.refresh(db_account)
@@ -895,14 +900,25 @@ def update_account(
 ):
     """
     Update an existing account.
+
+    Changing what the account opened with moves every balance recorded after it,
+    so that is followed through rather than left for the next full rebuild to
+    notice: the figures on the ledger would otherwise disagree with the account
+    until something else happened to touch it.
     """
     db_account = db.query(models.Account).filter(models.Account.id == account_id).first()
     if not db_account:
         raise HTTPException(status_code=404, detail="Account not found")
 
+    opening_before = float(db_account.initial_balance or 0.0)
+
     # Update fields
     for key, value in account.dict().items():
         setattr(db_account, key, value)
+
+    db.flush()
+    if abs(float(db_account.initial_balance or 0.0) - opening_before) > 0.005:
+        recalculate_balances_for_accounts(db, [db_account.id])
 
     db.commit()
     db.refresh(db_account)
@@ -2556,14 +2572,24 @@ def get_networth_evolution(
     transactions = query.order_by(Transaction.date).all()
 
     if not transactions:
+        # No movements yet, but the accounts still hold what they opened with, and
+        # that is the whole of someone's net worth on their first day. Reporting a
+        # flat zero here contradicted the account list beside it, which counts them.
+        base_currency = get_base_currency(db)
+        rates = get_latest_rates(db)
+        opening = round(sum(
+            convert_to_base_currency(float(a.initial_balance or 0.0), a.currency,
+                                     base_currency, rates)
+            for a in db.query(models.Account).filter(models.Account.is_active == 1).all()
+        ), 2)
         return {
             "data_points": [],
             "summary": {
-                "initial_balance": 0, "current_balance": 0, "total_change": 0,
-                "percentage_change": 0, "peak_balance": 0, "peak_date": None,
-                "lowest_balance": 0, "lowest_date": None
+                "initial_balance": opening, "current_balance": opening, "total_change": 0,
+                "percentage_change": 0, "peak_balance": opening, "peak_date": None,
+                "lowest_balance": opening, "lowest_date": None
             },
-            "base_currency": get_base_currency(db)
+            "base_currency": base_currency
         }
 
     # Determine date range for exchange rates

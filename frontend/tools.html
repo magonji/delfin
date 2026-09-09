@@ -169,6 +169,9 @@
 
         /* ── Forms ── */
         .form-group { margin-bottom:18px; padding:0 24px; }
+        /* A line under a field, for the consequence a label has no room to carry. */
+        .form-hint { margin-top:6px; font-family:'IBM Plex Sans',sans-serif; font-size:12px;
+            line-height:1.4; color:var(--muted); }
         label { display:block; margin-bottom:7px; font-weight:600; font-size:11px; letter-spacing:1px;
             text-transform:uppercase; color:var(--muted); font-family:'IBM Plex Sans',sans-serif; }
         input, select, textarea { width:100%; padding:11px 12px; border:1px solid var(--field);
@@ -553,11 +556,37 @@
     <div id="accountsModal" class="modal">
         <div class="modal-content">
             <div class="modal-header"><h3>Manage Accounts</h3><button class="close-btn" onclick="closeModal('accountsModal')">&times;</button></div>
+            <div style="padding: 10px 25px;"><button onclick="openNewAccount()" style="width: 100%;">Add account</button></div>
             <div class="search-box"><input type="text" id="accountSearch" placeholder="Search accounts..." onkeyup="filterAccounts()"></div>
             <div class="item-list" id="accountsList"></div>
         </div>
     </div>
     
+    <!-- Opening an account belongs with the list of them. It used to be possible
+         only from the Account picker of the transaction modal, which is a strange
+         place to keep the front door. -->
+    <div id="newAccountModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header"><h3>Add Account</h3><button class="close-btn" onclick="closeModal('newAccountModal')">&times;</button></div>
+            <div class="form-group"><label>Name</label><input type="text" id="newAccName" placeholder="Current account, Visa, Cash…"></div>
+            <div class="form-group"><label>Currency</label><select id="newAccCurrency"></select></div>
+            <div class="form-group"><label>Type</label><select id="newAccType"></select></div>
+            <div class="form-group">
+                <label>Opening balance</label>
+                <input type="number" id="newAccOpening" step="0.01" inputmode="decimal" placeholder="What is in it now">
+                <div class="form-hint">What the account holds before anything Delfin knows about. Leave it empty for zero.</div>
+            </div>
+            <div class="form-group" id="newAccLimitGroup" style="display: none;">
+                <label>Credit limit</label>
+                <input type="number" id="newAccLimit" step="0.01" min="0" inputmode="decimal" placeholder="Leave empty if there is none">
+            </div>
+            <div style="display: flex; gap: 10px; padding: 0 25px 4px;">
+                <button onclick="createAccount()" style="flex: 1;">Create</button>
+                <button onclick="closeModal('newAccountModal')" class="secondary" style="flex: 1;">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <div id="payeesModal" class="modal">
         <div class="modal-content">
             <div class="modal-header"><h3>Manage Payees</h3><button class="close-btn" onclick="closeModal('payeesModal')">&times;</button></div>
@@ -595,6 +624,11 @@
                 <div class="form-group" id="editTypeGroup" style="display: none;">
                     <label>Type</label>
                     <select id="editType"></select>
+                </div>
+                <div class="form-group" id="editOpeningGroup" style="display: none;">
+                    <label>Opening balance</label>
+                    <input type="number" id="editOpeningBalance" step="0.01" inputmode="decimal">
+                    <div class="form-hint">What the account held before its first recorded transaction. Changing it moves every balance after it.</div>
                 </div>
                 <div class="form-group" id="editLimitGroup" style="display: none;">
                     <label>Credit limit</label>
@@ -1369,6 +1403,15 @@
         }
    
         // Close modal
+        // The counterpart of closeModal, which this page has always had while three
+        // callers of this one -- the "Add new..." entries of the import preview's
+        // category, subcategory and location pickers -- had nothing to call. They
+        // threw a ReferenceError and the dialog never appeared. Modals here are
+        // shown by display rather than by a class, so it matches closeModal.
+        function openModal(modalId) {
+            document.getElementById(modalId).style.display = 'block';
+        }
+
         function closeModal(modalId) {
             document.getElementById(modalId).style.display = 'none';
         }
@@ -1863,6 +1906,52 @@
                 BORROWING_TYPES.includes(canonical) ? 'block' : 'none';
         }
 
+        async function openNewAccount() {
+            document.getElementById('newAccName').value = '';
+            document.getElementById('newAccOpening').value = '';
+            document.getElementById('newAccLimit').value = '';
+            document.getElementById('newAccType').innerHTML =
+                '<option value="">Select...</option>' + DelfinAccountTypes.options();
+            document.getElementById('newAccLimitGroup').style.display = 'none';
+            document.getElementById('newAccType').onchange = (e) => {
+                document.getElementById('newAccLimitGroup').style.display =
+                    BORROWING_TYPES.includes(DelfinAccountTypes.canonical(e.target.value)) ? 'block' : 'none';
+            };
+            await populateCurrencies('newAccCurrency');
+            openModal('newAccountModal');
+        }
+
+        async function createAccount() {
+            const name = document.getElementById('newAccName').value.trim();
+            const type = document.getElementById('newAccType').value;
+            if (!name) { showError('The account needs a name'); return; }
+            if (!type) { showError('Choose what kind of account this is'); return; }
+
+            const opening = document.getElementById('newAccOpening').value.trim();
+            const limit = document.getElementById('newAccLimit').value.trim();
+            const limitApplies = BORROWING_TYPES.includes(DelfinAccountTypes.canonical(type));
+            try {
+                const res = await fetch(`${API_URL}/accounts`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name, type,
+                        currency: document.getElementById('newAccCurrency').value,
+                        initial_balance: opening ? parseFloat(opening) : 0,
+                        credit_limit: (limitApplies && limit) ? parseFloat(limit) : null
+                    })
+                });
+                if (!res.ok) throw new Error((await res.json()).detail || 'Create failed');
+                DelfinCache.markDirty('tools');
+                closeModal('newAccountModal');
+                showSuccess(`Added "${name}"`);
+                await loadAccounts();
+                displayAccounts();
+            } catch (e) {
+                showError('Error creating the account: ' + e.message);
+            }
+        }
+
         function editItem(type, id) {
             currentEditType = type;
             let item;
@@ -1871,6 +1960,7 @@
             // the five branches below.
             document.getElementById('editTypeGroup').style.display = 'none';
             document.getElementById('editLimitGroup').style.display = 'none';
+            document.getElementById('editOpeningGroup').style.display = 'none';
 
             switch(type) {
                 case 'category':
@@ -1891,6 +1981,8 @@
                     document.getElementById('editCurrency').value = item.currency;
                     document.getElementById('editTypeGroup').style.display = 'block';
                     document.getElementById('editType').innerHTML = DelfinAccountTypes.options(item.type);
+                    document.getElementById('editOpeningGroup').style.display = 'block';
+                    document.getElementById('editOpeningBalance').value = item.initial_balance ?? 0;
                     document.getElementById('editCreditLimit').value =
                         item.credit_limit == null ? '' : item.credit_limit;
                     showCreditLimitFor(item.type);
@@ -2000,7 +2092,7 @@
                             name: newName,
                             currency: document.getElementById('editCurrency').value,
                             type: document.getElementById('editType').value,
-                            initial_balance: currentEditItem.initial_balance,
+                            initial_balance: parseFloat(document.getElementById('editOpeningBalance').value) || 0,
                             // Retyped as something that cannot borrow, the limit goes
                             // with it rather than lingering as a number nothing reads.
                             credit_limit: (limitApplies && limitField) ? parseFloat(limitField) : null
