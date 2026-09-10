@@ -566,7 +566,7 @@
             const sub = allCategories.filter(c => c.parent === parent).sort((a,b)=>a.name.localeCompare(b.name));
             const el = document.getElementById('category');
             el.disabled = false;
-            el.innerHTML = '<option value="">Select...</option>' + sub.map(c => `<option value="${c.id}">${c.name}</option>`).join('') + '<option value="__NEW__" style="color:#667eea">➕ Add new</option>';
+            el.innerHTML = '<option value="">Select...</option>' + sub.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('') + '<option value="__NEW__" style="color:#667eea">➕ Add new</option>';
         }
 
         function onSplitLineInput() {

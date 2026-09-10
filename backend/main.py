@@ -184,14 +184,40 @@ def auth_setup(request: Request, payload: schemas.SetupIn):
     request.session["authenticated"] = True
     return {"recovery_code": recovery_code}
 
+def _refuse_while_throttled():
+    """Turn an attempt away while the throttle is shut, before it is checked.
+
+    The wait is stated plainly: a person who has mistyped their password wants
+    to know how long, and a guesser learns nothing from it that the delay itself
+    does not already tell them.
+    """
+    wait = security.login_throttle.blocked_for()
+    if wait <= 0:
+        return
+    seconds = int(wait) + 1
+    if seconds < 60:
+        human = f"{seconds} seconds"
+    else:
+        minutes = (seconds + 59) // 60
+        human = f"{minutes} minute" + ("s" if minutes > 1 else "")
+    raise HTTPException(
+        status_code=429,
+        detail=f"Too many attempts. Try again in {human}.",
+        headers={"Retry-After": str(seconds)},
+    )
+
+
 @app.post("/auth/login")
 def auth_login(request: Request, payload: schemas.LoginIn):
     if not security.is_initialised():
         raise HTTPException(status_code=400, detail="Not set up yet.")
+    _refuse_while_throttled()
     try:
         dek_hex = security.unlock_with_password(payload.password)
     except security.InvalidCredential:
+        security.login_throttle.failure()
         raise HTTPException(status_code=401, detail="Incorrect password.")
+    security.login_throttle.success()
     database.unlock(dek_hex)
     request.session["authenticated"] = True
     return {"ok": True}
@@ -206,12 +232,15 @@ def auth_recover(request: Request, payload: schemas.RecoverIn):
     """Set a new password using the recovery code, then log in."""
     if not security.is_initialised():
         raise HTTPException(status_code=400, detail="Not set up yet.")
+    _refuse_while_throttled()
     try:
         dek_hex = security.reset_password_with_recovery(payload.recovery_code, payload.new_password)
     except security.InvalidCredential:
+        security.login_throttle.failure()
         raise HTTPException(status_code=401, detail="Incorrect recovery code.")
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    security.login_throttle.success()
     database.unlock(dek_hex)
     request.session["authenticated"] = True
     return {"ok": True}

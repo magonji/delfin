@@ -651,7 +651,7 @@
             <div class="loan-card">
                 <div class="loan-header" onclick="toggleTransactions(${debt.account.id})">
                     <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;min-width:0;">
-                        <span class="loan-title">${debt.account.name}</span>
+                        <span class="loan-title">${escapeHtml(debt.account.name)}</span>
                         ${isCompleted ? `<span class="badge" style="color:var(--green);border-color:#B6D2BF;">Paid off</span>` : ''}
                         ${debt.terms ? `<button class="terms-edit" onclick="editLoan(event, ${debt.account.id})"
                             title="Edit the agreed terms">Edit terms</button>` : ''}
@@ -668,7 +668,7 @@
                     ${isCard ? cardCeiling : ''}
                     ${isCard ? `<span>${debt.unique_payees} payees</span>` : ''}
                     ${debt.close_date ? `<span>Closed ${formatDate(debt.close_date)}</span>` : ''}
-                    <span>${debt.lender_name}</span>
+                    <span>${escapeHtml(debt.lender_name)}</span>
                 </div>
 
                 ${renderTerms(debt)}
@@ -898,7 +898,7 @@
                     <div class="transaction-date">${dateObj.toLocaleDateString('en-GB')}<br>${dateObj.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'})}</div>
                     <div class="transaction-details">
                         <div class="transaction-type ${typeClass}">${type}</div>
-                        <div class="transaction-note">${t.payee_name || t.category_name || t.note || ''}</div>
+                        <div class="transaction-note">${escapeHtml(t.payee_name || t.category_name || t.note || '')}</div>
                     </div>
                     <div class="transaction-amount ${amountClass}">
                         ${sym(currency)}${formatNum(Math.abs(t.amount))}

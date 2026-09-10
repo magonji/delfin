@@ -27,6 +27,8 @@ import base64
 import json
 import os
 import secrets
+import threading
+import time
 from typing import Tuple
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -47,6 +49,69 @@ _NONCE_LEN = 12
 
 class InvalidCredential(Exception):
     """Wrong password or recovery code."""
+
+
+class LoginThrottle:
+    """Slows a guesser down without ever locking the owner out.
+
+    There is one password here and no second factor, so the only thing between
+    a guesser and the data is how many guesses a minute they get. Scrypt already
+    makes each attempt cost something; this makes the tenth attempt cost a great
+    deal more than the first.
+
+    The first few failures pass free -- typing a password wrong is normal. After
+    that each failure doubles the wait before the next attempt is even looked
+    at, up to a ceiling. The ceiling matters: the wait must never grow into a
+    lockout, because the person most likely to be waiting is the owner, and
+    there is nobody to appeal to. Five minutes is long enough to make a
+    dictionary hopeless -- roughly twelve tries an hour -- and short enough to
+    wait out with a cup of tea.
+
+    Attempts made during a wait are refused without checking the credential and
+    without extending the wait, so a page left retrying in a loop cannot lock
+    its own owner out for ever. A success clears everything.
+
+    Kept in memory: a restart forgets it, which is fine, because nothing an
+    attacker can reach from outside restarts the process.
+    """
+
+    def __init__(self, free_attempts: int = 5, base_delay: float = 5.0,
+                 max_delay: float = 300.0):
+        self._free = free_attempts
+        self._base = base_delay
+        self._cap = max_delay
+        self._failures = 0
+        self._next_allowed = 0.0
+        self._lock = threading.Lock()
+
+    def blocked_for(self) -> float:
+        """Seconds still to wait before another attempt is looked at; 0 if now."""
+        with self._lock:
+            return max(0.0, self._next_allowed - time.monotonic())
+
+    def failure(self) -> None:
+        with self._lock:
+            # A guess made while the door is shut was never looked at, so it does
+            # not count against the next opening. The promise is kept here rather
+            # than left to every caller to remember.
+            if time.monotonic() < self._next_allowed:
+                return
+            self._failures += 1
+            over = self._failures - self._free
+            if over > 0:
+                delay = min(self._cap, self._base * (2 ** (over - 1)))
+                self._next_allowed = time.monotonic() + delay
+
+    def success(self) -> None:
+        with self._lock:
+            self._failures = 0
+            self._next_allowed = 0.0
+
+
+# One counter for the password and the recovery code together: they are two
+# doors to the same key, and a guesser turned away from one would otherwise
+# simply try the other.
+login_throttle = LoginThrottle()
 
 
 # ---- low-level helpers -------------------------------------------------------
@@ -100,7 +165,25 @@ def is_initialised() -> bool:
     return os.path.exists(KEYFILE)
 
 
+def _own_read_only(path: str) -> None:
+    """Make a secret file readable by its owner and nobody else.
+
+    Both of these are worth having: whoever can read the session secret can sign
+    a cookie and walk in without the password, and whoever can read the keyfile
+    can attack the password offline at their leisure. They were being written
+    with the default 0644 -- readable by every account on the machine, which on a
+    Pi shared with other services is not a theoretical distinction.
+    """
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        # Windows and some network filesystems have no say in this; the file is
+        # written either way.
+        pass
+
+
 def _read_keyfile() -> dict:
+    _own_read_only(KEYFILE)
     with open(KEYFILE) as f:
         return json.load(f)
 
@@ -108,9 +191,13 @@ def _read_keyfile() -> dict:
 def _write_keyfile(data: dict) -> None:
     os.makedirs(os.path.dirname(KEYFILE), exist_ok=True)
     tmp = KEYFILE + ".tmp"
-    with open(tmp, "w") as f:
+    # Created 0600 before anything is written into it, so the secret is never on
+    # disk under a wider mode, not even for an instant.
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
         json.dump(data, f, indent=2)
     os.replace(tmp, KEYFILE)
+    _own_read_only(KEYFILE)
 
 
 def setup(password: str) -> Tuple[str, str]:
@@ -180,12 +267,17 @@ def regenerate_recovery_code(password: str) -> str:
 def get_session_secret() -> str:
     """Stable random secret for signing session cookies (created on first use)."""
     if os.path.exists(SESSION_SECRET_FILE):
+        # An installation that predates the mode above still has a world-readable
+        # secret sitting there; narrow it on the way past.
+        _own_read_only(SESSION_SECRET_FILE)
         with open(SESSION_SECRET_FILE) as f:
             return f.read().strip()
     secret = secrets.token_hex(32)
     os.makedirs(os.path.dirname(SESSION_SECRET_FILE), exist_ok=True)
     tmp = SESSION_SECRET_FILE + ".tmp"
-    with open(tmp, "w") as f:
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
         f.write(secret)
     os.replace(tmp, SESSION_SECRET_FILE)
+    _own_read_only(SESSION_SECRET_FILE)
     return secret

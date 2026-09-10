@@ -71,6 +71,7 @@ month rather than a £600 spike.
 - **Add account**: Opens an account of any kind, with its opening balance and — for a card or a line of credit — its credit limit. A liability can be opened *on agreed terms*, which asks for the loan's rate, duration and instalments and shows the schedule it implies before anything is saved
 - **Entity management**: Edit and merge categories, accounts, payees, locations, and projects. Includes one-click **detect & merge duplicate categories** (reassigns all references)
 - **CSV import**: Import any bank statement CSV via a generic column-mapping step (delimiter, decimal, encoding, debit/credit), with reusable per-bank profiles, duplicate detection, and inline entity creation. A statement line that was several things at once can be **split** in the preview into lines with their own category, project and note; they must add up to the amount the bank charged, and the result is one split transaction rather than several separate ones
+- **Import preview**: the parsed statement read as a sheet — what the bank sent on the left, what it will become on the right. The fields carry no boxes until a row is under the pointer, a duplicate says so where its tick would be, and the other categories a payee has been filed under appear in a panel over the table rather than pushing the rows apart. On a phone the same preview shows **one line at a time**, filling the screen as a card, with arrows underneath to walk the statement
 - **CSV export**: Export transactions with date, account, and category filters in standard or detailed format
 - **Import Financisto**: Import a Financisto database — native `.backup` (gzipped) or CSV export — directly inside the app. Auto-detects the format, shows a pre-import **compatibility report** (so any data that can't be mapped is listed, never dropped silently), supports **merge** or **replace**, and always takes a safety backup first. Transfers become Delfin transfer pairs and **splits become Delfin splits**, keeping each sub-item's category, project and note under one entry
 - **Export Financisto**: Export your entire database as a native `.backup` (restorable in Financisto) or Financisto CSV. Splits survive both formats: the `.backup` rebuilds Financisto's parent envelope plus its children, and the CSV writes a `SPLIT` total row followed by one sub-item row each, the same shape Financisto's own CSV export produces
@@ -88,7 +89,8 @@ month rather than a £600 spike.
 - **Safari compatibility**: `-webkit-appearance: none` on all form controls, custom SVG dropdown arrows, no input zoom on iOS
 - **Long lists stay usable**: the payee picker filters as you type, and the category picker for planned expenses folds subcategories into their parent — ticking the parent covers everything under it
 - **Responsive design**: Optimised layouts for desktop, tablet, and mobile. Sticky footer on all pages
-- **FAB buttons**: Floating action buttons on every page for quick access to new transaction/transfer (navigates to transactions page with modal auto-open)
+- **Quick add**: one button in the corner of every page. Under the pointer — or under a thumb, on a screen that cannot hover — it splits upwards into three, each in its own colour: **new transaction**, **new transfer**, **new account**. They open where you are instead of navigating to the Transactions page first, so writing down a coffee from the Dashboard costs neither a page load nor your place in it
+- **One shape for every form**: a label on the left, its value on the right, one field to a line, ruled between. It was worked out for the CSV import on a phone and then applied to every dialog in the app, so a field is filled the same way wherever it is met
 
 ## Tech Stack
 
@@ -102,6 +104,11 @@ month rather than a £600 spike.
 ### Frontend
 
 - **Vanilla JavaScript** — no frameworks
+- **Shared modules, not a framework**: the dialogs that write money — transaction,
+  transfer, account, loan terms — and the button that offers them live in their own
+  files and are loaded by every page. One copy of each form, rather than one per
+  page drifting from the others; a page only tells its dialogs what to refresh once
+  something has been saved
 - **Chart.js v4** for all charts
 - **HTML5 + CSS3** with CSS custom properties
 
@@ -136,6 +143,12 @@ delfin/
 │   ├── budget.html                # Budget tracker
 │   ├── loans.html                 # Loans & credit cards
 │   ├── tools.html                 # Management tools (incl. Financisto import/export)
+│   ├── forms.css                  # One shape for every form in the app
+│   ├── cache.js                   # Shared client cache, account-type vocabulary, fetch timeouts
+│   ├── quick-add.js               # The button in the corner, and what it offers
+│   ├── transaction-form.js        # Transaction & transfer dialogs, split editor, deferred balances
+│   ├── account-form.js            # Opening an account, from any page
+│   ├── loan-form.js               # Loan terms, shared by Tools and the Loans page
 │   ├── sw.js                      # Service worker
 │   ├── manifest.json              # PWA manifest
 │   └── icons/                     # App icons (180, 192, 512)
@@ -368,6 +381,21 @@ How it works:
   the `.db` backups**, which are encrypted too.
 - After any restart the app is **locked until someone logs in** (the key lives
   only in memory). The nightly maintenance/rate update waits for the first login.
+
+Guarding the way in:
+- **Guessing is slowed down, not locked out.** Five wrong passwords pass free —
+  mistyping one is normal — and after that each failure doubles the wait before
+  the next attempt is even looked at, up to five minutes. That leaves a
+  dictionary attack around a dozen tries an hour, while never turning into a
+  lockout: the person most likely to be waiting is you, and there is nobody to
+  appeal to. Getting it right clears the count. The recovery code shares the
+  counter, being the other door to the same key.
+- **The keyfile and the session secret are written `0600`** — readable by their
+  owner and nobody else. Whoever can read the session secret can sign a cookie
+  and walk in without the password.
+- **Anything you or an import wrote is drawn as text, never as markup**, so a
+  payee, note or category name carrying HTML — a crafted CSV, say — is shown
+  rather than run.
 
 **Keep these safe — there is no other way back in:**
 - Your **password** and your **recovery code** (losing both = data unrecoverable).

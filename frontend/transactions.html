@@ -1663,11 +1663,11 @@
             } catch (e) { console.error(e); }
         }
         function populateAllAccountDropdowns() {
-            const createOpt = (acc) => `<option value="${acc.id}" data-currency="${acc.currency}">${acc.name} (${acc.currency})</option>`;
+            const createOpt = (acc) => `<option value="${acc.id}" data-currency="${acc.currency}">${escapeHtml(acc.name)} (${acc.currency})</option>`;
             const newOpt = `<option value="__NEW__" style="color:#667eea;font-weight:bold">➕ Add new</option>`;
             // Filters (include closed)
             const sortedAccountsForFilter = [...allAccountsIncludingClosed].sort((a, b) => a.name.localeCompare(b.name));
-            document.getElementById('filterAccount').innerHTML = '<option value="">All accounts</option>' + sortedAccountsForFilter.map(a => `<option value="${a.id}">${a.name}${!a.is_active ? ' (closed)' : ''}</option>`).join('');
+            document.getElementById('filterAccount').innerHTML = '<option value="">All accounts</option>' + sortedAccountsForFilter.map(a => `<option value="${a.id}">${escapeHtml(a.name)}${!a.is_active ? ' (closed)' : ''}</option>`).join('');
             // Bulk edit
             document.getElementById('bulkAccount').innerHTML = '<option value="">Don\'t change</option>' + allAccounts.map(createOpt).join('');
             document.getElementById('bulkTransferFromAccount').innerHTML = '<option value="">Don\'t change</option>' + allAccounts.map(createOpt).join('');
@@ -1679,14 +1679,14 @@
         }
         function populateAllCategoryDropdowns() {
             const parents = [...new Set(allCategories.map(c => c.parent || c.name))].sort();
-            const opts = parents.map(p => `<option value="${p}">${p}</option>`).join('');
+            const opts = parents.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('');
             // Filters
             const sortedCategoriesForFilter = [...allCategories].sort((a, b) => {
                 const aName = (a.parent ? a.parent + ' > ' : '') + a.name;
                 const bName = (b.parent ? b.parent + ' > ' : '') + b.name;
                 return aName.localeCompare(bName);
             });
-            document.getElementById('filterCategory').innerHTML = '<option value="">All categories</option>' + sortedCategoriesForFilter.map(c => `<option value="${c.id}">${c.parent ? c.parent + ' > ' : ''}${c.name}</option>`).join('');
+            document.getElementById('filterCategory').innerHTML = '<option value="">All categories</option>' + sortedCategoriesForFilter.map(c => `<option value="${c.id}">${c.parent ? escapeHtml(c.parent) + ' > ' : ''}${escapeHtml(c.name)}</option>`).join('');
             document.getElementById('bulkParentCategory').innerHTML = '<option value="">Don\'t change</option>' + opts;
             document.getElementById('bulkParentCategory').onchange = (e) => loadBulkSubcategories(e.target.value);
         }
@@ -1695,13 +1695,13 @@
             allPayees = await (await fetch(`${API_URL}/payees`)).json();
             ['payeeList', 'bulkPayeeList'].forEach(id => {
                 const el = document.getElementById(id);
-                if(el) el.innerHTML = allPayees.map(p => `<option value="${p.name}">`).join('');
+                if(el) el.innerHTML = allPayees.map(p => `<option value="${escapeHtml(p.name)}">`).join('');
             });
         }
         async function loadLocations() {
             allLocations = await (await fetch(`${API_URL}/locations`)).json();
             populateLocationSelect();
-            document.getElementById('bulkLocation').innerHTML = '<option value="">Don\'t change</option>' + allLocations.map(l => `<option value="${l.id}">${l.name}</option>`).join('');
+            document.getElementById('bulkLocation').innerHTML = '<option value="">Don\'t change</option>' + allLocations.map(l => `<option value="${l.id}">${escapeHtml(l.name)}</option>`).join('');
         }
         function populateLocationSelect() {
             // The form's own picker is filled by the form; nothing on the page
@@ -1711,7 +1711,7 @@
         async function loadProjects() {
             const projs = await (await fetch(`${API_URL}/projects`)).json();
             allProjects = projs;
-            document.getElementById('bulkProject').innerHTML = '<option value="">Don\'t change</option>' + projs.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+            document.getElementById('bulkProject').innerHTML = '<option value="">Don\'t change</option>' + projs.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
         }
 
         // The page has carried an error bar in its markup all along without ever
@@ -1931,9 +1931,9 @@
             
             // Build mobile detail rows
             const mobileDetails = [];
-            if (t.category_name) mobileDetails.push(['Category', t.category_name]);
-            if (t.location_name) mobileDetails.push(['Location', t.location_name]);
-            if (t.note) mobileDetails.push(['Note', t.note]);
+            if (t.category_name) mobileDetails.push(['Category', escapeHtml(t.category_name)]);
+            if (t.location_name) mobileDetails.push(['Location', escapeHtml(t.location_name)]);
+            if (t.note) mobileDetails.push(['Note', escapeHtml(t.note)]);
             if (t.account_balance_after != null) mobileDetails.push(['Acc. balance', `<span style="color:${balanceAccountColor}">${formatMoneyWithSymbol(t.account_balance_after, accountCurrency)}</span>`]);
             if (t.total_balance_after != null) mobileDetails.push(['Total balance', `<span style="color:${balanceTotalColor}">${formatMoneyWithSymbol(t.total_balance_after, displayCurrency)}</span>`]);
 
@@ -1946,15 +1946,15 @@
                     <span class="date-display">${dateStr}</span>
                     <span class="time-display">${timeStr}</span>
                 </div>
-                <div class="t-cell ledger-acct" title="${t.account_name || ''}">${t.account_name || ''}</div>
-                <div class="payee-cell" title="${t.payee_name || ''}">
-                    <div class="payee-name">${t.payee_name || '<span style="color:#bbb">—</span>'}</div>
+                <div class="t-cell ledger-acct" title="${escapeHtml(t.account_name || '')}">${escapeHtml(t.account_name || '')}</div>
+                <div class="payee-cell" title="${escapeHtml(t.payee_name || '')}">
+                    <div class="payee-name">${t.payee_name ? escapeHtml(t.payee_name) : '<span style="color:#bbb">—</span>'}</div>
                     <div class="cat-sub ${t.location_name ? 'has-loc' : ''}">
-                        <span class="category-display">${t.category_name || 'Uncategorised'}</span>
-                        ${t.location_name ? `<span class="location-display"><svg class="loc-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg> ${t.location_name}</span>` : ''}
+                        <span class="category-display">${escapeHtml(t.category_name || 'Uncategorised')}</span>
+                        ${t.location_name ? `<span class="location-display"><svg class="loc-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg> ${escapeHtml(t.location_name)}</span>` : ''}
                     </div>
                 </div>
-                <div class="t-cell ledger-note" title="${t.note || ''}">${t.note || ''}</div>
+                <div class="t-cell ledger-note" title="${escapeHtml(t.note || '')}">${escapeHtml(t.note || '')}</div>
                 <div class="t-cell t-amount ${t.amount < 0 ? 'amount-negative' : 'amount-positive'}">${formatMoneyWithSymbol(t.amount, t.currency)}</div>
                 <div class="t-cell balance-cell" style="color: ${balanceAccountColor}">${t.account_balance_after != null ? formatMoneyWithSymbol(t.account_balance_after, accountCurrency) : ''}</div>
                 <div class="t-cell balance-cell" style="color: ${balanceTotalColor}">${t.total_balance_after != null ? formatMoneyWithSymbol(t.total_balance_after, displayCurrency) : ''}</div>
@@ -1998,9 +1998,9 @@
                     </div>`).join('');
 
             const mobileDetails = [];
-            mobileDetails.push(['Lines', `${g.lines.length} · ${g.lines.map(l => l.category_name || 'Uncategorised').join(', ')}`]);
-            if (g.location_name) mobileDetails.push(['Location', g.location_name]);
-            if (g.note) mobileDetails.push(['Note', g.note]);
+            mobileDetails.push(['Lines', `${g.lines.length} · ${escapeHtml(g.lines.map(l => l.category_name || 'Uncategorised').join(', '))}`]);
+            if (g.location_name) mobileDetails.push(['Location', escapeHtml(g.location_name)]);
+            if (g.note) mobileDetails.push(['Note', escapeHtml(g.note)]);
             if (g.account_balance_after != null) mobileDetails.push(['Acc. balance', `<span style="color:${balanceAccountColor}">${formatMoneyWithSymbol(g.account_balance_after, accountCurrency)}</span>`]);
             if (g.total_balance_after != null) mobileDetails.push(['Total balance', `<span style="color:${balanceTotalColor}">${formatMoneyWithSymbol(g.total_balance_after, displayCurrency)}</span>`]);
             const detailHtml = mobileDetails.map(([l, v]) => `<span class="md-label">${l}</span><span class="md-value">${v}</span>`).join('');
@@ -2068,11 +2068,11 @@
 
             // Build mobile detail rows for transfers
             const trDetails = [];
-            if (t.note) trDetails.push(['Note', t.note]);
+            if (t.note) trDetails.push(['Note', escapeHtml(t.note)]);
             if (diffCurr) trDetails.push(['Rate', `1 ${t.from_currency} = ${(t.to_amount / t.from_amount).toFixed(4)} ${t.to_currency}`]);
             if (diffCurr) trDetails.push(['Received', `<span style="color:#059669">${formatMoneyWithSymbol(t.to_amount, t.to_currency)}</span>`]);
-            trDetails.push([`Bal. ${t.from_account_name}`, `<span style="color:${fromBalanceColor}">${formatMoneyWithSymbol(t.from_balance, t.from_currency)}</span>`]);
-            trDetails.push([`Bal. ${t.to_account_name}`, `<span style="color:${toBalanceColor}">${formatMoneyWithSymbol(t.to_balance, t.to_currency)}</span>`]);
+            trDetails.push([`Bal. ${escapeHtml(t.from_account_name)}`, `<span style="color:${fromBalanceColor}">${formatMoneyWithSymbol(t.from_balance, t.from_currency)}</span>`]);
+            trDetails.push([`Bal. ${escapeHtml(t.to_account_name)}`, `<span style="color:${toBalanceColor}">${formatMoneyWithSymbol(t.to_balance, t.to_currency)}</span>`]);
 
             const trDetailHtml = trDetails.map(([l, v]) => `<span class="md-label">${l}</span><span class="md-value">${v}</span>`).join('');
 
@@ -2084,12 +2084,12 @@
                     <span class="time-display">${timeStr}</span>
                 </div>
                 <div class="t-cell"></div>
-                <div class="payee-cell" title="${t.from_account_name} → ${t.to_account_name}">
-                    <div class="payee-name" style="color:#3C5A6E;">${t.from_account_name}</div>
-                    <div class="payee-name" style="color:#3C5A6E;margin-top:1px;"><span style="color:#A2937E;font-weight:400;">→</span> ${t.to_account_name}</div>
+                <div class="payee-cell" title="${escapeHtml(t.from_account_name)} → ${escapeHtml(t.to_account_name)}">
+                    <div class="payee-name" style="color:#3C5A6E;">${escapeHtml(t.from_account_name)}</div>
+                    <div class="payee-name" style="color:#3C5A6E;margin-top:1px;"><span style="color:#A2937E;font-weight:400;">→</span> ${escapeHtml(t.to_account_name)}</div>
                 </div>
                 <div class="t-cell ledger-note note-cell">
-                    <span class="note-display" title="${t.note || ''}">${t.note || ''}</span>
+                    <span class="note-display" title="${escapeHtml(t.note || '')}">${escapeHtml(t.note || '')}</span>
                     ${rateDisplay}
                 </div>
                 <div class="t-cell t-amount" style="color:#3C5A6E;line-height:1.35">${amountHtml}</div>
@@ -2593,7 +2593,7 @@
         
         // Opened from the account pickers in the transaction and transfer forms.
         
-        function loadBulkSubcategories(p){ const s = document.getElementById('bulkCategory'); s.disabled=false; s.innerHTML='<option>Don\'t change</option>'+allCategories.filter(c=>c.parent===p).map(c=>`<option value="${c.id}">${c.name}</option>`).join(''); }
+        function loadBulkSubcategories(p){ const s = document.getElementById('bulkCategory'); s.disabled=false; s.innerHTML='<option>Don\'t change</option>'+allCategories.filter(c=>c.parent===p).map(c=>`<option value="${c.id}">${escapeHtml(c.name)}</option>`).join(''); }
         
         async function applyBulkEdit() {
             if(selectedTransactions.length === 0) return;

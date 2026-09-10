@@ -1581,7 +1581,7 @@
                 }
             }
             const cur = selected || sel.value;
-            sel.innerHTML = _currencyCache.map(c => `<option value="${c.code}">${c.code} — ${c.name}</option>`).join('');
+            sel.innerHTML = _currencyCache.map(c => `<option value="${c.code}">${c.code} — ${csvEsc(c.name)}</option>`).join('');
             if (cur) sel.value = cur;
         }
         
@@ -1835,19 +1835,19 @@
                     html += `
                         <div style="margin-bottom:26px;">
                             <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0 8px; border-bottom:2px solid var(--btn-primary); margin-bottom:4px;">
-                                <span style="font-family:'Playfair Display',serif; font-size:17px; font-weight:700; color:var(--ink);">${parent}</span>
-                                <button class="secondary" style="padding:6px 12px; font-size:12px;" onclick="editParentCategory('${parent.replace(/'/g, "\\'")}', ${JSON.stringify(subcategories.map(c => c.id))})">Edit Parent</button>
+                                <span style="font-family:'Playfair Display',serif; font-size:17px; font-weight:700; color:var(--ink);">${csvEsc(parent)}</span>
+                                <button class="secondary" style="padding:6px 12px; font-size:12px;" onclick="editParentCategory('${jsArg(parent)}', ${JSON.stringify(subcategories.map(c => c.id))})">Edit Parent</button>
                             </div>`;
                     subcategories.forEach((cat, index) => {
                         const connector = index === subcategories.length - 1 ? '└─' : '├─';
                         html += `
                             <div class="item-row compact" style="margin-left:16px;">
                                 <div class="item-info">
-                                    <div class="item-name"><span style="color:var(--muted); margin-right:8px;">${connector}</span>${cat.name}</div>
+                                    <div class="item-name"><span style="color:var(--muted); margin-right:8px;">${connector}</span>${csvEsc(cat.name)}</div>
                                 </div>
                                 <div class="item-actions icons">
                                     <button title="Edit ${csvEsc(cat.name)}" aria-label="Edit ${csvEsc(cat.name)}" onclick="editItem('category', ${cat.id})">${ICON_EDIT}</button>
-                                    <button class="danger" title="Delete ${csvEsc(cat.name)}" aria-label="Delete ${csvEsc(cat.name)}" onclick="deleteCategory(${cat.id}, '${cat.name.replace(/'/g, "\\'")}', '${(cat.parent || '').replace(/'/g, "\\'")}')">${ICON_DELETE}</button>
+                                    <button class="danger" title="Delete ${csvEsc(cat.name)}" aria-label="Delete ${csvEsc(cat.name)}" onclick="deleteCategory(${cat.id}, '${jsArg(cat.name)}', '${jsArg(cat.parent || '')}')">${ICON_DELETE}</button>
                                 </div>
                             </div>`;
                     });
@@ -1858,12 +1858,12 @@
                         <div style="margin-bottom:26px;">
                             <div class="item-row compact">
                                 <div class="item-info">
-                                    <div class="item-name">${parent}</div>
+                                    <div class="item-name">${csvEsc(parent)}</div>
                                     <div class="item-meta">Parent category · no subcategories</div>
                                 </div>
                                 <div class="item-actions icons">
                                     <button title="Edit ${csvEsc(parent)}" aria-label="Edit ${csvEsc(parent)}" onclick="editItem('category', ${standaloneCategory.id})">${ICON_EDIT}</button>
-                                    <button class="danger" title="Delete ${csvEsc(parent)}" aria-label="Delete ${csvEsc(parent)}" onclick="deleteCategory(${standaloneCategory.id}, '${parent.replace(/'/g, "\\'")}', null)">${ICON_DELETE}</button>
+                                    <button class="danger" title="Delete ${csvEsc(parent)}" aria-label="Delete ${csvEsc(parent)}" onclick="deleteCategory(${standaloneCategory.id}, '${jsArg(parent)}', null)">${ICON_DELETE}</button>
                                 </div>
                             </div>
                         </div>`;
@@ -1880,12 +1880,12 @@
                     ? '<span class="badge badge-new" style="margin-left:8px;">Active</span>'
                     : '<span class="badge badge-dup" style="margin-left:8px;">Closed</span>';
                 const action_button = acc.is_active === 1
-                    ? `<button class="danger" onclick="closeAccount(${acc.id}, '${acc.name.replace(/'/g, "\\'")}', ${acc.current_balance})">Close</button>`
-                    : `<button class="secondary" onclick="openAccount(${acc.id}, '${acc.name.replace(/'/g, "\\'")}')">Reopen</button>`;
+                    ? `<button class="danger" onclick="closeAccount(${acc.id}, '${jsArg(acc.name)}', ${acc.current_balance})">Close</button>`
+                    : `<button class="secondary" onclick="openAccount(${acc.id}, '${jsArg(acc.name)}')">Reopen</button>`;
                 return `
                     <div class="item-row" style="${acc.is_active === 0 ? 'opacity:0.55;' : ''}">
                         <div class="item-info">
-                            <div class="item-name">${acc.name}${status_badge}</div>
+                            <div class="item-name">${csvEsc(acc.name)}${status_badge}</div>
                             <div class="item-meta">Currency: ${acc.currency} · Type: ${DelfinAccountTypes.label(acc.type) || '—'} · Balance: ${acc.current_balance.toFixed(2)}</div>
                         </div>
                         <div class="item-actions">
@@ -1948,7 +1948,7 @@
                 if (!res.ok) throw new Error('Merge failed');
                 const result = await res.json();
                 DelfinCache.markDirty('tools');
-                showSuccess(`Merged "${source.name}" into "${target?.name || 'payee'}" (${result.transactions_reassigned} transactions reassigned)`);
+                showSuccess(`Merged "${csvEsc(source.name)}" into "${csvEsc(target?.name || 'payee')}" (${result.transactions_reassigned} transactions reassigned)`);
                 await loadPayees();
                 filterPayees();
             } catch (e) {
@@ -1974,7 +1974,7 @@
                 const res = await fetch(`${API_URL}/payees/${id}`, { method: 'DELETE' });
                 if (!res.ok) throw new Error('Delete failed');
                 DelfinCache.markDirty('tools');
-                showSuccess(`Deleted "${payee.name}"`);
+                showSuccess(`Deleted "${csvEsc(payee.name)}"`);
                 await loadPayees();
                 filterPayees();
             } catch (e) {
@@ -2056,7 +2056,7 @@
                 if (!res.ok) throw new Error('Merge failed');
                 const result = await res.json();
                 DelfinCache.markDirty('tools');
-                showSuccess(`Merged "${source.name}" into "${target?.name || cfg.label}" (${result.transactions_reassigned} transactions reassigned)`);
+                showSuccess(`Merged "${csvEsc(source.name)}" into "${csvEsc(target?.name || cfg.label)}" (${result.transactions_reassigned} transactions reassigned)`);
                 await cfg.reload();
                 cfg.refilter();
             } catch (e) { showError(`Error merging ${cfg.label}: ` + e.message); }
@@ -2077,7 +2077,7 @@
                 const res = await fetch(`${API_URL}/${cfg.path}/${id}`, { method: 'DELETE' });
                 if (!res.ok) throw new Error('Delete failed');
                 DelfinCache.markDirty('tools');
-                showSuccess(`Deleted "${item.name}"`);
+                showSuccess(`Deleted "${csvEsc(item.name)}"`);
                 await cfg.reload();
                 cfg.refilter();
             } catch (e) { showError(`Error deleting ${cfg.label}: ` + e.message); }
@@ -2128,7 +2128,7 @@
         // Edit item
         async function deleteCategory(id, name, parent) {
             const categoryType = parent ? 'subcategory' : 'parent category';
-            const fullName = parent ? `${parent} → ${name}` : name;
+            const fullName = parent ? `${csvEsc(parent)} → ${csvEsc(name)}` : csvEsc(name);
             
             // First confirmation
             const confirmed = await customConfirm(
@@ -2489,12 +2489,12 @@
         async function closeAccount(account_id, account_name, current_balance) {
             // Check for non-zero balance (accounting for floating point errors)
             if (Math.abs(current_balance) > 0.01) {
-                showError(`Cannot close account "${account_name}" with non-zero balance: ${current_balance.toFixed(2)}`);
+                showError(`Cannot close account "${csvEsc(account_name)}" with non-zero balance: ${current_balance.toFixed(2)}`);
                 return;
             }
             
             const confirmed = await customConfirm(
-                `Are you sure you want to close the account "${account_name}"?\n\nClosed accounts will not appear in dropdowns or the dashboard, but all historical data will be preserved.`,
+                `Are you sure you want to close the account "${csvEsc(account_name)}"?\n\nClosed accounts will not appear in dropdowns or the dashboard, but all historical data will be preserved.`,
                 'Close Account',
                 'Close Account'
             );
@@ -2523,7 +2523,7 @@
         // Reopen an account
         async function openAccount(account_id, account_name) {
             const confirmed = await customConfirm(
-                `Are you sure you want to reopen the account "${account_name}"?`,
+                `Are you sure you want to reopen the account "${csvEsc(account_name)}"?`,
                 'Reopen Account',
                 'Reopen'
             );
@@ -3252,7 +3252,7 @@
                 importProfiles = data.profiles || [];
                 await populateProfileDropdown();
                 document.getElementById('mapProfileSelect').value = profile.name;
-                showToast(`Profile "${profile.name}" saved`, 'success');
+                showToast(`Profile "${csvEsc(profile.name)}" saved`, 'success');
             } catch (e) { showImportError(e.message); }
         }
         async function deleteImportProfile() {
@@ -3588,8 +3588,8 @@
                         <div class="date-long">${dateLongStr}</div>
                         <div class="date-time" style="font-size: 10px; opacity: 0.7;">${timeStr}</div>
                     </td>
-                    <td class="col-desc" data-label="Description" title="${trans.description || ''}">
-                        ${trans.description || '-'}
+                    <td class="col-desc" data-label="Description" title="${escImport(trans.description || '')}">
+                        ${escImport(trans.description || '-')}
                     </td>
                     <td class="col-amount" data-label="Amount" style="color: ${trans.amount < 0 ? 'var(--red)' : 'var(--green)'};">
                         ${fmtMoney(Math.abs(trans.amount), (allAccountsForImport.find(a => a.id === trans.account_id) || {}).currency || 'GBP')}
@@ -3612,13 +3612,13 @@
                                     placeholder="${prompt.payee}" 
                                     onchange="handlePayeeChange(${index})">
                                 <datalist id="payees_${index}">
-                                    ${allPayees.map(p => `<option value="${p.name}">`).join('')}
+                                    ${allPayees.map(p => `<option value="${escImport(p.name)}">`).join('')}
                                 </datalist>
                             </div>
 
                             <select id="account_${index}" class="import-select" style="display: ${trans.type === 'transfer' ? 'block' : 'none'};">
                                 <option value="">Select account...</option>
-                                ${allAccountsForImport.map(acc => `<option value="${acc.id}">${acc.name}</option>`).join('')}
+                                ${allAccountsForImport.map(acc => `<option value="${acc.id}">${escImport(acc.name)}</option>`).join('')}
                             </select>
                         </div>
                     </td>
@@ -3654,7 +3654,7 @@
                             <div class="field-line" data-label="Location">
                                 <select id="location_${index}" class="import-select" onchange="handleLocationChange(${index})" ${trans.type === 'transfer' ? 'disabled' : ''}>
                                     <option value="">${prompt.location}</option>
-                                    ${allLocations.map(l => `<option value="${l.id}">${l.name}</option>`).join('')}
+                                    ${allLocations.map(l => `<option value="${l.id}">${escImport(l.name)}</option>`).join('')}
                                     <option value="__NEW__" style="color:#667eea;font-weight:bold">Add...</option>
                                 </select>
                             </div>
@@ -3665,7 +3665,7 @@
                             <div class="field-line is-last" data-label="Project">
                                 <select id="project_${index}" class="import-select" ${trans.type === 'transfer' ? 'disabled' : ''}>
                                     <option value="">${prompt.project}</option>
-                                    ${allProjects.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
+                                    ${allProjects.map(p => `<option value="${p.id}">${escImport(p.name)}</option>`).join('')}
                                 </select>
                             </div>
                         </div>
@@ -3674,7 +3674,7 @@
                         <div id="noteCell_${index}">
                             <textarea id="note_${index}" class="import-textarea"
                                     placeholder="${prompt.note}"
-                                    onchange="parsedTransactions[${index}].note = this.value">${trans.note || ''}</textarea>
+                                    onchange="parsedTransactions[${index}].note = this.value">${escImport(trans.note || '')}</textarea>
                         </div>
                     </td>
                 `;
@@ -3711,6 +3711,17 @@
         // carves it into lines, each with its own category, project and note;
         // on import it becomes one Delfin split transaction, not several
         // unrelated ones. The lines must add up before the import will run.
+
+        /**
+         * A name that ends up inside onclick="fn('...')" has to survive two
+         * readers: the HTML parser, which decodes the attribute, and then the
+         * JavaScript one, which reads the string. Escaping only the apostrophe
+         * -- as this used to -- left a double quote or an angle bracket free to
+         * end the attribute and start something else.
+         */
+        function jsArg(value) {
+            return csvEsc(String(value ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
+        }
 
         function escImport(value) {
             return String(value ?? '').replace(/[&<>"']/g,
@@ -3930,7 +3941,7 @@
                 if (trans.isDuplicate || trans.skip || !trans.splitLines) continue;
                 syncRowSplit(i);
 
-                const where = `"${trans.description || 'row ' + (i + 1)}"`;
+                const where = `"${csvEsc(trans.description || 'row ' + (i + 1))}"`;
                 if (trans.splitLines.length < 2) {
                     return `The split on ${where} needs at least two lines.`;
                 }
@@ -4288,7 +4299,7 @@
 
                     for (const dup of duplicates) {
                         const confirmed = await customConfirm(
-                            `<b>"${dup.name}"</b> (${dup.transaction_count} transactions) looks like a duplicate of <b>"${keep.name}"</b> (${keep.transaction_count} transactions).\n\nMerge into <b>"${keep.name}"</b>? All transactions will be reassigned.`,
+                            `<b>"${csvEsc(dup.name)}"</b> (${dup.transaction_count} transactions) looks like a duplicate of <b>"${csvEsc(keep.name)}"</b> (${keep.transaction_count} transactions).\n\nMerge into <b>"${csvEsc(keep.name)}"</b>? All transactions will be reassigned.`,
                             'Merge Duplicate Payee',
                             'Merge'
                         );
@@ -4298,7 +4309,7 @@
                         if (!mergeRes.ok) throw new Error('Failed to merge');
                         const result = await mergeRes.json();
                         keep.transaction_count += result.transactions_reassigned;
-                        showSuccess(`Merged "${dup.name}" into "${keep.name}" (${result.transactions_reassigned} transactions reassigned)`);
+                        showSuccess(`Merged "${csvEsc(dup.name)}" into "${csvEsc(keep.name)}" (${result.transactions_reassigned} transactions reassigned)`);
                     }
                 }
 
@@ -4324,7 +4335,7 @@
                 }
 
                 const preview = data.groups.slice(0, 12).map(g =>
-                    `• <b>${g.name}</b>${g.parent ? ` <span style="opacity:0.7;">(under ${g.parent})</span>` : ''} — ${g.count} copies`
+                    `• <b>${csvEsc(g.name)}</b>${g.parent ? ` <span style="opacity:0.7;">(under ${csvEsc(g.parent)})</span>` : ''} — ${g.count} copies`
                 ).join('\n');
                 const more = data.total_groups > 12 ? `\n…and ${data.total_groups - 12} more` : '';
 
@@ -4566,7 +4577,7 @@
                 if (select && !select.disabled) {
                     const currentValue = select.value;
                     select.innerHTML = '<option value="">Loc...</option>' +
-                        allLocations.map(l => `<option value="${l.id}">${l.name}</option>`).join('') +
+                        allLocations.map(l => `<option value="${l.id}">${csvEsc(l.name)}</option>`).join('') +
                         '<option value="__NEW__" style="color:#667eea;font-weight:bold">Add...</option>';
                     select.value = currentValue;
                 }
@@ -5244,7 +5255,7 @@
                 }
             }
             const opts = ['<option value="auto">Automatic (most-used)</option>']
-                .concat(_currencyCache.map(c => `<option value="${c.code}">${c.code} — ${c.name}</option>`));
+                .concat(_currencyCache.map(c => `<option value="${c.code}">${c.code} — ${csvEsc(c.name)}</option>`));
             sel.innerHTML = opts.join('');
             sel.value = selected || 'auto';
         }
