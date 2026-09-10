@@ -238,16 +238,22 @@
         /* Fixed widths so a long payee cannot squeeze the note out of the row;
            what does not fit is cut with an ellipsis, as the eye expects of a table. */
         .import-preview { table-layout:fixed; }
-        .import-preview th.col-skip { width:4%; }
-        .import-preview th.col-date { width:8.5%; }
-        .import-preview th.col-desc { width:13.5%; }
-        .import-preview th.col-amount { width:7.5%; text-align:right; }
-        .import-preview th.col-type { width:9%; }
-        .import-preview th.col-payee { width:11.5%; }
-        .import-preview th.col-cat { width:21%; }
-        .import-preview th.col-loc { width:9%; }
-        .import-preview th.col-proj { width:9%; }
-        .import-preview th.col-note { width:7%; }
+        /* Three columns hold something of a known size -- a tick or a three-letter
+           mark, a date, an amount, one of two words -- so they are given exactly
+           that in pixels and
+           stop taking a share of the width they cannot use. What is left is split
+           between the columns that hold writing, and the note gets the largest
+           part of it: it is the one column where a sentence is typed. */
+        .import-preview th.col-skip { width:46px; }
+        .import-preview th.col-date { width:82px; }
+        .import-preview th.col-amount { width:96px; text-align:right; }
+        .import-preview th.col-type { width:96px; }
+        .import-preview th.col-desc { width:13%; }
+        .import-preview th.col-payee { width:11%; }
+        .import-preview th.col-cat { width:19%; }
+        .import-preview th.col-loc { width:7%; }
+        .import-preview th.col-proj { width:7%; }
+        .import-preview th.col-note { width:17.5%; }
         .import-preview td { padding:11px 10px; overflow:hidden; }
         .import-preview tbody td { white-space:nowrap; text-overflow:ellipsis; }
 
@@ -362,6 +368,24 @@
             border:1px solid var(--field); background:#fff; color:var(--ink); }
         .cat-hints button:hover { border-color:var(--btn-primary); background:var(--panel); }
         .cat-hints button .hint-count { margin-left:4px; opacity:.55; }
+
+        /* One line, two currencies: what the bank charged and what arrived are
+           different numbers, and only you know the second. A note attached to
+           the field that raised the question, in the colour the app uses for
+           "needs attention" rather than the borrowed yellow it used to wear. */
+        tr.fx-row td { padding:0 14px 10px 50px; border-bottom:1px solid var(--hair); background:#fff; }
+        tr.fx-row:hover td { background:#fff; }
+        .fx-note { display:flex; align-items:center; flex-wrap:wrap; gap:6px 14px;
+            padding:8px 12px; background:#FDF6E9; border:1px solid #E7CFA3;
+            border-left:3px solid var(--yellow); border-radius:8px; }
+        .fx-note .fx-head { font-family:'IBM Plex Sans',sans-serif; font-size:9.5px; font-weight:700;
+            letter-spacing:1px; text-transform:uppercase; color:#8F5D18; }
+        .fx-note .fx-line { font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--ink); }
+        .fx-note label { margin:0 0 0 auto; font-family:'IBM Plex Sans',sans-serif;
+            font-size:9.5px; font-weight:700; letter-spacing:1px; text-transform:uppercase;
+            color:var(--muted); }
+        .fx-note .import-input { flex:0 0 130px; width:130px; border-bottom:1px solid var(--field);
+            padding:6px 0; }
 
         /* ── Splitting a statement line into several concepts ── */
         .split-toggle { flex:0 0 auto; width:26px; height:26px; padding:0; border:none; border-radius:7px;
@@ -626,6 +650,13 @@
             .import-preview .import-input, .import-preview .import-select,
             .import-preview .import-textarea { font-size:16px; padding:10px; min-height:44px; }
             .import-preview .import-textarea { height:auto; min-height:84px; }
+
+            /* The two-currency note rides with the card it belongs to. */
+            .import-focus .import-preview tbody tr.fx-row.is-current { display:block; }
+            .import-preview tr.fx-row td { padding:0 0 12px; border:none; background:none; }
+            .import-preview .fx-note { margin:0 12px; }
+            .import-preview .fx-note label { margin-left:0; }
+            .import-preview .fx-note .import-input { flex:1 1 auto; width:auto; }
 
             /* The split editor is a panel under its card, not a table row. */
             .import-preview tr.split-row { padding:0; border:none; background:none;
@@ -3424,9 +3455,11 @@
             document.querySelectorAll('#transactionsTableBody tr.is-current')
                 .forEach(tr => tr.classList.remove('is-current'));
             const row = document.getElementById(`importRow_${importFocusIndex}`);
-            const splitRow = document.getElementById(`splitRow_${importFocusIndex}`);
             if (row) row.classList.add('is-current');
-            if (splitRow) splitRow.classList.add('is-current');
+            [`splitRow_${importFocusIndex}`, `fxRow_${importFocusIndex}`].forEach(id => {
+                const extra = document.getElementById(id);
+                if (extra) extra.classList.add('is-current');
+            });
 
             updateImportPager();
         }
@@ -4016,21 +4049,16 @@
             const fromAccount = allAccountsForImport.find(a => a.id === trans.account_id);
             const toAccount = allAccountsForImport.find(a => a.id === parseInt(toAccountId));
             
-            // The cell, not the line the select sits on: the rate goes underneath
-            // the field, not alongside it.
-            const td = document.getElementById(`account_${index}`).closest('td');
-            
-            // Remove existing conversion field if any
-            const existingConversion = document.getElementById(`currencyConversion_${index}`);
-            if (existingConversion) {
-                existingConversion.remove();
-            }
+            // A line of its own under the row, the way a split gets one. Inside
+            // the Payee cell -- a twelfth of the table -- it was cut off mid-word.
+            const existingRow = document.getElementById(`fxRow_${index}`);
+            if (existingRow) existingRow.remove();
             
             if (fromAccount.currency !== toAccount.currency) {
                 // Different currencies - show conversion field
                 const conversionDiv = document.createElement('div');
                 conversionDiv.id = `currencyConversion_${index}`;
-                conversionDiv.style.marginTop = '8px';
+
                 
                 // Determine the correct message based on transaction direction
                 let fromCurrency, toCurrency, fromAmountDisplay, toAmountLabel;
@@ -4050,27 +4078,30 @@
                     toAmountLabel = `Amount sent from ${fromCurrency}:`;
                 }
                 
+                conversionDiv.className = 'fx-note';
                 conversionDiv.innerHTML = `
-                    <div style="background: #fff3cd; padding: 8px; border-radius: 4px; border: 1px solid #ffc107;">
-                        <div style="font-size: 11px; color: #856404; margin-bottom: 4px;">
-                            <strong>Currency conversion required</strong>
-                        </div>
-                        <div style="font-size: 12px; margin-bottom: 4px;">
-                            ${trans.amount < 0 ? 'Sending' : 'Receiving'}: ${fromAmountDisplay}
-                        </div>
-                        <label style="font-size: 12px; display: block; margin-bottom: 4px;">
-                            ${toAmountLabel}
-                        </label>
-                        <input type="number"
-                            id="convertedAmount_${index}"
-                            step="0.01"
-                            inputmode="decimal"
-                            placeholder="Enter amount in ${trans.amount < 0 ? toCurrency : fromCurrency}"
-                            style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px;"
-                            onchange="parsedTransactions[${index}].convertedAmount = parseFloat(this.value)">
-                    </div>
+                    <span class="fx-head">Two currencies</span>
+                    <span class="fx-line">${trans.amount < 0 ? 'Sending' : 'Receiving'} ${escImport(fromAmountDisplay)}</span>
+                    <label for="convertedAmount_${index}">${escImport(toAmountLabel.replace(/:$/, ''))}</label>
+                    <input type="number" class="import-input"
+                        id="convertedAmount_${index}"
+                        step="0.01"
+                        inputmode="decimal"
+                        placeholder="Amount in ${trans.amount < 0 ? toCurrency : fromCurrency}"
+                        onchange="parsedTransactions[${index}].convertedAmount = parseFloat(this.value)">
                 `;
-                td.appendChild(conversionDiv);
+                const fxRow = document.createElement('tr');
+                fxRow.className = 'fx-row';
+                fxRow.id = `fxRow_${index}`;
+                const cell = document.createElement('td');
+                cell.colSpan = 10;
+                cell.appendChild(conversionDiv);
+                fxRow.appendChild(cell);
+                const row = document.getElementById(`importRow_${index}`);
+                row.parentNode.insertBefore(fxRow, row.nextSibling);
+                // On a phone the sheet shows one line at a time, and this belongs
+                // to the line it was raised by.
+                if (row.classList.contains('is-current')) fxRow.classList.add('is-current');
             }
         }
 
@@ -4142,10 +4173,13 @@
             const origin = box.getBoundingClientRect();
             const width = origin.width;
             const left = Math.min(r.left, window.innerWidth - width - 8);
-            // No room underneath? Then above, rather than off the bottom edge.
-            const below = r.bottom + 4;
+            // Its top edge overlaps the row it belongs to by a hair. Four pixels
+            // clear of it looked tidier and was unusable: the gap is the next
+            // row's category cell, so reaching for a suggestion crossed it, that
+            // row took the hover, and the panel vanished or jumped down a line.
+            const below = r.bottom - 6;
             const top = (below + origin.height > window.innerHeight - 8)
-                ? Math.max(8, r.top - origin.height - 4)
+                ? Math.max(8, r.top - origin.height + 6)
                 : below;
             box.style.left = `${Math.round(left - origin.left)}px`;
             box.style.top = `${Math.round(top - origin.top)}px`;
@@ -4162,7 +4196,7 @@
             _hintsTimer = setTimeout(() => {
                 if (_openHints) _openHints.classList.remove('is-open');
                 _openHints = null;
-            }, 140);
+            }, 220);
         }
 
         let _openHints = null;
