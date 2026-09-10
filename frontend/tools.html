@@ -215,7 +215,12 @@
         #transactionsTable th { padding:10px; background:var(--panel); border:1px solid var(--border); }
         #transactionsTable td { padding:8px; border:1px solid var(--border); background:#fff; }
 
-        /* ── Import table ── */
+        /* ── Import table ──
+           The preview is a sheet to read down, not a form to fight through: a
+           line the bank sent, and beside it what it will become. So the fields
+           carry no boxes at rest -- what they hold reads as the value it is --
+           and only the row under the pointer shows the rules that say it can be
+           changed. Everything stays one line tall, however much is in it. */
         .import-table-container { border:1px solid var(--border); border-radius:10px; overflow:hidden; background:#fff; box-shadow:0 2px 10px rgba(60,40,20,.05); }
         .import-table { width:100%; border-collapse:collapse; font-size:13px; }
         .import-table th { background:var(--panel); color:var(--muted); font-family:'IBM Plex Sans',sans-serif;
@@ -224,17 +229,68 @@
         .import-table td { padding:8px 10px; border-bottom:1px solid var(--hair); vertical-align:middle; color:var(--ink); transition:background .2s; }
         .import-table tr:last-child td { border-bottom:none; }
         .import-table tr:hover td { background-color:#FBF4EA; }
-        .col-skip { width:40px; text-align:center; }
-        .col-date { width:100px; white-space:nowrap; color:var(--muted); font-size:12px; }
-        .col-desc { max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; color:var(--muted); }
+
+        /* Fixed widths so a long payee cannot squeeze the note out of the row;
+           what does not fit is cut with an ellipsis, as the eye expects of a table. */
+        .import-preview { table-layout:fixed; }
+        .import-preview th.col-skip { width:6%; }
+        .import-preview th.col-date { width:8.5%; }
+        .import-preview th.col-desc { width:14%; }
+        .import-preview th.col-amount { width:7.5%; text-align:right; }
+        .import-preview th.col-type { width:9%; }
+        .import-preview th.col-payee { width:11.5%; }
+        .import-preview th.col-cat { width:19%; }
+        .import-preview th.col-loc { width:9%; }
+        .import-preview th.col-proj { width:9%; }
+        .import-preview th.col-note { width:7%; }
+        .import-preview td { padding:11px 10px; overflow:hidden; }
+        .import-preview tbody td { white-space:nowrap; text-overflow:ellipsis; }
+
+        /* The mark for a duplicate lives here, and a mark must not be cut short. */
+        .col-skip { text-align:center; text-overflow:clip; padding-left:6px; padding-right:6px; }
+        .import-preview .col-skip .badge { padding:3px 7px; font-size:9.5px; }
+        .col-date { white-space:nowrap; color:var(--muted); font-family:'IBM Plex Mono',monospace; font-size:11.5px; }
+        .col-desc { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; color:var(--ink); }
         .col-amount { text-align:right; font-family:'IBM Plex Mono',monospace; font-weight:600; white-space:nowrap; }
-        .col-status { width:80px; text-align:center; }
-        .import-input, .import-select, .import-textarea { width:100%; padding:6px 8px; font-size:12px;
-            border:1px solid var(--field); border-radius:6px; background:#fff; font-family:'IBM Plex Sans',sans-serif; color:var(--ink); transition:all .2s; }
-        .import-input:focus, .import-select:focus, .import-textarea:focus { border-color:var(--btn-primary);
-            outline:none; box-shadow:0 0 0 2px rgba(43,38,33,.1); }
-        .import-input:disabled, .import-select:disabled, .import-textarea:disabled { background:#f0eae0; color:#aaa; border-color:#e8e0d4; cursor:not-allowed; opacity:1; }
-        .import-textarea { resize:none; height:32px; line-height:1.2; }
+
+        /* The row being worked on says so: a rule under each field it will take,
+           and a mark down its left edge. At rest none of it is drawn. */
+        .import-preview tbody tr:hover, .import-preview tbody tr:focus-within
+            { box-shadow:inset 3px 0 0 var(--accent); }
+        .import-input, .import-select, .import-textarea { width:100%; padding:2px 0; font-size:13px;
+            border:none; border-bottom:1px solid transparent; border-radius:0; background:none;
+            font-family:'IBM Plex Sans',sans-serif; color:var(--ink); transition:border-color .15s; }
+        .import-select { -webkit-appearance:none; appearance:none; }
+        .import-preview tbody tr:hover .import-input, .import-preview tbody tr:hover .import-select,
+        .import-preview tbody tr:hover .import-textarea,
+        .import-preview tbody tr:focus-within .import-input,
+        .import-preview tbody tr:focus-within .import-select,
+        .import-preview tbody tr:focus-within .import-textarea
+            { border-bottom-color:var(--field); }
+        .import-input:focus, .import-select:focus, .import-textarea:focus {
+            outline:none; border-bottom-color:var(--accent); box-shadow:none; }
+        .import-input:disabled, .import-select:disabled, .import-textarea:disabled {
+            background:none; color:var(--muted); border-bottom-color:transparent !important;
+            cursor:default; opacity:1; }
+        .import-textarea { resize:none; height:24px; line-height:1.4; overflow:hidden; }
+        /* An empty field is a state, not an instruction: it reads as what is
+           missing. A missing category is the one that will cost something later,
+           so it is the one in red. */
+        .import-preview .import-select:has(option[value=""]:checked),
+        .import-preview .import-input:placeholder-shown { color:var(--muted); }
+        .import-preview .col-cat select[id^="parentCategory"]:has(option[value=""]:checked)
+            { color:var(--red); font-weight:600; }
+
+        /* Category: the pair reads as one path, "Groceries › Supermarket". With no
+           parent chosen there is no path to draw, so the tail stands down. */
+        .import-preview .col-cat .gap-small { flex:1 1 auto; flex-direction:row; align-items:center;
+            gap:4px; min-width:0; }
+        .import-preview .col-cat .field-line { min-width:0; flex:1 1 auto; }
+        .import-preview .col-cat .field-line:has(select:disabled) { display:none; }
+        .cat-sep { color:var(--muted); font-size:12px; flex:0 0 auto; }
+        .import-preview .col-cat .gap-small:has(select:disabled) .cat-sep { display:none; }
+        .cat-row { display:flex; align-items:center; gap:6px; min-width:0; }
+
         .badge { display:inline-flex; align-items:center; justify-content:center; padding:4px 8px;
             border-radius:999px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; }
         .badge-new { background:#E6F0EA; color:#2C5C42; border:1px solid #BFD9C9; }
@@ -249,19 +305,37 @@
         .type-seg { display:none; }
         .field-line::before { display:none; }
         .import-pager { display:none; }
-        tr.duplicate td { background-color:#FBF4EA !important; opacity:.8; }
-        tr.duplicate:hover td { background-color:#FBF4EA; opacity:1; }
-        tr.skipped td { opacity:.4; filter:grayscale(100%); background:#f5efe4; }
-        tr.skipped:hover td { opacity:.6; }
+
+        /* A duplicate is not coming in, so it does not offer a tick to skip it --
+           it says what it is. A skipped line keeps its tick and strikes its name. */
+        tr.duplicate td { background-color:#FDF6F2 !important; }
+        tr.duplicate:hover td { background-color:#FBEDE9 !important; }
+        tr.duplicate .col-desc, tr.duplicate .import-input, tr.duplicate .import-select,
+        tr.duplicate .import-textarea { color:var(--muted); }
+        tr.skipped td { opacity:.5; }
+        tr.skipped .col-desc { text-decoration:line-through; }
         .gap-small { display:flex; flex-direction:column; gap:4px; }
         .import-preview-wrap { max-height:500px; overflow-y:auto; }
         .import-modal-body { padding:25px; }
-        .preview-summary { background:var(--panel); border:1px solid var(--border); border-radius:8px;
-            padding:12px 20px; margin-bottom:20px; display:flex; justify-content:space-between;
-            align-items:center; gap:12px; flex-wrap:wrap; }
-        .preview-summary-count { font-family:'IBM Plex Sans',sans-serif; font-size:14px; font-weight:500; }
-        .preview-summary-tally { font-size:12px; display:flex; gap:15px; align-items:center; }
-        .preview-summary-tally button { font-size:12px; padding:6px 12px; height:auto; }
+
+        /* What the file turned out to be, said once and quietly. */
+        .preview-summary { background:var(--panel); border-radius:10px;
+            padding:14px 20px; margin-bottom:16px; display:flex; justify-content:space-between;
+            align-items:baseline; gap:16px; flex-wrap:wrap; }
+        .preview-summary-count { font-family:'Playfair Display',serif; font-size:19px; font-weight:700; color:var(--ink); }
+        .preview-summary-tally { font-family:'IBM Plex Sans',sans-serif; font-size:13px;
+            font-weight:400; color:var(--muted); margin-left:10px; }
+        #activeProfileLabel { font-family:'IBM Plex Mono',monospace; font-size:11.5px;
+            font-weight:400; color:var(--muted); margin-left:10px; }
+        .link-btn { background:none; border:none; padding:0; height:auto; cursor:pointer;
+            font-family:'IBM Plex Sans',sans-serif; font-size:13px; font-weight:600; color:var(--red); }
+        .link-btn:hover { text-decoration:underline; }
+
+        /* And what pressing the button will do, said in the same breath as the button. */
+        .preview-foot { display:flex; align-items:center; gap:12px; margin-top:16px; padding-top:16px;
+            border-top:1px solid var(--border); }
+        .preview-foot-tally { flex:1; font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--muted); }
+        .preview-foot .secondary, .preview-foot-go { height:44px; padding:0 22px; font-size:14px; }
         .profile-row { display:flex; gap:10px; align-items:flex-end; margin-bottom:16px; }
         .profile-row .form-group { flex:1; }
         .profile-row button { height:40px; }
@@ -269,23 +343,30 @@
         .hint-touch { display:none; }
 
         /* The other categories this payee has been filed under. Only the ones not
-           already chosen: what is chosen is in the two selects directly above, and
-           on a sheet of two hundred lines every word repeated is a word in the way.
-           Smaller than the same marks in the transaction modal for the same reason. */
-        .cat-hints { display:flex; flex-wrap:wrap; gap:3px; margin-top:4px; }
-        .cat-hints button { font-family:'IBM Plex Sans',sans-serif; font-size:10.5px;
-            line-height:1.2; padding:3px 7px; border-radius:999px; cursor:pointer;
-            border:1px solid var(--field); background:#fff; color:var(--muted); }
-        .cat-hints button:hover { border-color:var(--btn-primary); color:var(--ink); }
-        .cat-hints button .hint-count { margin-left:4px; opacity:.7; }
+           already chosen: what is chosen is showing in the cell itself. They hang
+           above the table rather than inside the row, because a row that grows to
+           hold them pushes the whole sheet down every time the pointer crosses it. */
+        .cat-hints { display:none; position:fixed; z-index:1200; flex-wrap:wrap; gap:4px;
+            background:var(--paper); border:1px solid var(--border); border-radius:10px;
+            padding:8px; box-shadow:0 12px 30px rgba(40,28,14,.18); max-width:280px; }
+        .cat-hints.is-open { display:flex; animation:hintsIn .13s ease-out; }
+        @keyframes hintsIn { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:none; } }
+        .cat-hints button { font-family:'IBM Plex Sans',sans-serif; font-size:11.5px;
+            line-height:1.2; padding:5px 9px; border-radius:999px; cursor:pointer;
+            border:1px solid var(--field); background:#fff; color:var(--ink); }
+        .cat-hints button:hover { border-color:var(--btn-primary); background:var(--panel); }
+        .cat-hints button .hint-count { margin-left:4px; opacity:.55; }
 
         /* ── Splitting a statement line into several concepts ── */
-        .split-toggle { margin-top:4px; padding:3px 8px; font-size:10px; font-weight:700; letter-spacing:.5px;
-            text-transform:uppercase; font-family:'IBM Plex Sans',sans-serif; border:1px solid var(--border);
-            border-radius:6px; background:#fff; color:var(--muted); cursor:pointer; width:100%; }
-        .split-toggle:hover:not(:disabled) { border-color:var(--btn-primary); color:var(--btn-primary); }
-        .split-toggle.is-on { border-color:var(--btn-primary); color:var(--btn-primary); background:var(--panel); }
-        .split-toggle:disabled { opacity:.4; cursor:not-allowed; }
+        .split-toggle { flex:0 0 auto; width:26px; height:26px; padding:0; border:none; border-radius:7px;
+            background:none; color:var(--muted); cursor:pointer; opacity:.35; transition:opacity .15s, color .15s; }
+        .split-toggle svg { width:15px; height:15px; display:block; margin:auto; fill:none;
+            stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+        .split-word { display:none; }
+        tr:hover .split-toggle { opacity:1; }
+        .split-toggle:hover:not(:disabled) { color:var(--red); background:var(--panel); }
+        .split-toggle.is-on { color:var(--red); opacity:1; background:var(--panel); }
+        .split-toggle:disabled { opacity:0; cursor:default; }
         .split-summary { display:none; font-size:10px; font-weight:700; letter-spacing:.5px; text-transform:uppercase;
             font-family:'IBM Plex Sans',sans-serif; color:var(--muted); padding:6px 0 2px; }
         tr.split-row td { background:#FBF4EA; border-bottom:1px solid var(--hair); padding:12px 14px 12px 50px; }
@@ -374,9 +455,15 @@
             .profile-row button { flex:1; height:auto; }
             /* Standing above a card that is paged through, the tally is read once
                and then in the way, so it keeps to two lines. */
-            .preview-summary { padding:10px 13px; gap:6px; }
-            .preview-summary-tally { width:100%; gap:10px; align-items:center; }
-            .preview-summary-tally button { flex:1; min-height:38px; font-size:12px; padding:6px 10px; }
+            .preview-summary { padding:10px 13px; gap:4px; align-items:flex-start; }
+            .preview-summary-count { font-size:17px; }
+            .preview-summary-tally, #activeProfileLabel { display:block; margin-left:0; }
+            .link-btn { min-height:38px; }
+            /* Room for a thumb, and the count above the buttons rather than beside. */
+            .preview-foot { flex-wrap:wrap; }
+            .preview-foot-tally { flex:1 0 100%; }
+            .preview-foot .secondary { flex:0 0 auto; }
+            .preview-foot-go { flex:1; }
             .import-preview-wrap { max-height:none; overflow:visible;
                 border:none; background:none; box-shadow:none; }
             .import-preview, .import-preview tbody, .import-preview td { display:block; width:auto; }
@@ -400,6 +487,7 @@
                     "payee    payee"
                     "cat      cat"
                     "loc      loc"
+                    "proj     proj"
                     "hints    hints"
                     "splitsum splitsum"
                     "splitbtn splitbtn"
@@ -408,7 +496,11 @@
                 margin-bottom:12px; padding:0;
             }
             .import-preview tr:hover td { background:none; }
-            .import-preview td { border:none; padding:0; }
+            .import-preview td { border:none; padding:0; white-space:normal; overflow:visible; }
+            /* The sheet's mark for the row under the pointer means nothing here,
+               where there is one row and no pointer -- and on a touch screen it
+               would stay lit after the tap that opened a field. */
+            .import-preview tbody tr:hover, .import-preview tbody tr:focus-within { box-shadow:none; }
             .import-preview td::before { content:attr(data-label); display:block;
                 font-family:'IBM Plex Sans',sans-serif; font-size:10px; font-weight:700;
                 text-transform:uppercase; letter-spacing:1px; color:var(--muted); }
@@ -433,14 +525,16 @@
                 font-size:19px; font-weight:700; line-height:1.25; color:var(--ink); }
             .import-preview .col-amount { grid-area:amount; padding:15px 16px 0; text-align:right;
                 font-size:23px; align-self:start; }
-            .import-preview .col-status { grid-area:status; padding:1px 16px 14px;
-                text-align:right; align-self:start; }
             .import-preview .col-date::before, .import-preview .col-desc::before,
-            .import-preview .col-amount::before, .import-preview .col-status::before { content:none; }
+            .import-preview .col-amount::before { content:none; }
 
-            /* Skipping a line is an action here, not a tick in a column. */
+            /* Skipping a line is an action here, not a tick in a column. A
+               duplicate has no such action -- it is not coming in either way --
+               so its mark rides up beside the amount instead. */
             .import-preview .col-skip { grid-area:skip; padding:0 12px 12px; }
             .import-preview .col-skip::before { content:none; }
+            .import-preview .col-skip:has(.badge) { grid-area:status; padding:1px 16px 14px;
+                text-align:right; align-self:start; }
             .import-preview .skip-toggle { display:flex; gap:10px; min-height:46px;
                 border:1px solid var(--border); border-radius:10px; background:#fff;
                 font-family:'IBM Plex Sans',sans-serif; font-size:13.5px; font-weight:600; color:#3A342C; }
@@ -464,12 +558,22 @@
             /* The fields: one label and its control per line, so the eye runs down
                a single edge instead of hunting for what belongs to what. */
             .import-preview .col-payee { grid-area:payee; margin:0 12px; }
-            .import-preview .col-cat { display:contents; }
-            .import-preview .col-cat .gap-small { grid-area:cat; margin:0 12px; gap:0; }
+            .import-preview .col-cat, .import-preview .cat-row { display:contents; }
+            /* Back to one line per field, each as wide as the card: the sheet's
+               single-line path and its centring belong to the sheet. */
+            .import-preview .col-cat .gap-small { grid-area:cat; margin:0 12px; gap:0;
+                flex-direction:column; align-items:stretch; }
+            /* Red here would read as a fault. On the sheet it marks the lines
+               still to be filed; on a card it is the field you are about to fill. */
+            .import-preview .col-cat select[id^="parentCategory"]:has(option[value=""]:checked)
+                { color:var(--muted); font-weight:400; }
+            .import-preview .col-cat .field-line:has(select:disabled) { display:flex; }
+            .import-preview .cat-sep { display:none; }
             .import-preview .col-loc { grid-area:loc; margin:0 12px; }
-            .import-preview .col-loc .gap-small { gap:0; }
+            .import-preview .col-proj { grid-area:proj; margin:0 12px; }
+            .import-preview .col-loc .gap-small, .import-preview .col-proj .gap-small { gap:0; }
             .import-preview .col-payee::before, .import-preview .col-cat::before,
-            .import-preview .col-loc::before { content:none; }
+            .import-preview .col-loc::before, .import-preview .col-proj::before { content:none; }
             .import-preview .field-line { display:flex; align-items:center; gap:10px;
                 min-height:52px; padding:2px 12px; background:#fff;
                 border:1px solid var(--hair); border-top:none; }
@@ -493,17 +597,28 @@
 
             /* What this payee has been filed under before, and the way out to a
                split: both belong to the categories above, under them, not in the box. */
-            .import-preview .cat-hints { grid-area:hints; padding:8px 13px 0; }
+            /* Nothing hovers on a phone, so the suggestions sit where they are
+               read: under the categories they are alternatives to. */
+            .import-preview .cat-hints { grid-area:hints; margin:0; padding:8px 13px 0;
+                position:static; background:none; border:none; box-shadow:none;
+                max-width:none; display:flex; }
+            .import-preview .cat-hints[hidden] { display:none; }
             .import-preview .split-summary { grid-area:splitsum; padding:8px 13px 0; }
             .import-preview .split-toggle { grid-area:splitbtn; justify-self:end; width:auto;
-                margin:0 12px; padding:10px 0; min-height:44px; border:none; background:none;
-                color:var(--red); font-size:12.5px; font-weight:700; text-transform:none;
-                letter-spacing:0; }
+                height:auto; opacity:1; margin:0 12px; padding:10px 0; min-height:44px;
+                border:none; background:none; color:var(--red); font-size:12.5px;
+                font-weight:700; text-transform:none; letter-spacing:0; }
+            .import-preview .split-toggle svg { display:none; }
+            .import-preview .split-word { display:inline; }
             .import-preview .split-toggle::before { content:'\21B3\00A0'; }
             /* The table's column is 180px wide and the card is not, so the longer
                wording is added here rather than written into the button. */
-            .import-preview .split-toggle:not(.is-on)::after { content:' across categories'; }
-            .import-preview .split-toggle:disabled { display:none; }
+            .import-preview .split-toggle:not(.is-on) .split-word::after { content:' across categories'; }
+            /* A transfer has nothing to spread over categories, so the way in is
+               withdrawn -- but it keeps its place. Removing the row outright made
+               the card shorter than a transaction's, so every switch between the
+               two moved the note and the arrows under the reader's thumb. */
+            .import-preview .split-toggle:disabled { visibility:hidden; }
 
             .import-preview .col-note { grid-area:note; padding:6px 14px 16px; }
             .import-preview .col-note::before { margin-bottom:6px; }
@@ -899,14 +1014,13 @@
                 <div id="previewSection" style="display: none;">
                     <div class="preview-summary">
                         <div class="preview-summary-count">
-                            Found <strong id="totalTransactions">0</strong> transactions
-                            <span id="activeProfileLabel" style="font-weight: 400; color: var(--muted); font-size: 12px;"></span>
+                            <strong id="totalTransactions">0</strong> transactions
+                            <span class="preview-summary-tally">
+                                <span id="newCount">0</span> new · <span id="duplicateCount">0</span> duplicates
+                            </span>
+                            <span id="activeProfileLabel"></span>
                         </div>
-                        <div class="preview-summary-tally">
-                            <span class="badge badge-dup">Duplicates: <span id="duplicateCount">0</span></span>
-                            <span class="badge badge-new">New: <span id="newCount">0</span></span>
-                            <button type="button" onclick="editMappingFromPreview()" class="secondary">Edit column mapping</button>
-                        </div>
+                        <button type="button" onclick="editMappingFromPreview()" class="link-btn">Edit column mapping</button>
                     </div>
 
                     <div class="import-table-container import-preview-wrap">
@@ -914,15 +1028,15 @@
                             <thead>
                                 <tr>
                                     <th class="col-skip">Skip</th>
-                                    <th style="width: 110px;">Date</th>
-                                    <th style="width: 150px;">Description</th>
-                                    <th style="text-align: right; width: 100px;">Amount</th>
-                                    <th style="width: 100px;">Type</th>
-                                    <th style="width: 180px;">Payee</th>
-                                    <th style="width: 180px;">Category</th>
-                                    <th style="width: 120px;">Location / Project</th>
-                                    <th>Note</th>
-                                    <th class="col-status">Status</th>
+                                    <th class="col-date">Date</th>
+                                    <th class="col-desc">Description</th>
+                                    <th class="col-amount">Amount</th>
+                                    <th class="col-type">Type</th>
+                                    <th class="col-payee">Payee</th>
+                                    <th class="col-cat">Category</th>
+                                    <th class="col-loc">Location</th>
+                                    <th class="col-proj">Project</th>
+                                    <th class="col-note">Note</th>
                                 </tr>
                             </thead>
                             <tbody id="transactionsTableBody"></tbody>
@@ -942,9 +1056,10 @@
                         <button type="button" id="importNext" onclick="stepImportCard(1)" aria-label="Next line">&#8250;</button>
                     </div>
 
-                    <div style="display: flex; gap: 10px; margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border);">
-                        <button onclick="importTransactions()" style="flex: 1; height: 44px; font-size: 15px;">Import <span id="importCount">0</span> Items</button>
-                        <button onclick="cancelImport()" class="secondary" style="height: 44px;">Cancel</button>
+                    <div class="preview-foot">
+                        <div class="preview-foot-tally" id="importFootTally"></div>
+                        <button onclick="cancelImport()" class="secondary">Cancel</button>
+                        <button onclick="importTransactions()" class="preview-foot-go">Import <span id="importCount">0</span></button>
                     </div>
                 </div>
             </div>
@@ -1694,6 +1809,13 @@
         const ICON_MERGE = '<svg viewBox="0 0 24 24" aria-hidden="true">'
             + '<path d="M2 12h8.5"/><path d="M7 8.5 10.5 12 7 15.5"/>'
             + '<path d="M22 12h-8.5"/><path d="M17 8.5 13.5 12 17 15.5"/></svg>';
+
+        // One line going in, several coming out: what splitting does to a statement
+        // line. Same grid and stroke as the marks above.
+        const ICON_SPLIT = '<svg viewBox="0 0 24 24" aria-hidden="true">'
+            + '<path d="M3 12h6"/>'
+            + '<path d="M9 12c4 0 4-6 8-6h4"/><path d="M9 12c4 0 4 6 8 6h4"/>'
+            + '<path d="M18 3l3 3-3 3"/><path d="M18 15l3 3-3 3"/></svg>';
 
         function displayCategories(filtered = null) {
             const categories = filtered || allCategories;
@@ -3410,13 +3532,30 @@
             if (splitRow) splitRow.classList.add('is-current');
 
             updateImportPager();
-            // A new line starts at its top, not wherever the last one was left.
-            const body = document.querySelector('#importModal .modal-content');
-            if (body && importFocusOn()) body.scrollTop = 0;
+        }
+
+        /**
+         * Brings the top of the card to the top of the screen.
+         *
+         * Stepping used to return to the top of the whole dialog, which put the
+         * title and the tally back on screen and left the line just moved to
+         * below the fold — one scroll down for every line of the statement. The
+         * card is what is being worked on, so the card is what the screen starts
+         * at; the tally stays where it was, one scroll up, for when it is wanted.
+         */
+        function alignImportCard() {
+            if (!importFocusOn()) return;
+            const scroller = document.querySelector('#importModal .modal-content');
+            const row = document.getElementById(`importRow_${importFocusIndex}`);
+            if (!scroller || !row) return;
+            const top = row.getBoundingClientRect().top
+                      - scroller.getBoundingClientRect().top + scroller.scrollTop;
+            scroller.scrollTop = Math.max(0, top - 10);
         }
 
         function stepImportCard(delta) {
             showImportCard(importFocusIndex + delta);
+            alignImportCard();
         }
 
         function updateImportPager() {
@@ -3470,9 +3609,11 @@
         function importPrompts() {
             return importFocusOn()
                 ? { payee: 'Search or create…', parent: 'Choose…', sub: 'Choose a category first',
-                    subOpen: 'Choose…', location: 'Optional', project: 'Optional' }
-                : { payee: 'Payee...', parent: 'Parent...', sub: 'Subcategory...',
-                    subOpen: 'Select category...', location: 'Loc...', project: 'Proj...' };
+                    subOpen: 'Choose…', location: 'Optional', project: 'Optional', note: 'Note…' }
+                // On the sheet an empty field states what is missing rather than
+                // telling the reader what to do about it — the underline does that.
+                : { payee: 'No payee', parent: 'No category', sub: '—',
+                    subOpen: '—', location: '—', project: '—', note: '—' };
         }
 
         // Display transactions preview table
@@ -3506,10 +3647,11 @@
 
                 row.innerHTML = `
                     <td class="col-skip" data-label="Skip">
+                        ${trans.isDuplicate ? '<span class="badge badge-dup">Dup</span>' : `
                         <label class="skip-toggle" for="skip_${index}">
                             <input type="checkbox" id="skip_${index}" class="custom-checkbox" onchange="handleSkipChange(${index})" ${trans.skip ? 'checked' : ''}>
                             <span>Skip this line</span>
-                        </label>
+                        </label>`}
                     </td>
                     <td class="col-date" data-label="Date">
                         <div class="date-short">${dateStr}</div>
@@ -3528,7 +3670,7 @@
                             <button type="button" data-type="transfer" onclick="setRowType(${index}, 'transfer')">Transfer</button>
                         </div>
                         <select id="type_${index}" class="import-select" onchange="handleTypeChange(${index})">
-                            <option value="transaction" ${trans.type === 'transaction' ? 'selected' : ''}>Transac.</option>
+                            <option value="transaction" ${trans.type === 'transaction' ? 'selected' : ''}>Transaction</option>
                             <option value="transfer" ${trans.type === 'transfer' ? 'selected' : ''}>Transfer</option>
                         </select>
                     </td>
@@ -3550,7 +3692,9 @@
                             </select>
                         </div>
                     </td>
-                    <td data-label="Category" class="col-field col-cat">
+                    <td data-label="Category" class="col-field col-cat"
+                        onmouseenter="openCategoryHints(${index}, this)" onmouseleave="closeCategoryHints()">
+                        <div class="cat-row">
                         <div class="gap-small" id="catCell_${index}">
                             <div class="field-line" data-label="Category">
                                 <select id="parentCategory_${index}" class="import-select" onchange="handleParentCategoryChange(${index})" ${trans.type === 'transfer' ? 'disabled' : ''}>
@@ -3559,20 +3703,23 @@
                                     <option value="__NEW__" style="color:#667eea;font-weight:bold">Add new...</option>
                                 </select>
                             </div>
+                            <span class="cat-sep" aria-hidden="true">&rsaquo;</span>
                             <div class="field-line" data-label="Sub">
                                 <select id="category_${index}" class="import-select" onchange="handleSubcategoryChange(${index})" disabled>
                                     <option value="">${prompt.sub}</option>
                                 </select>
                             </div>
                         </div>
-                        <div class="cat-hints" id="catHints_${index}" hidden></div>
-                        <div class="split-summary" id="splitSummary_${index}"></div>
                         <button type="button" class="split-toggle" id="splitBtn_${index}"
                                 onclick="toggleRowSplit(${index})"
                                 title="Spend one statement line across several categories"
-                                ${trans.type === 'transfer' ? 'disabled' : ''}>Split</button>
+                                ${trans.type === 'transfer' ? 'disabled' : ''}>${ICON_SPLIT}<span class="split-word">Split</span></button>
+                        </div>
+                        <div class="cat-hints" id="catHints_${index}" hidden
+                             onmouseenter="holdCategoryHints()" onmouseleave="closeCategoryHints()"></div>
+                        <div class="split-summary" id="splitSummary_${index}"></div>
                     </td>
-                    <td data-label="Location / project" class="col-field col-loc">
+                    <td data-label="Location" class="col-field col-loc">
                         <div class="gap-small" id="locProjCell_${index}">
                             <div class="field-line" data-label="Location">
                                 <select id="location_${index}" class="import-select" onchange="handleLocationChange(${index})" ${trans.type === 'transfer' ? 'disabled' : ''}>
@@ -3581,6 +3728,10 @@
                                     <option value="__NEW__" style="color:#667eea;font-weight:bold">Add...</option>
                                 </select>
                             </div>
+                        </div>
+                    </td>
+                    <td data-label="Project" class="col-field col-proj">
+                        <div class="gap-small" id="projCell_${index}">
                             <div class="field-line is-last" data-label="Project">
                                 <select id="project_${index}" class="import-select" ${trans.type === 'transfer' ? 'disabled' : ''}>
                                     <option value="">${prompt.project}</option>
@@ -3592,14 +3743,9 @@
                     <td data-label="Note" class="col-note">
                         <div id="noteCell_${index}">
                             <textarea id="note_${index}" class="import-textarea"
-                                    placeholder="Note..."
+                                    placeholder="${prompt.note}"
                                     onchange="parsedTransactions[${index}].note = this.value">${trans.note || ''}</textarea>
                         </div>
-                    </td>
-                    <td class="col-status">
-                        ${trans.isDuplicate ?
-                            '<span class="badge badge-dup">Dup</span>' :
-                            '<span class="badge badge-new">New</span>'}
                     </td>
                 `;
 
@@ -3621,11 +3767,8 @@
                 }
             });
             
-            // Update counts
             document.getElementById('totalTransactions').textContent = parsedTransactions.length;
-            document.getElementById('duplicateCount').textContent = duplicateCount;
-            document.getElementById('newCount').textContent = newCount;
-            document.getElementById('importCount').textContent = newCount;
+            updateImportCounts();
 
             parsedTransactions.forEach((_, i) => syncTypeSegment(i));
             importFocusIndex = 0;
@@ -3696,19 +3839,28 @@
             // in play, so neither are its suggestions.
             const hints = document.getElementById(`catHints_${index}`);
             if (hints) hints.style.display = on ? 'none' : '';
-            document.getElementById(`locProjCell_${index}`).style.display = on ? 'none' : '';
+            [`locProjCell_${index}`, `projCell_${index}`].forEach(id => {
+                const cell = document.getElementById(id);
+                if (cell) cell.style.display = on ? 'none' : '';
+            });
             document.getElementById(`noteCell_${index}`).style.display = on ? 'none' : '';
             // On a phone each cell prints its own label, so an emptied cell has to
             // take that label with it rather than leave a heading over nothing.
-            [`locProjCell_${index}`, `noteCell_${index}`].forEach(id => {
-                const cell = document.getElementById(id).closest('td');
+            [`locProjCell_${index}`, `projCell_${index}`, `noteCell_${index}`].forEach(id => {
+                const el = document.getElementById(id);
+                const cell = el && el.closest('td');
                 if (cell) cell.classList.toggle('label-off', on);
             });
             document.getElementById(`splitSummary_${index}`).style.display = on ? 'block' : 'none';
 
             const button = document.getElementById(`splitBtn_${index}`);
             button.classList.toggle('is-on', on);
-            button.textContent = on ? 'Undo split' : 'Split';
+            // On a wide screen the mark carries no text, so the tooltip is the label.
+            button.title = on
+                ? 'Put this line back together'
+                : 'Spend one statement line across several categories';
+            const word = button.querySelector('.split-word');
+            if (word) word.textContent = on ? 'Undo split' : 'Split';
 
             if (on) renderRowSplit(index);
         }
@@ -4068,11 +4220,67 @@
             return true;
         }
 
+        // ── The other categories this payee has been filed under ────────────
+        // They used to sit under the selects, which grew the row and moved every
+        // line below it. Now they wait above the table and only for as long as
+        // the pointer is on the category being questioned.
+
+        let _hintsTimer = null;
+
+        function openCategoryHints(index, cell) {
+            clearTimeout(_hintsTimer);
+            const box = document.getElementById(`catHints_${index}`);
+            if (!box || box.hidden) return;
+            if (_openHints && _openHints !== box) _openHints.classList.remove('is-open');
+            const r = cell.getBoundingClientRect();
+            box.style.minWidth = `${Math.round(r.width)}px`;
+            box.classList.add('is-open');
+
+            // The dialog is centred with a transform, which makes it the origin
+            // every fixed thing inside it is placed against — not the window. So
+            // the panel is dropped at 0,0 first and asked where that landed,
+            // rather than trusting the two to be the same.
+            box.style.left = '0px';
+            box.style.top = '0px';
+            const origin = box.getBoundingClientRect();
+            const width = origin.width;
+            const left = Math.min(r.left, window.innerWidth - width - 8);
+            // No room underneath? Then above, rather than off the bottom edge.
+            const below = r.bottom + 4;
+            const top = (below + origin.height > window.innerHeight - 8)
+                ? Math.max(8, r.top - origin.height - 4)
+                : below;
+            box.style.left = `${Math.round(left - origin.left)}px`;
+            box.style.top = `${Math.round(top - origin.top)}px`;
+            _openHints = box;
+        }
+
+        /** Keeps the panel up while the pointer travels from the cell into it. */
+        function holdCategoryHints() {
+            clearTimeout(_hintsTimer);
+        }
+
+        function closeCategoryHints() {
+            clearTimeout(_hintsTimer);
+            _hintsTimer = setTimeout(() => {
+                if (_openHints) _openHints.classList.remove('is-open');
+                _openHints = null;
+            }, 140);
+        }
+
+        let _openHints = null;
+
+        // A panel placed against a cell has to go when the cell moves under it.
+        document.addEventListener('scroll', () => {
+            if (_openHints) { _openHints.classList.remove('is-open'); _openHints = null; }
+        }, true);
+
         function clearRowCategoryHints(index) {
             const box = document.getElementById(`catHints_${index}`);
             if (!box) return;
             box.innerHTML = '';
             box.hidden = true;
+            box.classList.remove('is-open');
         }
 
         // The other pairs this payee has been filed under, most used first. The one
@@ -4247,6 +4455,9 @@
 
         // Handle parent category change
         function handleParentCategoryChange(index) {
+            // The footer counts the lines still without a category, so it is told
+            // whichever way this ends -- chosen, cleared, or off to create a new one.
+            setTimeout(updateImportCounts, 0);
             const parentSelect = document.getElementById(`parentCategory_${index}`);
             const parentValue = parentSelect.value;
             const categorySelect = document.getElementById(`category_${index}`);
@@ -4452,6 +4663,25 @@
             document.getElementById('newCount').textContent = newCount;
             document.getElementById('importCount').textContent = newCount;
             updateImportPager();
+
+            // What the footer says is what pressing Import will do: how many lines
+            // go in, how many were set aside, and how many are going in with no
+            // category on them — the one thing that is easy to leave half done.
+            const tally = document.getElementById('importFootTally');
+            if (tally) {
+                const blank = parsedTransactions.filter((t, i) => {
+                    if (t.skip || t.isDuplicate || t.splitLines) return false;
+                    const type = document.getElementById(`type_${i}`);
+                    if (type && type.value === 'transfer') return false;
+                    const parent = document.getElementById(`parentCategory_${i}`);
+                    return parent && !parent.value;
+                }).length;
+                const bits = [`${newCount} selected`];
+                if (skippedCount) bits.push(`${skippedCount} skipped`);
+                if (duplicateCount) bits.push(`${duplicateCount} duplicate${duplicateCount === 1 ? '' : 's'}`);
+                if (blank) bits.push(`${blank} without a category`);
+                tally.textContent = bits.join(' · ');
+            }
         }
 
         // Import transactions
