@@ -13,6 +13,11 @@
     <link rel="manifest" href="manifest.json" />
     <!-- Shared cache: loaded before the page script so DelfinCache exists. -->
     <script src="/app/cache.js"></script>
+    <!-- The dialogs that write money, and the button that offers them. -->
+    <script src="/app/loan-form.js"></script>
+    <script src="/app/account-form.js"></script>
+    <script src="/app/transaction-form.js"></script>
+    <script src="/app/quick-add.js"></script>
     <title>Delfin · Budget</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -364,12 +369,6 @@
         .info-row .symbol { display: inline-block; width: 22px; text-align: center; margin-right: 4px; }
         .footer { text-align: center; margin-top: auto; padding: 24px 10px 10px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 1px; color: #A99A85; }
 
-        /* Floating actions (shortcuts to add a transaction/transfer) */
-        .fab-container { position: fixed; bottom: 28px; right: 28px; display: flex; gap: 12px; z-index: 60; }
-        .fab-button { border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: transform .18s ease, box-shadow .18s ease; }
-        .fab-button:first-child { width: 54px; height: 54px; border-radius: 50%; background: var(--chip, #F1E7D6); color: #3A342C; font-size: 22px; box-shadow: 0 10px 24px rgba(40,28,14,.24); }
-        .fab-button:last-child { width: 60px; height: 60px; border-radius: 50%; background: #2B2621; color: #fff; font-size: 30px; font-weight: 300; box-shadow: 0 12px 30px rgba(40,28,14,.4); }
-        .fab-button:hover { transform: translateY(-3px) scale(1.05); }
 
         /* ── Responsive ── */
         @media (max-width: 1000px) {
@@ -2528,12 +2527,17 @@
         };
 
         // Init on load
-        document.addEventListener('DOMContentLoaded', init);
+            // The three dialogs the quick-add button offers are shared with every other
+    // page; what each page does once something is saved is its own business.
+    function setUpQuickAdd() {
+        DelfinLoanForm.configure({ apiBase: API_BASE });
+        DelfinAccountForm.configure({ apiBase: API_BASE, onSaved: () => init() });
+        DelfinTxForm.configure({ apiBase: API_BASE, reloadList: () => init() });
+        DelfinQuickAdd.install();
+    }
+
+    document.addEventListener('DOMContentLoaded', () => { setUpQuickAdd(); init(); });
     </script>
-<div class="fab-container">
-    <button class="fab-button" onclick="location.href='transactions.html#new-transfer'" title="New Transfer">⇄</button>
-    <button class="fab-button" onclick="location.href='transactions.html#new-transaction'" title="New Transaction">+</button>
-</div>
 <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');</script>
 <script>
 /* Delfin auth: bounce to login on 401, and wire the header Log out button. */

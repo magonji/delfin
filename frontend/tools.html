@@ -13,6 +13,11 @@
     <link rel="manifest" href="manifest.json" />
     <!-- Shared cache: loaded before the page script so DelfinCache exists. -->
     <script src="/app/cache.js"></script>
+    <!-- The dialogs that write money, and the button that offers them. -->
+    <script src="/app/loan-form.js"></script>
+    <script src="/app/account-form.js"></script>
+    <script src="/app/transaction-form.js"></script>
+    <script src="/app/quick-add.js"></script>
     <!-- The loan terms form, shared with the Loans page. -->
     <script src="/app/loan-form.js"></script>
     <title>Delfin · Tools</title>
@@ -403,13 +408,6 @@
         @keyframes slideInToast { from { transform:translateX(100%); opacity:0; } to { transform:translateX(0); opacity:1; } }
         @keyframes fadeOutToast { from { transform:translateX(0); opacity:1; } to { transform:translateX(100%); opacity:0; } }
 
-        /* ── FAB ── */
-        /* Floating actions (unified with the dashboard) */
-        .fab-container { position:fixed; bottom:28px; right:28px; display:flex; gap:12px; z-index:60; }
-        .fab-button { border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:transform .18s ease, box-shadow .18s ease; }
-        .fab-button:first-child { width:54px; height:54px; border-radius:50%; background:var(--chip, #F1E7D6); color:#3A342C; font-size:22px; box-shadow:0 10px 24px rgba(40,28,14,.24); }
-        .fab-button:last-child { width:60px; height:60px; border-radius:50%; background:#2B2621; color:#fff; font-size:30px; font-weight:300; box-shadow:0 12px 30px rgba(40,28,14,.4); }
-        .fab-button:hover { transform:translateY(-3px) scale(1.05); }
 
         /* ── Responsive ── */
         @media (max-width:820px) {
@@ -798,47 +796,12 @@
     <div id="accountsModal" class="modal">
         <div class="modal-content">
             <div class="modal-header"><h3>Manage Accounts</h3><button class="close-btn" onclick="closeModal('accountsModal')">&times;</button></div>
-            <div style="padding: 10px 25px;"><button onclick="openNewAccount()" style="width: 100%;">Add account</button></div>
+            <div style="padding: 10px 25px;"><button onclick="DelfinAccountForm.open()" style="width: 100%;">Add account</button></div>
             <div class="search-box"><input type="text" id="accountSearch" placeholder="Search accounts..." onkeyup="filterAccounts()"></div>
             <div class="item-list" id="accountsList"></div>
         </div>
     </div>
     
-    <!-- Opening an account belongs with the list of them. It used to be possible
-         only from the Account picker of the transaction modal, which is a strange
-         place to keep the front door. -->
-    <div id="newAccountModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header"><h3>Add Account</h3><button class="close-btn" onclick="cancelNewAccount()">&times;</button></div>
-            <div class="form-group"><label>Name</label><input type="text" id="newAccName" placeholder="Current account, Visa, Cash…"></div>
-            <div class="form-group" id="newAccCurrencyGroup"><label>Currency</label><select id="newAccCurrency"></select></div>
-            <div class="form-group"><label>Type</label><select id="newAccType"></select></div>
-            <div class="form-group" id="newAccOpeningGroup">
-                <label>Opening balance</label>
-                <input type="number" id="newAccOpening" step="0.01" inputmode="decimal" placeholder="What is in it now">
-                <div class="form-hint">What the account holds before anything Delfin knows about. Leave it empty for zero.</div>
-            </div>
-            <div class="form-group" id="newAccLimitGroup" style="display: none;">
-                <label>Credit limit</label>
-                <input type="number" id="newAccLimit" step="0.01" min="0" inputmode="decimal" placeholder="Leave empty if there is none">
-            </div>
-            <div class="form-group" id="newAccTermsGroup" style="display: none;">
-                <label>Repayment</label>
-                <select id="newAccTerms" onchange="onNewAccountTermsChange()">
-                    <option value="none">no schedule — just what is owed</option>
-                    <option value="terms">on agreed terms</option>
-                </select>
-                <div class="form-hint" id="newAccTermsHint">Choose the second and the instalments,
-                    interest and full schedule are worked out here.</div>
-            </div>
-            <!-- Where the shared loan form sits while this account is a loan. -->
-            <div id="newAccTermsHost"></div>
-            <div style="display: flex; gap: 10px; padding: 0 25px 4px;">
-                <button onclick="createAccount()" style="flex: 1;">Create</button>
-                <button onclick="cancelNewAccount()" class="secondary" style="flex: 1;">Cancel</button>
-            </div>
-        </div>
-    </div>
 
     <div id="payeesModal" class="modal">
         <div class="modal-content">
@@ -1529,6 +1492,7 @@
                 if (e.key === 'Escape') closeCustomDialog(false);
             });
             populateCurrencies('editCurrency');
+            setUpQuickAdd();
         });
 
         // Format a money amount with the proper symbol for any ISO currency
@@ -2239,6 +2203,20 @@
 
         // The loan terms form is shared with the Loans page; it only needs to be
         // told how this page writes money and what to refresh once it has saved.
+        // The three dialogs the quick-add button offers, and the button itself.
+        function setUpQuickAdd() {
+            DelfinAccountForm.configure({
+                apiBase: API_URL,
+                onSaved: async () => { await loadAccounts(); displayAccounts(); },
+                onSuccess: showSuccess,
+            });
+            DelfinTxForm.configure({
+                apiBase: API_URL,
+                reloadList: async () => { await loadAccounts(); displayAccounts(); },
+            });
+            DelfinQuickAdd.install();
+        }
+
         DelfinLoanForm.configure({
             apiBase: API_URL,
             formatMoney: (n, currency) => {
@@ -2261,94 +2239,10 @@
          * supersedes: the amount borrowed is the opening balance, and the currency
          * follows the account the money was paid into.
          */
-        async function onNewAccountTermsChange() {
-            const wanted = document.getElementById('newAccTerms').value === 'terms';
-            const el = (id) => document.getElementById(id);
-            el('newAccCurrencyGroup').style.display = wanted ? 'none' : '';
-            el('newAccOpeningGroup').style.display = wanted ? 'none' : '';
-            el('newAccTermsHint').style.display = wanted ? 'none' : 'block';
-            // A limit belongs to revolving credit; a schedule replaces it outright.
-            const kind = DelfinAccountTypes.canonical(el('newAccType').value);
-            el('newAccLimitGroup').style.display =
-                (!wanted && BORROWING_TYPES.includes(kind)) ? '' : 'none';
-            if (wanted) {
-                await DelfinLoanForm.attach(el('newAccTermsHost'));
-            } else {
-                DelfinLoanForm.detach();
-            }
-        }
 
         /** Closing the dialog gives the shared form back before it disappears. */
-        function cancelNewAccount() {
-            DelfinLoanForm.detach();
-            closeModal('newAccountModal');
-        }
 
-        async function openNewAccount() {
-            document.getElementById('newAccName').value = '';
-            document.getElementById('newAccOpening').value = '';
-            document.getElementById('newAccLimit').value = '';
-            document.getElementById('newAccType').innerHTML =
-                '<option value="">Select...</option>' + DelfinAccountTypes.options();
-            document.getElementById('newAccLimitGroup').style.display = 'none';
-            document.getElementById('newAccTermsGroup').style.display = 'none';
-            document.getElementById('newAccTerms').value = 'none';
-            DelfinLoanForm.detach();
-            document.getElementById('newAccCurrencyGroup').style.display = '';
-            document.getElementById('newAccOpeningGroup').style.display = '';
-            document.getElementById('newAccType').onchange = (e) => {
-                const kind = DelfinAccountTypes.canonical(e.target.value);
-                document.getElementById('newAccLimitGroup').style.display =
-                    BORROWING_TYPES.includes(kind) ? '' : 'none';
-                const lending = SCHEDULABLE_TYPES.includes(kind);
-                document.getElementById('newAccTermsGroup').style.display = lending ? '' : 'none';
-                if (!lending) {
-                    document.getElementById('newAccTerms').value = 'none';
-                    onNewAccountTermsChange();
-                }
-            };
-            await populateCurrencies('newAccCurrency');
-            openModal('newAccountModal');
-        }
 
-        async function createAccount() {
-            const name = document.getElementById('newAccName').value.trim();
-            const type = document.getElementById('newAccType').value;
-            if (!name) { showError('The account needs a name'); return; }
-            if (!type) { showError('Choose what kind of account this is'); return; }
-
-            // With terms it is the loan that is created, and the account comes with
-            // it — along with the drawdown into whichever account received the money.
-            if (document.getElementById('newAccTerms').value === 'terms') {
-                const saved = await DelfinLoanForm.submit({ name });
-                if (saved) closeModal('newAccountModal');
-                return;
-            }
-
-            const opening = document.getElementById('newAccOpening').value.trim();
-            const limit = document.getElementById('newAccLimit').value.trim();
-            const limitApplies = BORROWING_TYPES.includes(DelfinAccountTypes.canonical(type));
-            try {
-                const res = await fetch(`${API_URL}/accounts`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        name, type,
-                        currency: document.getElementById('newAccCurrency').value,
-                        initial_balance: opening ? parseFloat(opening) : 0,
-                        credit_limit: (limitApplies && limit) ? parseFloat(limit) : null
-                    })
-                });
-                if (!res.ok) throw new Error((await res.json()).detail || 'Create failed');
-                DelfinCache.markDirty('tools');
-                closeModal('newAccountModal');
-                showSuccess(`Added "${name}"`);
-                await loadAccounts();
-                displayAccounts();
-            } catch (e) {
-                showError('Error creating the account: ' + e.message);
-            }
-        }
 
         function editItem(type, id) {
             currentEditType = type;
@@ -5668,10 +5562,6 @@
             }
         }
     </script>
-<div class="fab-container">
-    <button class="fab-button" onclick="location.href='transactions.html#new-transfer'" title="New Transfer">⇄</button>
-    <button class="fab-button" onclick="location.href='transactions.html#new-transaction'" title="New Transaction">+</button>
-</div>
 <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');</script>
 <script>
 /* Delfin auth: bounce to login on 401, and wire the header Log out icon. */

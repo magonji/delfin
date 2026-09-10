@@ -13,6 +13,11 @@
     <link rel="manifest" href="manifest.json" />
     <!-- Shared cache: loaded before the page script so DelfinCache exists. -->
     <script src="/app/cache.js"></script>
+    <!-- The dialogs that write money, and the button that offers them. -->
+    <script src="/app/loan-form.js"></script>
+    <script src="/app/account-form.js"></script>
+    <script src="/app/transaction-form.js"></script>
+    <script src="/app/quick-add.js"></script>
     <!-- The loan terms form, shared with Tools. -->
     <script src="/app/loan-form.js"></script>
     <title>Delfin · Loans and Credit Cards</title>
@@ -89,12 +94,6 @@
         .amount-negative { color: var(--red); }
         .footer { text-align: center; margin-top: auto; padding: 104px 0 10px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 1px; color: #A99A85; }
 
-        /* Floating actions (unified with the dashboard) */
-        .fab-container { position: fixed; bottom: 28px; right: 28px; display: flex; gap: 12px; z-index: 60; }
-        .fab-button { border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: transform .18s ease, box-shadow .18s ease; }
-        .fab-button:first-child { width: 54px; height: 54px; border-radius: 50%; background: var(--chip, #F1E7D6); color: #3A342C; font-size: 22px; box-shadow: 0 10px 24px rgba(40,28,14,.24); }
-        .fab-button:last-child { width: 60px; height: 60px; border-radius: 50%; background: #2B2621; color: #fff; font-size: 30px; font-weight: 300; box-shadow: 0 12px 30px rgba(40,28,14,.4); }
-        .fab-button:hover { transform: translateY(-3px) scale(1.05); }
 
         /* Success and error message boxes */
         .message-box { padding: 15px; border-radius: 8px; margin: 20px; display: none; color: white; text-align: center; }
@@ -216,6 +215,8 @@
             .schedule-table { font-size: 10.5px; }
         }
     </style>
+    <!-- One shape for every form in the app; see the file. -->
+    <link rel="stylesheet" href="/app/forms.css">
 </head>
 <body>
 
@@ -1071,7 +1072,16 @@
     }
     
     // Load data when DOM is ready
-    document.addEventListener('DOMContentLoaded', loadData);
+        // The three dialogs the quick-add button offers are shared with every other
+    // page; what each page does once something is saved is its own business.
+    function setUpQuickAdd() {
+        DelfinLoanForm.configure({ apiBase: API_BASE });
+        DelfinAccountForm.configure({ apiBase: API_BASE, onSaved: () => loadData() });
+        DelfinTxForm.configure({ apiBase: API_BASE, reloadList: () => loadData() });
+        DelfinQuickAdd.install();
+    }
+
+    document.addEventListener('DOMContentLoaded', () => { setUpQuickAdd(); loadData(); });
 
     // =============================================================================
     // XIRR CALCULATION (Extended Internal Rate of Return)
@@ -1197,10 +1207,6 @@
         return NaN;
     }
 </script>
-<div class="fab-container">
-    <button class="fab-button" onclick="location.href='transactions.html#new-transfer'" title="New Transfer">⇄</button>
-    <button class="fab-button" onclick="location.href='transactions.html#new-transaction'" title="New Transaction">+</button>
-</div>
 <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');</script>
 <script>
 /* Delfin auth: bounce to login on 401, and add a Log out item to the nav menu. */
