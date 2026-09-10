@@ -1471,13 +1471,18 @@
             // but had no working Save button and no infinite scroll, until it was
             // reloaded by hand. Now whatever arrives is used, and what did not is
             // said out loud.
+            // Held by name rather than read back out of the list by position: the
+            // list has had entries added and removed over time, and an index into
+            // it is a silent way to end up rendering the wrong answer -- which is
+            // exactly what happened when one was taken out.
+            const transactions = fetchTransactionsData();
             const loaded = await Promise.allSettled([
                 loadAccounts(),
                 loadCategories(),
                 loadPayees(),
                 loadLocations(),
                 loadProjects(),
-                fetchTransactionsData(),  // Fetch raw data in parallel
+                transactions,
                 // Fills the summary strip, and is also where the base currency is
                 // learnt. It has to settle before the first render: `displayCurrency`
                 // starts on its GBP placeholder, and the Total Balance column would
@@ -1487,7 +1492,7 @@
                 updateTransactionsSummary()
             ]);
 
-            const transactionsData = loaded[6].status === 'fulfilled' ? loaded[6].value : null;
+            const transactionsData = await transactions.catch(() => null);
             if (loaded.some(r => r.status === 'rejected')) {
                 loaded.filter(r => r.status === 'rejected')
                       .forEach(r => console.error('Load failed:', r.reason));
