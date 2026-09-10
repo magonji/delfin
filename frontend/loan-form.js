@@ -56,6 +56,24 @@
     }
 
     var STYLE = `
+      /**
+       * The dialogs carry the app's colours with them.
+       *
+       * They open on five pages, and the pages do not agree on the vocabulary:
+       * the dashboard calls --ink a blue (#3C5A6E, what the others call
+       * --ink-blue) and never defines --accent, --field or --panel. A
+       * dialog written against those names therefore came out with blue text,
+       * a blue rule where the red one belongs, and colourless buttons. Naming
+       * them again here, on the dialog itself, settles what they mean inside it
+       * whatever the page around it believes.
+       */
+      #dlfLoanModal, #dlfLoanForm {
+        --bg:#FAF3E9; --paper:#FFFDFA; --panel:#F3E9DA; --card:#E4D5C1;
+        --border:#D8C6B0; --hair:#EFE4D3; --field:#E4D5C1; --chip:#F1E7D6;
+        --muted:#8A7D6C; --text:#23201C; --ink:#23201C; --accent:#B0402E;
+        --red:#B0402E; --green:#3C7A57; --yellow:#C6893F; --ink-blue:#3C5A6E;
+        --btn-primary:#2B2621; --danger:#B0402E;
+      }
       #dlfLoanModal { display:none; position:fixed; z-index:1200; inset:0;
         background-color:rgba(35,32,28,.4); backdrop-filter:blur(3px);
         align-items:center; justify-content:center; padding:18px; }

@@ -35,6 +35,24 @@
     function el(id) { return document.getElementById(id); }
 
     var STYLE = `
+      /**
+       * The dialogs carry the app's colours with them.
+       *
+       * They open on five pages, and the pages do not agree on the vocabulary:
+       * the dashboard calls --ink a blue (#3C5A6E, what the others call
+       * --ink-blue) and never defines --accent, --field or --panel. A
+       * dialog written against those names therefore came out with blue text,
+       * a blue rule where the red one belongs, and colourless buttons. Naming
+       * them again here, on the dialog itself, settles what they mean inside it
+       * whatever the page around it believes.
+       */
+      #dlfAccountModal {
+        --bg:#FAF3E9; --paper:#FFFDFA; --panel:#F3E9DA; --card:#E4D5C1;
+        --border:#D8C6B0; --hair:#EFE4D3; --field:#E4D5C1; --chip:#F1E7D6;
+        --muted:#8A7D6C; --text:#23201C; --ink:#23201C; --accent:#B0402E;
+        --red:#B0402E; --green:#3C7A57; --yellow:#C6893F; --ink-blue:#3C5A6E;
+        --btn-primary:#2B2621; --danger:#B0402E;
+      }
       #dlfAccountModal { display:none; position:fixed; inset:0; z-index:1100;
         background:rgba(35,32,28,.4); backdrop-filter:blur(3px);
         align-items:center; justify-content:center; padding:18px; }
@@ -53,7 +71,9 @@
       #dlfAccountModal .dlf-foot button { flex:1; height:46px; border-radius:10px; cursor:pointer;
         font-family:'Playfair Display',serif; font-size:14px; font-weight:500;
         border:1px solid var(--field); background:#fff; color:#3A342C; }
-      #dlfAccountModal .dlf-primary { background:#2B2621; color:#F6EFE3; border-color:#2B2621; }
+      /* Beaten by the rule above it on specificity when it named only the class. */
+      #dlfAccountModal .dlf-foot button.dlf-primary { background:#2B2621; color:#F6EFE3;
+        border-color:#2B2621; }
       #dlfAccountModal .dlf-error { color:var(--red); font-size:12.5px; padding:10px 22px 0; display:none; }`;
 
     var MARKUP = `

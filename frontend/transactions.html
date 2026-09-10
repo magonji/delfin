@@ -1553,7 +1553,7 @@
         function setupEventListeners() {
             // The dialogs and their pickers wire themselves up: they belong to
             // transaction-form.js now, and to every page, not only this one.
-            window.addEventListener('click', (e) => { if(e.target.classList.contains('modal')) e.target.classList.remove('active'); });
+            window.addEventListener('click', (e) => { if(e.target.classList.contains('modal')) closeModal(e.target.id); });
             
             // --- Keyboard shortcuts ---
             document.addEventListener('keydown', handleGlobalKeyboard);

@@ -1264,6 +1264,24 @@
      * the sign button, the split editor, the batch notice.
      */
     var STYLE = `
+      /**
+       * The dialogs carry the app's colours with them.
+       *
+       * They open on five pages, and the pages do not agree on the vocabulary:
+       * the dashboard calls --ink a blue (#3C5A6E, what the others call
+       * --ink-blue) and never defines --accent, --field or --panel. A
+       * dialog written against those names therefore came out with blue text,
+       * a blue rule where the red one belongs, and colourless buttons. Naming
+       * them again here, on the dialog itself, settles what they mean inside it
+       * whatever the page around it believes.
+       */
+      .dlf-tx {
+        --bg:#FAF3E9; --paper:#FFFDFA; --panel:#F3E9DA; --card:#E4D5C1;
+        --border:#D8C6B0; --hair:#EFE4D3; --field:#E4D5C1; --chip:#F1E7D6;
+        --muted:#8A7D6C; --text:#23201C; --ink:#23201C; --accent:#B0402E;
+        --red:#B0402E; --green:#3C7A57; --yellow:#C6893F; --ink-blue:#3C5A6E;
+        --btn-primary:#2B2621; --danger:#B0402E;
+      }
       .dlf-tx .cat-hints .hint-lead { font-family: 'IBM Plex Sans', sans-serif; font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); margin-right: 2px; }
       .dlf-tx .cat-hints button { font-family: 'IBM Plex Sans', sans-serif; font-size: 12px; padding: 5px 11px; border-radius: 999px; cursor: pointer; border: 1px solid var(--field); background: var(--paper); color: var(--text); }
       .dlf-tx .cat-hints button:hover { border-color: var(--btn-primary); color: var(--ink); }
@@ -1317,6 +1335,30 @@
       .dlf-tx .batch-indicator.active { display: flex; }
       .dlf-tx .batch-indicator .count { font-weight: 700; }
       .dlf-tx .modal-footer-batch .btn-save-new { grid-column: 1 / -1; }
+
+      /* Rules whose selector followed a comment, and which the first pass
+         therefore read as part of it. */
+      .dlf-tx .split-line-card { border: 1px solid var(--hair); border-radius: 10px; padding: 14px 14px 0; margin-bottom: 12px; background: #FBF4EA; }
+      .modal.dlf-tx input.amount-negative { color: var(--red); }
+      .dlf-tx #splitToggleRow { justify-content: flex-end; padding: 10px 12px 0; }
+      .dlf-tx .modal-content { background-color: var(--paper); padding: 0; border-radius: 16px; width: 90%; max-width: 520px; max-height: 90vh; overflow-y: auto; box-shadow: 0 24px 60px rgba(40,28,14,.35); border: 1px solid var(--hair); animation: slideUp 0.3s ease; }
+      .dlf-tx .modal-header { background: transparent; padding: 18px 24px; border-bottom: 1px solid var(--hair); display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+      .dlf-tx .modal-header h3 { margin: 0; color: var(--ink); font-family: 'Playfair Display', serif; font-size: 21px; font-weight: 700; padding-left: 12px; border-left: 3px solid var(--accent); }
+      .dlf-tx .modal-close { background: var(--field); border: none; border-radius: 8px; width: 32px; height: 32px; font-size: 18px; line-height: 1; color: #3A342C; cursor: pointer; flex: 0 0 auto; }
+      .dlf-tx .modal-close:hover { background: var(--card); color: var(--ink); }
+      .dlf-tx .modal-body { padding: 22px 24px; overflow: hidden; }
+      .dlf-tx .form-group { margin-bottom: 18px; }
+      .dlf-tx .modal-footer { display: flex; gap: 12px; margin-top: 24px; }
+      .dlf-tx .modal-footer button, .dlf-tx .modal-footer-batch button { flex: 1; padding: 0 20px; height: 46px; border-radius: 9px; border: 1px solid var(--field); font-weight: 500; font-size: 14px; cursor: pointer; font-family: 'Playfair Display', serif; -webkit-appearance: none; appearance: none; }
+      .dlf-tx .modal-footer-batch { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 20px; }
+      .dlf-tx .modal-footer-batch .btn-save-new { grid-column: 1 / -1; }
+      .dlf-tx .cat-hints { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: -6px 0 14px; }
+      .dlf-tx .split-caret { display: inline-block; border: none; background: none; cursor: pointer; padding: 0 4px 0 0; margin: 0; color: inherit; font: inherit; line-height: 1; }
+      .modal.dlf-tx { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(35, 32, 28, 0.4); backdrop-filter: blur(3px); align-items: center; justify-content: center; }
+      .modal.dlf-tx input, .modal.dlf-tx select, .modal.dlf-tx textarea { width: 100%; max-width: 100%; box-sizing: border-box; padding: 11px 12px; border: 1px solid var(--field); border-radius: 9px; background: #fff; color: var(--ink); font-family: 'IBM Plex Sans', sans-serif; font-size: 14px; transition: border-color 0.2s; -webkit-appearance: none; appearance: none; }
+      .modal.dlf-tx input:focus, .modal.dlf-tx select:focus, .modal.dlf-tx textarea:focus { outline: none; border-color: var(--accent); }
+      .dlf-tx .modal-footer button, .dlf-tx .modal-footer-batch button { flex: 1; padding: 0 20px; height: 46px; border-radius: 9px; border: 1px solid var(--field); font-weight: 500; font-size: 14px; cursor: pointer; font-family: 'Playfair Display', serif; -webkit-appearance: none; appearance: none; }
+      .dlf-tx .batch-indicator { background: var(--yellow); color: var(--text); padding: 8px 15px; border-radius: 6px; font-size: 13px; display: none; align-items: center; gap: 8px; margin-bottom: 15px; }
     `;
 
     var MARKUP = `        <div id="newCategoryModal" class="modal dlf-tx">
@@ -1546,9 +1588,17 @@
             if (e.target.value === '__NEW__') { e.target.value = ''; openNewAccountModal('toAccount'); }
             checkTransferCurrencies();
         });
-        // A click on the backdrop closes the dialog it fell on.
+        // A click on the backdrop closes the dialog it fell on -- through the
+        // door, not the window. An open dialog puts the page behind it out of
+        // reach (`inert`, so a stray tab or click cannot land there), and only
+        // closing properly hands it back. Merely dropping the `active` class
+        // left the page unreachable: the quick-add button in the corner stopped
+        // answering, and nothing said why.
         window.addEventListener('click', function (e) {
-            if (e.target.classList && e.target.classList.contains('modal')) e.target.classList.remove('active');
+            if (!e.target.classList || !e.target.classList.contains('modal')) return;
+            if (e.target.id === 'transactionModal') closeTransactionModal();
+            else if (e.target.id === 'transferModal') closeTransferModal();
+            else closeModal(e.target.id);
         });
     }
 
