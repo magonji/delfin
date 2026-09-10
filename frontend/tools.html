@@ -240,6 +240,15 @@
         .badge-new { background:#E6F0EA; color:#2C5C42; border:1px solid #BFD9C9; }
         .badge-dup { background:#FBEDE9; color:#8A2D1C; border:1px solid #E7C3B8; }
         .custom-checkbox { width:16px; height:16px; cursor:pointer; accent-color:var(--btn-primary); }
+        /* Pieces the phone's card needs and the table does not: a column already
+           headed Skip needs no second label, a select is a better use of 100px
+           than two tabs, and the sheet is walked by scrolling, not by arrows. */
+        .skip-toggle { display:inline-flex; align-items:center; justify-content:center; cursor:pointer; }
+        .col-date .date-long { display:none; }
+        .skip-toggle span { display:none; }
+        .type-seg { display:none; }
+        .field-line::before { display:none; }
+        .import-pager { display:none; }
         tr.duplicate td { background-color:#FBF4EA !important; opacity:.8; }
         tr.duplicate:hover td { background-color:#FBF4EA; opacity:1; }
         tr.skipped td { opacity:.4; filter:grayscale(100%); background:#f5efe4; }
@@ -354,62 +363,175 @@
             .import-modal-body { padding:16px; }
 
             /* The preview is a form, not a spreadsheet. Ten columns of selects
-               could only be reached by pinching, so each statement line becomes
-               a card with its fields labelled and stacked. */
+               could only be reached by pinching; stacking every line into a card
+               left a page a hundred cards long to thumb through. So one line
+               fills the screen and the arrows underneath walk the sheet. */
             /* The modal body already provides the gutter; the global rule below
                would indent every field a second time inside it. */
             .import-modal-body .form-group { padding:0; }
             .profile-row { flex-wrap:wrap; }
             .profile-row .form-group { flex:1 0 100%; }
             .profile-row button { flex:1; height:auto; }
-            .preview-summary { padding:12px 14px; }
-            .preview-summary-tally { flex-wrap:wrap; width:100%; gap:10px; }
-            .preview-summary-tally button { flex:1 0 100%; min-height:44px; font-size:13px; }
+            /* Standing above a card that is paged through, the tally is read once
+               and then in the way, so it keeps to two lines. */
+            .preview-summary { padding:10px 13px; gap:6px; }
+            .preview-summary-tally { width:100%; gap:10px; align-items:center; }
+            .preview-summary-tally button { flex:1; min-height:38px; font-size:12px; padding:6px 10px; }
             .import-preview-wrap { max-height:none; overflow:visible;
                 border:none; background:none; box-shadow:none; }
-            .import-preview, .import-preview tbody, .import-preview tr, .import-preview td
-                { display:block; width:auto; }
+            .import-preview, .import-preview tbody, .import-preview td { display:block; width:auto; }
             .import-preview thead { display:none; }
-            .import-preview tr { display:flex; flex-wrap:wrap; align-items:stretch;
-                border:1px solid var(--border); border-radius:10px; background:#fff;
-                padding:10px 12px; margin-bottom:10px; }
+
+            /* Only the line being worked on is on screen. The rest keep their
+               fields — the import reads its values from them, so a row that was
+               never rendered would be a row silently dropped. */
+            .import-focus .import-preview tbody tr { display:none; }
+            .import-focus .import-preview tbody tr.is-current { display:grid; }
+            .import-focus .import-preview tbody tr.split-row.is-current { display:block; }
+
+            .import-preview tr {
+                display:grid;
+                grid-template-columns:minmax(0,1fr) auto;
+                grid-template-areas:
+                    "date     amount"
+                    "desc     status"
+                    "skip     skip"
+                    "type     type"
+                    "payee    payee"
+                    "cat      cat"
+                    "loc      loc"
+                    "hints    hints"
+                    "splitsum splitsum"
+                    "splitbtn splitbtn"
+                    "note     note";
+                border:1px solid var(--border); border-radius:14px; background:var(--panel);
+                margin-bottom:12px; padding:0;
+            }
             .import-preview tr:hover td { background:none; }
-            .import-preview td { flex:0 0 100%; order:3; border:none; padding:8px 0 0; }
-            .import-preview td::before { content:attr(data-label); display:block; margin-bottom:4px;
+            .import-preview td { border:none; padding:0; }
+            .import-preview td::before { content:attr(data-label); display:block;
                 font-family:'IBM Plex Sans',sans-serif; font-size:10px; font-weight:700;
                 text-transform:uppercase; letter-spacing:1px; color:var(--muted); }
             /* A cell that stands down while the line is split takes its label with it. */
             .import-preview td.label-off { display:none; }
+            /* The tinting the table used to tell a duplicate apart is the card's
+               border and badge here, so the cells themselves stay clear. */
+            .import-preview tr.duplicate td, .import-preview tr.skipped td
+                { background:none !important; opacity:1; filter:none; }
+            .import-preview tr.duplicate { background:#FBF1EC; border-color:#E7C3B8; }
+            .import-preview tr.skipped { opacity:.6; }
 
-            /* Skip and the New/Dup badge share the card's top line. */
-            .import-preview .col-skip, .import-preview .col-status { flex:1 1 auto; width:auto;
-                display:flex; align-items:center; gap:8px; padding:0 0 8px; margin-bottom:4px;
-                border-bottom:1px solid var(--hair); }
-            .import-preview .col-skip { order:1; }
-            .import-preview .col-status { order:2; justify-content:flex-end; }
-            .import-preview .col-skip::before { margin:0; }
-            .import-preview .col-status::before { content:none; }
-            .import-preview .custom-checkbox { width:22px; height:22px; }
+            /* The header: when it happened, what the bank called it, how much. */
+            .import-preview .col-date { grid-area:date; padding:15px 16px 0;
+                font-family:'IBM Plex Mono',monospace; font-size:11.5px; letter-spacing:.5px;
+                text-transform:uppercase; color:var(--muted); white-space:normal; }
+            .import-preview .col-date .date-short { display:none; }
+            .import-preview .col-date .date-long, .import-preview .col-date .date-time { display:inline; }
+            .import-preview .col-date .date-time::before { content:' · '; }
+            .import-preview .col-desc { grid-area:desc; padding:1px 16px 14px; max-width:none;
+                white-space:normal; overflow:visible; font-family:'Playfair Display',serif;
+                font-size:19px; font-weight:700; line-height:1.25; color:var(--ink); }
+            .import-preview .col-amount { grid-area:amount; padding:15px 16px 0; text-align:right;
+                font-size:23px; align-self:start; }
+            .import-preview .col-status { grid-area:status; padding:1px 16px 14px;
+                text-align:right; align-self:start; }
+            .import-preview .col-date::before, .import-preview .col-desc::before,
+            .import-preview .col-amount::before, .import-preview .col-status::before { content:none; }
 
-            /* Freed of its column, the description no longer needs clipping. */
-            .import-preview .col-desc { max-width:none; white-space:normal; overflow:visible;
-                font-size:14px; color:var(--ink); }
-            .import-preview .col-date > div { display:inline-block; }
-            .import-preview .col-date > div + div { margin-left:6px; }
-            .import-preview .col-amount { text-align:left; font-size:17px; }
+            /* Skipping a line is an action here, not a tick in a column. */
+            .import-preview .col-skip { grid-area:skip; padding:0 12px 12px; }
+            .import-preview .col-skip::before { content:none; }
+            .import-preview .skip-toggle { display:flex; gap:10px; min-height:46px;
+                border:1px solid var(--border); border-radius:10px; background:#fff;
+                font-family:'IBM Plex Sans',sans-serif; font-size:13.5px; font-weight:600; color:#3A342C; }
+            .import-preview .skip-toggle span { display:inline; margin:0;
+                text-transform:none; letter-spacing:0; font-size:13.5px; }
+            .import-preview .skip-toggle:has(:checked) { border-color:var(--red); background:#FBEDE9; color:var(--red); }
+            .import-preview .custom-checkbox { width:20px; height:20px; }
+
+            /* Transaction or transfer, as two tabs rather than a list of two. */
+            .import-preview .col-type { grid-area:type; padding:0 12px 14px; }
+            .import-preview .col-type::before { content:none; }
+            .import-preview .col-type .import-select { display:none; }
+            .import-preview .type-seg { display:grid; grid-template-columns:1fr 1fr; gap:4px;
+                background:var(--field); border-radius:12px; padding:4px; }
+            .import-preview .type-seg button { min-height:40px; border:none; border-radius:9px;
+                background:none; font-family:'IBM Plex Sans',sans-serif; font-size:14px;
+                font-weight:600; color:var(--muted); cursor:pointer; }
+            .import-preview .type-seg button.is-on { background:#fff; color:var(--ink);
+                box-shadow:0 1px 3px rgba(40,28,14,.16); }
+
+            /* The fields: one label and its control per line, so the eye runs down
+               a single edge instead of hunting for what belongs to what. */
+            .import-preview .col-payee { grid-area:payee; margin:0 12px; }
+            .import-preview .col-cat { display:contents; }
+            .import-preview .col-cat .gap-small { grid-area:cat; margin:0 12px; gap:0; }
+            .import-preview .col-loc { grid-area:loc; margin:0 12px; }
+            .import-preview .col-loc .gap-small { gap:0; }
+            .import-preview .col-payee::before, .import-preview .col-cat::before,
+            .import-preview .col-loc::before { content:none; }
+            .import-preview .field-line { display:flex; align-items:center; gap:10px;
+                min-height:52px; padding:2px 12px; background:#fff;
+                border:1px solid var(--hair); border-top:none; }
+            .import-preview .field-line.is-first { border-top:1px solid var(--hair);
+                border-radius:11px 11px 0 0; }
+            .import-preview .field-line.is-last { border-radius:0 0 11px 11px; }
+            .import-preview .field-line::before { content:attr(data-label); display:block;
+                flex:0 0 76px; font-family:'IBM Plex Sans',sans-serif; font-size:10px;
+                font-weight:700; text-transform:uppercase; letter-spacing:1px; color:var(--muted); }
+            .import-preview .field-line > div, .import-preview .field-line > select { flex:1; min-width:0; }
+            /* Inside a line the control is the line: its own frame would be a box
+               drawn inside a box. */
+            .import-preview .field-line .import-input,
+            .import-preview .field-line .import-select { border:none; background:none;
+                box-shadow:none; padding:11px 0; min-height:46px; font-size:16px; }
+            .import-preview .field-line .import-input:focus,
+            .import-preview .field-line .import-select:focus { box-shadow:none; }
+            .import-preview .field-line .import-select:disabled,
+            .import-preview .field-line .import-input:disabled { background:none; opacity:.45; }
+            .import-preview .field-line .import-select:has(option[value=""]:checked) { color:#9C9081; }
+
+            /* What this payee has been filed under before, and the way out to a
+               split: both belong to the categories above, under them, not in the box. */
+            .import-preview .cat-hints { grid-area:hints; padding:8px 13px 0; }
+            .import-preview .split-summary { grid-area:splitsum; padding:8px 13px 0; }
+            .import-preview .split-toggle { grid-area:splitbtn; justify-self:end; width:auto;
+                margin:0 12px; padding:10px 0; min-height:44px; border:none; background:none;
+                color:var(--red); font-size:12.5px; font-weight:700; text-transform:none;
+                letter-spacing:0; }
+            .import-preview .split-toggle::before { content:'\21B3\00A0'; }
+            /* The table's column is 180px wide and the card is not, so the longer
+               wording is added here rather than written into the button. */
+            .import-preview .split-toggle:not(.is-on)::after { content:' across categories'; }
+            .import-preview .split-toggle:disabled { display:none; }
+
+            .import-preview .col-note { grid-area:note; padding:6px 14px 16px; }
+            .import-preview .col-note::before { margin-bottom:6px; }
 
             /* 12px controls sized for a dense table are too small to hit. */
             .import-preview .import-input, .import-preview .import-select,
             .import-preview .import-textarea { font-size:16px; padding:10px; min-height:44px; }
-            .import-preview .import-textarea { height:auto; }
-            .import-preview .split-toggle { min-height:38px; font-size:11px; }
-            .import-preview .gap-small { gap:6px; }
+            .import-preview .import-textarea { height:auto; min-height:84px; }
 
             /* The split editor is a panel under its card, not a table row. */
-            .import-preview tr.split-row { padding:0; border:none; margin:-6px 0 10px; }
-            .import-preview tr.split-row td { padding:12px 14px; background:#FBF4EA;
-                border:1px solid var(--border); border-radius:10px; }
+            .import-preview tr.split-row { padding:0; border:none; background:none;
+                margin:-6px 0 12px; }
+            .import-preview tr.split-row td { padding:12px 14px; background:#FBF4EA !important;
+                border:1px solid var(--border); border-radius:12px; }
             .import-preview tr.split-row td::before { content:none; }
+
+            /* The way through the statement, always within thumb's reach. */
+            .import-focus .import-pager { display:flex; align-items:center; gap:12px;
+                position:sticky; bottom:0; z-index:2; margin-top:14px; padding:10px 0;
+                background:var(--paper); border-top:1px solid var(--hair); }
+            .import-pager button { flex:0 0 56px; min-height:48px; border-radius:12px;
+                border:1px solid var(--border); background:#fff; color:#3A342C;
+                font-size:24px; line-height:1; cursor:pointer; }
+            .import-pager button:disabled { opacity:.35; cursor:default; }
+            .import-pager-count { flex:1; text-align:center; font-family:'IBM Plex Mono',monospace;
+                font-size:12px; letter-spacing:.5px; text-transform:uppercase; color:var(--muted); }
+            .import-pager-count strong { display:block; font-size:14px; color:var(--ink); }
+
             .split-line-row { grid-template-columns:minmax(0,1fr) 34px; }
             .split-line-row > :not(.split-line-x) { grid-column:1; }
             .split-line-row > .split-line-x { grid-column:2; grid-row:1; font-size:22px; }
@@ -805,6 +927,19 @@
                             </thead>
                             <tbody id="transactionsTableBody"></tbody>
                         </table>
+                    </div>
+
+                    <!-- On a phone the preview shows one line at a time, so the
+                         way through the statement is a pair of arrows rather than
+                         a scroll bar. Hidden on a desktop, where the table is the
+                         better view of the same rows. -->
+                    <div class="import-pager" id="importPager">
+                        <button type="button" id="importPrev" onclick="stepImportCard(-1)" aria-label="Previous line">&#8249;</button>
+                        <div class="import-pager-count">
+                            <strong id="importPagerPos">1 of 1</strong>
+                            <span id="importPagerLeft"></span>
+                        </div>
+                        <button type="button" id="importNext" onclick="stepImportCard(1)" aria-label="Next line">&#8250;</button>
                     </div>
 
                     <div style="display: flex; gap: 10px; margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border);">
@@ -3243,8 +3378,106 @@
             currentProfile = null;
         }
 
+        // ── One line at a time, on a phone ──────────────────────────────
+        // A statement line asks for eight fields. Ten columns of them could only
+        // be reached by pinching, and stacking every line into a card left a
+        // page a hundred cards long to thumb through. So on a narrow screen the
+        // preview shows the line being worked on and nothing else, and the rest
+        // of the sheet is reached with the arrows underneath.
+        //
+        // Every row stays in the DOM, only hidden: the import reads its values
+        // straight from the fields, so a row that was never rendered would be a
+        // row that was silently dropped.
+
+        let importFocusIndex = 0;
+        const importNarrow = window.matchMedia('(max-width: 600px)');
+
+        function importFocusOn() {
+            return importNarrow.matches;
+        }
+
+        /** Brings one line to the front, leaving the others in place but out of view. */
+        function showImportCard(index) {
+            const total = parsedTransactions.length;
+            if (!total) return;
+            importFocusIndex = Math.max(0, Math.min(index, total - 1));
+
+            document.querySelectorAll('#transactionsTableBody tr.is-current')
+                .forEach(tr => tr.classList.remove('is-current'));
+            const row = document.getElementById(`importRow_${importFocusIndex}`);
+            const splitRow = document.getElementById(`splitRow_${importFocusIndex}`);
+            if (row) row.classList.add('is-current');
+            if (splitRow) splitRow.classList.add('is-current');
+
+            updateImportPager();
+            // A new line starts at its top, not wherever the last one was left.
+            const body = document.querySelector('#importModal .modal-content');
+            if (body && importFocusOn()) body.scrollTop = 0;
+        }
+
+        function stepImportCard(delta) {
+            showImportCard(importFocusIndex + delta);
+        }
+
+        function updateImportPager() {
+            const total = parsedTransactions.length;
+            const left = parsedTransactions.filter(t => !t.isDuplicate && !t.skip).length;
+            document.getElementById('importPagerPos').textContent =
+                `${Math.min(importFocusIndex + 1, total)} of ${total}`;
+            document.getElementById('importPagerLeft').textContent =
+                left === 1 ? '1 to import' : `${left} to import`;
+            document.getElementById('importPrev').disabled = importFocusIndex <= 0;
+            document.getElementById('importNext').disabled = importFocusIndex >= total - 1;
+        }
+
+        /** Whether the preview is showing one card or the whole table. */
+        function applyImportFocusMode() {
+            const section = document.getElementById('previewSection');
+            if (!section) return;
+            section.classList.toggle('import-focus', importFocusOn());
+            if (parsedTransactions.length) showImportCard(importFocusIndex);
+        }
+
+        // Turning the phone, or opening the same page on a wider screen, changes
+        // which of the two views is the right one.
+        importNarrow.addEventListener('change', applyImportFocusMode);
+
+        /**
+         * The card's face for the type select, which stays where the value is
+         * read from. Tapping a tab is the same as choosing from the list.
+         */
+        function setRowType(index, type) {
+            const select = document.getElementById(`type_${index}`);
+            if (!select || select.value === type) return;
+            select.value = type;
+            handleTypeChange(index);
+        }
+
+        function syncTypeSegment(index) {
+            const seg = document.getElementById(`typeSeg_${index}`);
+            if (!seg) return;
+            const type = document.getElementById(`type_${index}`).value;
+            seg.querySelectorAll('button').forEach(b =>
+                b.classList.toggle('is-on', b.dataset.type === type));
+        }
+
+        /**
+         * The table's columns are 100px wide, so its prompts are cut to fit —
+         * "Loc...", "Proj...". A card has a label on every line and room to
+         * spare, so there the same options can say what they mean instead of
+         * repeating the label back at the reader.
+         */
+        function importPrompts() {
+            return importFocusOn()
+                ? { payee: 'Search or create…', parent: 'Choose…', sub: 'Choose a category first',
+                    subOpen: 'Choose…', location: 'Optional', project: 'Optional' }
+                : { payee: 'Payee...', parent: 'Parent...', sub: 'Subcategory...',
+                    subOpen: 'Select category...', location: 'Loc...', project: 'Proj...' };
+        }
+
         // Display transactions preview table
         function displayTransactionsPreview() {
+            const prompt = importPrompts();
             const tbody = document.getElementById('transactionsTableBody');
             tbody.innerHTML = '';
             
@@ -3259,21 +3492,29 @@
                 }
                 
                 const row = document.createElement('tr');
+                row.id = `importRow_${index}`;
                 if (trans.isDuplicate) row.classList.add('duplicate');
                 if (trans.skip) row.classList.add('skipped');
                 
                 // Date formatting
                 const dateObj = new Date(trans.date);
                 const dateStr = dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' });
+                // Spelled out for the card, where there is room and one line is
+                // being read rather than a column of them scanned.
+                const dateLongStr = dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
                 const timeStr = dateObj.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 
                 row.innerHTML = `
                     <td class="col-skip" data-label="Skip">
-                        <input type="checkbox" id="skip_${index}" class="custom-checkbox" onchange="handleSkipChange(${index})" ${trans.skip ? 'checked' : ''}>
+                        <label class="skip-toggle" for="skip_${index}">
+                            <input type="checkbox" id="skip_${index}" class="custom-checkbox" onchange="handleSkipChange(${index})" ${trans.skip ? 'checked' : ''}>
+                            <span>Skip this line</span>
+                        </label>
                     </td>
                     <td class="col-date" data-label="Date">
-                        <div>${dateStr}</div>
-                        <div style="font-size: 10px; opacity: 0.7;">${timeStr}</div>
+                        <div class="date-short">${dateStr}</div>
+                        <div class="date-long">${dateLongStr}</div>
+                        <div class="date-time" style="font-size: 10px; opacity: 0.7;">${timeStr}</div>
                     </td>
                     <td class="col-desc" data-label="Description" title="${trans.description || ''}">
                         ${trans.description || '-'}
@@ -3281,38 +3522,48 @@
                     <td class="col-amount" data-label="Amount" style="color: ${trans.amount < 0 ? 'var(--red)' : 'var(--green)'};">
                         ${fmtMoney(Math.abs(trans.amount), (allAccountsForImport.find(a => a.id === trans.account_id) || {}).currency || 'GBP')}
                     </td>
-                    <td data-label="Type">
+                    <td data-label="Type" class="col-type">
+                        <div class="type-seg" id="typeSeg_${index}" role="group" aria-label="Type">
+                            <button type="button" data-type="transaction" onclick="setRowType(${index}, 'transaction')">Transaction</button>
+                            <button type="button" data-type="transfer" onclick="setRowType(${index}, 'transfer')">Transfer</button>
+                        </div>
                         <select id="type_${index}" class="import-select" onchange="handleTypeChange(${index})">
                             <option value="transaction" ${trans.type === 'transaction' ? 'selected' : ''}>Transac.</option>
                             <option value="transfer" ${trans.type === 'transfer' ? 'selected' : ''}>Transfer</option>
                         </select>
                     </td>
-                    <td data-label="Payee">
-                        <div id="payee_container_${index}" class="gap-small" style="display: ${trans.type === 'transfer' ? 'none' : 'flex'};">
-                            <input list="payees_${index}" id="payee_${index}" 
-                                class="import-input"
-                                placeholder="Payee..." 
-                                onchange="handlePayeeChange(${index})">
-                            <datalist id="payees_${index}">
-                                ${allPayees.map(p => `<option value="${p.name}">`).join('')}
-                            </datalist>
-                        </div>
+                    <td class="col-field col-payee">
+                        <div class="field-line is-first" data-label="${trans.type === 'transfer' ? 'To account' : 'Payee'}">
+                            <div id="payee_container_${index}" class="gap-small" style="display: ${trans.type === 'transfer' ? 'none' : 'flex'};">
+                                <input list="payees_${index}" id="payee_${index}" 
+                                    class="import-input"
+                                    placeholder="${prompt.payee}" 
+                                    onchange="handlePayeeChange(${index})">
+                                <datalist id="payees_${index}">
+                                    ${allPayees.map(p => `<option value="${p.name}">`).join('')}
+                                </datalist>
+                            </div>
 
-                        <select id="account_${index}" class="import-select" style="display: ${trans.type === 'transfer' ? 'block' : 'none'};">
-                            <option value="">Select account...</option>
-                            ${allAccountsForImport.map(acc => `<option value="${acc.id}">${acc.name}</option>`).join('')}
-                        </select>
+                            <select id="account_${index}" class="import-select" style="display: ${trans.type === 'transfer' ? 'block' : 'none'};">
+                                <option value="">Select account...</option>
+                                ${allAccountsForImport.map(acc => `<option value="${acc.id}">${acc.name}</option>`).join('')}
+                            </select>
+                        </div>
                     </td>
-                    <td data-label="Category">
+                    <td data-label="Category" class="col-field col-cat">
                         <div class="gap-small" id="catCell_${index}">
-                            <select id="parentCategory_${index}" class="import-select" onchange="handleParentCategoryChange(${index})" ${trans.type === 'transfer' ? 'disabled' : ''}>
-                                <option value="">Parent...</option>
-                                ${getUniqueParents().map(p => `<option value="${p}">${p}</option>`).join('')}
-                                <option value="__NEW__" style="color:#667eea;font-weight:bold">Add new...</option>
-                            </select>
-                            <select id="category_${index}" class="import-select" onchange="handleSubcategoryChange(${index})" disabled>
-                                <option value="">Subcategory...</option>
-                            </select>
+                            <div class="field-line" data-label="Category">
+                                <select id="parentCategory_${index}" class="import-select" onchange="handleParentCategoryChange(${index})" ${trans.type === 'transfer' ? 'disabled' : ''}>
+                                    <option value="">${prompt.parent}</option>
+                                    ${getUniqueParents().map(p => `<option value="${p}">${p}</option>`).join('')}
+                                    <option value="__NEW__" style="color:#667eea;font-weight:bold">Add new...</option>
+                                </select>
+                            </div>
+                            <div class="field-line" data-label="Sub">
+                                <select id="category_${index}" class="import-select" onchange="handleSubcategoryChange(${index})" disabled>
+                                    <option value="">${prompt.sub}</option>
+                                </select>
+                            </div>
                         </div>
                         <div class="cat-hints" id="catHints_${index}" hidden></div>
                         <div class="split-summary" id="splitSummary_${index}"></div>
@@ -3321,20 +3572,24 @@
                                 title="Spend one statement line across several categories"
                                 ${trans.type === 'transfer' ? 'disabled' : ''}>Split</button>
                     </td>
-                    <td data-label="Location / project">
+                    <td data-label="Location / project" class="col-field col-loc">
                         <div class="gap-small" id="locProjCell_${index}">
-                            <select id="location_${index}" class="import-select" onchange="handleLocationChange(${index})" ${trans.type === 'transfer' ? 'disabled' : ''}>
-                                <option value="">Loc...</option>
-                                ${allLocations.map(l => `<option value="${l.id}">${l.name}</option>`).join('')}
-                                <option value="__NEW__" style="color:#667eea;font-weight:bold">Add...</option>
-                            </select>
-                            <select id="project_${index}" class="import-select" ${trans.type === 'transfer' ? 'disabled' : ''}>
-                                <option value="">Proj...</option>
-                                ${allProjects.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
-                            </select>
+                            <div class="field-line" data-label="Location">
+                                <select id="location_${index}" class="import-select" onchange="handleLocationChange(${index})" ${trans.type === 'transfer' ? 'disabled' : ''}>
+                                    <option value="">${prompt.location}</option>
+                                    ${allLocations.map(l => `<option value="${l.id}">${l.name}</option>`).join('')}
+                                    <option value="__NEW__" style="color:#667eea;font-weight:bold">Add...</option>
+                                </select>
+                            </div>
+                            <div class="field-line is-last" data-label="Project">
+                                <select id="project_${index}" class="import-select" ${trans.type === 'transfer' ? 'disabled' : ''}>
+                                    <option value="">${prompt.project}</option>
+                                    ${allProjects.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
+                                </select>
+                            </div>
                         </div>
                     </td>
-                    <td data-label="Note">
+                    <td data-label="Note" class="col-note">
                         <div id="noteCell_${index}">
                             <textarea id="note_${index}" class="import-textarea"
                                     placeholder="Note..."
@@ -3371,6 +3626,10 @@
             document.getElementById('duplicateCount').textContent = duplicateCount;
             document.getElementById('newCount').textContent = newCount;
             document.getElementById('importCount').textContent = newCount;
+
+            parsedTransactions.forEach((_, i) => syncTypeSegment(i));
+            importFocusIndex = 0;
+            applyImportFocusMode();
         }
 
         // ── Splitting one statement line into several concepts ──────────────
@@ -3620,6 +3879,7 @@
         // Handle transaction type change (Transaction vs Transfer)
         function handleTypeChange(index) {
             const type = document.getElementById(`type_${index}`).value;
+            syncTypeSegment(index);
             const payeeContainer = document.getElementById(`payee_container_${index}`) || document.getElementById(`payee_${index}`);
             const accountSelect = document.getElementById(`account_${index}`);
             const categoryParent = document.getElementById(`parentCategory_${index}`);
@@ -3629,8 +3889,8 @@
             
             const splitButton = document.getElementById(`splitBtn_${index}`);
 
-            // Same cell, two different fields: the card layout labels it from here.
-            const payeeCell = accountSelect.closest('td');
+            // Same line, two different fields: the card layout labels it from here.
+            const payeeCell = accountSelect.closest('.field-line') || accountSelect.closest('td');
             if (payeeCell) payeeCell.dataset.label = type === 'transfer' ? 'To account' : 'Payee';
 
             if (type === 'transfer') {
@@ -3707,7 +3967,9 @@
             const fromAccount = allAccountsForImport.find(a => a.id === trans.account_id);
             const toAccount = allAccountsForImport.find(a => a.id === parseInt(toAccountId));
             
-            const td = document.getElementById(`account_${index}`).parentElement;
+            // The cell, not the line the select sits on: the rate goes underneath
+            // the field, not alongside it.
+            const td = document.getElementById(`account_${index}`).closest('td');
             
             // Remove existing conversion field if any
             const existingConversion = document.getElementById(`currencyConversion_${index}`);
@@ -3998,7 +4260,7 @@
                 return;
             }
             
-            categorySelect.innerHTML = '<option value="">Select category...</option>';
+            categorySelect.innerHTML = `<option value="">${importPrompts().subOpen}</option>`;
             
             if (!parentValue) {
                 categorySelect.disabled = true;
@@ -4189,6 +4451,7 @@
             document.getElementById('duplicateCount').textContent = duplicateCount;
             document.getElementById('newCount').textContent = newCount;
             document.getElementById('importCount').textContent = newCount;
+            updateImportPager();
         }
 
         // Import transactions
