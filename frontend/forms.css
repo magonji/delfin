@@ -1,0 +1,232 @@
+/**
+ * The shape of a form in Delfin.
+ *
+ * It was worked out for the CSV import on a phone, where a statement line asks
+ * for eight fields and there is no room to waste: a label on the left, its
+ * value on the right, one field per line, ruled between. Every field then
+ * starts at the same edge, so the eye runs down a single column instead of
+ * hunting for what belongs to what, and the control is the line rather than a
+ * box drawn inside it.
+ *
+ * Every other form in the app was written before that, each page with its own
+ * spacing and its own idea of how tall a field should be. This says it once.
+ *
+ * It attaches to the markup the pages already have -- `.form-group` holding a
+ * label and its control -- so no dialog had to be rewritten to take it. Loaded
+ * after each page's own <style>, so it wins where the two disagree.
+ *
+ * The import dialog is left out: it is the original, and its preview is a
+ * table, not a form.
+ */
+
+/* ── The dialog ─────────────────────────────────────────────────────── */
+
+.modal:not(#importModal) .modal-content {
+    border-radius: 16px;
+    border: 1px solid var(--hair);
+}
+
+.modal:not(#importModal) .modal-header {
+    padding: 18px 22px;
+    border-bottom: 1px solid var(--hair);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+
+.modal:not(#importModal) .modal-header h3 {
+    margin: 0;
+    font-family: 'Playfair Display', serif;
+    font-size: 21px;
+    font-weight: 700;
+    padding-left: 12px;
+    border-left: 3px solid var(--accent);
+    color: var(--ink);
+}
+
+/* ── The fields ─────────────────────────────────────────────────────── */
+
+.modal:not(#importModal) .modal-content .form-group {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    min-height: 52px;
+    margin: 0;
+    padding: 2px 12px;
+    background: #fff;
+    border-bottom: 1px solid var(--hair);
+}
+
+/* A pair written side by side is two questions on one line, and in a dialog
+   520px wide it left the amount 76 pixels to live in -- once its label and the
+   sign button had taken theirs, nothing. One field to a line: the run reads
+   unbroken, and each field gets the width of the dialog. */
+.modal:not(#importModal) .modal-content .form-row { display: contents; }
+
+.modal:not(#importModal) .modal-content .form-group > label {
+    flex: 0 0 84px;
+    margin: 0;
+    align-self: center;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1.25;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+/* The control is the line: its own frame would be a box drawn inside a box.
+   Named by descent rather than by parentage, because a page may wrap a field in
+   a helper -- an amount and its sign, a password and its eye. A tickbox is
+   excluded: it is a mark, not a line to write on. */
+.modal:not(#importModal) .modal-content .form-group input:not([type="checkbox"]):not([type="radio"]),
+.modal:not(#importModal) .modal-content .form-group select,
+.modal:not(#importModal) .modal-content .form-group textarea {
+    min-width: 0;
+    width: auto;
+    flex: 1 1 auto;
+    padding: 11px 0;
+    min-height: 46px;
+    border: none;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    font-size: 15px;
+}
+
+.modal:not(#importModal) .modal-content .form-group > .amount-field,
+.modal:not(#importModal) .modal-content .form-group > .pw-wrap,
+.modal:not(#importModal) .modal-content .form-group > .form-row {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.modal:not(#importModal) .modal-content .form-group select {
+    background-image: none;
+    padding-right: 0;
+}
+
+.modal:not(#importModal) .modal-content .form-group textarea {
+    resize: none;
+    line-height: 1.4;
+}
+
+/* A field whose label is a sentence, or whose answer is a list rather than a
+   value, keeps its label above it -- the way the note field does on the import
+   card, and for the same reason: there is nothing to line it up with. */
+.modal:not(#importModal) .modal-content .form-group.is-stacked,
+.modal:not(#importModal) .modal-content .form-group:has(.pick-list) {
+    display: block;
+    padding: 10px 12px;
+}
+
+.modal:not(#importModal) .modal-content .form-group.is-stacked > label,
+.modal:not(#importModal) .modal-content .form-group:has(.pick-list) > label {
+    display: block;
+    margin-bottom: 4px;
+}
+
+/* A tickbox and the sentence it answers are one line, like any other field. */
+.modal:not(#importModal) .modal-content .form-check {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 52px;
+    margin: 0;
+    padding: 2px 12px;
+    background: #fff;
+    border-bottom: 1px solid var(--hair);
+    font-size: 13.5px;
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--ink);
+}
+
+/* A rule under the field being filled, and nothing drawn around the rest. */
+.modal:not(#importModal) .modal-content .form-group:focus-within {
+    box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.modal:not(#importModal) .modal-content .form-group input:focus,
+.modal:not(#importModal) .modal-content .form-group select:focus,
+.modal:not(#importModal) .modal-content .form-group textarea:focus {
+    outline: none;
+    border-color: transparent;
+}
+
+/* Something shown but not for changing states that plainly, rather than
+   wearing the grey box that used to say it. */
+.modal:not(#importModal) .modal-content .form-group input[readonly] {
+    background: none !important;
+    color: var(--muted);
+}
+
+.modal:not(#importModal) .modal-content .form-group input:disabled,
+.modal:not(#importModal) .modal-content .form-group select:disabled {
+    background: none;
+    color: var(--muted);
+    opacity: .55;
+}
+
+/* An explanation written inside the field it explains breaks to its own line
+   and lines up under the value, rather than crowding in beside it. */
+.modal:not(#importModal) .modal-content .form-group > .form-hint {
+    flex: 0 0 100%;
+    margin: 0;
+    padding: 0 0 10px 94px;
+    background: none;
+    border: none;
+    font-size: 11.5px;
+    line-height: 1.45;
+    color: var(--muted);
+}
+
+/* What a field means, when the label alone cannot carry it. It belongs to the
+   field above, so it sits under it rather than between the rows. */
+.modal:not(#importModal) .modal-content .form-hint {
+    margin: 0;
+    padding: 8px 12px 10px;
+    background: #fff;
+    border-bottom: 1px solid var(--hair);
+    font-size: 11.5px;
+    line-height: 1.45;
+    color: var(--muted);
+}
+
+/* ── The actions ────────────────────────────────────────────────────── */
+
+.modal:not(#importModal) .modal-footer,
+.modal:not(#importModal) .modal-footer-batch {
+    display: flex;
+    gap: 10px;
+    margin-top: 18px;
+}
+
+.modal:not(#importModal) .modal-footer button,
+.modal:not(#importModal) .modal-footer-batch button {
+    flex: 1;
+    height: 46px;
+    padding: 0 18px;
+    border-radius: 10px;
+    font-family: 'Playfair Display', serif;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+@media (max-width: 600px) {
+    .modal:not(#importModal) .modal-content .form-group { min-height: 54px; }
+    /* Below 16px a phone zooms the page in to meet the field, and never zooms
+       back out. */
+    .modal:not(#importModal) .modal-content .form-group input:not([type="checkbox"]),
+    .modal:not(#importModal) .modal-content .form-group select,
+    .modal:not(#importModal) .modal-content .form-group textarea {
+        font-size: 16px;
+    }
+    .modal:not(#importModal) .modal-footer button,
+    .modal:not(#importModal) .modal-footer-batch button { min-height: 48px; }
+}

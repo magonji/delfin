@@ -395,6 +395,8 @@
             .history-item .bar-container { max-width: 100%; flex-basis: 100%; order: 10; margin: 0; }
         }
     </style>
+    <!-- One shape for every form in the app; see the file. -->
+    <link rel="stylesheet" href="/app/forms.css">
 </head>
 <body>
     <header>
@@ -708,13 +710,13 @@
                 </div>
                 <div class="form-hint" id="itemDayHint" style="display:none;"></div>
                 <div class="form-hint" id="itemProrateHint" style="display:none;"></div>
-                <div class="form-group" id="itemPayeeGroup">
+                <div class="form-group is-stacked" id="itemPayeeGroup">
                     <label id="itemPayeeLabel">Payee — used to spot the payment</label>
                     <input type="text" id="itemPayeeSearch" class="bucket-search" style="margin-bottom:8px;"
                            placeholder="Search payees…" autocomplete="off" oninput="filterItemPayees()">
                     <select id="itemPayee"><option value="">-- None --</option></select>
                 </div>
-                <div class="form-group" id="itemAccountGroup">
+                <div class="form-group is-stacked" id="itemAccountGroup">
                     <label id="itemAccountLabel">Savings or debt account it is paid into</label>
                     <select id="itemAccount"><option value="">-- None --</option></select>
                 </div>

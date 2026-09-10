@@ -317,7 +317,12 @@
         .modal input.amount-positive { color: var(--green); }
         .amount-field { display: flex; align-items: stretch; gap: 8px; }
         .amount-field input { flex: 1 1 auto; min-width: 0; }
-        .sign-toggle { flex: 0 0 auto; width: 48px; padding: 0; border: 1px solid var(--field); border-radius: 9px; background: #fff; color: var(--muted); font-family: 'IBM Plex Sans', sans-serif; font-size: 18px; font-weight: 600; line-height: 1; cursor: pointer; transition: color 0.2s, border-color 0.2s, background 0.2s; }
+        .sign-toggle { flex: 0 0 auto; width: 44px; height: 34px; align-self: center; padding: 0; border: 1px solid var(--field); border-radius: 8px; background: #fff; color: var(--muted); font-family: 'IBM Plex Sans', sans-serif; font-size: 18px; font-weight: 600; line-height: 1; cursor: pointer; transition: color 0.2s, border-color 0.2s, background 0.2s; }
+        /* The way out to a split reads as what it is -- a way out -- rather than
+           as another button competing with Save. Same mark as the CSV import. */
+        #splitToggleRow { justify-content: flex-end; padding: 10px 12px 0; }
+        #splitToggleBtn { border: none; background: none; padding: 8px 0; color: var(--red); font-family: 'IBM Plex Sans', sans-serif; font-size: 12.5px; font-weight: 700; }
+        #splitToggleBtn::before { content: '\21B3\00A0'; }
         .sign-toggle.is-negative { color: var(--red); border-color: var(--red); background: rgba(176, 64, 46, 0.08); }
         .sign-toggle.is-positive { color: var(--green); border-color: var(--green); background: rgba(60, 122, 87, 0.08); }
         .hidden { display: none; }
@@ -799,6 +804,8 @@
             .footer { padding-top: 60px; }
         }
     </style>
+    <!-- One shape for every form in the app; see the file. -->
+    <link rel="stylesheet" href="/app/forms.css">
 </head>
 <body>
     <header>
@@ -1034,13 +1041,13 @@
                             </select>
                         </div>
                         <div class="bulk-form-group">
-                            <label>Parent Category</label>
+                            <label>Category</label>
                             <select id="bulkParentCategory">
                                 <option value="">Don't change</option>
                             </select>
                         </div>
                         <div class="bulk-form-group">
-                            <label>Subcategory</label>
+                            <label>Sub</label>
                             <select id="bulkCategory" disabled>
                                 <option value="">Select parent first...</option>
                             </select>
@@ -1104,8 +1111,8 @@
                         </div>
                     </div>
                     <div class="form-row" id="singleCategoryRow">
-                        <div class="form-group"><label>Parent Category</label><select id="parentCategory"><option value="">Select...</option></select></div>
-                        <div class="form-group"><label>Subcategory</label><select id="category" disabled><option value="">Select parent...</option></select></div>
+                        <div class="form-group"><label>Category</label><select id="parentCategory"><option value="">Select...</option></select></div>
+                        <div class="form-group"><label>Sub</label><select id="category" disabled><option value="">Select parent...</option></select></div>
                     </div>
                     <div id="payeeCategoryHints" class="cat-hints" hidden></div>
                     <div class="form-row">
@@ -2427,7 +2434,7 @@
                                value="${line.amount ?? ''}" oninput="onSplitLineInput()">
                     </div>
                     <div class="form-group">
-                        <label>Parent Category</label>
+                        <label>Category</label>
                         <select id="splitParent_${index}" onchange="onSplitParentChange(${index})">
                             <option value="">Select...</option>${parentOpts}
                         </select>
@@ -2435,7 +2442,7 @@
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Subcategory</label>
+                        <label>Sub</label>
                         <select id="splitCat_${index}" ${line.parent ? '' : 'disabled'} onchange="onSplitLineInput()">
                             <option value="">${line.parent ? 'Select...' : 'Select parent...'}</option>${subOpts}
                         </select>

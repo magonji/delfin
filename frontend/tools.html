@@ -233,13 +233,13 @@
         /* Fixed widths so a long payee cannot squeeze the note out of the row;
            what does not fit is cut with an ellipsis, as the eye expects of a table. */
         .import-preview { table-layout:fixed; }
-        .import-preview th.col-skip { width:6%; }
+        .import-preview th.col-skip { width:4%; }
         .import-preview th.col-date { width:8.5%; }
-        .import-preview th.col-desc { width:14%; }
+        .import-preview th.col-desc { width:13.5%; }
         .import-preview th.col-amount { width:7.5%; text-align:right; }
         .import-preview th.col-type { width:9%; }
         .import-preview th.col-payee { width:11.5%; }
-        .import-preview th.col-cat { width:19%; }
+        .import-preview th.col-cat { width:21%; }
         .import-preview th.col-loc { width:9%; }
         .import-preview th.col-proj { width:9%; }
         .import-preview th.col-note { width:7%; }
@@ -247,8 +247,9 @@
         .import-preview tbody td { white-space:nowrap; text-overflow:ellipsis; }
 
         /* The mark for a duplicate lives here, and a mark must not be cut short. */
-        .col-skip { text-align:center; text-overflow:clip; padding-left:6px; padding-right:6px; }
-        .import-preview .col-skip .badge { padding:3px 7px; font-size:9.5px; }
+        .import-preview tbody td.col-skip { text-overflow:clip; }
+        .col-skip { text-align:center; padding-left:4px; padding-right:4px; }
+        .import-preview .col-skip .badge { padding:2px 6px; font-size:9px; }
         .col-date { white-space:nowrap; color:var(--muted); font-family:'IBM Plex Mono',monospace; font-size:11.5px; }
         .col-desc { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; color:var(--ink); }
         .col-amount { text-align:right; font-family:'IBM Plex Mono',monospace; font-weight:600; white-space:nowrap; }
@@ -363,7 +364,7 @@
         .split-toggle svg { width:15px; height:15px; display:block; margin:auto; fill:none;
             stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
         .split-word { display:none; }
-        tr:hover .split-toggle { opacity:1; }
+        tr:hover .split-toggle:not(:disabled) { opacity:1; }
         .split-toggle:hover:not(:disabled) { color:var(--red); background:var(--panel); }
         .split-toggle.is-on { color:var(--red); opacity:1; background:var(--panel); }
         .split-toggle:disabled { opacity:0; cursor:default; }
@@ -654,6 +655,8 @@
             .toast { min-width:unset; }
         }
     </style>
+    <!-- One shape for every form in the app; see the file. -->
+    <link rel="stylesheet" href="/app/forms.css">
 </head>
 <body>
     <header>
@@ -822,14 +825,14 @@
             <div class="form-group" id="newAccTermsGroup" style="display: none;">
                 <label>Repayment</label>
                 <select id="newAccTerms" onchange="onNewAccountTermsChange()">
-                    <option value="none">no agreed schedule — just track what is owed</option>
-                    <option value="terms">on agreed terms — rate, duration and instalments</option>
+                    <option value="none">no schedule — just what is owed</option>
+                    <option value="terms">on agreed terms</option>
                 </select>
                 <div class="form-hint" id="newAccTermsHint">Choose the second and the instalments,
                     interest and full schedule are worked out here.</div>
             </div>
             <!-- Where the shared loan form sits while this account is a loan. -->
-            <div id="newAccTermsHost" style="padding: 0 25px;"></div>
+            <div id="newAccTermsHost"></div>
             <div style="display: flex; gap: 10px; padding: 0 25px 4px;">
                 <button onclick="createAccount()" style="flex: 1;">Create</button>
                 <button onclick="cancelNewAccount()" class="secondary" style="flex: 1;">Cancel</button>
@@ -2184,9 +2187,9 @@
         function showCreditLimitFor(type) {
             const canonical = DelfinAccountTypes.canonical(type);
             document.getElementById('editLimitGroup').style.display =
-                BORROWING_TYPES.includes(canonical) ? 'block' : 'none';
+                BORROWING_TYPES.includes(canonical) ? '' : 'none';
             document.getElementById('editTermsGroup').style.display =
-                SCHEDULABLE_TYPES.includes(canonical) ? 'block' : 'none';
+                SCHEDULABLE_TYPES.includes(canonical) ? '' : 'none';
         }
 
         // The contract of the account being edited, once looked up, so the button
@@ -2261,13 +2264,13 @@
         async function onNewAccountTermsChange() {
             const wanted = document.getElementById('newAccTerms').value === 'terms';
             const el = (id) => document.getElementById(id);
-            el('newAccCurrencyGroup').style.display = wanted ? 'none' : 'block';
-            el('newAccOpeningGroup').style.display = wanted ? 'none' : 'block';
+            el('newAccCurrencyGroup').style.display = wanted ? 'none' : '';
+            el('newAccOpeningGroup').style.display = wanted ? 'none' : '';
             el('newAccTermsHint').style.display = wanted ? 'none' : 'block';
             // A limit belongs to revolving credit; a schedule replaces it outright.
             const kind = DelfinAccountTypes.canonical(el('newAccType').value);
             el('newAccLimitGroup').style.display =
-                (!wanted && BORROWING_TYPES.includes(kind)) ? 'block' : 'none';
+                (!wanted && BORROWING_TYPES.includes(kind)) ? '' : 'none';
             if (wanted) {
                 await DelfinLoanForm.attach(el('newAccTermsHost'));
             } else {
@@ -2291,14 +2294,14 @@
             document.getElementById('newAccTermsGroup').style.display = 'none';
             document.getElementById('newAccTerms').value = 'none';
             DelfinLoanForm.detach();
-            document.getElementById('newAccCurrencyGroup').style.display = 'block';
-            document.getElementById('newAccOpeningGroup').style.display = 'block';
+            document.getElementById('newAccCurrencyGroup').style.display = '';
+            document.getElementById('newAccOpeningGroup').style.display = '';
             document.getElementById('newAccType').onchange = (e) => {
                 const kind = DelfinAccountTypes.canonical(e.target.value);
                 document.getElementById('newAccLimitGroup').style.display =
-                    BORROWING_TYPES.includes(kind) ? 'block' : 'none';
+                    BORROWING_TYPES.includes(kind) ? '' : 'none';
                 const lending = SCHEDULABLE_TYPES.includes(kind);
-                document.getElementById('newAccTermsGroup').style.display = lending ? 'block' : 'none';
+                document.getElementById('newAccTermsGroup').style.display = lending ? '' : 'none';
                 if (!lending) {
                     document.getElementById('newAccTerms').value = 'none';
                     onNewAccountTermsChange();
@@ -2364,7 +2367,7 @@
                     document.getElementById('editModalTitle').textContent = 'Edit Category';
                     document.getElementById('editName').value = item.name;
                     document.getElementById('editCurrencyGroup').style.display = 'none';
-                    document.getElementById('editParentGroup').style.display = item.parent ? 'block' : 'none';
+                    document.getElementById('editParentGroup').style.display = item.parent ? '' : 'none';
                     if (item.parent) {
                         document.getElementById('editParent').value = item.parent;
                     }
@@ -2373,11 +2376,11 @@
                     item = allAccounts.find(a => a.id === id);
                     document.getElementById('editModalTitle').textContent = 'Edit Account';
                     document.getElementById('editName').value = item.name;
-                    document.getElementById('editCurrencyGroup').style.display = 'block';
+                    document.getElementById('editCurrencyGroup').style.display = '';
                     document.getElementById('editCurrency').value = item.currency;
-                    document.getElementById('editTypeGroup').style.display = 'block';
+                    document.getElementById('editTypeGroup').style.display = '';
                     document.getElementById('editType').innerHTML = DelfinAccountTypes.options(item.type);
-                    document.getElementById('editOpeningGroup').style.display = 'block';
+                    document.getElementById('editOpeningGroup').style.display = '';
                     document.getElementById('editOpeningBalance').value = item.initial_balance ?? 0;
                     document.getElementById('editCreditLimit').value =
                         item.credit_limit == null ? '' : item.credit_limit;

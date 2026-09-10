@@ -69,21 +69,30 @@
         font-weight:700; padding-left:12px; border-left:3px solid var(--accent); color:var(--ink); }
       .dlf-x { background:var(--field); border:none; border-radius:8px; width:32px;
         height:32px; font-size:18px; line-height:1; cursor:pointer; color:#3A342C; flex:0 0 auto; }
-      .dlf-body { padding:18px 22px; }
+      .dlf-body { padding:0; }
       .dlf-foot { display:flex; justify-content:flex-end; gap:8px; padding:16px 22px;
         border-top:1px solid var(--hair); }
       .dlf-foot .dlf-danger { margin-right:auto; }
-      .dlf-g { margin-bottom:16px; }
-      #dlfLoanForm label { display:block; margin-bottom:6px; font-weight:600; font-size:11px;
-        letter-spacing:1px; text-transform:uppercase; color:var(--muted); }
-      #dlfLoanForm input, #dlfLoanForm select { width:100%; padding:11px 12px;
-        border:1px solid var(--field); border-radius:9px; background:#fff; font-size:14px;
-        font-family:'IBM Plex Sans',sans-serif; color:var(--ink);
+      /* The same shape as every other form in the app: a label on the left, its
+         value on the right, one field to a line, ruled between. See forms.css --
+         it is written out here as well because this module carries its own
+         styling and is loaded by a page that has none. */
+      .dlf-g { display:flex; align-items:center; gap:10px; min-height:52px; margin:0;
+        padding:2px 12px; background:#fff; border-bottom:1px solid var(--hair); }
+      #dlfLoanForm label { flex:0 0 84px; margin:0; font-weight:700; font-size:10px;
+        line-height:1.25; letter-spacing:1px; text-transform:uppercase; color:var(--muted); }
+      #dlfLoanForm input, #dlfLoanForm select { flex:1 1 auto; min-width:0; width:auto;
+        padding:11px 0; min-height:46px; border:none; border-radius:0; background:none;
+        font-size:15px; font-family:'IBM Plex Sans',sans-serif; color:var(--ink);
         -webkit-appearance:none; appearance:none; box-sizing:border-box; }
-      #dlfLoanForm select { background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%238A7D6C'/%3E%3C/svg%3E") no-repeat right 12px center; padding-right:28px; }
-      .dlf-hint { font-size:11.5px; color:var(--muted); margin-top:-10px;
-        margin-bottom:16px; line-height:1.45; }
-      .dlf-row { display:grid; grid-template-columns:100px 1fr; gap:10px; }
+      #dlfLoanForm input:focus, #dlfLoanForm select:focus { outline:none; }
+      .dlf-g:focus-within { box-shadow:inset 2px 0 0 var(--accent); }
+      /* What a field means, when the label cannot carry it: under the field it
+         belongs to, not between the rows. */
+      .dlf-hint { margin:0; padding:8px 12px 10px; background:#fff;
+        border-bottom:1px solid var(--hair); font-size:11.5px; color:var(--muted); line-height:1.45; }
+      .dlf-row { display:flex; align-items:center; gap:10px; flex:1 1 auto; min-width:0; }
+      .dlf-row input { flex:0 0 78px; }
       .dlf-error { color:var(--red); font-size:12.5px; margin-bottom:12px; display:none; }
       .dlf-quote { background:var(--panel); border:1px solid var(--hair);
         border-radius:10px; padding:12px 14px; margin-bottom:16px; }
@@ -130,11 +139,11 @@
               <input type="text" id="loanName" placeholder="e.g., Flat mortgage, Car loan" oninput="quoteLoan()">
             </div>
             <div class="dlf-g">
-              <label>Amount borrowed</label>
+              <label>Borrowed</label>
               <input type="number" id="loanPrincipal" step="0.01" min="0" inputmode="decimal" oninput="quoteLoan()">
             </div>
             <div class="dlf-g">
-              <label>Annual interest rate (%)</label>
+              <label>Annual rate (%)</label>
               <input type="number" id="loanRate" step="0.01" min="0" value="0" inputmode="decimal" oninput="quoteLoan()">
             </div>
             <div class="dlf-g">
@@ -167,7 +176,7 @@
               An administration or account fee charged for as long as the loan runs. It counts towards the effective rate too, and needn't share the instalments' rhythm.
             </div>
             <div class="dlf-g">
-              <label>Early repayment charge (% of the capital outstanding)</label>
+              <label>Early repayment (%)</label>
               <input type="number" id="loanEarlyFee" step="0.01" min="0" value="0" inputmode="decimal" oninput="onLoanFeeChange()">
             </div>
             <div class="dlf-hint" id="loanEarlyFeeHint" style="display:none;">
@@ -179,11 +188,11 @@
             </div>
             <div class="dlf-hint">Interest starts here, on the day the money is drawn down.</div>
             <div class="dlf-g">
-              <label>First payment date <span style="text-transform:none;letter-spacing:0">— optional</span></label>
+              <label>First payment</label>
               <input type="date" id="loanFirstPayment" onchange="quoteLoan()">
             </div>
             <div class="dlf-hint">
-              Leave it empty and the first instalment falls one period after the opening date, on the day chosen below. Set it when it doesn't — the first instalment then carries only the interest that has actually accrued, which is more or less than a full one.
+              Optional. Leave it empty and the first instalment falls one period after the opening date, on the day chosen below. Set it when it doesn't — the first instalment then carries only the interest that has actually accrued, which is more or less than a full one.
             </div>
             <div class="dlf-g">
               <label>Duration</label>
@@ -204,7 +213,7 @@
               </select>
             </div>
             <div class="dlf-g">
-              <label>Interest is charged</label>
+              <label>Interest</label>
               <select id="loanInterestFrequency" onchange="onLoanInterestFrequencyChange()">
                 <option value="day">daily</option>
                 <option value="1" selected>monthly</option>
@@ -217,7 +226,7 @@
               Interest follows the real days of each period, so a February instalment carries less than a March one and a leap year costs a day more. The instalment itself stays level — the difference lands in the final payment.
             </div>
             <div class="dlf-g">
-              <label>Instalments are paid</label>
+              <label>Instalments</label>
               <select id="loanPaymentMonths" onchange="quoteLoan()">
                 <option value="1" selected>monthly</option>
                 <option value="3">quarterly</option>
@@ -313,8 +322,8 @@
     function applyChrome() {
         var editing = editingId !== null;
         // Attached, the host owns the name — an account's name is the loan's name.
-        q('#loanNameGroup').style.display = attached ? 'none' : 'block';
-        q('#loanModeGroup').style.display = (attached || editing) ? 'none' : 'block';
+        q('#loanNameGroup').style.display = attached ? 'none' : '';
+        q('#loanModeGroup').style.display = (attached || editing) ? 'none' : '';
     }
 
     async function loanRequest(path, method, body) {
@@ -411,11 +420,11 @@
         var editing = editingId !== null;
         var picked = !editing && boundAccount === null && !attached
             && q('#loanMode').value === 'existing';
-        q('#loanExistingGroup').style.display = picked ? 'block' : 'none';
+        q('#loanExistingGroup').style.display = picked ? '' : 'none';
         q('#loanExistingHint').style.display = picked ? 'block' : 'none';
         // An account that already carries its drawdown must not be given a second one.
         var wantsDestination = !editing && !isExisting();
-        q('#loanDestinationGroup').style.display = wantsDestination ? 'block' : 'none';
+        q('#loanDestinationGroup').style.display = wantsDestination ? '' : 'none';
         q('#loanDestinationHint').style.display = wantsDestination ? 'block' : 'none';
         // Whoever chose the account — the picker, or the host that opened the form
         // on one — what is already known about it fills the form in.
@@ -435,7 +444,7 @@
 
     global.onLoanFeeChange = function () {
         var hasFee = (parseFloat(q('#loanFee').value) || 0) > 0;
-        q('#loanFeeTreatmentGroup').style.display = hasFee ? 'block' : 'none';
+        q('#loanFeeTreatmentGroup').style.display = hasFee ? '' : 'none';
         q('#loanFeeHint').style.display = hasFee ? 'block' : 'none';
         q('#loanRecurringFeeHint').style.display =
             (parseFloat(q('#loanRecurringFee').value) || 0) > 0 ? 'block' : 'none';
@@ -447,8 +456,8 @@
     global.onLoanDayRuleChange = function () {
         var rule = q('#loanDayRule').value;
         var working = rule !== 'exact';
-        q('#loanDayOfMonthGroup').style.display = working ? 'none' : 'block';
-        q('#loanDayOrdinalGroup').style.display = working ? 'block' : 'none';
+        q('#loanDayOfMonthGroup').style.display = working ? 'none' : '';
+        q('#loanDayOrdinalGroup').style.display = working ? '' : 'none';
         q('#loanDayHint').style.display = working ? 'block' : 'none';
         q('#loanDayOrdinalLabel').textContent = rule === 'working_from_end'
             ? 'Which working day, counting back' : 'Which working day';
