@@ -597,6 +597,19 @@ const cacheGet = (key) => DelfinCache.get(key);
 const cacheSet = (key, data, kind = 'volatile') => DelfinCache.set(key, data, kind);
 const cacheClearAll = () => DelfinCache.clear();
 
+// What is already cached, or a request for it — always a promise, so a caller
+// can start several at once and wait for each where it draws with it.
+function cachedApi(key, path, kind = 'volatile') {
+    const hit = cacheGet(key);
+    if (hit) return Promise.resolve(hit);
+    return api(path).then(d => { cacheSet(key, d, kind); return d; });
+}
+
+function currentYearMonth() {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
 // Application state
 const state = { baseCurrency: 'GBP', months: [], categories: [], accounts: [], excludedAccountIds: new Set(), selectedCategoryIds: new Set(), yearAxisFull: false, yearlyAxisFull: false, totalBalanceConverted: null };
 
@@ -773,8 +786,8 @@ function renderTxDelta() {
     el.innerHTML = `+${cnt.toLocaleString('en-GB')} <span class="muted">this year</span>`;
 }
 
-async function loadSummary() {
-    let sum = cacheGet('cache_summary') || await api('/dashboard/summary').then(d => { cacheSet('cache_summary', d, 'volatile'); return d; });
+async function loadSummary(started, budgetStarted) {
+    let sum = await (started || cachedApi('cache_summary', '/dashboard/summary'));
     state.baseCurrency = sum.base_currency || 'GBP';
     noteCurrenciesInUse([state.baseCurrency]);
     const footer = q('#footerNote');
@@ -791,10 +804,11 @@ async function loadSummary() {
     // Balance KPIs are set from networth endpoint (see loadBalanceKpis)
 
     // Load current month budget available
-    const now = new Date();
-    const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     try {
-        const bp = cacheGet('cache_budget_progress') || await api(`/budgets/${ym}/progress`).then(d => { cacheSet('cache_budget_progress', d, 'volatile'); return d; });
+        // Asked for at the same time as the summary above: it depends on today's
+        // date, not on anything the summary says.
+        const bp = await (budgetStarted
+            || cachedApi('cache_budget_progress', `/budgets/${currentYearMonth()}/progress`));
         // `available` is what there is left to spend; `remaining` only divides the
         // target up and sits at zero all month, which is not what this cell claims.
         // A payload cached before `available` existed still has to render.
@@ -803,7 +817,7 @@ async function loadSummary() {
     } catch { q('#kpiBudgetAvail').textContent = '—'; renderBudgetDelta(null); }
 }
 
-async function loadBalanceKpis() {
+async function loadBalanceKpis(totalStarted, loanIdsStarted) {
     // Use the networth endpoint (all-time, daily) so KPIs match the graph calculation exactly
     const setMoney = (id, val) => {
         const el = q(id);
@@ -812,17 +826,20 @@ async function loadBalanceKpis() {
     };
 
     // Total balance (no exclusions)
-    const total = cacheGet('cache_nw_kpi_total') || await api('/dashboard/networth/daily').then(d => { cacheSet('cache_nw_kpi_total', d, 'volatile'); return d; });
+    const total = await (totalStarted || cachedApi('cache_nw_kpi_total', '/dashboard/networth/daily'));
     state.totalBalanceConverted = total.summary?.current_balance ?? 0;
     setMoney('#kpiTotalBalance', state.totalBalanceConverted);
     renderBalanceDelta('#deltaTotalBalance', state.totalBalanceConverted, balanceOneYearAgo(total.data_points));
 
     // Without loans
-    const res = cacheGet('cache_loan_ids') || await api('/loans/account-ids').then(d => { cacheSet('cache_loan_ids', d); return d; });
+    // Asked for alongside the figure above rather than after it: only the
+    // "without loans" call below needs to know which accounts those are.
+    const res = await (loanIdsStarted || cachedApi('cache_loan_ids', '/loans/account-ids'));
     const loanIds = res.loan_account_ids || [];
     if (loanIds.length) {
         const excluded = loanIds.join(',');
-        const noLoans = cacheGet('cache_nw_kpi_noloans') || await api(`/dashboard/networth/daily?excluded_accounts=${excluded}`).then(d => { cacheSet('cache_nw_kpi_noloans', d, 'volatile'); return d; });
+        const noLoans = await cachedApi('cache_nw_kpi_noloans',
+            `/dashboard/networth/daily?excluded_accounts=${excluded}`);
         const nlCur = noLoans.summary?.current_balance ?? 0;
         setMoney('#kpiBalanceNoLoans', nlCur);
         renderBalanceDelta('#deltaBalanceNoLoans', nlCur, balanceOneYearAgo(noLoans.data_points));
@@ -893,13 +910,12 @@ function acctDeltaHtml(a) {
  * compare against.
  */
 function fetchAccounts() {
-    return cacheGet('cache_accounts')
-        || api(`/accounts/with-balances?include_closed=true&as_of=${sameDayLastMonth()}`)
-               .then(d => { cacheSet('cache_accounts', d, 'volatile'); return d; });
+    return cachedApi('cache_accounts',
+        `/accounts/with-balances?include_closed=true&as_of=${sameDayLastMonth()}`);
 }
 
-async function loadAccounts() {
-    let data = await fetchAccounts();
+async function loadAccounts(started) {
+    let data = await (started || fetchAccounts());
     state.accounts = data.sort((a, b) => (b.current_balance || 0) - (a.current_balance || 0));
     renderExcludeList();
 
@@ -1051,10 +1067,10 @@ async function loadNetworth() {
     changeEl.style.color = s.total_change >= 0 ? 'var(--green)' : 'var(--red)';
 }
 
-async function loadAvailableMonths() {
+async function loadAvailableMonths(started) {
     // v2: response now carries per-month transaction counts (for the KPI delta).
-    const cacheKey = 'cache_available_months_v2';
-    const res = cacheGet(cacheKey) || await api('/dashboard/available-months').then(d => { cacheSet(cacheKey, d, 'catalog'); return d; });
+    const res = await (started
+        || cachedApi('cache_available_months_v2', '/dashboard/available-months', 'catalog'));
     state.months = res.months || [];
     const sel = q('#selectMonth');
     sel.innerHTML = state.months.map(m => `<option value="${m.value}">${m.label}</option>`).join('');
@@ -1211,16 +1227,17 @@ async function loadYearlySummary(year) {
     setVal('#ysNet', data.summary.net_savings);
 }
 
-async function loadYearlyTrendAll() {
+async function loadYearlyTrendAll(started) {
     const years = [...new Set(state.months.map(m => m.year))].sort((a, b) => a - b);
     if (!years.length) return;
 
-    const results = await Promise.all(years.map(y => {
-        const cacheKey = `cache_yearly_${y}`;
-        return cacheGet(cacheKey) || api(`/dashboard/yearly-summary?year=${y}`).then(d => { cacheSet(cacheKey, d, 'historical'); return d; });
-    }));
-    const base = results[0]?.base_currency || 'GBP';
-    const totals = (prop) => results.map(r => r.summary[prop]);
+    // One request for the whole chart. This used to ask for a full yearly
+    // summary per year -- eight scans of the ledger for eight bars -- and throw
+    // away the month-by-month breakdown and category table each one returned.
+    const trend = await (started || cachedApi('cache_yearly_trend_v2', '/dashboard/yearly-trend', 'historical'));
+    const byYear = new Map((trend.years || []).map(r => [r.year, r]));
+    const base = trend.base_currency || 'GBP';
+    const totals = (prop) => years.map(y => (byYear.get(y) || {})[prop] || 0);
     const income = totals('total_income'), expenses = totals('total_expenses');
     const yAxis = configureAxisToggle('#yearlyAxisToggle', state.yearlyAxisFull, [...income, ...expenses]);
 
@@ -1546,28 +1563,49 @@ async function init() {
     // get there. The old single flag was consumed by whoever loaded first.
     DelfinCache.consumeDirty('index');
     try {
-        // Settle which currencies are in play before a single figure is drawn:
+        // Everything that depends on nothing is asked for at once.
+        //
+        // This page used to wait for the accounts, then for the summary, then
+        // for the budget, then open a group, then ask which accounts are loans,
+        // then ask again excluding them, then fetch a year at a time: about ten
+        // rounds of question and answer, one after another. On a phone away from
+        // home each round costs a whole trip to the server and back, so the wait
+        // grew with the distance rather than with the data. None of these seven
+        // needs another's answer, so none of them waits for one.
+        const asked = {
+            accounts:   fetchAccounts(),
+            summary:    cachedApi('cache_summary', '/dashboard/summary'),
+            budget:     cachedApi('cache_budget_progress', `/budgets/${currentYearMonth()}/progress`),
+            months:     cachedApi('cache_available_months_v2', '/dashboard/available-months', 'catalog'),
+            categories: cachedApi('cache_categories_v1', '/categories?limit=1000', 'catalog'),
+            nwTotal:    cachedApi('cache_nw_kpi_total', '/dashboard/networth/daily'),
+            loanIds:    cachedApi('cache_loan_ids', '/loans/account-ids'),
+            yearly:     cachedApi('cache_yearly_trend_v2', '/dashboard/yearly-trend', 'historical'),
+        };
+        // A rejection nobody is waiting on yet would be reported as unhandled.
+        Object.values(asked).forEach(p => p.catch(() => {}));
+
+        // Which currencies are in play settles before a single figure is drawn:
         // whether USD prints as "$" or "US$" depends on the company it keeps.
-        // loadAccounts reuses this same cache entry, so it costs nothing.
         try {
-            const accounts = await fetchAccounts();
+            const accounts = await asked.accounts;
             noteCurrenciesInUse((accounts || []).map(a => a.currency));
         } catch (e) { /* no list yet — the narrow symbol is the safe default */ }
 
-        await loadSummary();
+        await loadSummary(asked.summary, asked.budget);
 
         await Promise.all([
-            loadAccounts(),
+            loadAccounts(asked.accounts),
             loadNetworth(),
-            loadAvailableMonths(),
-            loadBalanceKpis()
+            loadAvailableMonths(asked.months),
+            loadBalanceKpis(asked.nwTotal, asked.loanIds)
         ]);
 
         // state.months is now loaded, so we know how much history exists:
         // rebuild every date-range menu with the unified option set.
         applyUnifiedRanges();
 
-        await loadYearlyTrendAll();
+        await loadYearlyTrendAll(asked.yearly);
 
         const years = [...new Set(state.months.map(m => m.year))].sort((a, b) => b - a);
         q('#selectYear').innerHTML = years.map(y => `<option value="${y}">${y}</option>`).join('');
@@ -1575,7 +1613,7 @@ async function init() {
 
         // Without a limit the endpoint caps at 200, silently dropping categories
         // from the filter — the other pages all ask for 1000.
-        state.categories = await api('/categories?limit=1000');
+        state.categories = await asked.categories;
         restoreSelectedCategories();
         renderCategoriesList();
         loadCategoriesSeries();

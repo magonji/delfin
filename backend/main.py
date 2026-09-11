@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import Dict, List, Optional
 from datetime import datetime, date, timedelta, time
 from sqlalchemy import func as sql_func, case, and_, or_, func, update as sa_update
 import shutil
@@ -3087,6 +3087,57 @@ def get_monthly_category_expenses(
         "month": year_month,
         "expenses": all_expenses,
         "base_currency": base_currency
+    }
+
+
+@app.get("/dashboard/yearly-trend")
+def get_yearly_trend(db: Session = Depends(get_db)):
+    """Income and expenses per year, which is all the yearly bar chart draws.
+
+    The dashboard used to build this chart by asking /dashboard/yearly-summary
+    once per year of history -- eight requests for eight years, each scanning
+    that year and returning a month-by-month breakdown and a category league
+    table that the chart then threw away. This walks the ledger once and answers
+    with the two figures a year that are actually drawn. The rules are the ones
+    that endpoint uses: transfers are not income or spending, and every amount is
+    converted at the rate of its own day.
+    """
+    base_currency = get_base_currency(db)
+    rows = db.query(
+        models.Transaction.date, models.Transaction.currency, models.Transaction.amount
+    ).filter(
+        models.Transaction.transfer_group_id.is_(None)
+    ).order_by(models.Transaction.date.asc()).all()
+    if not rows:
+        return {"years": [], "base_currency": base_currency}
+
+    currencies = list({r.currency for r in rows if r.currency})
+    historical_rates = get_rates_bulk(
+        db, currencies, _to_date(rows[0].date), _to_date(rows[-1].date))
+
+    per_year = {}
+    for r in rows:
+        day = _to_date(r.date)
+        rates_for_day = historical_rates.get(day, {'GBP': 1.0})
+        converted = (r.amount or 0.0) * (
+            rates_for_day.get(base_currency, 1.0) / rates_for_day.get(r.currency, 1.0))
+        year = per_year.setdefault(day.year, {"total_income": 0.0, "total_expenses": 0.0})
+        if converted > 0:
+            year["total_income"] += converted
+        else:
+            year["total_expenses"] += abs(converted)
+
+    return {
+        "years": [
+            {"year": y,
+             "total_income": round(v["total_income"], 2),
+             "total_expenses": round(v["total_expenses"], 2),
+             # Rounded the same way the per-year summary rounds it, so the two
+             # agree to the penny wherever both are shown.
+             "net_savings": round(v["total_income"] - v["total_expenses"], 2)}
+            for y, v in sorted(per_year.items())
+        ],
+        "base_currency": base_currency,
     }
 
 
