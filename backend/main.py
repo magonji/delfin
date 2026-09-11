@@ -8,7 +8,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime, date, timedelta, time
-from sqlalchemy import func as sql_func, case, and_, or_, func
+from sqlalchemy import func as sql_func, case, and_, or_, func, update as sa_update
 import shutil
 import os
 from backend.database import get_db
@@ -1355,7 +1355,15 @@ def get_transactions_summary(
             or_(models.Payee.name.ilike(pattern), models.Transaction.note.ilike(pattern))
         )
 
-    transactions = query.all()
+    # Four columns, not whole rows: this answers with a count and two sums, and
+    # building a mapped instance per matched transaction to add up their amounts
+    # is most of what it was costing.
+    transactions = query.with_entities(
+        models.Transaction.date,
+        models.Transaction.currency,
+        models.Transaction.amount,
+        models.Transaction.split_group_id,
+    ).all()
     if not transactions:
         return {"count": 0, "money_in": 0, "money_out": 0, "base_currency": base_currency}
 
@@ -2227,7 +2235,12 @@ def recalculate_balances_for_accounts(db: Session, account_ids: List[int]):
         if not account:
             continue
 
-        transactions = db.query(models.Transaction).filter(
+        # The id and the amount are all this needs; fetching whole instances to
+        # write one column each puts the cost in the unit of work rather than in
+        # the arithmetic.
+        transactions = db.query(
+            models.Transaction.id, models.Transaction.amount
+        ).filter(
             models.Transaction.account_id == account_id
         ).order_by(
             models.Transaction.date.asc(),
@@ -2236,10 +2249,15 @@ def recalculate_balances_for_accounts(db: Session, account_ids: List[int]):
 
         running_balance = float(account.initial_balance) if account.initial_balance else 0.0
 
+        updates = []
         for tx in transactions:
             if tx.amount is not None:
                 running_balance += float(tx.amount)
-            tx.account_balance_after = round(running_balance, 2)
+            updates.append({"id": tx.id, "account_balance_after": round(running_balance, 2)})
+
+        if updates:
+            db.execute(sa_update(models.Transaction), updates)
+            db.expire_all()
 
         account.current_balance = round(running_balance, 2)
 

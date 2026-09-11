@@ -53,7 +53,7 @@ month rather than a £600 spike.
 
 ### Loans & Credit Cards (`loans.html`)
 
-- **Automatic detection**: Distinguishes credit cards (3+ unique payees) from traditional loans
+- **Declared, not guessed**: an account is a credit card or a liability because it was given that type, or because loan terms were attached to it — the old guess from the shape of the spending (3+ unique payees) is gone, along with the surprises it caused
 - **Loan tracking**: Borrowed amount, repaid, interest, remaining balance, and estimated APR via XIRR calculation
 - **Loan terms**: Rate, duration, repayment type, how often interest is charged and instalments paid, and which day of the month they land on (a fixed day, or a working day counted from either end). A loan is opened where every other account is, under **Tools → Add account**: choose *Liability* and *on agreed terms* and the whole schedule is worked out as you type, with the drawdown booked as a transfer into the account the money was paid into. Terms can also be attached to a loan that already exists, from the account's editor or from the card on this page
 - **Daily interest**: Interest can accrue daily rather than monthly, as most mortgages do. The schedule then follows the real days of each period (ACT/365F), so a February instalment carries less interest than a March one and a leap year costs a day more, while the instalment itself stays level and the difference lands in the final payment
@@ -61,7 +61,7 @@ month rather than a £600 spike.
 - **Amortisation schedule**: With terms in hand the schedule is computed exactly instead of estimated — constant instalment, interest only, or constant capital — and the card shows the instalment, the next payment, and how far the real balance is ahead of or behind schedule
 - **Fees**: An arrangement fee is booked as its own charge — added to the debt when it is capitalised, taken out of the money received when it is paid at the outset. A standing administration fee is charged on its own rhythm, which needn't match the instalments', and appears as a column in the schedule. Neither touches the nominal rate, but both drive the **effective rate** (APR/TAE) shown beside it, which is the figure two offers can honestly be compared on. An early repayment charge is kept out of both — it prices one thing, settling the loan today, which the card shows
 - **Editing**: Terms can be corrected or removed from the card. Both leave the account and its movements alone: deleting the terms returns the loan to being estimated from its transactions, exactly as it was tracked before
-- **Credit card progress bars**: Show ratio of current debt to historical maximum debt
+- **Credit card progress bars**: how much of the **credit limit** is in use — green under 25%, amber between, red past 75% — with the percentage beside the bar. A card with no limit set is measured against its own peak debt instead, in a colour of its own so the two are never read as the same thing
 - **Smart categorisation**: Interest and fees identified by category keywords
 - **Lender detection**: Automatically identifies the lender from transaction payees
 - **Transaction history**: Expandable per-account transaction list

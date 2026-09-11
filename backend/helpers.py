@@ -5,7 +5,7 @@ Consolidates balance_calculator.py and exchange_rate_helpers.py.
 from datetime import date, datetime, timedelta
 from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_
+from sqlalchemy import func, and_, update as sa_update
 from backend.models import Transaction, Account, ExchangeRate
 
 
@@ -229,9 +229,14 @@ def rebuild_total_balances(db: Session) -> None:
     accounts = db.query(Account).all()
     accounts_map = {a.id: a for a in accounts}
 
-    all_transactions = db.query(Transaction).order_by(
-        Transaction.date.asc(), Transaction.id.asc()
-    ).all()
+    # Columns, not objects. Loading twelve thousand rows as mapped instances and
+    # then marking each one dirty puts the whole cost of this in SQLAlchemy's
+    # unit of work -- two thirds of it, measured -- for a column the ledger only
+    # ever reads. The figures below are unchanged; only the way they are fetched
+    # and written is.
+    all_transactions = db.query(
+        Transaction.id, Transaction.date, Transaction.account_id, Transaction.amount
+    ).order_by(Transaction.date.asc(), Transaction.id.asc()).all()
     if not all_transactions:
         return
 
@@ -244,6 +249,7 @@ def rebuild_total_balances(db: Session) -> None:
     # balance throughout, so they are seeded up front; leaving them out made this
     # figure disagree with the dashboard, which counts them.
     converted = {}
+    updates = []
     touched = {t.account_id for t in all_transactions}
     opening_rates = historical_rates.get(min_date, {}) or {}
     opening_base_rate = opening_rates.get(base_currency, 1.0)
@@ -272,7 +278,13 @@ def rebuild_total_balances(db: Session) -> None:
 
         converted[t.account_id] += float(t.amount or 0.0) * (
             base_rate / rates_for_day.get(currency, 1.0))
-        t.total_balance_after = round(sum(converted.values()), 2)
+        updates.append({"id": t.id, "total_balance_after": round(sum(converted.values()), 2)})
+
+    # One statement, by primary key, instead of a flush that has to work out what
+    # changed on every instance it is holding.
+    if updates:
+        db.execute(sa_update(Transaction), updates)
+        db.expire_all()
 
     db.flush()
 

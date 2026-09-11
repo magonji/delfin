@@ -351,8 +351,10 @@ footer {
                     <li><b>Save &amp; New</b> batch mode — balance recalculation deferred until the last save</li>
                     <li><b>Payee autocomplete</b> that remembers the usual category and location</li>
                     <li><b>Transfers</b> across currencies, with the rate shown</li>
+                    <li><b>Splits</b> — one purchase carved into several lines with their own category, project and note, shown in the ledger as a single entry that opens</li>
                     <li><b>Bulk edit</b>, advanced filters and infinite scroll</li>
                     <li><b>Running balances</b> per account and portfolio-wide on every row</li>
+                    <li><b>Writable from anywhere</b> — one button in the corner of every page opens the same dialogs where you are, instead of sending you here first</li>
                 </ul>
             </div>
             <div class="card">
@@ -370,10 +372,11 @@ footer {
                 <span class="eyebrow">Loans &amp; cards</span>
                 <h3>Debt, worked out for you</h3>
                 <ul>
-                    <li><b>Tells cards from loans</b> automatically, by the shape of the spending</li>
-                    <li><b>Borrowed, repaid, interest, outstanding</b> — and an estimated APR via XIRR</li>
-                    <li><b>Lender detected</b> from the payees on the account</li>
-                    <li><b>Card progress bars</b> against your historical maximum debt</li>
+                    <li><b>Borrowed, repaid, interest, outstanding</b> — and an estimated APR via XIRR for a debt with no terms agreed</li>
+                    <li><b>Or give it its terms</b> — rate, duration, repayment type, fees — and the whole amortisation schedule is worked out instead of estimated, with the <b>effective rate</b> the fees really cost you beside the nominal one</li>
+                    <li><b>Interest the way the lender charges it</b> — daily if that is how the mortgage works, and a first period charged for the days that actually elapsed rather than rounded to a whole one</li>
+                    <li><b>Card bars show what you are using</b> — green under a quarter of the limit, amber, red past three quarters; a card with no limit set gets a colour of its own and is measured against the most it has ever owed</li>
+                    <li><b>A loan is an account</b>, opened where every other account is, with the drawdown booked as a transfer into wherever the money landed</li>
                 </ul>
             </div>
             <div class="card">
@@ -382,6 +385,7 @@ footer {
                 <ul>
                     <li><b>Financisto in and out</b> — native <code>.backup</code> or CSV, with a compatibility report before anything is written</li>
                     <li><b>Any bank CSV</b> via a column-mapping step, with reusable per-bank profiles and duplicate detection</li>
+                    <li><b>A preview you read down</b> — what the bank sent on the left, what it will become on the right, with the payee's usual categories offered as you go. On a phone it shows one line at a time, filling the screen, with arrows to walk the statement</li>
                     <li><b>Merge duplicates</b> across categories, accounts, payees, locations and projects</li>
                     <li><b>Backup and restore</b> using SQLite's online backup API — consistent, never a raw file copy</li>
                 </ul>
@@ -393,6 +397,7 @@ footer {
                     <li><b>Multi-currency</b> — every currency in the ECB feed, converted at the rate of the transaction date</li>
                     <li><b>Nightly maintenance</b> — rates, balances, payee stats and an off-disk backup, but only when your data actually changed</li>
                     <li><b>PWA</b> — installable on iOS, Android and desktop, with a service worker</li>
+                    <li><b>One shape for every form</b> — a label on the left, its value on the right, one field to a line; worked out for importing a statement on a phone and then used everywhere</li>
                     <li><b>No frameworks</b> — vanilla JavaScript and Chart.js, so there is nothing to keep upgrading</li>
                 </ul>
             </div>
@@ -476,6 +481,16 @@ footer {
                 twice — once behind your password, once behind your recovery code —
                 so changing the password only re-wraps it. The database is never
                 re-encrypted, and existing backups stay valid.
+            </p>
+            <p>
+                Guessing is slowed down rather than locked out: five wrong passwords pass
+                free, and after that each failure doubles the wait before the next attempt
+                is even looked at, up to five minutes. That leaves a dictionary attack
+                about a dozen tries an hour — and never turns into a lockout, because the
+                person most likely to be waiting is you. The keyfile and the session
+                secret are written readable by their owner and nobody else, and anything
+                you or an import wrote is drawn as text rather than markup, so a crafted
+                statement cannot smuggle a script into the page.
             </p>
         </div>
         <div class="callout">
