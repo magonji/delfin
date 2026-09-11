@@ -1598,11 +1598,21 @@ async function init() {
 
         await loadSummary(asked.summary, asked.budget);
 
+        // The KPI band finishes before anything below it starts.
+        //
+        // Ordering the list below was not enough: this yields at its first await
+        // -- the answer is already on its way, often already stored -- and the
+        // charts, which draw straight from what is stored, filled that gap and
+        // painted first. They are slow to draw, so the two figures at the top of
+        // the page were left blank behind a chart halfway down it. Its answer was
+        // asked for with everything else and has been in flight throughout, so
+        // waiting for it here costs the chart a few milliseconds at most.
+        await loadBalanceKpis(asked.kpis);
+
         await Promise.all([
             loadAccounts(asked.accounts),
-            loadNetworth(),
             loadAvailableMonths(asked.months),
-            loadBalanceKpis(asked.kpis)
+            loadNetworth()
         ]);
 
         // state.months is now loaded, so we know how much history exists:
