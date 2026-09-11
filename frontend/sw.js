@@ -1,4 +1,4 @@
-const CACHE_NAME = 'delfin-v42';
+const CACHE_NAME = 'delfin-v44';
 const STATIC_ASSETS = [
   '/app/index.html',
   '/app/transactions.html',
@@ -35,10 +35,9 @@ self.addEventListener('activate', event => {
   );
 });
 
-// How long a slow network is given before the cached copy is served instead.
-// Long enough not to prefer stale code on an ordinary mobile connection, short
-// enough that a stalled one never leaves the app staring at nothing.
-const NETWORK_PATIENCE_MS = 4000;
+// How long the stored copy is served before the network is asked whether it has
+// changed. Long enough for the page to have loaded everything it wanted first.
+const REVALIDATE_AFTER_MS = 3000;
 
 // Fetch handler
 self.addEventListener('fetch', event => {
@@ -64,29 +63,76 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // HTML and scripts: network-first (always get latest when online, cache fallback
-  // for offline). Code must not be served a version behind, which is what the
-  // stale-while-revalidate branch below would do.
+  // HTML and scripts: served from the cache, and replaced behind your back.
   //
-  // Network-first, though, is not network-forever. A connection that is up but
-  // barely moving is worse than no connection at all: `fetch` neither resolves
-  // nor rejects, so the page hangs on a blank screen instead of taking the
-  // perfectly good copy sitting in the cache. Once a cached copy exists the
-  // network gets a few seconds to beat it, and then it is served anyway.
+  // These used to go to the network first, so that code could never be a version
+  // behind. The price turned out to be the whole of the app's speed: a page and
+  // its six shared files are two round trips, paid on every single navigation,
+  // before a line of Delfin's own code runs. On a page whose figures were all
+  // already stored, that was five sixths of the wait.
+  //
+  // So the stored copy is served at once and the network asked in the background;
+  // whatever comes back is what the next load gets. The window in which you can
+  // be a version behind is therefore one load long, and only just after an
+  // update -- measured, not assumed: publish a change and the load that follows
+  // it still shows the old page, the one after that the new one.
+  //
+  // Bumping CACHE_NAME on release does not shorten that window (also measured),
+  // but it does make the change all-or-nothing: installing under a new name
+  // fetches every file afresh before it takes over, so you never get a new page
+  // paired with yesterday's scripts.
+  //
+  // Nothing stored yet -- a first visit, or a page reached with a query string --
+  // means waiting for the network, which is what it did before anyway.
   if (url.pathname.endsWith('.html') || url.pathname.endsWith('.js')) {
+    // Only a good answer replaces a good copy, and only under its plain URL:
+    // "transactions.html?account=5" is the same document as the one already
+    // stored, and keeping one entry per link would fill the cache with copies.
+    //
+    // Returns the writing, so that whoever cares can wait for it. Nobody waited
+    // before, and a service worker with nothing left to do is stopped where it
+    // stands: the new copy was fetched and then thrown away unwritten, so an
+    // updated file never arrived however many times the page was opened.
+    const store = response => {
+      if (!response || !response.ok || url.search) return Promise.resolve();
+      const clone = response.clone();
+      return caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+    };
+
     event.respondWith((async () => {
-      const cached = await caches.match(event.request);
-      const network = fetch(event.request).then(response => {
-        const clone = response.clone();
-        caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+      const cached = await caches.match(event.request, { ignoreSearch: true });
+      if (!cached) {
+        const response = await fetch(event.request);
+        // The page has waited long enough; the writing can finish behind it.
+        event.waitUntil(store(response).catch(() => {}));
         return response;
-      });
-      // Nothing cached to fall back on, so waiting is the only option.
-      if (!cached) return network.catch(() => caches.match(event.request));
-      return Promise.race([
-        network.catch(() => cached),
-        new Promise(resolve => setTimeout(() => resolve(cached), NETWORK_PATIENCE_MS))
-      ]);
+      }
+
+      // Once the page has finished asking for its own things.
+      //
+      // A browser holds six connections open to a server, and these seven
+      // checks, which nobody is waiting on, took all of them the moment the
+      // page opened -- so the figures it had gone to fetch queued behind them
+      // for a whole round trip, and serving the app from the cache had bought
+      // back only half of what it should have. Asking for them late costs
+      // nothing: what comes back is for the next visit, not this one.
+      //
+      // Said out loud that it must finish, too: a service worker with no
+      // pending work can be stopped where it stands. If it is stopped anyway --
+      // the tab closed in the meantime -- the check simply happens next time.
+      //
+      // Asked for by its address rather than by re-sending the request itself:
+      // a navigation cannot be handed back to fetch with options attached, and
+      // doing so failed with "Failed to fetch" every time -- so every page's
+      // own markup was the one file that never got its update.
+      const quiet = new Request(event.request.url, { priority: 'low' });
+      event.waitUntil(
+        new Promise(done => setTimeout(done, REVALIDATE_AFTER_MS))
+          .then(() => fetch(quiet))
+          .then(store)
+          .catch(() => {})
+      );
+      return cached;
     })());
     return;
   }
