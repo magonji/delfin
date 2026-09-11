@@ -1570,16 +1570,20 @@ async function init() {
         // then ask again excluding them, then fetch a year at a time: about ten
         // rounds of question and answer, one after another. On a phone away from
         // home each round costs a whole trip to the server and back, so the wait
-        // grew with the distance rather than with the data. None of these seven
+        // grew with the distance rather than with the data. None of these
         // needs another's answer, so none of them waits for one.
+        //
+        // Written in the order they are wanted on screen, because a browser will
+        // only hold six connections open to one server: the seventh waits for one
+        // to come free, a whole trip to the server and back later. What is at the
+        // top of the page goes first, and the chart lower down brings up the rear.
         const asked = {
             accounts:   fetchAccounts(),
             summary:    cachedApi('cache_summary', '/dashboard/summary'),
+            kpis:       cachedApi('cache_balance_kpis_v1', balanceKpisPath()),
             budget:     cachedApi('cache_budget_progress', `/budgets/${currentYearMonth()}/progress`),
             months:     cachedApi('cache_available_months_v2', '/dashboard/available-months', 'catalog'),
             categories: cachedApi('cache_categories_v1', '/categories?limit=1000', 'catalog'),
-            loanIds:    cachedApi('cache_loan_ids', '/loans/account-ids'),
-            kpis:       cachedApi('cache_balance_kpis_v1', balanceKpisPath()),
             yearly:     cachedApi('cache_yearly_trend_v2', '/dashboard/yearly-trend', 'historical'),
         };
         // A rejection nobody is waiting on yet would be reported as unhandled.
