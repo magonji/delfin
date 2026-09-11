@@ -11,6 +11,71 @@
     <link rel="icon" href="favicon.ico" sizes="any">
     <link rel="apple-touch-icon" sizes="180x180" href="/app/icons/icon-180.png" />
     <link rel="manifest" href="manifest.json" />
+    <!--
+      The first requests, before the first script.
+
+      Everything this page needs was already asked for at once, but not until
+      DOMContentLoaded -- which waits for five shared modules, 160kB of them, to
+      arrive. On a slow connection that is a whole round trip spent with the
+      network idle: the markup is in, the browser already knows what the page
+      will want, and it spends the wait downloading JavaScript instead. Asking
+      from the markup itself puts the questions on the wire alongside the
+      scripts rather than behind them.
+
+      What to ask depends only on `?account=` in the URL, which is the same
+      thing the page reads when it starts. Each answer is parked under the exact
+      path it came from, so a request the page builds differently -- a limit
+      changed here and not there -- finds nothing and simply asks again. A
+      mistake here costs a round trip, never the right answer.
+    -->
+    <script>
+    (function (global) {
+        'use strict';
+
+        var api = (localStorage.getItem('delfin_api')
+                   || (location.pathname.startsWith('/app') ? location.origin : 'http://localhost:8422'))
+                  .replace(/\/$/, '');
+        var parked = {};
+
+        // cache.js puts a deadline on every fetch and has not loaded yet, so
+        // these carry their own -- the same 25 seconds. Nothing started here
+        // may hang for ever either.
+        function ask(path) {
+            var controller = new AbortController();
+            var timer = setTimeout(function () { controller.abort(); }, 25000);
+            return fetch(api + path, { signal: controller.signal })
+                .then(function (r) { return r.json(); })
+                .finally(function () { clearTimeout(timer); });
+        }
+
+        function park(path) {
+            parked[path] = ask(path);
+            // Nobody is waiting on these yet, and a failure in the meantime
+            // would be reported as an error with no owner. Whoever takes the
+            // promise still sees it.
+            parked[path].catch(function () {});
+        }
+
+        var account = new URLSearchParams(location.search).get('account');
+        var filter = account ? 'account_id=' + encodeURIComponent(account) + '&' : '';
+        park('/catalogues');
+        park('/transactions?' + filter + 'skip=0&limit=100');
+        park('/transactions/summary?' + filter.replace(/&$/, ''));
+
+        global.DelfinPreflight = {
+            api: api,
+            // Taken once. The list is read again whenever a filter moves or the
+            // scroll reaches the end, and those must ask the server rather than
+            // be handed the answer from page load.
+            take: function (path) {
+                var p = parked[path];
+                if (!p) return ask(path);
+                delete parked[path];
+                return p;
+            }
+        };
+    })(window);
+    </script>
     <!-- Shared cache: loaded before the page script so DelfinCache exists. -->
     <script src="/app/cache.js"></script>
     <!-- The dialogs that write money, shared with every other page. -->
@@ -1022,7 +1087,9 @@
     <div class="footer" id="footerNote">Delfin · balances shown in GBP at historical rates</div>
 
     <script>
-        const API_URL = (localStorage.getItem('delfin_api') || (location.pathname.startsWith('/app') ? location.origin : 'http://localhost:8422')).replace(/\/$/, '');
+        // Worked out by the preflight in the <head>, which had to know it
+        // before this script existed.
+        const API_URL = DelfinPreflight.api;
         // --- Configuration and global state ---
         let allCategories = [], allPayees = [], allAccounts = [], allAccountsIncludingClosed = [], allLocations = [], regularTransactions = [], transferTransactions = [];
         let accountsMap = new Map();
@@ -1477,11 +1544,7 @@
             // exactly what happened when one was taken out.
             const transactions = fetchTransactionsData();
             const loaded = await Promise.allSettled([
-                loadAccounts(),
-                loadCategories(),
-                loadPayees(),
-                loadLocations(),
-                loadProjects(),
+                loadCatalogues(),
                 transactions,
                 // Fills the summary strip, and is also where the base currency is
                 // learnt. It has to settle before the first render: `displayCurrency`
@@ -1652,15 +1715,22 @@
         }
 
         // --- Data loading from API ---
+        // Each of these is asked for on its own when something has just been
+        // added and only that list has changed. At page load they arrive
+        // together, in one request, so the asking and the placing are separate:
+        // `load…` fetches and hands over, `absorb…` is what the page does with
+        // the answer whichever way it came.
         async function loadAccounts() {
-            try { 
-                allAccountsIncludingClosed = await (await fetch(`${API_URL}/accounts?include_closed=true`)).json();
-                accountsMap.clear();
-                allAccountsIncludingClosed.forEach(a => accountsMap.set(a.id, a));
-                noteCurrenciesInUse(allAccountsIncludingClosed.map(a => a.currency));
-                allAccounts = allAccountsIncludingClosed.filter(a => a.is_active).sort((a, b) => a.name.localeCompare(b.name));
-                populateAllAccountDropdowns(); 
-            } catch (e) { console.error(e); }
+            try { absorbAccounts(await DelfinPreflight.take('/accounts?include_closed=true')); }
+            catch (e) { console.error(e); }
+        }
+        function absorbAccounts(list) {
+            allAccountsIncludingClosed = list;
+            accountsMap.clear();
+            allAccountsIncludingClosed.forEach(a => accountsMap.set(a.id, a));
+            noteCurrenciesInUse(allAccountsIncludingClosed.map(a => a.currency));
+            allAccounts = allAccountsIncludingClosed.filter(a => a.is_active).sort((a, b) => a.name.localeCompare(b.name));
+            populateAllAccountDropdowns();
         }
         function populateAllAccountDropdowns() {
             const createOpt = (acc) => `<option value="${acc.id}" data-currency="${acc.currency}">${escapeHtml(acc.name)} (${acc.currency})</option>`;
@@ -1675,8 +1745,10 @@
         }
 
         async function loadCategories() {
-            try { allCategories = await (await fetch(`${API_URL}/categories?limit=1000`)).json(); populateAllCategoryDropdowns(); } catch (e) { console.error(e); }
+            try { absorbCategories(await DelfinPreflight.take('/categories?limit=1000')); }
+            catch (e) { console.error(e); }
         }
+        function absorbCategories(list) { allCategories = list; populateAllCategoryDropdowns(); }
         function populateAllCategoryDropdowns() {
             const parents = [...new Set(allCategories.map(c => c.parent || c.name))].sort();
             const opts = parents.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('');
@@ -1691,15 +1763,17 @@
             document.getElementById('bulkParentCategory').onchange = (e) => loadBulkSubcategories(e.target.value);
         }
 
-        async function loadPayees() {
-            allPayees = await (await fetch(`${API_URL}/payees`)).json();
+        async function loadPayees() { absorbPayees(await DelfinPreflight.take('/payees')); }
+        function absorbPayees(list) {
+            allPayees = list;
             ['payeeList', 'bulkPayeeList'].forEach(id => {
                 const el = document.getElementById(id);
                 if(el) el.innerHTML = allPayees.map(p => `<option value="${escapeHtml(p.name)}">`).join('');
             });
         }
-        async function loadLocations() {
-            allLocations = await (await fetch(`${API_URL}/locations`)).json();
+        async function loadLocations() { absorbLocations(await DelfinPreflight.take('/locations')); }
+        function absorbLocations(list) {
+            allLocations = list;
             populateLocationSelect();
             document.getElementById('bulkLocation').innerHTML = '<option value="">Don\'t change</option>' + allLocations.map(l => `<option value="${l.id}">${escapeHtml(l.name)}</option>`).join('');
         }
@@ -1708,10 +1782,40 @@
             // outside it lists locations.
             DelfinTxForm.refresh();
         }
-        async function loadProjects() {
-            const projs = await (await fetch(`${API_URL}/projects`)).json();
+        async function loadProjects() { absorbProjects(await DelfinPreflight.take('/projects')); }
+        function absorbProjects(projs) {
             allProjects = projs;
             document.getElementById('bulkProject').innerHTML = '<option value="">Don\'t change</option>' + projs.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
+        }
+
+        /**
+         * The five menus, in one request.
+         *
+         * A browser holds six connections open to a server, and the six shared
+         * files this page loads take all of them: asked for separately, the last
+         * of these queued behind the scripts for a second round trip, and the
+         * summary strip for a third. One request fits in the first round with
+         * the list itself.
+         *
+         * If it fails, the five are asked for the old way rather than leaving the
+         * page with empty menus -- one request that fails takes all five with it,
+         * where five used to fail one at a time.
+         */
+        async function loadCatalogues() {
+            let c;
+            try {
+                c = await DelfinPreflight.take('/catalogues');
+            } catch (e) {
+                console.error('Catalogues failed, asking one by one:', e);
+                await Promise.allSettled([loadAccounts(), loadCategories(), loadPayees(),
+                                          loadLocations(), loadProjects()]);
+                return;
+            }
+            absorbAccounts(c.accounts);
+            absorbCategories(c.categories);
+            absorbPayees(c.payees);
+            absorbLocations(c.locations);
+            absorbProjects(c.projects);
         }
 
         // The page has carried an error bar in its markup all along without ever
@@ -1753,7 +1857,7 @@
         // Totals over the whole filtered set (converted to GBP, transfers excluded).
         async function updateTransactionsSummary() {
             try {
-                const s = await (await fetch(`${API_URL}/transactions/summary?${currentFilterParams().toString()}`)).json();
+                const s = await DelfinPreflight.take(`/transactions/summary?${currentFilterParams().toString()}`);
                 const cur = s.base_currency || 'GBP';
                 displayCurrency = cur;
                 noteCurrenciesInUse([cur]);
@@ -1887,7 +1991,7 @@
             const params = currentFilterParams();
             params.append('skip', transactionsSkip);
             params.append('limit', LIMIT);
-            return await (await fetch(`${API_URL}/transactions?${params.toString()}`)).json();
+            return await DelfinPreflight.take(`/transactions?${params.toString()}`);
         }
 
         async function loadRecentTransactions(reset = false, isFilterChange = false) {

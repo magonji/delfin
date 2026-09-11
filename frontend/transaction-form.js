@@ -225,6 +225,31 @@
      * from its own copy: what belongs to the form is filled here, so a page
      * without filters needs nothing but this.
      */
+    /**
+     * Refills a menu and puts it back on what it was showing.
+     *
+     * Replacing a select's options throws away what was chosen in it, and the
+     * menus are refilled while the form is being filled in: after Save & New, to
+     * pick up a payee that has just been created, and after adding a location or
+     * a project from the form itself. The account was the casualty -- Save & New
+     * keeps it on purpose, and the account filter preselects it -- and it went
+     * blank a moment after being set, so the next save stopped with "Please fill
+     * in Amount and Account".
+     *
+     * A value that is no longer among the options cannot be put back; the menu
+     * then falls to "Select...", as it did before. Assigning an unknown value
+     * leaves `selectedIndex` at -1, which draws the menu blank rather than on
+     * its first entry, so that is corrected here.
+     */
+    function fillSelect(id, html) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        var chosen = el.value;
+        el.innerHTML = html;
+        if (chosen) el.value = chosen;
+        if (el.selectedIndex < 0) el.selectedIndex = 0;
+    }
+
     function populateFormSelects() {
         var accountOpt = function (a) {
             return '<option value="' + a.id + '" data-currency="' + a.currency + '">' +
@@ -232,26 +257,22 @@
         };
         var addNew = '<option value="__NEW__" style="color:#667eea;font-weight:bold">\u2795 Add new</option>';
         ['account', 'fromAccount', 'toAccount'].forEach(function (id) {
-            var el = document.getElementById(id);
-            if (el) el.innerHTML = '<option value="">Select...</option>' +
-                allAccounts.map(accountOpt).join('') + addNew;
+            fillSelect(id, '<option value="">Select...</option>' +
+                allAccounts.map(accountOpt).join('') + addNew);
         });
 
         var parents = Array.from(new Set(allCategories.map(function (c) { return c.parent || c.name; }))).sort();
-        var parentSel = document.getElementById('parentCategory');
-        if (parentSel) parentSel.innerHTML = '<option value="">Select...</option>' +
+        fillSelect('parentCategory', '<option value="">Select...</option>' +
             parents.map(function (p) { return '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + '</option>'; }).join('') +
-            '<option value="__NEW__" style="color:#667eea">\u2795 Add new</option>';
+            '<option value="__NEW__" style="color:#667eea">\u2795 Add new</option>');
 
-        var loc = document.getElementById('location');
-        if (loc) loc.innerHTML = '<option value="">Select...</option>' +
+        fillSelect('location', '<option value="">Select...</option>' +
             allLocations.map(function (l) { return '<option value="' + l.id + '">' + escapeHtml(l.name) + '</option>'; }).join('') +
-            '<option value="__NEW__" style="color:#667eea">\u2795 Add new</option>';
+            '<option value="__NEW__" style="color:#667eea">\u2795 Add new</option>');
 
-        var proj = document.getElementById('project');
-        if (proj) proj.innerHTML = '<option value="">Select...</option>' +
+        fillSelect('project', '<option value="">Select...</option>' +
             allProjects.map(function (p) { return '<option value="' + p.id + '">' + escapeHtml(p.name) + '</option>'; }).join('') +
-            '<option value="__NEW__" style="color:#667eea">\u2795 Add new</option>';
+            '<option value="__NEW__" style="color:#667eea">\u2795 Add new</option>');
 
         var list = document.getElementById('payeeList');
         if (list) list.innerHTML = allPayees.map(function (p) {

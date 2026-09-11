@@ -280,13 +280,24 @@ def rebuild_total_balances(db: Session) -> None:
             base_rate / rates_for_day.get(currency, 1.0))
         updates.append({"id": t.id, "total_balance_after": round(sum(converted.values()), 2)})
 
+    # Whatever the caller has already worked out goes to the database first.
+    #
+    # The session is created with autoflush off, so a change made on an instance
+    # sits in memory until something flushes it -- and expiring the session does
+    # not postpone such a change, it throws it away. The caller above this one
+    # writes `account_balance_after` on every transaction it has just walked and
+    # then calls this; the expiry below therefore used to discard the lot, while
+    # the statement beside it wrote `total_balance_after` quite happily. An
+    # imported statement came out with a total balance on every row and no
+    # account balance at all, and recalculating did it again.
+    db.flush()
+
     # One statement, by primary key, instead of a flush that has to work out what
     # changed on every instance it is holding.
     if updates:
         db.execute(sa_update(Transaction), updates)
+        # Written behind the session's back, so what it is holding is stale.
         db.expire_all()
-
-    db.flush()
 
 
 def recalculate_balances_from_transaction(

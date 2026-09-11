@@ -672,3 +672,24 @@ class ChangePasswordIn(BaseModel):
 class RecoverIn(BaseModel):
     recovery_code: str
     new_password: str
+
+
+# --- The page-load bundle ---
+
+class CataloguesResponse(BaseModel):
+    """The five lists a page needs before it can draw a row.
+
+    They are five endpoints because they are five different things, and they
+    stay that way. Asked for together they are one request instead of five:
+    a browser holds six connections open to a server, the shared modules take
+    all six while they download, and the last of these used to queue behind
+    them for a second round trip it did not need.
+
+    Each list is typed by the schema its own endpoint returns, so what is sent
+    here and what is sent there cannot drift apart.
+    """
+    accounts: List[AccountResponse]
+    categories: List[CategoryResponse]
+    payees: List[PayeeWithDetails]
+    locations: List[LocationResponse]
+    projects: List[ProjectResponse]

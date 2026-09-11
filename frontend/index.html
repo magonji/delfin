@@ -750,15 +750,21 @@ function oneYearAgoCutoff() {
     const p = new Date(d.getFullYear() - 1, d.getMonth(), d.getDate());
     return `${p.getFullYear()}-${String(p.getMonth() + 1).padStart(2, '0')}-${String(p.getDate()).padStart(2, '0')}`;
 }
-// Net-worth balance as of ~one year ago, from the daily data points (sorted
-// ascending). null when there's no data that far back.
-function balanceOneYearAgo(dataPoints) {
-    if (!Array.isArray(dataPoints) || !dataPoints.length) return null;
-    const cutoff = oneYearAgoCutoff();
-    let bal = null;
-    for (const p of dataPoints) { if (p.date <= cutoff) bal = p.balance; else break; }
-    return bal;
+/**
+ * What the two balance KPIs ask for.
+ *
+ * Both figures, and both of them a year ago, in one answer. They used to be two
+ * walks of the whole ledger returning ninety kilobytes each -- three thousand
+ * daily readings -- for the browser to pick two numbers out of and throw the
+ * rest away. None of that walking was needed: net worth at a moment is written
+ * on the last transaction up to it, and without the loans is that minus what
+ * the loan accounts hold. The cutoff is worked out here so it stays the
+ * viewer's own date rather than the server's.
+ */
+function balanceKpisPath() {
+    return `/dashboard/balance-kpis?one_year_ago=${oneYearAgoCutoff()}&exclude_loans=true`;
 }
+
 function renderBalanceDelta(id, current, prev) {
     const el = q(id);
     if (!el) return;
@@ -801,7 +807,7 @@ async function loadSummary(started, budgetStarted) {
 
     setKPI('#kpiTxCount', sum.total_transactions);
 
-    // Balance KPIs are set from networth endpoint (see loadBalanceKpis)
+    // The two balance KPIs are filled in by loadBalanceKpis.
 
     // Load current month budget available
     try {
@@ -817,36 +823,30 @@ async function loadSummary(started, budgetStarted) {
     } catch { q('#kpiBudgetAvail').textContent = '—'; renderBudgetDelta(null); }
 }
 
-async function loadBalanceKpis(totalStarted, loanIdsStarted) {
-    // Use the networth endpoint (all-time, daily) so KPIs match the graph calculation exactly
+async function loadBalanceKpis(started) {
+    // Both figures come from the ledger's own running total, which is the same
+    // arithmetic the net-worth graph does -- checked against it across the whole
+    // history, to the penny.
     const setMoney = (id, val) => {
         const el = q(id);
         el.textContent = fmtMoney(Math.abs(val || 0), state.baseCurrency);
         el.style.color = (val || 0) > 0 ? 'var(--green)' : (val || 0) < 0 ? 'var(--red)' : 'var(--text)';
     };
 
-    // Total balance (no exclusions)
-    const total = await (totalStarted || cachedApi('cache_nw_kpi_total', '/dashboard/networth/daily'));
-    state.totalBalanceConverted = total.summary?.current_balance ?? 0;
-    setMoney('#kpiTotalBalance', state.totalBalanceConverted);
-    renderBalanceDelta('#deltaTotalBalance', state.totalBalanceConverted, balanceOneYearAgo(total.data_points));
+    // Which accounts are loans is settled by the server, so this waits on
+    // nothing and can be asked for with everything else.
+    const kpis = await (started || cachedApi('cache_balance_kpis_v1', balanceKpisPath()));
 
-    // Without loans
-    // Asked for alongside the figure above rather than after it: only the
-    // "without loans" call below needs to know which accounts those are.
-    const res = await (loanIdsStarted || cachedApi('cache_loan_ids', '/loans/account-ids'));
-    const loanIds = res.loan_account_ids || [];
-    if (loanIds.length) {
-        const excluded = loanIds.join(',');
-        const noLoans = await cachedApi('cache_nw_kpi_noloans',
-            `/dashboard/networth/daily?excluded_accounts=${excluded}`);
-        const nlCur = noLoans.summary?.current_balance ?? 0;
-        setMoney('#kpiBalanceNoLoans', nlCur);
-        renderBalanceDelta('#deltaBalanceNoLoans', nlCur, balanceOneYearAgo(noLoans.data_points));
-    } else {
-        setMoney('#kpiBalanceNoLoans', state.totalBalanceConverted);
-        renderBalanceDelta('#deltaBalanceNoLoans', state.totalBalanceConverted, balanceOneYearAgo(total.data_points));
-    }
+    state.totalBalanceConverted = kpis.total?.current ?? 0;
+    setMoney('#kpiTotalBalance', state.totalBalanceConverted);
+    renderBalanceDelta('#deltaTotalBalance', state.totalBalanceConverted, kpis.total?.on_date ?? null);
+
+    // With nothing excluded the server returns the same figure twice, so this
+    // needs no branch of its own.
+    const withoutLoans = kpis.without_excluded?.current ?? state.totalBalanceConverted;
+    setMoney('#kpiBalanceNoLoans', withoutLoans);
+    renderBalanceDelta('#deltaBalanceNoLoans', withoutLoans, kpis.without_excluded?.on_date ?? null);
+
     updateAcctNetTotal();
 }
 
@@ -1578,8 +1578,8 @@ async function init() {
             budget:     cachedApi('cache_budget_progress', `/budgets/${currentYearMonth()}/progress`),
             months:     cachedApi('cache_available_months_v2', '/dashboard/available-months', 'catalog'),
             categories: cachedApi('cache_categories_v1', '/categories?limit=1000', 'catalog'),
-            nwTotal:    cachedApi('cache_nw_kpi_total', '/dashboard/networth/daily'),
             loanIds:    cachedApi('cache_loan_ids', '/loans/account-ids'),
+            kpis:       cachedApi('cache_balance_kpis_v1', balanceKpisPath()),
             yearly:     cachedApi('cache_yearly_trend_v2', '/dashboard/yearly-trend', 'historical'),
         };
         // A rejection nobody is waiting on yet would be reported as unhandled.
@@ -1598,7 +1598,7 @@ async function init() {
             loadAccounts(asked.accounts),
             loadNetworth(),
             loadAvailableMonths(asked.months),
-            loadBalanceKpis(asked.nwTotal, asked.loanIds)
+            loadBalanceKpis(asked.kpis)
         ]);
 
         // state.months is now loaded, so we know how much history exists:

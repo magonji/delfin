@@ -851,6 +851,29 @@ def get_projects(
     return result[skip:skip + limit]
 
 
+@app.get("/catalogues", response_model=schemas.CataloguesResponse)
+def get_catalogues(db: Session = Depends(get_db)):
+    """
+    The five lists a page fills its menus from, in one request.
+
+    A browser will hold six connections open to one server, and the shared
+    form modules take all six while they download, so asking for these one by
+    one put the last of them a whole round trip behind the rest -- on a slow
+    connection, the better part of a second before the first row could be
+    drawn. The work is the same either way; only the waiting changes.
+
+    It calls the five endpoints rather than repeating them, with the arguments
+    the pages pass, so there is one definition of what each list contains and
+    no second copy to keep in step.
+    """
+    return {
+        "accounts": get_accounts(skip=0, limit=100, include_closed=True, db=db),
+        "categories": get_categories(skip=0, limit=1000, db=db),
+        "payees": get_payees(db=db),
+        "locations": get_locations(db=db),
+        "projects": get_projects(db=db),
+    }
+
 @app.post("/projects", response_model=schemas.ProjectResponse)
 def create_project(
     project: schemas.ProjectCreate,
@@ -2255,11 +2278,17 @@ def recalculate_balances_for_accounts(db: Session, account_ids: List[int]):
                 running_balance += float(tx.amount)
             updates.append({"id": tx.id, "account_balance_after": round(running_balance, 2)})
 
+        # Set, and written out, before the expiry below: the session has
+        # autoflush off, so expiring while this is still pending discards it --
+        # and with more than one account in the list, each pass used to throw
+        # away the figure the pass before it had just worked out.
+        account.current_balance = round(running_balance, 2)
+        db.flush()
+
         if updates:
             db.execute(sa_update(models.Transaction), updates)
+            # Written behind the session's back, so what it is holding is stale.
             db.expire_all()
-
-        account.current_balance = round(running_balance, 2)
 
     # Step 2: the running total, from the one definition of that column. This
     # used to sum transaction amounts from zero, so a single call here quietly
@@ -2586,17 +2615,158 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
 # OPTIMISED DASHBOARD ENDPOINTS
 # ============================================
 
+@app.get("/dashboard/balance-kpis")
+def get_balance_kpis(
+    one_year_ago: Optional[date] = Query(
+        None, description="YYYY-MM-DD; also report both figures as they stood that day"
+    ),
+    excluded_accounts: Optional[str] = Query(None),
+    exclude_loans: bool = Query(
+        False, description="exclude the loan accounts, without having to be told which they are"
+    ),
+    db: Session = Depends(get_db)
+):
+    """
+    The dashboard's two balance figures, read rather than recomputed.
+
+    Net worth at any moment is already written down: ``total_balance_after`` on
+    the last transaction up to that moment is every account added together in
+    the base currency, which is precisely this figure. Two indexed rows, then,
+    where the net-worth endpoint walked all twelve thousand transactions to
+    arrive at the same number -- twice over, because the same walk ran again
+    with the loans left out.
+
+    And the second figure is the first minus what the excluded accounts hold,
+    which the ledger also already knows: ``account_balance_after`` on the last
+    transaction of each.
+
+    Two things the walk does that a subtraction must not forget:
+
+      - An account joins the total on its first transaction, not before. One
+        whose first movement is after the date asked for held nothing as far as
+        this figure is concerned, and contributes zero rather than its opening
+        balance.
+      - An account with no transactions at all never joins that way, so it
+        carries its opening balance throughout.
+
+    The subtraction is only exact while the excluded accounts are kept in the
+    base currency: their balance is recorded in their own, and what the walk
+    adds up is each movement converted at the rate of its own day, which no
+    single rate applied to the closing balance reproduces. So a loan in another
+    currency is handed back to the walk, which stays the one definition of the
+    figure for the cases this cannot answer exactly.
+    """
+    excluded_ids = []
+    if excluded_accounts:
+        excluded_ids = [int(i) for i in excluded_accounts.split(',') if i.strip().isdigit()]
+    # Worked out here rather than asked for first: the dashboard used to fetch
+    # the list and only then these figures, two round trips deep for something
+    # it could have started at the same moment as everything else.
+    if exclude_loans:
+        excluded_ids = sorted(set(excluded_ids) | set(loan_account_ids(db)))
+        excluded_accounts = ','.join(str(i) for i in excluded_ids)
+
+    base_currency = get_base_currency(db)
+    accounts = {a.id: a for a in db.query(models.Account).all()}
+
+    # A loan kept in another currency: the shortcut below cannot reproduce what
+    # the walk would say, so it is not used.
+    if any(accounts[i].currency != base_currency for i in excluded_ids if i in accounts):
+        # Every argument spelled out: the defaults in that signature are
+        # FastAPI Query objects, not values, and only the request machinery
+        # turns them into ones.
+        def walk(excluded):
+            return get_networth_evolution(
+                period="daily", date_from=None, date_to=None, excluded_accounts=excluded,
+                points=False, balance_on=one_year_ago, db=db,
+            )["summary"]
+
+        total = walk(None)
+        without = walk(excluded_accounts)
+        return {
+            "base_currency": base_currency,
+            "total": {"current": total["current_balance"], "on_date": total.get("balance_on")},
+            "without_excluded": {"current": without["current_balance"],
+                                 "on_date": without.get("balance_on")},
+        }
+
+    def last_before(cutoff: Optional[date], account_id: Optional[int] = None):
+        """The last transaction up to the end of ``cutoff``, or ever if None."""
+        q = db.query(Transaction.total_balance_after, Transaction.account_balance_after)
+        if account_id is not None:
+            q = q.filter(Transaction.account_id == account_id)
+        if cutoff is not None:
+            q = q.filter(Transaction.date < _as_datetime_floor(cutoff) + timedelta(days=1))
+        return q.order_by(Transaction.date.desc(), Transaction.id.desc()).first()
+
+    # Which accounts have ever had a movement: one that has not is holding its
+    # opening balance on every date, including dates before it was opened -- the
+    # same thing the walk does with it.
+    touched = {row[0] for row in db.query(Transaction.account_id).distinct().all()}
+
+    def figures(cutoff: Optional[date]):
+        row = last_before(cutoff)
+        if row is None:
+            # Nothing recorded by then. Before the ledger begins there is no
+            # reading to report; with no ledger at all, the accounts still hold
+            # what they opened with.
+            if cutoff is not None and touched:
+                return None, None
+            opening = round(sum(float(a.initial_balance or 0.0) for a in accounts.values()
+                                if a.is_active == 1), 2)
+            held = sum(float(accounts[i].initial_balance or 0.0)
+                       for i in excluded_ids if i in accounts and accounts[i].is_active == 1)
+            return opening, round(opening - held, 2)
+
+        total = row[0]
+        if total is None:
+            return None, None
+
+        held = 0.0
+        for account_id in excluded_ids:
+            account = accounts.get(account_id)
+            if account is None:
+                continue
+            if account_id not in touched:
+                held += float(account.initial_balance or 0.0)
+                continue
+            own = last_before(cutoff, account_id)
+            # No movement of its own by then: it had not joined the total yet.
+            if own is not None and own[1] is not None:
+                held += float(own[1])
+        return round(float(total), 2), round(float(total) - held, 2)
+
+    total_now, without_now = figures(None)
+    total_then, without_then = (None, None)
+    if one_year_ago is not None:
+        total_then, without_then = figures(one_year_ago)
+
+    return {
+        "base_currency": base_currency,
+        "total": {"current": total_now, "on_date": total_then},
+        "without_excluded": {"current": without_now, "on_date": without_then},
+    }
+
 @app.get("/dashboard/networth/{period}")
 def get_networth_evolution(
     period: str,
     date_from: Optional[date] = Query(None),
     date_to: Optional[date] = Query(None),
     excluded_accounts: Optional[str] = Query(None),
+    points: bool = Query(True, description="false to leave out the series and send only the summary"),
+    balance_on: Optional[date] = Query(
+        None, description="YYYY-MM-DD; also report the balance on the last day at or before it"
+    ),
     db: Session = Depends(get_db)
 ):
     """
     Get net worth evolution with HISTORICAL exchange rates.
     Each transaction uses the exchange rate from its transaction date.
+
+    The dashboard's two balance figures want one number each and the same
+    number a year earlier, not three thousand daily readings; ``points=false``
+    and ``balance_on`` give them that, from this same walk, rather than sending
+    ninety kilobytes twice over for the caller to scan.
     """
     # Parse excluded accounts
     excluded_ids = []
@@ -2613,7 +2783,15 @@ def get_networth_evolution(
         filters.append(Transaction.date <= _as_datetime_ceil(date_to))
 
     # Get all transactions in range
-    query = db.query(Transaction)
+    #
+    # Four columns rather than mapped instances. The loop below reads the date,
+    # the account, the amount and the currency and nothing else, and building
+    # twelve thousand objects to read four fields off each was most of what this
+    # endpoint spent its time on -- time the dashboard waits for twice over,
+    # once for the total and once for the same figure without the loans.
+    query = db.query(
+        Transaction.date, Transaction.account_id, Transaction.amount, Transaction.currency
+    )
     if filters:
         query = query.filter(and_(*filters))
     transactions = query.order_by(Transaction.date).all()
@@ -2737,8 +2915,23 @@ def get_networth_evolution(
             account_balances[acc.id] = float(acc.initial_balance) * (opening_base_rate / acc_rate)
 
     # Process transactions with HISTORICAL rates
+    #
+    # One reading per day, taken once the day's last transaction has been
+    # applied. Every aggregation below -- daily, weekly, monthly -- keeps only
+    # the last point of its period and throws the rest away, so a reading after
+    # each of twelve thousand transactions was twelve thousand additions across
+    # every account to produce three thousand answers. The readings that survive
+    # are the same ones, worked out the same way.
+    pending_date = None
     for trans in transactions:
         trans_date = _to_date(trans.date)
+        if pending_date is not None and trans_date != pending_date:
+            all_balance_points.append({
+                'date': pending_date,
+                'balance': round(sum(account_balances.values()), 2)
+            })
+        pending_date = trans_date
+
         rates_for_day = historical_rates.get(trans_date, {'GBP': 1.0})
 
         trans_rate = rates_for_day.get(trans.currency, 1.0)
@@ -2755,10 +2948,11 @@ def get_networth_evolution(
             account_balances[trans.account_id] = init_bal
         account_balances[trans.account_id] += converted_amount
 
-        total_balance = sum(account_balances.values())
+    # The last day has nothing after it to close it.
+    if pending_date is not None:
         all_balance_points.append({
-            'date': trans_date,
-            'balance': round(total_balance, 2)
+            'date': pending_date,
+            'balance': round(sum(account_balances.values()), 2)
         })
 
     # Aggregate by period
@@ -2814,18 +3008,25 @@ def get_networth_evolution(
             "lowest_balance": round(lowest_balance, 2),
             "lowest_date": aggregated_data[lowest_idx]['date'].isoformat()
         }
+        if balance_on is not None:
+            # The reading on the last day at or before the date asked for: the
+            # same one the caller used to find by walking the series itself.
+            earlier = [p['balance'] for p in aggregated_data if p['date'] <= balance_on]
+            summary["balance_on"] = earlier[-1] if earlier else None
     else:
         summary = {
             "initial_balance": 0, "current_balance": 0, "total_change": 0,
             "percentage_change": 0, "peak_balance": 0, "peak_date": None,
             "lowest_balance": 0, "lowest_date": None
         }
+        if balance_on is not None:
+            summary["balance_on"] = None
 
     return {
         "data_points": [
             {'date': point['date'].isoformat(), 'balance': point['balance']}
             for point in aggregated_data
-        ],
+        ] if points else [],
         "summary": summary,
         "base_currency": base_currency
     }
@@ -3576,8 +3777,7 @@ def get_top_individual_expenses(
 # LOANS & CREDIT CARDS ENDPOINTS 
 # ============================================
 
-@app.get("/loans/account-ids")
-def get_loan_account_ids(db: Session = Depends(get_db)):
+def loan_account_ids(db: Session) -> List[int]:
     """
     The IDs of accounts that are loans: agreed terms, or typed as a liability.
 
@@ -3590,7 +3790,13 @@ def get_loan_account_ids(db: Session = Depends(get_db)):
     typed = {row[0] for row in db.query(Account.id).filter(
         func.replace(func.upper(func.trim(Account.type)), " ", "_") == "LIABILITY"
     ).all()}
-    return {"loan_account_ids": sorted(declared | typed)}
+    return sorted(declared | typed)
+
+
+@app.get("/loans/account-ids")
+def get_loan_account_ids(db: Session = Depends(get_db)):
+    """The accounts the dashboard treats as loans."""
+    return {"loan_account_ids": loan_account_ids(db)}
 
 
 @app.get("/loans/summary")
@@ -4215,36 +4421,41 @@ def initialise_balances(db: Session = Depends(get_db)):
         total_tx_count = 0
         
         # PHASE 1: Calculate account_balance_after for each account
-        # Also track each account's running balance at each transaction
-        account_running_balances = {}  # account_id -> running_balance
-        
+        #
+        # Columns rather than mapped instances, and one statement per account
+        # rather than a unit of work holding every row in the ledger. Two
+        # reasons beyond the speed: the phase below expires the session, and an
+        # expiry discards changes that have not been written yet -- which is
+        # how this column came to be left empty on freshly imported rows -- and
+        # writing both columns as statements means one UPDATE per row for each,
+        # rather than a flush per instance.
         for account in accounts:
             print(f"Processing account: {account.name} (ID: {account.id})")
-            account_running_balances[account.id] = float(account.initial_balance) if account.initial_balance is not None else 0.0
-            
-            # Get transactions ordered by date and ID
-            transactions = db.query(models.Transaction).filter(
+
+            # Ordered by date and ID, so the running balance follows the ledger.
+            transactions = db.query(
+                models.Transaction.id, models.Transaction.amount
+            ).filter(
                 models.Transaction.account_id == account.id
             ).order_by(models.Transaction.date.asc(), models.Transaction.id.asc()).all()
-            
-            # Calculate running balance
-            running_balance = account_running_balances[account.id]
-            
-            for t in transactions:
-                if t is None:
-                    print("WARNING: Found None transaction in list. Skipping.")
-                    continue
-                
-                if not hasattr(t, 'amount') or t.amount is None:
-                    print(f"WARNING: Transaction ID {t.id} has None or invalid amount. Assuming 0.")
-                    amount = 0.0
-                else:
-                    amount = float(t.amount)
 
-                running_balance += amount
-                t.account_balance_after = running_balance
+            running_balance = float(account.initial_balance) if account.initial_balance is not None else 0.0
+
+            updates = []
+            for t in transactions:
+                if t.amount is None:
+                    print(f"WARNING: Transaction ID {t.id} has None or invalid amount. Assuming 0.")
+                else:
+                    running_balance += float(t.amount)
+                # Rounded on the way out, as the mapper's own listener does for
+                # this column -- a statement does not pass through it, and the
+                # ledger would otherwise carry 1253.2499999999955.
+                updates.append({"id": t.id, "account_balance_after": round(running_balance, 2)})
                 total_tx_count += 1
-            
+
+            if updates:
+                db.execute(sa_update(models.Transaction), updates)
+
             # Update account's current balance
             account.current_balance = running_balance
         
