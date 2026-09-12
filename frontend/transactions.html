@@ -196,6 +196,10 @@
            little and give it back first: the row never wraps, and the amounts
            shrink before the search box does. */
         #filters input[type="number"] { flex: 0 1 74px; min-width: 52px; -moz-appearance: textfield; }
+        /* Smallest and largest are one question, so they are wrapped together for
+           the phone. Here that wrapper is nothing at all: the two fields stay
+           direct children of the row, which remains the single line it was. */
+        #filters .filter-amounts { display: contents; }
         #filters input[type="number"]::-webkit-outer-spin-button,
         #filters input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         .filter-actions { display: flex; gap: 5px; flex: 0 0 auto; }
@@ -755,7 +759,18 @@
             #filters.open { max-height: 620px; padding: 8px; gap: 6px; border: 1px solid var(--border); background: var(--panel); }
             #filters input, #filters select { flex: 0 0 auto; width: 100%; min-width: 0; max-width: 100%; font-size: 14px; margin-top: 6px; }
             #filters input[type="date"] { width: 100%; }
-            #filters input[type="number"] { width: 100%; }
+            /* Side by side: "from" and "to" is one line of thought, and on a
+               phone the panel is a column of full-width fields where these two
+               would take two rows to say one thing.
+
+               The flex is reset, not only the width. In a column the basis is
+               the height, so the 74px asked for above -- a width, on a row that
+               runs across -- was making these two fields half again as tall as
+               every other one. The rule that sets the width here could not undo
+               it: an id with an element beats an id with an element and an
+               attribute nowhere, and it is the attribute that carries the 74. */
+            #filters .filter-amounts { display: flex; gap: 6px; width: 100%; margin-top: 6px; }
+            #filters .filter-amounts input[type="number"] { flex: 1 1 0; width: auto; min-width: 0; margin-top: 0; }
             .filter-actions { margin-left: 0; width: 100%; justify-content: stretch; margin-top: 6px; }
             .filter-actions button { flex: 1; }
             .bulk-controls { border-left: none; padding-left: 0; margin-left: 0; border-top: 1px solid var(--border); padding-top: 8px; width: 100%; justify-content: center; }
@@ -926,8 +941,10 @@
                 <input type="date" id="filterStartDate" title="From date">
                 <input type="date" id="filterEndDate" title="To date">
 
-                <input type="number" step="0.01" min="0" inputmode="decimal" id="filterMinAmount" placeholder="Min" title="Smallest amount, ignoring sign">
-                <input type="number" step="0.01" min="0" inputmode="decimal" id="filterMaxAmount" placeholder="Max" title="Largest amount, ignoring sign">
+                <div class="filter-amounts">
+                    <input type="number" step="0.01" min="0" inputmode="decimal" id="filterMinAmount" placeholder="Min" title="Smallest amount, ignoring sign">
+                    <input type="number" step="0.01" min="0" inputmode="decimal" id="filterMaxAmount" placeholder="Max" title="Largest amount, ignoring sign">
+                </div>
 
                 <select id="filterAccount" title="Filter by account"><option value="">All accounts</option></select>
                 <select id="filterCategory" title="Filter by category"><option value="">All categories</option></select>
