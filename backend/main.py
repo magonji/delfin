@@ -2483,6 +2483,91 @@ def create_transfer(
         "message": "Transfer created successfully"
     }
 
+@app.put("/transactions/transfers/{out_id}/{in_id}")
+def update_transfer(
+    out_id: int,
+    in_id: int,
+    transfer: schemas.TransferCreate,
+    db: Session = Depends(get_db)
+):
+    """
+    Change a transfer, in place.
+
+    It used to be changed by deleting both legs and making a new pair, from the
+    browser, as three separate requests. Anything at all between the first and
+    the last -- a phone that locks, a tab closed on an app that looks frozen, a
+    connection that drops -- and the transfer was simply gone, money missing
+    from the ledger with nothing left to say it had ever been there. Worse, the
+    message the app showed when a save failed said nothing had been saved, which
+    by then was the opposite of true.
+
+    Here the two legs are edited and committed together, so it either happens or
+    it does not, and the balances are worked out once from the earlier of where
+    the transfer was and where it now is.
+    """
+    # Named by its two legs rather than by the group they share. The group is
+    # written when a transfer is made and is one per pair, but a database that
+    # arrived some other way -- an import, a restored backup, a seeded demo --
+    # can carry the same one on several pairs, and keying an edit on it would
+    # then rewrite every transfer that happened to share it.
+    legs = db.query(models.Transaction).filter(
+        models.Transaction.id.in_([out_id, in_id])
+    ).all()
+    if out_id == in_id or len(legs) != 2:
+        raise HTTPException(status_code=404, detail="Transfer not found")
+    if any(leg.transfer_group_id is None for leg in legs) or \
+            legs[0].transfer_group_id != legs[1].transfer_group_id:
+        raise HTTPException(status_code=400, detail="Those two rows are not a transfer")
+
+    from_account = db.query(models.Account).filter(
+        models.Account.id == transfer.from_account_id
+    ).first()
+    to_account = db.query(models.Account).filter(
+        models.Account.id == transfer.to_account_id
+    ).first()
+    if not from_account or not to_account:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    # Which leg is which is the sign, as it is everywhere else. Written in id
+    # order when the two cannot be told apart, which is the order they were
+    # created in.
+    out_leg, in_leg = sorted(legs, key=lambda t: (float(t.amount or 0.0), t.id))
+
+    # Where it was, so that whatever it passes over on the way is rewritten too.
+    old_accounts = {out_leg.account_id, in_leg.account_id}
+    earliest = min(out_leg.date, in_leg.date, transfer.date)
+
+    to_amount = transfer.to_amount if transfer.to_amount else transfer.from_amount
+
+    out_leg.date = transfer.date
+    out_leg.amount = -abs(transfer.from_amount)
+    out_leg.currency = from_account.currency
+    out_leg.account_id = transfer.from_account_id
+    out_leg.note = transfer.note
+
+    in_leg.date = transfer.date
+    in_leg.amount = abs(to_amount)
+    in_leg.currency = to_account.currency
+    in_leg.account_id = transfer.to_account_id
+    in_leg.note = transfer.note
+
+    now = datetime.utcnow()
+    out_leg.updated_at = now
+    in_leg.updated_at = now
+    db.flush()
+
+    affected = sorted(old_accounts | {transfer.from_account_id, transfer.to_account_id})
+    _recalculate_from_date(db, earliest, affected)
+    db.commit()
+
+    db.refresh(out_leg)
+    db.refresh(in_leg)
+    return {
+        "transfer_out": out_leg,
+        "transfer_in": in_leg,
+        "message": "Transfer updated successfully",
+    }
+
                             
 # ============================================
 # EXCHANGE RATES ENDPOINTS

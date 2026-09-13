@@ -250,6 +250,23 @@
         if (el.selectedIndex < 0) el.selectedIndex = 0;
     }
 
+    /**
+     * The day and the time a transaction carries, as its two fields want them.
+     *
+     * Read off the text rather than through a Date. What the server sends has no
+     * timezone on it -- "2026-06-10T00:30:00" is a wall clock, the one the money
+     * moved at -- and passing that through `new Date` and back out of
+     * `valueAsDate` converts it twice: once into the reader's zone on the way in,
+     * and once out of UTC on the way out. An hour east of Greenwich in summer,
+     * that turned every transaction recorded between midnight and one o'clock
+     * into the day before -- on screen, and then in the ledger, because opening
+     * one and pressing Update without touching anything saved the day it showed.
+     */
+    function whenFields(value) {
+        var text = String(value || '');
+        return { day: text.slice(0, 10), time: text.slice(11, 16) || '00:00' };
+    }
+
     function populateFormSelects() {
         var accountOpt = function (a) {
             return '<option value="' + a.id + '" data-currency="' + a.currency + '">' +
@@ -354,7 +371,9 @@
             }
             resetTransferBatchState();
             closeModal('transferModal'); 
-            delete document.getElementById('transferForm').dataset.editingOutId; 
+            const tf = document.getElementById('transferForm');
+            delete tf.dataset.editingOutId; delete tf.dataset.editingInId;
+            
             document.getElementById('transferForm').querySelector('button[type="submit"]').textContent='Save'; 
             return balancesReady;
         }
@@ -418,9 +437,9 @@
             const g = await (await fetch(`${API_URL}/transactions/split/${groupId}`)).json();
             openTransactionModal();
 
-            const d = new Date(g.date);
-            document.getElementById('date').valueAsDate = d;
-            document.getElementById('time').value = d.toTimeString().slice(0, 5);
+            const when = whenFields(g.date);
+            document.getElementById('date').value = when.day;
+            document.getElementById('time').value = when.time;
             document.getElementById('amount').value = g.amount;
             document.getElementById('account').value = g.account_id;
             syncAmountSign();
@@ -450,7 +469,8 @@
             setScrollTarget(id);
             const t = await (await fetch(`${API_URL}/transactions/${id}`)).json();
             openTransactionModal();
-            const d = new Date(t.date); document.getElementById('date').valueAsDate = d; document.getElementById('time').value = d.toTimeString().slice(0,5);
+            const when = whenFields(t.date);
+            document.getElementById('date').value = when.day; document.getElementById('time').value = when.time;
             document.getElementById('amount').value = t.amount; document.getElementById('account').value = t.account_id; document.getElementById('note').value = t.note||'';
             syncAmountSign();
             if(t.category_id) { 
@@ -472,12 +492,15 @@
             const o = await (await fetch(`${API_URL}/transactions/${outId}`)).json();
             const i = await (await fetch(`${API_URL}/transactions/${inId}`)).json();
             openTransferModal();
-            const d = new Date(o.date); document.getElementById('transferDate').valueAsDate = d; document.getElementById('transferTime').value = d.toTimeString().slice(0,5);
+            const when = whenFields(o.date);
+            document.getElementById('transferDate').value = when.day; document.getElementById('transferTime').value = when.time;
             document.getElementById('fromAccount').value = o.account_id; document.getElementById('toAccount').value = i.account_id;
             document.getElementById('fromAmount').value = Math.abs(o.amount); 
             if(o.currency !== i.currency) document.getElementById('toAmount').value = i.amount;
             document.getElementById('transferNote').value = o.note || ''; checkTransferCurrencies();
-            const f = document.getElementById('transferForm'); f.dataset.editingOutId = outId; f.dataset.editingInId = inId; f.querySelector('button[type="submit"]').textContent = 'Update';
+            const f = document.getElementById('transferForm');
+            f.dataset.editingOutId = outId; f.dataset.editingInId = inId;
+            f.querySelector('button[type="submit"]').textContent = 'Update';
             setModalMode('transferModal', true);
         }
 
@@ -944,11 +967,6 @@
                 return false;
             }
 
-            if(isEdit) {
-                await fetch(`${API_URL}/transactions/${form.dataset.editingOutId}`, {method:'DELETE'});
-                await fetch(`${API_URL}/transactions/${form.dataset.editingInId}`, {method:'DELETE'});
-            }
-
             const fromAccountId = parseInt(document.getElementById('fromAccount').value);
             const toAccountId = parseInt(document.getElementById('toAccount').value);
 
@@ -969,13 +987,23 @@
 
             // Skip recalculation only in batch mode (Save & New); otherwise let backend recalculate incrementally
             const skipRecalc = saveAndNew && !isEdit;
-            const url = `${API_URL}/transactions/transfers?skip_recalculation=${skipRecalc}`;
 
-            const res = await fetch(url, {
-                method: 'POST',
-                body: JSON.stringify(data),
-                headers: {'Content-Type': 'application/json'}
-            });
+            // Changed where it stands, not deleted and built again. The old way
+            // was three requests from here -- delete, delete, create -- and a
+            // phone that locked or an app closed on a screen that looked frozen
+            // between the first and the last left no transfer at all and the
+            // money gone from the ledger.
+            const res = isEdit
+                ? await fetch(`${API_URL}/transactions/transfers/${form.dataset.editingOutId}/${form.dataset.editingInId}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(data),
+                    headers: {'Content-Type': 'application/json'}
+                })
+                : await fetch(`${API_URL}/transactions/transfers?skip_recalculation=${skipRecalc}`, {
+                    method: 'POST',
+                    body: JSON.stringify(data),
+                    headers: {'Content-Type': 'application/json'}
+                });
 
             if (!res.ok) {
                 alert('Error saving transfer');

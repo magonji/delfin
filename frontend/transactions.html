@@ -1193,37 +1193,56 @@
             return false;
         }
         
+        // How far down the list a row is worth chasing.
+        //
+        // This used to read fifty more pages -- five thousand rows -- and every
+        // one of them redrew the whole list, which grows as it goes: by the end
+        // that is a hundred thousand rows rendered. Editing a transfer and
+        // moving its date back sent it thousands of rows down, and a phone spent
+        // the next minute with nothing responding, not the Save button and not
+        // the close cross, because the work was all on the one thread.
+        //
+        // A few pages is what the gesture is worth: jumping to the row you just
+        // touched helps while it is near where you are, and a row five thousand
+        // down is not somewhere you were looking anyway.
+        const TARGET_SEARCH_PAGES = 5;
+
         async function scrollToTarget() {
             if (!targetTransactionId && !targetTransferId) return;
             if (isScrollingToTarget) return;
-            
+
             isScrollingToTarget = true;
-            
-            // Wait for any ongoing load to finish
-            while (isLoadingTransactions) {
-                await new Promise(r => setTimeout(r, 50));
-            }
-            
-            if (findAndScrollToTarget()) return;
-            
-            const maxAttempts = 50;
-            let attempts = 0;
-            
-            while (attempts < maxAttempts && hasMoreTransactions && (targetTransactionId || targetTransferId)) {
-                // Wait if something else is loading
+            try {
+                // Wait for any ongoing load to finish
                 while (isLoadingTransactions) {
                     await new Promise(r => setTimeout(r, 50));
                 }
-                
-                await loadMoreTransactionsOnly();
-                attempts++;
-                
+
                 if (findAndScrollToTarget()) return;
+
+                let attempts = 0;
+                while (attempts < TARGET_SEARCH_PAGES && hasMoreTransactions
+                       && (targetTransactionId || targetTransferId)) {
+                    // Wait if something else is loading
+                    while (isLoadingTransactions) {
+                        await new Promise(r => setTimeout(r, 50));
+                    }
+
+                    await loadMoreTransactionsOnly();
+                    attempts++;
+
+                    if (findAndScrollToTarget()) return;
+                }
+
+                targetTransactionId = null;
+                targetTransferId = null;
+            } finally {
+                // Released on the way out however it went. Left standing after a
+                // successful jump -- which is what the two returns above used to
+                // do -- it turned every later one into a no-op for the rest of
+                // the session.
+                isScrollingToTarget = false;
             }
-            
-            targetTransactionId = null;
-            targetTransferId = null;
-            isScrollingToTarget = false;
         }
         
         async function loadMoreTransactionsOnly() {
