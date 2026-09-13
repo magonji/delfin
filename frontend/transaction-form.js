@@ -267,6 +267,67 @@
         return { day: text.slice(0, 10), time: text.slice(11, 16) || '00:00' };
     }
 
+    /**
+     * Put an account picker on the account a transaction actually uses.
+     *
+     * The pickers offer open accounts, which is right for writing something new
+     * and wrong for reading back something old: a transfer made years ago out of
+     * an account since closed has an account the list no longer contains, so the
+     * picker stayed on "Select...". That field is required, so the browser
+     * quietly refused to submit the form -- no request, no message, nothing at
+     * all when Update was pressed, and no way to tell why.
+     *
+     * A closed account is therefore put back, for as long as the dialog needs
+     * it, and said to be closed.
+     */
+    function selectAccount(selectId, accountId) {
+        var el = document.getElementById(selectId);
+        if (!el) return;
+        var wanted = accountId == null ? '' : String(accountId);
+        el.value = wanted;
+        if (el.value === wanted) return;
+
+        var known = allAccountsIncludingClosed.filter(function (a) { return String(a.id) === wanted; })[0]
+                 || (accountsMap && accountsMap.get ? accountsMap.get(Number(accountId)) : null);
+        var option = document.createElement('option');
+        option.value = wanted;
+        option.dataset.currency = known && known.currency ? known.currency : '';
+        option.textContent = (known && known.name ? known.name : 'Account ' + wanted)
+            + (known && known.currency ? ' (' + known.currency + ')' : '') + ' \u2014 closed';
+        // After "Select...", so the open accounts keep the order they had.
+        el.insertBefore(option, el.options[1] || null);
+        el.value = wanted;
+    }
+
+    /**
+     * Say which field is holding the save back.
+     *
+     * A required field the user cannot see or cannot satisfy makes the browser
+     * refuse the submit in silence -- it tries to point at the field, and when
+     * it cannot, nothing happens and nothing is said. The button reads as broken.
+     * `invalid` does not bubble, so this listens on the way down, and gathers the
+     * whole round of complaints into one sentence.
+     */
+    function reportBlockedSave(form) {
+        var pending = null;
+        form.addEventListener('invalid', function (e) {
+            if (!pending) {
+                pending = [];
+                setTimeout(function () {
+                    var names = pending.map(function (el) {
+                        var group = el.closest ? el.closest('.form-group') : null;
+                        var label = group ? group.querySelector('label') : null;
+                        return label ? label.textContent.trim() : (el.id || 'a field');
+                    });
+                    pending = null;
+                    alert('This cannot be saved yet: ' + names.join(', ')
+                        + (names.length > 1 ? ' need filling in.' : ' needs filling in.'));
+                }, 0);
+            }
+            pending.push(e.target);
+        }, true);
+    }
+
     function populateFormSelects() {
         var accountOpt = function (a) {
             return '<option value="' + a.id + '" data-currency="' + a.currency + '">' +
@@ -441,7 +502,7 @@
             document.getElementById('date').value = when.day;
             document.getElementById('time').value = when.time;
             document.getElementById('amount').value = g.amount;
-            document.getElementById('account').value = g.account_id;
+            selectAccount('account', g.account_id);
             syncAmountSign();
             document.getElementById('payee').value = g.payee_name || '';
             document.getElementById('location').value = g.location_id || '';
@@ -471,7 +532,9 @@
             openTransactionModal();
             const when = whenFields(t.date);
             document.getElementById('date').value = when.day; document.getElementById('time').value = when.time;
-            document.getElementById('amount').value = t.amount; document.getElementById('account').value = t.account_id; document.getElementById('note').value = t.note||'';
+            document.getElementById('amount').value = t.amount;
+            selectAccount('account', t.account_id);
+            document.getElementById('note').value = t.note||'';
             syncAmountSign();
             if(t.category_id) { 
                 const c = allCategories.find(x=>x.id===t.category_id); 
@@ -494,7 +557,7 @@
             openTransferModal();
             const when = whenFields(o.date);
             document.getElementById('transferDate').value = when.day; document.getElementById('transferTime').value = when.time;
-            document.getElementById('fromAccount').value = o.account_id; document.getElementById('toAccount').value = i.account_id;
+            selectAccount('fromAccount', o.account_id); selectAccount('toAccount', i.account_id);
             document.getElementById('fromAmount').value = Math.abs(o.amount); 
             if(o.currency !== i.currency) document.getElementById('toAmount').value = i.amount;
             document.getElementById('transferNote').value = o.note || ''; checkTransferCurrencies();
@@ -1606,6 +1669,8 @@
         };
         on('transactionForm', 'submit', handleTransactionSubmit);
         on('transferForm', 'submit', handleTransferSubmit);
+        reportBlockedSave(document.getElementById('transactionForm'));
+        reportBlockedSave(document.getElementById('transferForm'));
         on('payee', 'blur', handlePayeeBlur);
         // "Add new" is the last option of every picker: it opens the dialog that
         // makes one and puts the result back in the picker that asked.
