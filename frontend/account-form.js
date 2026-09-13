@@ -58,7 +58,8 @@
         align-items:center; justify-content:center; padding:18px; }
       #dlfAccountModal.dlf-open { display:flex; }
       #dlfAccountModal .modal-content { background:var(--paper); border-radius:16px; width:100%;
-        max-width:460px; max-height:90vh; overflow-y:auto; border:1px solid var(--hair);
+        max-width:460px; max-height:90vh; overflow-y:auto; overscroll-behavior:contain;
+        border:1px solid var(--hair);
         box-shadow:0 24px 60px rgba(40,28,14,.35); font-family:'IBM Plex Sans',sans-serif;
         position:static; transform:none; padding:0; }
       #dlfAccountModal .modal-header { display:flex; justify-content:space-between; align-items:center;
@@ -199,14 +200,23 @@
             return '<option value="' + c.code + '">' + c.code + ' — ' + c.name + '</option>';
         }).join('');
 
-        el('dlfAccountModal').classList.add('dlf-open');
+        var modal = el('dlfAccountModal');
+        if (!modal.classList.contains('dlf-open')) {
+            modal.classList.add('dlf-open');
+            // Same sheet, same problem: without this the page behind takes the
+            // drag and slides away while the dialog stands still.
+            if (global.DelfinScrollLock) global.DelfinScrollLock.hold();
+        }
     }
 
     function close() {
         // The loan form is on loan: it goes back before this dialog disappears.
         if (global.DelfinLoanForm) DelfinLoanForm.detach();
         var m = el('dlfAccountModal');
-        if (m) m.classList.remove('dlf-open');
+        if (m && m.classList.contains('dlf-open')) {
+            m.classList.remove('dlf-open');
+            if (global.DelfinScrollLock) global.DelfinScrollLock.release();
+        }
     }
 
     async function create() {

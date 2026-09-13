@@ -329,3 +329,61 @@
         });
     };
 })(window);
+
+
+/**
+ * Hold the page still while a dialog is open.
+ *
+ * A dialog is a fixed sheet laid over the page, and the page underneath is still
+ * a scrollable thing. On a phone a drag that starts on the dialog and reaches
+ * the end of it carries straight on into the page, which slides away behind --
+ * and a dialog short enough not to scroll at all hands over every drag from the
+ * first pixel. Either way what moves is the wrong thing.
+ *
+ * `overflow: hidden` on the body is the usual answer to this and is not enough
+ * on iOS, where touch scrolling goes on ignoring it. Taking the body out of flow
+ * does work everywhere, and costs the scroll position, so that is measured on
+ * the way in and put back on the way out.
+ *
+ * Counted, because dialogs open on top of dialogs -- "add a new location" over
+ * the transaction it is being added to -- and the page has to stay still until
+ * the last of them has gone.
+ */
+(function (global) {
+    'use strict';
+
+    var depth = 0;
+    var offset = 0;
+    var gap = 0;
+
+    global.DelfinScrollLock = {
+        hold: function () {
+            if (depth++ > 0) return;
+            offset = global.scrollY || global.pageYOffset || 0;
+            // A scrollbar that takes up room goes away with the scrolling, and
+            // the page behind widens into the space it leaves -- a sideways jolt
+            // at the moment the dialog appears. Where the scrollbar floats over
+            // the page instead, as it does on a phone and on a Mac, this is zero
+            // and nothing happens.
+            gap = global.innerWidth - document.documentElement.clientWidth;
+            var style = document.body.style;
+            style.position = 'fixed';
+            style.top = -offset + 'px';
+            style.left = '0';
+            style.right = '0';
+            style.width = '100%';
+            if (gap > 0) style.paddingRight = gap + 'px';
+        },
+        release: function () {
+            if (depth === 0 || --depth > 0) return;
+            var style = document.body.style;
+            style.position = '';
+            style.top = '';
+            style.left = '';
+            style.right = '';
+            style.width = '';
+            if (gap > 0) style.paddingRight = '';
+            global.scrollTo(0, offset);
+        },
+    };
+})(window);

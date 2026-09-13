@@ -91,13 +91,22 @@
         // A direct child of <body>, so that a dialog opened over another is its
         // sibling rather than inside the part being made inert.
         if (modal.parentElement !== document.body) document.body.appendChild(modal);
-        modal.classList.add('active');
+        // Paired with the class, not with the call: a dialog asked to open twice
+        // must not take two holds on the page, and one asked to close when it is
+        // already shut must not give back a hold it never took.
+        if (!modal.classList.contains('active')) {
+            modal.classList.add('active');
+            if (global.DelfinScrollLock) global.DelfinScrollLock.hold();
+        }
         trapFocus(modal);
     }
 
     function closeModal(id) {
         var modal = document.getElementById(id);
-        modal.classList.remove('active');
+        if (modal.classList.contains('active')) {
+            modal.classList.remove('active');
+            if (global.DelfinScrollLock) global.DelfinScrollLock.release();
+        }
         var form = modal.querySelector('form');
         if (form) form.reset();
         releaseFocus(modal);
@@ -1444,7 +1453,7 @@
       .dlf-tx .sign-toggle.is-negative { color: var(--red); border-color: var(--red); background: rgba(176, 64, 46, 0.08); }
       .dlf-tx .sign-toggle.is-positive { color: var(--green); border-color: var(--green); background: rgba(60, 122, 87, 0.08); }
       .modal.dlf-tx.active { display: flex; }
-      .dlf-tx .modal-content { background-color: var(--paper); padding: 0; border-radius: 16px; width: 90%; max-width: 520px; max-height: 90vh; overflow-y: auto; box-shadow: 0 24px 60px rgba(40,28,14,.35); border: 1px solid var(--hair); animation: slideUp 0.3s ease; }
+      .dlf-tx .modal-content { background-color: var(--paper); padding: 0; border-radius: 16px; width: 90%; max-width: 520px; max-height: 90vh; overflow-y: auto; overscroll-behavior: contain; box-shadow: 0 24px 60px rgba(40,28,14,.35); border: 1px solid var(--hair); animation: slideUp 0.3s ease; }
       .dlf-tx .modal-header { background: transparent; padding: 18px 24px; border-bottom: 1px solid var(--hair); display: flex; justify-content: space-between; align-items: center; gap: 12px; }
       .dlf-tx .modal-header h3 { margin: 0; color: var(--ink); font-family: 'Playfair Display', serif; font-size: 21px; font-weight: 700; padding-left: 12px; border-left: 3px solid var(--accent); }
       .dlf-tx .modal-close { background: var(--field); border: none; border-radius: 8px; width: 32px; height: 32px; font-size: 18px; line-height: 1; color: #3A342C; cursor: pointer; flex: 0 0 auto; }
@@ -1470,7 +1479,7 @@
       .dlf-tx .split-line-card { border: 1px solid var(--hair); border-radius: 10px; padding: 14px 14px 0; margin-bottom: 12px; background: #FBF4EA; }
       .modal.dlf-tx input.amount-negative { color: var(--red); }
       .dlf-tx #splitToggleRow { justify-content: flex-end; padding: 10px 12px 0; }
-      .dlf-tx .modal-content { background-color: var(--paper); padding: 0; border-radius: 16px; width: 90%; max-width: 520px; max-height: 90vh; overflow-y: auto; box-shadow: 0 24px 60px rgba(40,28,14,.35); border: 1px solid var(--hair); animation: slideUp 0.3s ease; }
+      .dlf-tx .modal-content { background-color: var(--paper); padding: 0; border-radius: 16px; width: 90%; max-width: 520px; max-height: 90vh; overflow-y: auto; overscroll-behavior: contain; box-shadow: 0 24px 60px rgba(40,28,14,.35); border: 1px solid var(--hair); animation: slideUp 0.3s ease; }
       .dlf-tx .modal-header { background: transparent; padding: 18px 24px; border-bottom: 1px solid var(--hair); display: flex; justify-content: space-between; align-items: center; gap: 12px; }
       .dlf-tx .modal-header h3 { margin: 0; color: var(--ink); font-family: 'Playfair Display', serif; font-size: 21px; font-weight: 700; padding-left: 12px; border-left: 3px solid var(--accent); }
       .dlf-tx .modal-close { background: var(--field); border: none; border-radius: 8px; width: 32px; height: 32px; font-size: 18px; line-height: 1; color: #3A342C; cursor: pointer; flex: 0 0 auto; }
