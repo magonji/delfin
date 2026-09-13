@@ -97,10 +97,16 @@
     font-size: 15px;
 }
 
+/* Basis zero, not auto. The row is allowed to wrap, and a flex item asks for
+   the width of its contents before anyone is permitted to shrink it -- so a
+   field that carries something alongside it, an amount with its sign button or a
+   password with its eye, measured wider than the space left beside its label and
+   dropped onto a line of its own, back at the left edge and out of the column
+   every other value lines up in. Grow still fills the rest of the line. */
 .modal:not(#importModal) .modal-content .form-group > .amount-field,
 .modal:not(#importModal) .modal-content .form-group > .pw-wrap,
 .modal:not(#importModal) .modal-content .form-group > .form-row {
-    flex: 1 1 auto;
+    flex: 1 1 0;
     min-width: 0;
 }
 

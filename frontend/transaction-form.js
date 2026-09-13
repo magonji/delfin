@@ -1453,11 +1453,23 @@
       .dlf-tx .sign-toggle.is-negative { color: var(--red); border-color: var(--red); background: rgba(176, 64, 46, 0.08); }
       .dlf-tx .sign-toggle.is-positive { color: var(--green); border-color: var(--green); background: rgba(60, 122, 87, 0.08); }
       .modal.dlf-tx.active { display: flex; }
-      .dlf-tx .modal-content { background-color: var(--paper); padding: 0; border-radius: 16px; width: 90%; max-width: 520px; max-height: 90vh; overflow-y: auto; overscroll-behavior: contain; box-shadow: 0 24px 60px rgba(40,28,14,.35); border: 1px solid var(--hair); animation: slideUp 0.3s ease; }
+      .dlf-tx .modal-content { display: block; background-color: var(--paper); padding: 0; border-radius: 16px; width: 90%; max-width: 520px; max-height: 90vh; overflow-y: auto; overscroll-behavior: contain; box-shadow: 0 24px 60px rgba(40,28,14,.35); border: 1px solid var(--hair); animation: slideUp 0.3s ease; }
       .dlf-tx .modal-header { background: transparent; padding: 18px 24px; border-bottom: 1px solid var(--hair); display: flex; justify-content: space-between; align-items: center; gap: 12px; }
       .dlf-tx .modal-header h3 { margin: 0; color: var(--ink); font-family: 'Playfair Display', serif; font-size: 21px; font-weight: 700; padding-left: 12px; border-left: 3px solid var(--accent); }
       .dlf-tx .modal-close { background: var(--field); border: none; border-radius: 8px; width: 32px; height: 32px; font-size: 18px; line-height: 1; color: #3A342C; cursor: pointer; flex: 0 0 auto; }
       .dlf-tx .modal-close:hover { background: var(--card); color: var(--ink); }
+      /* The veil says its own padding too, for the same reason. The dashboard
+         and the budget page pad theirs by 18px, which is right for their own
+         dialogs and took 32px off the width of this one -- enough that Payee,
+         Location and Note each dropped onto a line of their own, out of the
+         column every other value lines up in. */
+      /* The dialog brings its own box, and says so, because the pages it opens
+         on do not agree about what a .modal-content is. The dashboard makes one
+         a flex column that hides its overflow and does the scrolling on the body
+         inside -- a good design for its own dialogs, and for this one it meant
+         the body was squeezed to fit and everything past the fold was clipped
+         away with no way to reach it. Nothing scrolled, so every drag went to
+         the page behind, which is what it looked like from the outside. */
       .dlf-tx .modal-body { padding: 22px 24px; overflow: hidden; }
       .dlf-tx .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
       .modal.dlf-tx input, .modal.dlf-tx select, .modal.dlf-tx textarea { width: 100%; max-width: 100%; box-sizing: border-box; padding: 11px 12px; border: 1px solid var(--field); border-radius: 9px; background: #fff; color: var(--ink); font-family: 'IBM Plex Sans', sans-serif; font-size: 14px; transition: border-color 0.2s; -webkit-appearance: none; appearance: none; }
@@ -1479,7 +1491,7 @@
       .dlf-tx .split-line-card { border: 1px solid var(--hair); border-radius: 10px; padding: 14px 14px 0; margin-bottom: 12px; background: #FBF4EA; }
       .modal.dlf-tx input.amount-negative { color: var(--red); }
       .dlf-tx #splitToggleRow { justify-content: flex-end; padding: 10px 12px 0; }
-      .dlf-tx .modal-content { background-color: var(--paper); padding: 0; border-radius: 16px; width: 90%; max-width: 520px; max-height: 90vh; overflow-y: auto; overscroll-behavior: contain; box-shadow: 0 24px 60px rgba(40,28,14,.35); border: 1px solid var(--hair); animation: slideUp 0.3s ease; }
+      .dlf-tx .modal-content { display: block; background-color: var(--paper); padding: 0; border-radius: 16px; width: 90%; max-width: 520px; max-height: 90vh; overflow-y: auto; overscroll-behavior: contain; box-shadow: 0 24px 60px rgba(40,28,14,.35); border: 1px solid var(--hair); animation: slideUp 0.3s ease; }
       .dlf-tx .modal-header { background: transparent; padding: 18px 24px; border-bottom: 1px solid var(--hair); display: flex; justify-content: space-between; align-items: center; gap: 12px; }
       .dlf-tx .modal-header h3 { margin: 0; color: var(--ink); font-family: 'Playfair Display', serif; font-size: 21px; font-weight: 700; padding-left: 12px; border-left: 3px solid var(--accent); }
       .dlf-tx .modal-close { background: var(--field); border: none; border-radius: 8px; width: 32px; height: 32px; font-size: 18px; line-height: 1; color: #3A342C; cursor: pointer; flex: 0 0 auto; }
@@ -1491,7 +1503,7 @@
       .dlf-tx .modal-footer-batch { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 20px; }
       .dlf-tx .modal-footer-batch .btn-save-new { grid-column: 1 / -1; }
       .dlf-tx .split-caret { display: inline-block; border: none; background: none; cursor: pointer; padding: 0 4px 0 0; margin: 0; color: inherit; font: inherit; line-height: 1; }
-      .modal.dlf-tx { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(35, 32, 28, 0.4); backdrop-filter: blur(3px); align-items: center; justify-content: center; }
+      .modal.dlf-tx { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; padding: 0; background-color: rgba(35, 32, 28, 0.4); backdrop-filter: blur(3px); align-items: center; justify-content: center; }
       .modal.dlf-tx input, .modal.dlf-tx select, .modal.dlf-tx textarea { width: 100%; max-width: 100%; box-sizing: border-box; padding: 11px 12px; border: 1px solid var(--field); border-radius: 9px; background: #fff; color: var(--ink); font-family: 'IBM Plex Sans', sans-serif; font-size: 14px; transition: border-color 0.2s; -webkit-appearance: none; appearance: none; }
       .modal.dlf-tx input:focus, .modal.dlf-tx select:focus, .modal.dlf-tx textarea:focus { outline: none; border-color: var(--accent); }
       .dlf-tx .modal-footer button, .dlf-tx .modal-footer-batch button { flex: 1; padding: 0 20px; height: 46px; border-radius: 9px; border: 1px solid var(--field); font-weight: 500; font-size: 14px; cursor: pointer; font-family: 'Playfair Display', serif; -webkit-appearance: none; appearance: none; }

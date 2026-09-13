@@ -57,8 +57,11 @@
         background:rgba(35,32,28,.4); backdrop-filter:blur(3px);
         align-items:center; justify-content:center; padding:18px; }
       #dlfAccountModal.dlf-open { display:flex; }
-      #dlfAccountModal .modal-content { background:var(--paper); border-radius:16px; width:100%;
-        max-width:460px; max-height:90vh; overflow-y:auto; overscroll-behavior:contain;
+      /* Its own box, said out loud: the dashboard turns a .modal-content into a
+         flex column with its overflow hidden, which squeezes this one and clips
+         whatever does not fit instead of letting it scroll. */
+      #dlfAccountModal .modal-content { display:block; background:var(--paper); border-radius:16px;
+        width:100%; max-width:460px; max-height:90vh; overflow-y:auto; overscroll-behavior:contain;
         border:1px solid var(--hair);
         box-shadow:0 24px 60px rgba(40,28,14,.35); font-family:'IBM Plex Sans',sans-serif;
         position:static; transform:none; padding:0; }
