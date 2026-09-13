@@ -1497,6 +1497,26 @@ function setRefreshStage(text) { _refreshTip.textContent = text || ''; if (!text
     btn.addEventListener('mouseenter', () => { if (btn.classList.contains('spinning') && _refreshTip.textContent) _refreshTip.classList.add('show'); });
     btn.addEventListener('mouseleave', () => _refreshTip.classList.remove('show'));
 })();
+/**
+ * A POST that is allowed to fail loudly.
+ *
+ * `fetch` treats a 500 as a perfectly good answer -- it only rejects when the
+ * request never got there -- so a refresh whose recalculation had blown up on
+ * the server span its icon, reloaded the page and said nothing at all. The
+ * figures stayed exactly as wrong as before and there was no way to tell that
+ * anything had gone wrong, let alone what.
+ */
+async function mustSucceed(url, what) {
+    const res = await fetch(url, { method: 'POST' });
+    if (res.ok) return res;
+    let detail = `${res.status} ${res.statusText}`;
+    try {
+        const body = await res.json();
+        if (body && body.detail) detail = body.detail;
+    } catch (e) { /* not JSON; the status is all there is */ }
+    throw new Error(`${what} failed.\n\n${detail}`);
+}
+
 q('#btnRefresh').onclick = async () => {
     const btn = q('#btnRefresh');
     if (btn.classList.contains('spinning')) return;
@@ -1508,9 +1528,9 @@ q('#btnRefresh').onclick = async () => {
         cacheClearAll();
         setRefreshStage('Recalculating balances…');
         if (wasHovered) _refreshTip.classList.add('show');
-        await fetch(`${API_BASE}/admin/initialise-balances`, { method: 'POST' });
+        await mustSucceed(`${API_BASE}/admin/initialise-balances`, 'Recalculating balances');
         setRefreshStage('Updating payee statistics…');
-        await fetch(`${API_BASE}/payees/recalculate-all-stats`, { method: 'POST' });
+        await mustSucceed(`${API_BASE}/payees/recalculate-all-stats`, 'Updating payee statistics');
         setRefreshStage('Reloading…');
         location.reload();
     } catch (e) {

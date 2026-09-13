@@ -1047,9 +1047,19 @@
             DelfinCache.clear();
             setRefreshStage('Recalculating balances…');
             if (wasHovered) _refreshTip.classList.add('show');
-            await fetch(`${API_BASE}/admin/initialise-balances`, { method: 'POST' });
+            // A 500 is an answer as far as fetch is concerned, so a refresh whose
+            // recalculation had failed on the server used to spin, reload and say
+            // nothing, leaving the figures exactly as wrong as before.
+            const mustSucceed = async (url, what) => {
+                const res = await fetch(url, { method: 'POST' });
+                if (res.ok) return res;
+                let detail = `${res.status} ${res.statusText}`;
+                try { const b = await res.json(); if (b && b.detail) detail = b.detail; } catch (e) {}
+                throw new Error(`${what} failed.\n\n${detail}`);
+            };
+            await mustSucceed(`${API_BASE}/admin/initialise-balances`, 'Recalculating balances');
             setRefreshStage('Updating payee statistics…');
-            await fetch(`${API_BASE}/payees/recalculate-all-stats`, { method: 'POST' });
+            await mustSucceed(`${API_BASE}/payees/recalculate-all-stats`, 'Updating payee statistics');
             setRefreshStage('Refreshing display…');
             await loadData();
         } catch (e) { alert('Error: ' + e.message); }

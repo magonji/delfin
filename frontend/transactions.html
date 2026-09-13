@@ -1419,8 +1419,15 @@
                 cacheClearAll();
                 setRefreshStage('Recalculating balances…');
                 if (wasHovered) _refreshTip.classList.add('show');
+                // The server says why when it fails, and that is the one thing
+                // worth putting on screen: "Failed to recalculate balances" tells
+                // whoever reads it nothing it did not already know.
                 const balanceResponse = await fetch(`${API_URL}/admin/initialise-balances`, { method: 'POST' });
-                if (!balanceResponse.ok) throw new Error('Failed to recalculate balances');
+                if (!balanceResponse.ok) {
+                    let detail = `${balanceResponse.status} ${balanceResponse.statusText}`;
+                    try { const b = await balanceResponse.json(); if (b && b.detail) detail = b.detail; } catch (e) {}
+                    throw new Error(`Recalculating balances failed.\n\n${detail}`);
+                }
                 setRefreshStage('Updating payee statistics…');
                 await fetch(`${API_URL}/payees/recalculate-all-stats`, { method: 'POST' });
                 setRefreshStage('Refreshing display…');
