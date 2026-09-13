@@ -406,7 +406,8 @@
 
         function clearPayeeCategoryHints() {
             const box = document.getElementById('payeeCategoryHints');
-            box.innerHTML = '';
+            // The label belongs to the row, not to the answer, so only the chips go.
+            box.querySelector('.hint-chips').innerHTML = '';
             box.hidden = true;
         }
 
@@ -1141,7 +1142,8 @@
                 .filter(c => c.category_id && allCategories.some(x => x.id === c.category_id));
             if (options.length < 2) { clearPayeeCategoryHints(); return; }
 
-            box.innerHTML = '<span class="hint-lead">Usually</span>' + options.map(c => {
+            const chips = box.querySelector('.hint-chips');
+            chips.innerHTML = options.map(c => {
                 const label = c.parent ? `${escapeHtml(c.parent)} › ${escapeHtml(c.name)}`
                                        : escapeHtml(c.name || '');
                 return `<button type="button" data-category-id="${c.category_id}"
@@ -1394,7 +1396,22 @@
         --red:#B0402E; --green:#3C7A57; --yellow:#C6893F; --ink-blue:#3C5A6E;
         --btn-primary:#2B2621; --danger:#B0402E;
       }
-      .dlf-tx .cat-hints .hint-lead { font-family: 'IBM Plex Sans', sans-serif; font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); margin-right: 2px; }
+      /* The suggestions are a row of the form like any other: the word in the
+         label column, the chips where every other value sits. They used to hang
+         in the gap between two rows, lined up with nothing on either side --
+         the label a little left of the labels, the chips a long way left of the
+         values, and no white behind them, so the card looked like it had a step
+         in it. forms.css draws the row; what is left is the inside of it.
+
+         The hidden attribute needs saying again, because that row rule sets
+         display to flex and a bare attribute selector does not outrank it. */
+      .dlf-tx .cat-hints[hidden] { display: none !important; }
+      /* Basis zero, not auto: the row wraps, and a flex item asks for the width
+         of its contents before anyone is allowed to shrink it -- so two chips
+         wide enough to matter threw themselves onto a line of their own, back
+         at the left edge, which is the misalignment this was meant to end. */
+      .dlf-tx .cat-hints .hint-chips { flex: 1 1 0; min-width: 0; display: flex;
+        flex-wrap: wrap; gap: 6px; padding: 7px 0; }
       .dlf-tx .cat-hints button { font-family: 'IBM Plex Sans', sans-serif; font-size: 12px; padding: 5px 11px; border-radius: 999px; cursor: pointer; border: 1px solid var(--field); background: var(--paper); color: var(--text); }
       .dlf-tx .cat-hints button:hover { border-color: var(--btn-primary); color: var(--ink); }
       .dlf-tx .cat-hints button .hint-count { color: var(--muted); margin-left: 5px; }
@@ -1464,7 +1481,6 @@
       .dlf-tx .modal-footer button, .dlf-tx .modal-footer-batch button { flex: 1; padding: 0 20px; height: 46px; border-radius: 9px; border: 1px solid var(--field); font-weight: 500; font-size: 14px; cursor: pointer; font-family: 'Playfair Display', serif; -webkit-appearance: none; appearance: none; }
       .dlf-tx .modal-footer-batch { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 20px; }
       .dlf-tx .modal-footer-batch .btn-save-new { grid-column: 1 / -1; }
-      .dlf-tx .cat-hints { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: -6px 0 14px; }
       .dlf-tx .split-caret { display: inline-block; border: none; background: none; cursor: pointer; padding: 0 4px 0 0; margin: 0; color: inherit; font: inherit; line-height: 1; }
       .modal.dlf-tx { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(35, 32, 28, 0.4); backdrop-filter: blur(3px); align-items: center; justify-content: center; }
       .modal.dlf-tx input, .modal.dlf-tx select, .modal.dlf-tx textarea { width: 100%; max-width: 100%; box-sizing: border-box; padding: 11px 12px; border: 1px solid var(--field); border-radius: 9px; background: #fff; color: var(--ink); font-family: 'IBM Plex Sans', sans-serif; font-size: 14px; transition: border-color 0.2s; -webkit-appearance: none; appearance: none; }
@@ -1577,7 +1593,9 @@
                         <div class="form-group"><label>Category</label><select id="parentCategory"><option value="">Select...</option></select></div>
                         <div class="form-group"><label>Sub</label><select id="category" disabled><option value="">Select parent...</option></select></div>
                     </div>
-                    <div id="payeeCategoryHints" class="cat-hints" hidden></div>
+                    <div id="payeeCategoryHints" class="form-group cat-hints" hidden>
+                        <label>Usually</label><div class="hint-chips"></div>
+                    </div>
                     <div class="form-row">
                         <div class="form-group"><label>Account</label><select id="account" required><option value="">Select...</option></select></div>
                         <div class="form-group"><label>Location</label><select id="location"><option value="">Select...</option></select></div>

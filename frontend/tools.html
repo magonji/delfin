@@ -358,10 +358,17 @@
            already chosen: what is chosen is showing in the cell itself. They hang
            above the table rather than inside the row, because a row that grows to
            hold them pushes the whole sheet down every time the pointer crosses it. */
-        .cat-hints { display:none; position:fixed; z-index:1200; flex-wrap:wrap; gap:4px;
+        .cat-hints { display:none; position:fixed; z-index:1200;
             background:var(--paper); border:1px solid var(--border); border-radius:10px;
-            padding:8px; box-shadow:0 12px 30px rgba(40,28,14,.18); max-width:280px; }
-        .cat-hints.is-open { display:flex; animation:hintsIn .13s ease-out; }
+            padding:8px 10px 9px; box-shadow:0 12px 30px rgba(40,28,14,.18); max-width:280px; }
+        .cat-hints.is-open { display:block; animation:hintsIn .13s ease-out; }
+        /* What they are, in the same small caps the sheet uses for its column
+           headings, so the panel reads as a labelled thing rather than two pills
+           floating over the row below. */
+        .cat-hints .hint-lead { display:block; margin-bottom:6px;
+            font-family:'IBM Plex Sans',sans-serif; font-size:9.5px; font-weight:700;
+            text-transform:uppercase; letter-spacing:1px; color:var(--muted); }
+        .cat-hints .hint-chips { display:flex; flex-wrap:wrap; gap:4px; }
         @keyframes hintsIn { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:none; } }
         .cat-hints button { font-family:'IBM Plex Sans',sans-serif; font-size:11.5px;
             line-height:1.2; padding:5px 9px; border-radius:999px; cursor:pointer;
@@ -509,9 +516,9 @@
                     "type     type"
                     "payee    payee"
                     "cat      cat"
+                    "hints    hints"
                     "loc      loc"
                     "proj     proj"
-                    "hints    hints"
                     "splitsum splitsum"
                     "splitbtn splitbtn"
                     "note     note";
@@ -621,11 +628,22 @@
             /* What this payee has been filed under before, and the way out to a
                split: both belong to the categories above, under them, not in the box. */
             /* Nothing hovers on a phone, so the suggestions sit where they are
-               read: under the categories they are alternatives to. */
-            .import-preview .cat-hints { grid-area:hints; margin:0; padding:8px 13px 0;
-                position:static; background:none; border:none; box-shadow:none;
-                max-width:none; display:flex; }
+               read: directly under the categories they are alternatives to, and
+               as one more line of the same block -- same white, same rules, the
+               word in the label column and the chips where every other value
+               sits. Loose underneath the block, aligned to nothing, they read as
+               something left over rather than as part of the card. */
+            .import-preview .cat-hints { grid-area:hints; margin:0 12px; padding:2px 12px;
+                position:static; background:#fff; border:1px solid var(--hair);
+                border-top:none; border-radius:0; box-shadow:none; max-width:none;
+                display:flex; align-items:center; gap:10px; min-height:52px; }
             .import-preview .cat-hints[hidden] { display:none; }
+            .import-preview .cat-hints .hint-lead { flex:0 0 76px; margin:0;
+                font-size:10px; letter-spacing:1px; }
+            /* Basis zero so the chips share the line instead of demanding the
+               width of their contents and being thrown onto one of their own. */
+            .import-preview .cat-hints .hint-chips { flex:1 1 0; min-width:0;
+                gap:6px; padding:7px 0; }
             .import-preview .split-summary { grid-area:splitsum; padding:8px 13px 0; }
             .import-preview .split-toggle { grid-area:splitbtn; justify-self:end; width:auto;
                 height:auto; opacity:1; margin:0 12px; padding:10px 0; min-height:44px;
@@ -4181,7 +4199,11 @@
             const box = document.getElementById(`catHints_${index}`);
             if (!box || box.hidden) return;
             if (_openHints && _openHints !== box) _openHints.classList.remove('is-open');
-            const r = cell.getBoundingClientRect();
+            // Measured against the selects inside the cell, not the cell: the
+            // cell carries padding, so lining up with its edge left the panel a
+            // few pixels to the left of everything it belongs to.
+            const inner = document.getElementById(`catCell_${index}`) || cell;
+            const r = inner.getBoundingClientRect();
             box.style.minWidth = `${Math.round(r.width)}px`;
             box.classList.add('is-open');
 
@@ -4246,10 +4268,14 @@
                 allCategories.some(x => x.id === c.category_id));
             if (!others.length) { clearRowCategoryHints(index); return; }
 
-            box.innerHTML = others.map(c =>
+            // Named, and gathered. Two bare pills appearing under a row said
+            // nothing about what they were or why they were there.
+            box.innerHTML = '<span class="hint-lead">Usually</span><span class="hint-chips">'
+                + others.map(c =>
                 `<button type="button" data-cat="${c.category_id}"
                     title="${c.count} transaction${c.count === 1 ? '' : 's'} filed under ${csvEsc(c.parent)} > ${csvEsc(c.name)}"
-                    >${csvEsc(c.name)}<span class="hint-count">${c.count}</span></button>`).join('');
+                    >${csvEsc(c.name)}<span class="hint-count">${c.count}</span></button>`).join('')
+                + '</span>';
             box.querySelectorAll('button').forEach(btn => {
                 btn.onclick = () => {
                     if (applyRowCategory(index, Number(btn.dataset.cat))) {
