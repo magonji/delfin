@@ -40,6 +40,23 @@ def _apply_pragmas(dbapi_connection):
     cur.execute(f"PRAGMA key = \"x'{_dek_hex}'\"")
     cur.execute("PRAGMA journal_mode=WAL")       # Faster concurrent reads
     cur.execute("PRAGMA synchronous=NORMAL")      # Faster writes (safe with WAL)
+    # How long a write waits for another one to finish before giving up.
+    #
+    # WAL lets readers and a writer work at the same time, but two writers still
+    # take turns. Nightly maintenance and the exchange-rate refresh both write,
+    # and either can land on the same second as someone saving a transaction.
+    #
+    # Not a new guarantee: the driver already asks for five seconds of its own
+    # accord. Saying it here makes it ours rather than inherited, and puts it
+    # where the rest of the connection's settings are -- and fifteen seconds
+    # rides out a rebuild that five would not.
+    #
+    # Fifteen and not more because the browser gives an ordinary request
+    # twenty-five (the deadline in cache.js). The server has to run out of
+    # patience first: a save that genuinely cannot go through should come back
+    # as an error, not leave the browser walking away from work that is still
+    # going to be committed.
+    cur.execute("PRAGMA busy_timeout=15000")
     cur.execute("PRAGMA cache_size=-64000")        # 64MB cache
     cur.execute("PRAGMA temp_store=MEMORY")        # Temp tables in RAM
     cur.close()
