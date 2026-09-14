@@ -55,9 +55,10 @@
         },
     ];
 
-    // Tall enough for a thumb (the row itself clears 44px) without eating the
-    // page: the icon, a hair of space, and the word.
-    var HEIGHT = 62;
+    // The height iOS gives its own tab bar, so the two look like the same kind
+    // of thing: 49pt of row, and the phone adds whatever it keeps below for the
+    // home indicator. A thumb still has more than the 44px it needs.
+    var HEIGHT = 50;
 
     var STYLE = ''
         /* How much of the bottom of the screen the bar is taking, published so a
@@ -68,10 +69,15 @@
         + '.dlf-tabbar { display: none; }'
         + '@media (max-width: ' + BREAKPOINT + 'px) {'
         + '  :root { --dlf-tabbar: calc(' + HEIGHT + 'px + env(safe-area-inset-bottom)); }'
+        /* The same material as the header at the other end: the page shows
+           through it rather than stopping at it, which is what keeps the strip
+           the phone reserves for its home indicator from reading as a blank
+           white slab under the words. */
         + '  .dlf-tabbar { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 75;'
-        + '    background: #FFFDFA; border-top: 1px solid #EFE4D3;'
-        + '    padding-bottom: env(safe-area-inset-bottom);'
-        + '    box-shadow: 0 -6px 22px rgba(40,28,14,.07); }'
+        + '    background: rgba(250,243,233,.86);'
+        + '    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);'
+        + '    border-top: 1px solid #D8C6B0;'
+        + '    padding-bottom: env(safe-area-inset-bottom); }'
         + '  .dlf-tabbar a { position: relative; flex: 1 1 0; min-width: 0; display: flex;'
         + '    flex-direction: column; align-items: center; justify-content: center; gap: 3px;'
         + '    height: ' + HEIGHT + 'px; padding: 0 2px; text-decoration: none; color: #8A7D6C;'
@@ -94,6 +100,13 @@
         /* The burger held these five and the two actions; the five are here now,
            and the two go back to being the icons they already are on a wide
            screen, where they were only hidden because the burger had them. */
+        /* The header to the same measure: 44pt of bar below the island, as a
+           native one has, instead of 48. And the separator after the name goes
+           with the words it separates -- they are hidden on a narrow screen and
+           it was left hanging there on its own. The five pages each hide those
+           at a width of their own, or not at all, so it is settled here. */
+        + '  header { padding-top: calc(10px + env(safe-area-inset-top)); padding-bottom: 10px; }'
+        + '  .brand .rule, .brand .tag { display: none; }'
         + '  .burger { display: none !important; }'
         + '  .nav-right .tip-wrap { display: inline-flex !important; }'
         + '  .nav-right > #btnLogout { display: flex !important; }'

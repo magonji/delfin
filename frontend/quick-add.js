@@ -61,11 +61,12 @@
         .qa-main { width:58px; height:58px; }
         .qa-extra { width:50px; height:50px; }
       }
-      /* Above the row of tabs, which takes over from the burger at this width.
-         Written after the rule for a narrow phone so it wins there too: one
-         height for the button wherever the bar is showing. */
+      /* Clear of the row of tabs by the same eighteen pixels it used to keep
+         from the bottom of the screen. How tall that row is belongs to the row,
+         which says so; with no row there is nothing to add. Written after the
+         rule for a narrow phone so it wins there too. */
       @media (max-width:760px) {
-        .qa-root { bottom:calc(80px + env(safe-area-inset-bottom)); }
+        .qa-root { bottom:calc(var(--dlf-tabbar, 0px) + 18px); }
       }
       @media (prefers-reduced-motion: reduce) {
         .qa-root .qa-extra, .qa-label, .qa-main svg { transition:none; }
