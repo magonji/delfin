@@ -61,6 +61,12 @@
         .qa-main { width:58px; height:58px; }
         .qa-extra { width:50px; height:50px; }
       }
+      /* Above the row of tabs, which takes over from the burger at this width.
+         Written after the rule for a narrow phone so it wins there too: one
+         height for the button wherever the bar is showing. */
+      @media (max-width:760px) {
+        .qa-root { bottom:calc(80px + env(safe-area-inset-bottom)); }
+      }
       @media (prefers-reduced-motion: reduce) {
         .qa-root .qa-extra, .qa-label, .qa-main svg { transition:none; }
       }`;

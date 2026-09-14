@@ -11,6 +11,7 @@ const STATIC_ASSETS = [
   '/app/account-form.js',
   '/app/transaction-form.js',
   '/app/quick-add.js',
+  '/app/tab-bar.js',
   '/app/manifest.json',
   '/app/icons/icon-180.png',
   '/app/icons/icon-192.png',

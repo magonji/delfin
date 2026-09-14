@@ -83,6 +83,8 @@
     <script src="/app/account-form.js"></script>
     <script src="/app/transaction-form.js"></script>
     <script src="/app/quick-add.js"></script>
+    <!-- The row of tabs a phone gets instead of the burger. -->
+    <script src="/app/tab-bar.js"></script>
     <title>Delfin · Transactions</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -863,7 +865,9 @@
             .mobile-detail-actions button { background: none; border: 1px solid var(--border); border-radius: 6px; padding: 4px 12px; font-size: 13px; cursor: pointer; min-height: 32px; color: var(--text); }
 
             /* Transaction list height */
-            .transactions-list { max-height: calc(100vh - 250px); }
+            /* Less whatever the row of tabs is taking along the bottom, which it
+               publishes so this does not have to carry a copy of the number. */
+            .transactions-list { max-height: calc(100vh - 250px - var(--dlf-tabbar, 0px)); }
 
             /* Bulk edit bar */
             .bulk-edit-header { flex-wrap: wrap; padding: 10px 15px; }
