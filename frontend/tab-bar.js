@@ -164,10 +164,92 @@
         document.body.appendChild(bar);
 
         publishHeight();
+        installSwipe();
         // Turning the phone, or a window dragged across the width where the bar
         // comes and goes, changes the answer.
         global.addEventListener('resize', publishHeight);
         global.addEventListener('orientationchange', publishHeight);
+    }
+
+    /**
+     * A finger drawn across the page moves to the tab beside this one.
+     *
+     * Detected, never intercepted: the listeners are passive and nothing calls
+     * preventDefault, so the browser goes on scrolling exactly as it did and the
+     * gesture is worked out afterwards, from where the finger started and where
+     * it left. It cannot take a scroll away from anything, because it never asks
+     * for one.
+     *
+     * The pages are separate documents, so this is a page load rather than a
+     * carousel: there is nothing to slide in from the side because it does not
+     * exist yet. No animation, then -- a swipe and you are there.
+     *
+     * It stands aside for four things: a dialog (a swipe in the middle of
+     * writing a transaction would throw it away), a field being typed in,
+     * anything that scrolls sideways on its own -- the import sheet does -- and
+     * the ends of the row, which do not wrap around.
+     */
+    var SWIPE_MIN = 70;      // how far it has to travel to count as one
+    var SWIPE_RATIO = 1.6;   // and how much more sideways than up or down
+    var SWIPE_MAX_MS = 600;  // a swipe, not a slow drag with a change of mind
+
+    function dialogOpen() {
+        var open = false;
+        var sheets = document.querySelectorAll('.modal, #dlfAccountModal');
+        Array.prototype.forEach.call(sheets, function (sheet) {
+            if (getComputedStyle(sheet).display !== 'none') open = true;
+        });
+        return open;
+    }
+
+    function scrollsSideways(node) {
+        for (; node && node !== document.body; node = node.parentElement) {
+            if (!node.scrollWidth) continue;
+            var how = getComputedStyle(node).overflowX;
+            if ((how === 'auto' || how === 'scroll') && node.scrollWidth > node.clientWidth + 4) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function installSwipe() {
+        var startX = 0, startY = 0, startAt = 0, watching = false;
+
+        document.addEventListener('touchstart', function (e) {
+            watching = false;
+            if (e.touches.length !== 1) return;
+            if (global.innerWidth > BREAKPOINT) return;
+            if (dialogOpen()) return;
+            if (e.target.closest && e.target.closest('input, textarea, select')) return;
+            if (scrollsSideways(e.target)) return;
+            startX = e.touches[0].clientX;
+            startY = e.touches[0].clientY;
+            startAt = Date.now();
+            watching = true;
+        }, { passive: true });
+
+        document.addEventListener('touchend', function (e) {
+            if (!watching) return;
+            watching = false;
+            if (Date.now() - startAt > SWIPE_MAX_MS) return;
+
+            var touch = e.changedTouches[0];
+            var dx = touch.clientX - startX;
+            var dy = touch.clientY - startY;
+            if (Math.abs(dx) < SWIPE_MIN) return;
+            if (Math.abs(dx) < Math.abs(dy) * SWIPE_RATIO) return;
+
+            var here = currentFile();
+            var at = -1;
+            PAGES.forEach(function (page, i) { if (page.file === here) at = i; });
+            if (at < 0) return;
+
+            // Drawn to the right, the page to the left comes in.
+            var wanted = at + (dx > 0 ? -1 : 1);
+            if (wanted < 0 || wanted >= PAGES.length) return;
+            global.location.href = PAGES[wanted].file;
+        }, { passive: true });
     }
 
     if (document.readyState === 'loading') {
