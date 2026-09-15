@@ -118,6 +118,25 @@
         return last || 'index.html';
     }
 
+    /**
+     * Say how tall the bar actually came out, as a plain number of pixels.
+     *
+     * The stylesheet below works it out too, but as a calc() holding an env()
+     * inside a custom property -- three things that have to survive together,
+     * and Safari is the one that decides whether they do. A page that then wrote
+     * `calc(100vh - 250px - var(--dlf-tabbar))` and lost the whole declaration
+     * would fall back to a list nearly as tall as the screen, which reaches its
+     * own end at every touch. Measuring the bar and handing over the answer
+     * leaves nothing to resolve.
+     */
+    function publishHeight() {
+        var bar = document.querySelector('.dlf-tabbar');
+        if (!bar) return;
+        var showing = getComputedStyle(bar).display !== 'none';
+        var height = showing ? Math.round(bar.getBoundingClientRect().height) : 0;
+        document.documentElement.style.setProperty('--dlf-tabbar', height + 'px');
+    }
+
     function install() {
         if (document.querySelector('.dlf-tabbar')) return;
 
@@ -136,6 +155,12 @@
                  + '<span>' + page.label + '</span></a>';
         }).join('');
         document.body.appendChild(bar);
+
+        publishHeight();
+        // Turning the phone, or a window dragged across the width where the bar
+        // comes and goes, changes the answer.
+        global.addEventListener('resize', publishHeight);
+        global.addEventListener('orientationchange', publishHeight);
     }
 
     if (document.readyState === 'loading') {

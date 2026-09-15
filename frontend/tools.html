@@ -329,7 +329,9 @@
         tr.skipped td { opacity:.5; }
         tr.skipped .col-desc { text-decoration:line-through; }
         .gap-small { display:flex; flex-direction:column; gap:4px; }
-        .import-preview-wrap { max-height:500px; overflow-y:auto; }
+        /* The drag stays in the preview, instead of moving the dialog behind it
+           the moment it reaches an end. */
+        .import-preview-wrap { max-height:500px; overflow-y:auto; overscroll-behavior:contain; }
         .import-modal-body { padding:25px; }
 
         /* What the file turned out to be, said once and quietly. */
