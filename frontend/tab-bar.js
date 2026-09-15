@@ -192,6 +192,18 @@
     var SWIPE_MIN = 70;      // how far it has to travel to count as one
     var SWIPE_RATIO = 1.6;   // and how much more sideways than up or down
     var SWIPE_MAX_MS = 600;  // a swipe, not a slow drag with a change of mind
+    /**
+     * The strip along each edge belongs to the phone, not to us.
+     *
+     * A drag that starts there is how iOS goes back and forward through
+     * history, and that gesture is the system's: these listeners are passive
+     * and could not cancel it even if they were not. So a swipe from the edge
+     * used to fire both at once -- the phone went back to wherever you had
+     * been, and this went to the neighbouring tab on top of it. Leaving the
+     * strip alone is the whole fix: from the edge you get history, from
+     * anywhere else you get the tab next door, and the two never argue.
+     */
+    var EDGE = 36;
 
     function dialogOpen() {
         var open = false;
@@ -223,7 +235,9 @@
             if (dialogOpen()) return;
             if (e.target.closest && e.target.closest('input, textarea, select')) return;
             if (scrollsSideways(e.target)) return;
-            startX = e.touches[0].clientX;
+            var x = e.touches[0].clientX;
+            if (x < EDGE || x > global.innerWidth - EDGE) return;
+            startX = x;
             startY = e.touches[0].clientY;
             startAt = Date.now();
             watching = true;
