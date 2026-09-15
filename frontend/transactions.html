@@ -758,7 +758,14 @@
             header { flex-wrap: nowrap; padding: 12px 15px; padding-top: calc(12px + env(safe-area-inset-top)); position: sticky; top: 0; }
             h1 { font-size: 20px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
             button, select, input, textarea { min-height: 44px; font-size: 16px; }
-            .container { margin: 10px auto; max-width: 100%; overflow: hidden; }
+            /* No room kept at the tail. The ninety pixels here were the berth of
+               the floating button, so that the last row of the ledger never sat
+               underneath it; asked for, they are gone, and the button floats
+               over the end of the list the way it already does over the end of
+               every other page. What is left below the list is the card's own
+               margin, and then the bar. */
+            .container { margin: 10px auto; max-width: 100%; overflow: hidden;
+                padding-bottom: 0; }
             .tx-summary { width: 100%; }
             .sum-cell { flex: 1 1 0; padding: 0 8px; }
             .card { margin: 8px; padding: 8px; overflow: hidden; }

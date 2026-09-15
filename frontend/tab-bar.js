@@ -107,6 +107,13 @@
            at a width of their own, or not at all, so it is settled here. */
         + '  header { padding-top: calc(10px + env(safe-area-inset-top)); padding-bottom: 10px; }'
         + '  .brand .rule, .brand .tag { display: none; }'
+        /* The line at the foot of a page goes too. It is a caption for a wide
+           screen -- what currency the figures are in, whose app this is -- and
+           on a phone it is a sentence you have read once, sitting on top of the
+           padding each page keeps above it: a hundred and four pixels of air on
+           the ledger and on the loans, sixty on the tools. All of it lands
+           exactly where the bar now is. */
+        + '  .footer { display: none; }'
         + '  .burger { display: none !important; }'
         + '  .nav-right .tip-wrap { display: inline-flex !important; }'
         + '  .nav-right > #btnLogout { display: flex !important; }'
