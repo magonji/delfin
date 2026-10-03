@@ -22,6 +22,8 @@
     <script src="/app/tab-bar.js"></script>
     <!-- The loan terms form, shared with Tools. -->
     <script src="/app/loan-form.js"></script>
+    <!-- The spending chart in a credit card's dialog. -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <title>Delfin · Loans and Credit Cards</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -194,6 +196,41 @@
 
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
+        /* ── Spending dialog (credit cards) ── */
+        .spend-modal { display: none; position: fixed; inset: 0; z-index: 80; background: rgba(35,32,28,.4); backdrop-filter: blur(3px);
+            align-items: center; justify-content: center; padding: 18px; }
+        .spend-modal.active { display: flex; }
+        .spend-content { background: var(--paper); border: 1px solid var(--hair); border-radius: 16px; width: 100%; max-width: 520px;
+            max-height: 88vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 24px 60px rgba(40,28,14,.35); }
+        .spend-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 22px; border-bottom: 1px solid var(--hair); }
+        .spend-header h3 { margin: 0; font-family: 'Playfair Display', serif; font-size: 21px; font-weight: 700; padding-left: 12px;
+            border-left: 3px solid var(--accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .spend-close { background: var(--panel); border: none; border-radius: 8px; width: 32px; height: 32px; font-size: 18px; line-height: 1;
+            color: #3A342C; cursor: pointer; flex: 0 0 auto; }
+        .spend-body { padding: 16px 22px 20px; overflow-y: auto; }
+        .spend-tools { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
+        .spend-tools select { -webkit-appearance: none; appearance: none; border: none; border-radius: 7px; height: 28px; padding: 0 24px 0 10px;
+            font-family: 'Playfair Display', serif; font-size: 13px; color: #3A342C; cursor: pointer;
+            background: var(--panel) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%238A7D6C'/%3E%3C/svg%3E") no-repeat right 9px center; }
+        .spend-crumb { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted);
+            min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .spend-back { background: none; border: none; padding: 0; cursor: pointer; font: inherit; letter-spacing: inherit; text-transform: inherit; color: var(--accent); }
+        .spend-pie { position: relative; width: 220px; height: 220px; margin: 4px auto 18px; }
+        .spend-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
+        .spend-center .lbl { font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); max-width: 130px;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .spend-center .val { font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+        .spend-row { display: grid; grid-template-columns: 10px 1fr auto; gap: 10px; align-items: baseline; padding: 9px 0; border-bottom: 1px solid var(--hair); }
+        .spend-row:last-child { border-bottom: none; }
+        .spend-row.clickable { cursor: pointer; }
+        .spend-row.clickable:hover { background: #F8F0E3; }
+        .spend-dot { width: 10px; height: 10px; border-radius: 3px; align-self: center; }
+        .spend-name { font-size: 13.5px; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .spend-sub { font-size: 11.5px; color: var(--muted); font-weight: 400; }
+        .spend-amt { font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; text-align: right; }
+        .spend-pct { display: block; font-size: 11px; color: var(--muted); font-weight: 400; }
+        .spend-empty { color: var(--muted); text-align: center; padding: 30px 0; font-size: 13px; }
+
         /* ── Responsive ── */
         @media (max-width: 1000px) {
             .kpi-grid { grid-template-columns: 1fr 1fr; }
@@ -296,6 +333,32 @@
         </section>
 
         <div class="footer" id="footerNote">Delfin · balances in GBP at historical rates</div>
+    </div>
+
+    <!-- Where a credit card's money went, by category and subcategory. -->
+    <div id="spendModal" class="spend-modal" onclick="if (event.target === this) closeSpending()">
+        <div class="spend-content" role="dialog" aria-modal="true" aria-labelledby="spendTitle">
+            <div class="spend-header">
+                <h3 id="spendTitle">Spending</h3>
+                <button class="spend-close" onclick="closeSpending()" aria-label="Close">&times;</button>
+            </div>
+            <div class="spend-body">
+                <div class="spend-tools">
+                    <div class="spend-crumb" id="spendCrumb">All categories</div>
+                    <select id="spendPeriod" aria-label="Period" onchange="drawSpending()">
+                        <option value="all">All time</option>
+                        <option value="12">Last 12 months</option>
+                        <option value="3">Last 3 months</option>
+                        <option value="1">Last month</option>
+                    </select>
+                </div>
+                <div class="spend-pie" id="spendPie">
+                    <canvas id="spendChart"></canvas>
+                    <div class="spend-center"><div class="lbl" id="spendCenterLbl">Spent</div><div class="val" id="spendTotal">—</div></div>
+                </div>
+                <div id="spendList"></div>
+            </div>
+        </div>
     </div>
 
 
@@ -411,10 +474,12 @@
             }
 
             // Load detailed loan/card data with transactions
-            let details = getCache('cache_loans_details');
+            // v2: each transaction now carries its parent category, for the
+            // spending chart.
+            let details = getCache('cache_loans_details_v2');
             if (!details) {
                 details = await api('/loans/details?include_completed=true');
-                setCache('cache_loans_details', details);
+                setCache('cache_loans_details_v2', details);
             }
 
             // Both are in hand before anything is drawn: the KPI symbol depends on
@@ -657,6 +722,8 @@
                         ${isCompleted ? `<span class="badge" style="color:var(--green);border-color:#B6D2BF;">Paid off</span>` : ''}
                         ${debt.terms ? `<button class="terms-edit" onclick="editLoan(event, ${debt.account.id})"
                             title="Edit the agreed terms">Edit terms</button>` : ''}
+                        ${isCard ? `<button class="terms-edit" onclick="openSpending(event, ${debt.account.id})"
+                            title="Where the money on this card went">Spending</button>` : ''}
                     </div>
                     <span class="loan-toggle" id="toggle-${debt.account.id}">▼</span>
                 </div>
@@ -946,6 +1013,175 @@
             terms: debt.terms,
         });
     }
+
+    // =============================================================================
+    // SPENDING BY CATEGORY (credit cards)
+    //
+    // Drawn from the transactions the page already holds, so opening it costs no
+    // request. Transfers are left out -- paying the card off is not spending --
+    // and a refund nets against the category it came back to.
+    // =============================================================================
+
+    // The same warm palette as the dashboard's charts.
+    const SPEND_PALETTE = ['#B0402E', '#C6893F', '#3C5A6E', '#7C7A4E', '#8A5A3C', '#5E7C6E', '#A88A5A', '#9C6E7A'];
+    // Past this many slices the colours repeat and the slivers stop being
+    // readable, so the rest share one grey slice. The list below still has them all.
+    const SPEND_MAX_SLICES = 8;
+    const SPEND_OTHER_COLOUR = '#D6D0CA';
+
+    if (window.Chart) {
+        Chart.defaults.font.family = "'IBM Plex Mono', monospace";
+        Chart.defaults.font.size = 10;
+        Chart.defaults.color = '#8A7D6C';
+    }
+
+    // Which card is open and, when drilled in, which category.
+    const _spend = { accountId: null, category: null, chart: null };
+
+    function openSpending(ev, accountId) {
+        ev.stopPropagation();
+        const debt = (_lastDetails.credit_cards || []).find(d => d.account.id === accountId);
+        if (!debt) return;
+        _spend.accountId = accountId;
+        _spend.category = null;
+        q('#spendTitle').textContent = debt.account.name;
+        q('#spendModal').classList.add('active');
+        drawSpending();
+    }
+
+    function closeSpending() {
+        q('#spendModal').classList.remove('active');
+        if (_spend.chart) { _spend.chart.destroy(); _spend.chart = null; }
+    }
+
+    function drillSpending(category) {
+        _spend.category = category;
+        drawSpending();
+    }
+
+    /**
+     * Net spend per category, and per subcategory within each, over the chosen
+     * period. Categories that come out at nothing or less (all refunds) are dropped.
+     *
+     * @returns {Array<{name, amount, count, subs: Array<{name, amount, count}>}>} largest first
+     */
+    function spendingByCategory(transactions, months) {
+        let since = null;
+        if (months !== 'all') {
+            since = new Date();
+            since.setMonth(since.getMonth() - Number(months));
+        }
+        const cats = new Map();
+        (transactions || []).forEach(t => {
+            if (t.transfer_group_id != null) return;
+            if (since && new Date(t.date) < since) return;
+            const parent = t.parent_category || 'Uncategorised';
+            const sub = t.category_name && t.category_name !== parent ? t.category_name : 'General';
+            if (!cats.has(parent)) cats.set(parent, { name: parent, amount: 0, count: 0, subs: new Map() });
+            const c = cats.get(parent);
+            if (!c.subs.has(sub)) c.subs.set(sub, { name: sub, amount: 0, count: 0 });
+            const sc = c.subs.get(sub);
+            c.amount -= t.amount; sc.amount -= t.amount;
+            if (t.amount < 0) { c.count++; sc.count++; }
+        });
+        return [...cats.values()]
+            .map(c => ({ ...c, subs: [...c.subs.values()].filter(s => s.amount > 0.005).sort((a, b) => b.amount - a.amount) }))
+            .filter(c => c.amount > 0.005)
+            .sort((a, b) => b.amount - a.amount);
+    }
+
+    function drawSpending() {
+        const debt = (_lastDetails.credit_cards || []).find(d => d.account.id === _spend.accountId);
+        if (!debt) return;
+        const s = sym(debt.account.currency);
+        const cats = spendingByCategory(debt.transactions, q('#spendPeriod').value);
+
+        // Drilled into a category that the new period no longer has: back out.
+        let focus = _spend.category ? cats.find(c => c.name === _spend.category) : null;
+        if (_spend.category && !focus) _spend.category = null;
+
+        const items = focus ? focus.subs : cats;
+        const total = items.reduce((sum, i) => sum + i.amount, 0);
+
+        q('#spendCrumb').innerHTML = focus
+            ? `<button class="spend-back" onclick="drillSpending(null)">‹ All</button> · ${escapeHtml(focus.name)}`
+            : 'All categories';
+        q('#spendCenterLbl').textContent = focus ? focus.name : 'Spent';
+        q('#spendTotal').textContent = `${s}${formatNum(total)}`;
+
+        if (_spend.chart) { _spend.chart.destroy(); _spend.chart = null; }
+        if (!items.length) {
+            q('#spendPie').style.display = 'none';
+            q('#spendList').innerHTML = '<div class="spend-empty">No spending on this card in this period.</div>';
+            return;
+        }
+        q('#spendPie').style.display = '';
+
+        const colourOf = (i) => i < SPEND_MAX_SLICES - 1 || items.length <= SPEND_MAX_SLICES
+            ? SPEND_PALETTE[i % SPEND_PALETTE.length] : SPEND_OTHER_COLOUR;
+        let slices = items;
+        if (items.length > SPEND_MAX_SLICES) {
+            const shown = items.slice(0, SPEND_MAX_SLICES - 1);
+            const rest = items.slice(SPEND_MAX_SLICES - 1).reduce((sum, i) => sum + i.amount, 0);
+            slices = shown.concat([{ name: 'Other', amount: rest, other: true }]);
+        }
+
+        if (window.Chart) {
+            _spend.chart = new Chart(q('#spendChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: slices.map(i => i.name),
+                    datasets: [{
+                        data: slices.map(i => i.amount),
+                        backgroundColor: slices.map((_, i) => colourOf(i)),
+                        borderColor: '#FFFDFA', borderWidth: 2, hoverOffset: 6,
+                    }],
+                },
+                options: {
+                    maintainAspectRatio: false, cutout: '66%',
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { callbacks: { label: (ctx) => {
+                            const pct = total > 0 ? (ctx.parsed / total * 100).toFixed(1) : '0';
+                            return `${ctx.label}: ${s}${formatNum(ctx.parsed)} (${pct}%)`;
+                        } } },
+                    },
+                    // A slice of a category opens its subcategories, as its row does.
+                    onClick: (_, els) => {
+                        if (focus || !els.length) return;
+                        const slice = slices[els[0].index];
+                        // After the event, since redrawing destroys this chart.
+                        if (!slice.other) setTimeout(() => drillSpending(slice.name));
+                    },
+                    onHover: (e, els) => {
+                        const target = e.native && e.native.target;
+                        if (target) target.style.cursor = !focus && els.length && !slices[els[0].index].other ? 'pointer' : 'default';
+                    },
+                },
+            });
+        }
+
+        q('#spendList').innerHTML = items.map((i, idx) => {
+            const pct = total > 0 ? (i.amount / total * 100).toFixed(1) : '0';
+            const detail = focus
+                ? `${i.count} charge${i.count === 1 ? '' : 's'}`
+                : `${i.subs.length} subcategor${i.subs.length === 1 ? 'y' : 'ies'} · ${i.count} charge${i.count === 1 ? '' : 's'}`;
+            return `
+                <div class="spend-row${focus ? '' : ' clickable'}" data-name="${escapeHtml(i.name)}">
+                    <span class="spend-dot" style="background:${colourOf(idx)}"></span>
+                    <div class="spend-name">${escapeHtml(i.name)}<div class="spend-sub">${detail}</div></div>
+                    <div class="spend-amt">${s}${formatNum(i.amount)}<span class="spend-pct">${pct}%</span></div>
+                </div>`;
+        }).join('');
+        if (!focus) {
+            q('#spendList').querySelectorAll('.spend-row').forEach(row =>
+                row.addEventListener('click', () => drillSpending(row.dataset.name)));
+        }
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && q('#spendModal').classList.contains('active')) closeSpending();
+    });
 
     // =============================================================================
     // UTILITY FUNCTIONS

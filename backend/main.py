@@ -4175,6 +4175,9 @@ def get_loans_details(
                 "currency": tx.currency,
                 "payee_name": tx.payee.name if tx.payee else None,
                 "category_name": tx.category.name if tx.category else None,
+                # The top of the category's tree, for the card's spending chart.
+                # A top-level category is its own parent.
+                "parent_category": (tx.category.parent or tx.category.name) if tx.category else None,
                 "location_name": tx.location.name if tx.location else None,
                 # What tells the loans page a row is a leg of a transfer; it
                 # used to look for "Transfer" in the location name.
