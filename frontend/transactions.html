@@ -1815,7 +1815,8 @@
             const createOpt = (acc) => `<option value="${acc.id}" data-currency="${acc.currency}">${escapeHtml(acc.name)} (${acc.currency})</option>`;
             const newOpt = `<option value="__NEW__" style="color:#667eea;font-weight:bold">➕ Add new</option>`;
             // Filters (include closed)
-            const sortedAccountsForFilter = [...allAccountsIncludingClosed].sort((a, b) => a.name.localeCompare(b.name));
+            // Open accounts first, then the closed ones, each alphabetically.
+            const sortedAccountsForFilter = [...allAccountsIncludingClosed].sort((a, b) => (!a.is_active - !b.is_active) || a.name.localeCompare(b.name));
             document.getElementById('filterAccount').innerHTML = '<option value="">All accounts</option>' + sortedAccountsForFilter.map(a => `<option value="${a.id}">${escapeHtml(a.name)}${!a.is_active ? ' (closed)' : ''}</option>`).join('');
             // Bulk edit
             document.getElementById('bulkAccount').innerHTML = '<option value="">Don\'t change</option>' + allAccounts.map(createOpt).join('');

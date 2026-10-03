@@ -965,9 +965,11 @@ function updateExcludeCount() {
 function renderExcludeList() {
     const list = q('#excludeList');
     list.innerHTML = '';
-    [...state.accounts].sort((a, b) => a.name.localeCompare(b.name)).forEach(a => {
+    // Open accounts first, then the closed ones, each alphabetically.
+    const isClosed = a => a.is_active === false || a.is_active === 0;
+    [...state.accounts].sort((a, b) => (isClosed(a) - isClosed(b)) || a.name.localeCompare(b.name)).forEach(a => {
         const label = document.createElement('label');
-        const closed = a.is_active === false || a.is_active === 0;
+        const closed = isClosed(a);
         label.innerHTML = `<input type="checkbox" value="${a.id}" ${state.excludedAccountIds.has(a.id) ? 'checked' : ''}><span${closed ? ' style="opacity:.5"' : ''}>${esc(a.name)}${closed ? ' (closed)' : ''}</span><span class="muted" style="margin-left:auto">${esc(a.currency)}</span>`;
         label.querySelector('input').onchange = (e) => {
             const val = parseInt(e.target.value);

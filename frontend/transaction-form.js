@@ -413,6 +413,8 @@
             else document.getElementById('toAmountGroup').classList.add('hidden');
         }
 
+        function forgetPayeeGuesses() { payeeFilled = {}; }
+
         function clearPayeeCategoryHints() {
             const box = document.getElementById('payeeCategoryHints');
             // The label belongs to the row, not to the answer, so only the chips go.
@@ -626,6 +628,17 @@
             }
         }
 
+        // What the payee last filled in by itself. The suggestion now arrives
+        // while you type, so "Amazon" can land before "Amazon Prime" is finished;
+        // a field still holding that guess is fair game for the better one, while
+        // anything you picked yourself stays put.
+        let payeeFilled = {};
+
+        function isPayeeGuess(id, key) {
+            const v = document.getElementById(id).value;
+            return !v || (payeeFilled[key] != null && v === String(payeeFilled[key]));
+        }
+
         async function handlePayeeBlur() {
             const payeeName = document.getElementById('payee').value.trim();
             if (!payeeName) { clearPayeeCategoryHints(); return; }
@@ -643,30 +656,42 @@
                 // empty field: a category you chose yourself is not a guess to be
                 // overruled.
                 let applied = null;
-                if (payee.most_common_category_id && !document.getElementById('parentCategory').value) {
+                const categoryIsGuess = !document.getElementById('parentCategory').value
+                    || (payeeFilled.category != null
+                        && document.getElementById('category').value === String(payeeFilled.category));
+                if (payee.most_common_category_id && categoryIsGuess) {
                     if (applyCategoryPair(payee.most_common_category_id)) {
                         applied = payee.most_common_category_id;
+                        payeeFilled.category = applied;
                     }
                 }
                 showPayeeCategoryHints(payee, applied);
                 
-                if (payee.most_common_location_id) {
-                    const locationSelect = document.getElementById('location');
-                    if (!locationSelect.value) {
-                        locationSelect.value = payee.most_common_location_id;
-                    }
+                if (payee.most_common_location_id && isPayeeGuess('location', 'location')) {
+                    document.getElementById('location').value = payee.most_common_location_id;
+                    payeeFilled.location = payee.most_common_location_id;
                 }
                 
-                if (payee.most_common_project_id) {
-                    const projectSelect = document.getElementById('project');
-                    if (!projectSelect.value) {
-                        projectSelect.value = payee.most_common_project_id;
-                    }
+                if (payee.most_common_project_id && isPayeeGuess('project', 'project')) {
+                    document.getElementById('project').value = payee.most_common_project_id;
+                    payeeFilled.project = payee.most_common_project_id;
                 }
                 
             } catch (error) {
                 console.error('Error auto-filling from payee:', error);
             }
+        }
+
+        // Runs the payee suggestion while typing rather than waiting for the field
+        // to lose focus. A pick from the list goes at once; typed text waits for a
+        // pause, so a payee that is a prefix of another does not flash past.
+        let payeeInputTimer = null;
+        function handlePayeeInput(e) {
+            clearTimeout(payeeInputTimer);
+            const name = e.target.value.trim().toLowerCase();
+            if (!name || !allPayees.some(p => p.name.toLowerCase() === name)) return;
+            const picked = !e.inputType || e.inputType === 'insertReplacementText';
+            payeeInputTimer = setTimeout(handlePayeeBlur, picked ? 0 : 350);
         }
 
         async function handleTransactionSubmit(e) {
@@ -702,6 +727,7 @@
             setModalMode('transactionModal', false);
             exitSplitMode();
             clearPayeeCategoryHints();
+            forgetPayeeGuesses();
             const now = new Date();
             const dateStr = now.toISOString().split('T')[0];
             const timeStr = now.toTimeString().split(' ')[0].substring(0,5);
@@ -801,6 +827,7 @@
             updateAmountSignToggle();
             document.getElementById('payee').value = '';
             clearPayeeCategoryHints();
+            forgetPayeeGuesses();
             document.getElementById('parentCategory').value = '';
             document.getElementById('category').value = '';
             document.getElementById('category').disabled = true;
@@ -1711,6 +1738,7 @@
         reportBlockedSave(document.getElementById('transactionForm'));
         reportBlockedSave(document.getElementById('transferForm'));
         on('payee', 'blur', handlePayeeBlur);
+        on('payee', 'input', handlePayeeInput);
         // "Add new" is the last option of every picker: it opens the dialog that
         // makes one and puts the result back in the picker that asked.
         on('parentCategory', 'change', function (e) {

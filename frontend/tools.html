@@ -3642,6 +3642,7 @@
                                 <input list="payees_${index}" id="payee_${index}" 
                                     class="import-input"
                                     placeholder="${prompt.payee}" 
+                                    oninput="handlePayeeInput(${index}, event)"
                                     onchange="handlePayeeChange(${index})">
                                 <datalist id="payees_${index}">
                                     ${allPayees.map(p => `<option value="${escImport(p.name)}">`).join('')}
@@ -4146,6 +4147,19 @@
                 // to the line it was raised by.
                 if (row.classList.contains('is-current')) fxRow.classList.add('is-current');
             }
+        }
+
+        // The suggestion used to wait for the field to lose focus. Now it runs as
+        // soon as the text names a known payee: at once for a pick from the list,
+        // after a pause for typing, so a payee that is a prefix of another does
+        // not flash past on the way.
+        const _payeeInputTimers = {};
+        function handlePayeeInput(index, e) {
+            clearTimeout(_payeeInputTimers[index]);
+            const name = e.target.value.trim().toLowerCase();
+            if (!name || !allPayees.some(p => p.name.toLowerCase() === name)) return;
+            const picked = !e.inputType || e.inputType === 'insertReplacementText';
+            _payeeInputTimers[index] = setTimeout(() => handlePayeeChange(index), picked ? 0 : 350);
         }
 
         // Handle payee change
