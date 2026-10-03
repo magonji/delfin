@@ -808,7 +808,24 @@ def month_snapshot(db: Session, ym: str) -> Dict:
     # --- headline figures ----------------------------------------------------------
     spent = sum(abs(tx_base(tx)) for tx in expenses)
     # Bills settled by transfer leave the accounts too, so they belong in "spent".
-    spent += sum(tx_base(tx) for tx in transfers_in if tx.id in matched_tx_ids)
+    # A repayment into a debt is the exception: the interest it carries was
+    # already counted when it was charged to the debt, so only what the payment
+    # amortises is new. Cards and loans alike — a purchase on the card is spent
+    # when made, and paying it off is spent again on the debt it left behind.
+    debt_costs: Dict[int, float] = {}
+    for tx in expenses:
+        if tx.account_id in debt_ids and _is_interest_or_fee(tx):
+            debt_costs[tx.account_id] = debt_costs.get(tx.account_id, 0.0) + abs(tx_base(tx))
+    repaid: Dict[int, float] = {}
+    for tx in transfers_in:
+        if tx.id not in matched_tx_ids:
+            continue
+        if tx.account_id in debt_ids:
+            repaid[tx.account_id] = repaid.get(tx.account_id, 0.0) + tx_base(tx)
+        else:
+            spent += tx_base(tx)
+    spent += sum(max(0.0, paid - debt_costs.get(account_id, 0.0))
+                 for account_id, paid in repaid.items())
     # Bills ticked off by hand with no transaction to show for them: the money
     # left even though nothing here records it leaving.
     spent += imputed_spent
@@ -959,6 +976,17 @@ def _debt_accounts(db: Session, account_ids: set) -> set:
             debts.add(account.id)
 
     return debts
+
+
+# Category names that mark a charge as the cost of a debt rather than spending
+# it financed — the same test the loans page uses to split out interest.
+INTEREST_KEYWORDS = ("interes", "interés", "interest", "comision", "comisión",
+                     "fee", "hipoteca", "mortgage")
+
+
+def _is_interest_or_fee(tx: Transaction) -> bool:
+    name = (tx.category.name if tx.category else "").lower()
+    return any(word in name for word in INTEREST_KEYWORDS)
 
 
 def _loose_match(line: BudgetMonthLine, expenses: List[Transaction],
