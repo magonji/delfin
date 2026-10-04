@@ -20,6 +20,8 @@
     <script src="/app/quick-add.js"></script>
     <!-- The row of tabs a phone gets instead of the burger. -->
     <script src="/app/tab-bar.js"></script>
+    <!-- Long figures shrink to fit their cells rather than being cut off. -->
+    <script src="/app/fit-text.js" data-fit=".kpi-val, .stat-val"></script>
     <title>Delfin · The Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -153,7 +155,11 @@
         .kpi-cell:first-child { padding-left: 0; }
         .kpi-cell + .kpi-cell { border-left: 1px solid var(--hair); }
         .kpi-label { font-size: 10.5px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
-        .kpi-val { font-family: 'Playfair Display', serif; font-size: 31px; font-weight: 800; line-height: 1.1; margin-top: 8px; font-variant-numeric: tabular-nums; }
+        /* A cell no wider than its share, and a figure that cannot push it wider:
+           fit-text.js shrinks the figure to the room it has. */
+        .kpi-cell, .statstrip .stat { min-width: 0; }
+        .kpi-val { font-family: 'Playfair Display', serif; font-size: 31px; font-weight: 800; line-height: 1.1; margin-top: 8px; font-variant-numeric: tabular-nums;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .kpi-delta { font-family: 'IBM Plex Mono', monospace; font-size: 11px; margin-top: 5px; min-height: 14px; color: var(--muted); }
         .kpi-delta.up { color: var(--green); }
         .kpi-delta.down { color: var(--red); }
@@ -167,7 +173,8 @@
         .statstrip .stat { padding: 0 16px; border-left: 1px solid var(--hair); }
         .statstrip .stat:first-child { padding-left: 0; border-left: none; }
         .stat-label { font-size: 10px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
-        .stat-val { font-family: 'Playfair Display', serif; font-size: 21px; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; }
+        .stat-val { font-family: 'Playfair Display', serif; font-size: 21px; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .statstrip.small .stat-val { font-size: 19px; }
         #ysExpenses, #totExpenses { color: var(--red) !important; }
 
@@ -293,6 +300,10 @@
             .nav-action { display: block; }
             .nav-action.nav-div { margin-top: 6px; padding-top: 12px; border-top: 1px solid var(--hair); }
             .nav-right .tip-wrap, .nav-right > #btnLogout { display: none; }
+            /* The title is in the header on a phone (tab-bar.js), so the
+               section after it opens the page, without a rule above it. */
+            .page-head { margin: 0; }
+            .page-head + * { border-top: none; padding-top: 0; margin-top: 0; }
         }
         @media (max-width: 640px) {
             header { padding: 12px 16px; padding-top: calc(12px + env(safe-area-inset-top)); }
@@ -301,7 +312,6 @@
             .statstrip .stat:nth-child(odd) { padding-left: 0; border-left: none; }
             button, select, input { min-height: 40px; }
             .tools select, .tools button, .tools .chip-btn { height: 34px; font-size: 13px; }
-            .page-title { font-size: 26px; }
             .sec-title { font-size: 21px; }
             .catspend-body { gap: 24px; justify-content: center; }
             /* Keep the Category Spending Trend controls on a single line: the two

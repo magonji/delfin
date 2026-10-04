@@ -85,6 +85,8 @@
     <script src="/app/quick-add.js"></script>
     <!-- The row of tabs a phone gets instead of the burger. -->
     <script src="/app/tab-bar.js"></script>
+    <!-- Long figures shrink to fit their cells rather than being cut off. -->
+    <script src="/app/fit-text.js" data-fit=".sum-val"></script>
     <title>Delfin · Transactions</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -246,10 +248,9 @@
         .page-head { margin-bottom: 22px; }
         .page-head-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
         .page-title { margin: 0; font-family: 'Playfair Display', serif; font-size: 34px; font-weight: 800; line-height: 1; padding-left: 18px; border-left: 3px solid var(--accent); }
-        @media (max-width: 640px) { .page-title { font-size: 26px; } }
         .tx-summary { display: flex; max-width: 100%; }
         /* min-width:0 lets a cell be narrower than its number, which is what makes
-           the overflow measurable — see fitSummaryValues(). */
+           the overflow measurable — see fit-text.js. */
         .sum-cell { text-align: right; padding: 0 18px; border-left: 1px solid var(--hair); min-width: 0; }
         .sum-cell:first-child { border-left: none; padding-left: 0; }
         .sum-cell:last-child { padding-right: 0; }
@@ -740,6 +741,12 @@
             .grid-layout { grid-template-columns: 16px 65px 140px 160px minmax(120px, 1fr) 90px 100px 100px 60px; gap: 6px; }
         }
 
+        /* The title is in the header on a phone (tab-bar.js): the summary has
+           the row to itself. */
+        @media (max-width: 760px) {
+            .tx-summary { width: 100%; }
+        }
+
         /* ── Responsive: Small tablet ── */
         @media (max-width: 900px) {
             .grid-layout { grid-template-columns: 16px 65px 130px 1fr 80px 60px; gap: 6px; }
@@ -765,11 +772,12 @@
                over the end of the list the way it already does over the end of
                every other page. What is left below the list is the card's own
                margin, and then the bar. */
-            .container { margin: 10px auto; max-width: 100%; overflow: hidden;
+            .container { margin: 0 auto; max-width: 100%; overflow: hidden;
                 padding-bottom: 0; }
-            .tx-summary { width: 100%; }
             .sum-cell { flex: 1 1 0; padding: 0 8px; }
-            .card { margin: 8px; padding: 8px; overflow: hidden; }
+            /* The gutter alone frames the page, as on every other one; extra
+               margin or padding here shifts the title off its usual place. */
+            .card { margin: 0 0 16px; padding: 0; overflow: hidden; }
 
             /* Filter toggle */
             #filterToggle { display: block; padding: 10px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; text-align: center; font-size: 14px; font-weight: 600; cursor: pointer; margin-bottom: 8px; }
@@ -1918,23 +1926,6 @@
             return params;
         }
 
-        // Playfair at 22px suits a four-figure total and runs off the side of a
-        // phone at seven, so each value is stepped down until it fits the cell it
-        // was given. Measured rather than guessed from the viewport: what matters
-        // is how many digits the number actually has.
-        function fitSummaryValues() {
-            document.querySelectorAll('.sum-val').forEach(el => {
-                el.style.fontSize = '';   // back to the CSS size before measuring
-                let size = parseFloat(getComputedStyle(el).fontSize) || 22;
-                while (size > 11 && el.scrollWidth > el.clientWidth) {
-                    size -= 1;
-                    el.style.fontSize = size + 'px';
-                }
-            });
-        }
-        addEventListener('resize', fitSummaryValues);
-        if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitSummaryValues);
-
         // Totals over the whole filtered set (converted to GBP, transfers excluded).
         async function updateTransactionsSummary() {
             try {
@@ -1947,7 +1938,6 @@
                 document.getElementById('sumCount').textContent = (s.count ?? 0).toLocaleString('en-GB');
                 document.getElementById('sumIn').textContent = formatMoneyWithSymbol(s.money_in ?? 0, cur);
                 document.getElementById('sumOut').textContent = formatMoneyWithSymbol(s.money_out ?? 0, cur);
-                fitSummaryValues();
             } catch (e) { console.error('Summary load failed', e); }
         }
 

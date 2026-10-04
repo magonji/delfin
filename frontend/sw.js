@@ -1,4 +1,4 @@
-const CACHE_NAME = 'delfin-v47';
+const CACHE_NAME = 'delfin-v49';
 const STATIC_ASSETS = [
   '/app/index.html',
   '/app/transactions.html',
@@ -12,6 +12,7 @@ const STATIC_ASSETS = [
   '/app/transaction-form.js',
   '/app/quick-add.js',
   '/app/tab-bar.js',
+  '/app/fit-text.js',
   '/app/manifest.json',
   '/app/icons/icon-180.png',
   '/app/icons/icon-192.png',

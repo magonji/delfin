@@ -20,6 +20,8 @@
     <script src="/app/quick-add.js"></script>
     <!-- The row of tabs a phone gets instead of the burger. -->
     <script src="/app/tab-bar.js"></script>
+    <!-- Long figures shrink to fit their cells rather than being cut off. -->
+    <script src="/app/fit-text.js" data-fit=".kpi-val"></script>
     <!-- The loan terms form, shared with Tools. -->
     <script src="/app/loan-form.js"></script>
     <!-- The spending chart in a credit card's dialog. -->
@@ -131,7 +133,11 @@
         .kpi-cell:first-child { padding-left: 0; }
         .kpi-cell + .kpi-cell { border-left: 1px solid var(--hair); }
         .kpi-label { font-size: 10.5px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
-        .kpi-val { font-family: 'Playfair Display', serif; font-size: 29px; font-weight: 800; margin: 7px 0 3px; font-variant-numeric: tabular-nums; }
+        /* A cell no wider than its share, and a figure that cannot push it wider:
+           fit-text.js shrinks the figure to the room it has. */
+        .kpi-cell { min-width: 0; }
+        .kpi-val { font-family: 'Playfair Display', serif; font-size: 29px; font-weight: 800; margin: 7px 0 3px; font-variant-numeric: tabular-nums;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .kpi-sub { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--muted); }
 
         /* Sections */
@@ -238,12 +244,13 @@
             .kpi-cell:nth-child(1), .kpi-cell:nth-child(2) { border-top: none; }
             .kpi-cell:first-child { padding-left: 20px; }
             .kpi-cell:nth-child(odd) { border-left: none; padding-left: 0; }
+            /* The title is in the header on a phone (tab-bar.js). */
+            .page-head { margin-bottom: 0; }
         }
         @media (max-width: 640px) {
             header { padding: 12px 16px; padding-top: calc(12px + env(safe-area-inset-top)); }
             .brand .tag { display: none; }
             button, select, input, textarea { min-height: 40px; }
-            .page-title { font-size: 26px; }
             .sechead { font-size: 21px; }
             .loan-title { font-size: 18px; }
             .loan-stats { grid-template-columns: 1fr 1fr; gap: 12px 0; }

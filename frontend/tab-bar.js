@@ -67,6 +67,7 @@
            know the number. Zero on a wide screen, where there is no bar. */
         + ':root { --dlf-tabbar: 0px; }'
         + '.dlf-tabbar { display: none; }'
+        + '.brand .tag.dlf-here { display: none; }'
         + '@media (max-width: ' + BREAKPOINT + 'px) {'
         + '  :root { --dlf-tabbar: calc(' + HEIGHT + 'px + env(safe-area-inset-bottom)); }'
         /* The same material as the header at the other end: the page shows
@@ -107,6 +108,22 @@
            at a width of their own, or not at all, so it is settled here. */
         + '  header { padding-top: calc(10px + env(safe-area-inset-top)); padding-bottom: 10px; }'
         + '  .brand .rule, .brand .tag { display: none; }'
+        /* The page's name moves up into the place the strapline leaves, after
+           the same separator, and its heading below goes: on a phone it was a
+           line and a half of screen spent saying what the bar already marks,
+           and every page had kept it at a different distance from the top.
+           Smaller name and tighter letters than the strapline had, so that
+           "Loans & Credit Cards" still fits beside the two icons on an iPhone;
+           on a narrower phone it ends in an ellipsis rather than pushing them
+           off. The heading is only hidden from sight, so a screen reader still
+           finds it. */
+        + '  .brand { gap: 10px; flex: 1 1 auto; }'
+        + '  .brand .word { font-size: 21px; }'
+        + '  .brand.has-here .rule { display: block; flex: none; height: 16px; }'
+        + '  .brand .tag.dlf-here { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis;'
+        + '    font-size: 10px; letter-spacing: 1.2px; color: #23201C; }'
+        + '  .page-title { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;'
+        + '    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }'
         /* The line at the foot of a page goes too. It is a caption for a wide
            screen -- what currency the figures are in, whose app this is -- and
            on a phone it is a sentence you have read once, sitting on top of the
@@ -144,6 +161,29 @@
         document.documentElement.style.setProperty('--dlf-tabbar', height + 'px');
     }
 
+    /**
+     * Put the page's own heading beside the name in the header, for a phone.
+     *
+     * Its text rather than the tab's label, which is shorter: the tab says
+     * "Loans", the page is "Loans & Credit Cards". Only the words directly in
+     * the heading are taken, so a badge that sits inside one does not come too.
+     */
+    function nameThePage() {
+        var title = document.querySelector('.page-title');
+        var brand = document.querySelector('header .brand');
+        if (!title || !brand || brand.querySelector('.dlf-here')) return;
+        var text = Array.prototype.filter.call(title.childNodes, function (node) {
+            return node.nodeType === 3;
+        }).map(function (node) { return node.textContent; }).join('').trim();
+        if (!text) return;
+        var here = document.createElement('span');
+        here.className = 'tag dlf-here';
+        here.setAttribute('aria-hidden', 'true');
+        here.textContent = text;
+        brand.appendChild(here);
+        brand.classList.add('has-here');
+    }
+
     function install() {
         if (document.querySelector('.dlf-tabbar')) return;
 
@@ -163,6 +203,7 @@
         }).join('');
         document.body.appendChild(bar);
 
+        nameThePage();
         publishHeight();
         installSwipe();
         // Turning the phone, or a window dragged across the width where the bar

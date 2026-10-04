@@ -20,6 +20,8 @@
     <script src="/app/quick-add.js"></script>
     <!-- The row of tabs a phone gets instead of the burger. -->
     <script src="/app/tab-bar.js"></script>
+    <!-- Long figures shrink to fit their cells rather than being cut off. -->
+    <script src="/app/fit-text.js" data-fit=".stat-value"></script>
     <title>Delfin · Budget</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -123,10 +125,12 @@
 
         /* Stat strip */
         .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); margin-top: 26px; border-top: 1px solid var(--hair); padding-top: 18px; }
-        .stat { padding: 0 16px; border-left: 1px solid var(--hair); text-align: left; }
+        .stat { padding: 0 16px; border-left: 1px solid var(--hair); text-align: left; min-width: 0; }
         .stat:first-child { padding-left: 0; border-left: none; }
         .stat-label { font-size: 10px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
-        .stat-value { font-family: 'Playfair Display', serif; font-size: 24px; font-weight: 800; margin-top: 5px; }
+        /* fit-text.js shrinks a figure too long for its third of the row. */
+        .stat-value { font-family: 'Playfair Display', serif; font-size: 24px; font-weight: 800; margin-top: 5px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .stat-value.spent { color: var(--red); }
         .stat-note { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: var(--muted); margin-top: 3px; line-height: 1.35; }
         .stat-value.committed { color: var(--yellow); }
@@ -144,6 +148,7 @@
         .tm-row .v.negative { color: var(--red); }
         .badge { display: inline-block; padding: 2px 9px; border-radius: 99px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: .5px; text-transform: uppercase; vertical-align: middle; margin-left: 8px; }
         .badge.future { background: var(--ink-blue); color: white; }
+        .tools .badge { margin-left: 0; }
 
         /* Recurring / planned rows (flat) */
         .recurring-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 8px; margin: 0 -8px; border: none; border-bottom: 1px solid var(--hair); border-radius: 0; cursor: pointer; transition: background .15s; }
@@ -390,7 +395,6 @@
             .sec-head { flex-wrap: wrap; }
             .sec-head .tools { flex-wrap: nowrap; }
             .budget-amount { font-size: 40px; }
-            .page-title { font-size: 26px; }
             .sechead { font-size: 21px; }
             .stats-row { grid-template-columns: 1fr 1fr 1fr; }
             .stat { padding: 0 8px; }
@@ -439,11 +443,12 @@
         <!-- Monthly Budget hero -->
         <section>
             <div class="sec-head">
-                <h1 class="page-title">Monthly Budget <span id="futureBadge" class="badge future" style="display:none;">Future</span></h1>
+                <h1 class="page-title">Monthly Budget</h1>
                 <div class="tools">
                     <button class="lbtn" id="btnPrevMonth" aria-label="Previous month" style="height:28px;width:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor"><path d="M15 5L8 12l7 7z"/></svg></button>
                     <select id="selectMonth"></select>
                     <button class="lbtn" id="btnNextMonth" aria-label="Next month" style="height:28px;width:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor"><path d="M9 5l7 7-7 7z"/></svg></button>
+                    <span id="futureBadge" class="badge future" style="display:none;">Future</span>
                 </div>
             </div>
             <div id="pastNote" style="display:none;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--muted);padding-top:12px;">This month is closed — its figures are the record of what was budgeted at the time. Editing a line asks whether the change stops here or carries on into the months after it; the months before it never move.</div>

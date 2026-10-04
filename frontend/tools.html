@@ -110,8 +110,11 @@
         .page-head { margin-bottom:22px; }
         .page-title { margin:0; font-family:'Playfair Display',serif; font-size:34px; font-weight:800; line-height:1;
             padding-left:18px; border-left:3px solid var(--accent); }
+        /* The title is in the header on a phone (tab-bar.js). */
+        @media (max-width:760px) {
+            .page-head { margin-bottom:0; }
+        }
         @media (max-width:640px) {
-            .page-title { font-size:26px; }
             .sechead { font-size:21px; }
         }
 
