@@ -246,6 +246,7 @@
         .page-head { margin-bottom: 22px; }
         .page-head-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
         .page-title { margin: 0; font-family: 'Playfair Display', serif; font-size: 34px; font-weight: 800; line-height: 1; padding-left: 18px; border-left: 3px solid var(--accent); }
+        @media (max-width: 640px) { .page-title { font-size: 26px; } }
         .tx-summary { display: flex; max-width: 100%; }
         /* min-width:0 lets a cell be narrower than its number, which is what makes
            the overflow measurable — see fitSummaryValues(). */

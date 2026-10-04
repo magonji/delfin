@@ -85,6 +85,10 @@
         .split > *:first-child { padding-right: 44px; }
         .split > *:last-child { padding-left: 44px; border-left: 1px solid var(--hair2); }
 
+        /* ── Page title (same shape on every page) ── */
+        .page-head { margin-bottom: 22px; }
+        .page-title { margin: 0; font-family: 'Playfair Display', serif; font-size: 34px; font-weight: 800; line-height: 1; padding-left: 18px; border-left: 3px solid var(--red); }
+
         /* ── Section head ── */
         .head-row { display: flex; align-items: center; justify-content: space-between; gap: 12px;
             padding: 0 0 16px; border-bottom: 1px solid var(--hair); margin-bottom: 20px; flex-wrap: wrap; }
@@ -297,6 +301,7 @@
             .statstrip .stat:nth-child(odd) { padding-left: 0; border-left: none; }
             button, select, input { min-height: 40px; }
             .tools select, .tools button, .tools .chip-btn { height: 34px; font-size: 13px; }
+            .page-title { font-size: 26px; }
             .sec-title { font-size: 21px; }
             .catspend-body { gap: 24px; justify-content: center; }
             /* Keep the Category Spending Trend controls on a single line: the two
@@ -342,6 +347,7 @@
     </header>
 
     <div class="content">
+        <div class="page-head"><h1 class="page-title">Dashboard</h1></div>
 
         <!-- Before the first account there is nothing to total, chart or compare.
              Everything below stays in the document and is simply hidden, so it

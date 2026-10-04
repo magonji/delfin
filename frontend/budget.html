@@ -101,6 +101,7 @@
         /* Kept in the stylesheet rather than inline so the responsive rules below can override it. */
         .hero-split { grid-template-columns: 1.15fr 1fr; padding-top: 24px; align-items: start; }
         .sec-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-bottom: 14px; border-bottom: 1px solid var(--hair); }
+        .page-title { margin: 0; font-family: 'Playfair Display', serif; font-size: 34px; font-weight: 800; line-height: 1; padding-left: 18px; border-left: 3px solid var(--accent); }
         .sechead { margin: 0; font-family: 'Playfair Display', serif; font-size: 25px; font-weight: 800; padding-left: 15px; border-left: 3px solid var(--accent); }
         .card, .card .head, .card .content { display: block; }
         .card .title { margin: 0; font-family: 'Playfair Display', serif; font-size: 25px; font-weight: 800; }
@@ -389,6 +390,7 @@
             .sec-head { flex-wrap: wrap; }
             .sec-head .tools { flex-wrap: nowrap; }
             .budget-amount { font-size: 40px; }
+            .page-title { font-size: 26px; }
             .sechead { font-size: 21px; }
             .stats-row { grid-template-columns: 1fr 1fr 1fr; }
             .stat { padding: 0 8px; }
@@ -437,7 +439,7 @@
         <!-- Monthly Budget hero -->
         <section>
             <div class="sec-head">
-                <h1 class="sechead" style="font-size:30px;">Monthly Budget <span id="futureBadge" class="badge future" style="display:none;">Future</span></h1>
+                <h1 class="page-title">Monthly Budget <span id="futureBadge" class="badge future" style="display:none;">Future</span></h1>
                 <div class="tools">
                     <button class="lbtn" id="btnPrevMonth" aria-label="Previous month" style="height:28px;width:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor"><path d="M15 5L8 12l7 7z"/></svg></button>
                     <select id="selectMonth"></select>

@@ -103,13 +103,17 @@
         /* ── Section headers (editorial) ── */
         .tool-section { margin-bottom:40px; }
         .tool-section-head { padding-bottom:12px; border-bottom:2px solid var(--btn-primary); }
-        .sechead { margin:0 0 0 -22px; font-family:'Playfair Display',serif; font-size:24px; font-weight:800;
-            padding-left:19px; border-left:3px solid var(--accent); }
+        .sechead { margin:0; font-family:'Playfair Display',serif; font-size:25px; font-weight:800;
+            padding-left:15px; border-left:3px solid var(--accent); }
 
         /* ── Page title ── */
-        .page-head { margin-bottom:30px; }
-        .page-title { margin:0 0 0 -22px; font-family:'Playfair Display',serif; font-size:34px; font-weight:800;
-            padding-left:19px; border-left:3px solid var(--accent); }
+        .page-head { margin-bottom:22px; }
+        .page-title { margin:0; font-family:'Playfair Display',serif; font-size:34px; font-weight:800; line-height:1;
+            padding-left:18px; border-left:3px solid var(--accent); }
+        @media (max-width:640px) {
+            .page-title { font-size:26px; }
+            .sechead { font-size:21px; }
+        }
 
         /* ── Tools grid & tiles (editorial rows with SVG icons, no chunky cards) ── */
         .tools-grid { display:grid; grid-template-columns:1fr 1fr; gap:0 40px; padding-top:6px; }
