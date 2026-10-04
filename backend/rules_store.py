@@ -60,3 +60,37 @@ def merge_rules(new_rules: Dict[str, str]) -> Dict[str, str]:
                 rules.pop(k, None)  # empty payee removes the rule
         _write(rules)
         return rules
+
+
+def rename_payee(old_name: str, new_name: str) -> int:
+    """
+    Point every rule at ``old_name`` to ``new_name`` instead. Rules hold the payee
+    by name, so without this a renamed or merged payee would leave its rules
+    filling in a name that no longer exists. Returns how many rules moved.
+    """
+    old_name, new_name = (old_name or "").strip(), (new_name or "").strip()
+    if not old_name or not new_name or old_name == new_name:
+        return 0
+    with _lock:
+        rules = _read()
+        moved = [k for k, v in rules.items() if v == old_name]
+        if not moved:
+            return 0
+        for k in moved:
+            rules[k] = new_name
+        _write(rules)
+        return len(moved)
+
+
+def remove_payee(name: str) -> int:
+    """Drop every rule that fills in ``name``. Returns how many were removed."""
+    name = (name or "").strip()
+    if not name:
+        return 0
+    with _lock:
+        rules = _read()
+        kept = {k: v for k, v in rules.items() if v != name}
+        removed = len(rules) - len(kept)
+        if removed:
+            _write(kept)
+        return removed

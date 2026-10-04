@@ -449,6 +449,63 @@
         @keyframes slideInToast { from { transform:translateX(100%); opacity:0; } to { transform:translateX(0); opacity:1; } }
         @keyframes fadeOutToast { from { transform:translateX(0); opacity:1; } to { transform:translateX(100%); opacity:0; } }
 
+        /* ── Import rules, exchange rates and data health ── */
+        .tool-intro { margin:0; padding:16px 24px 14px; font-size:13px; line-height:1.5; color:var(--muted); }
+        .tool-subhead { margin:24px 0 10px; font-family:'Playfair Display',serif; font-size:17px; font-weight:700; }
+        .rule-desc { font-family:'IBM Plex Mono',monospace; font-size:12.5px; font-weight:500; overflow-wrap:anywhere; }
+        .rule-warn { color:var(--danger); }
+        .fx-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:4px 0 12px; }
+        .fx-summary { font-size:13px; color:var(--muted); line-height:1.5; }
+        .fx-summary strong { color:var(--ink); font-weight:600; }
+        .fx-head button { flex:0 0 auto; }
+        .fx-table { width:100%; border-collapse:collapse; font-size:13px; }
+        .fx-table th { text-align:left; font-size:10px; font-weight:700; letter-spacing:1px; text-transform:uppercase;
+            color:var(--muted); padding:8px 8px 8px 0; border-bottom:1px solid var(--border); }
+        .fx-table td { padding:9px 8px 9px 0; border-bottom:1px solid var(--hair); vertical-align:top; }
+        .fx-table td.num, .fx-table th.num { text-align:right; font-family:'IBM Plex Mono',monospace; font-variant-numeric:tabular-nums; }
+        .fx-table .fx-code { font-weight:600; }
+        .fx-table .fx-issues { margin-top:3px; font-size:12px; color:var(--danger); line-height:1.4; }
+        .status-pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:600; white-space:nowrap; }
+        .status-pill.ok { background:#E6F0EA; color:#2C5C42; }
+        .status-pill.warning, .status-pill.incomplete { background:#FBF0DF; color:#8A5A1E; }
+        .status-pill.error, .status-pill.missing { background:#FBEDE9; color:#8A2D1C; }
+        .status-pill.info { background:var(--panel); color:#5E5446; }
+        .fx-convert { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+        .fx-convert input, .fx-convert select { padding:9px 10px; border:1px solid var(--border); border-radius:8px;
+            background:#fff; font:inherit; font-size:14px; color:var(--ink); }
+        .fx-convert #fxAmount { width:120px; }
+        .fx-convert select { width:92px; }
+        .fx-convert .fx-swap { padding:8px 12px; font-size:16px; line-height:1; }
+        .fx-convert input[type=date] { width:auto; flex:1 1 140px; }
+        .fx-result { margin-top:12px; font-size:13px; color:var(--muted); line-height:1.5; }
+        .fx-result .fx-big { display:block; font-family:'Playfair Display',serif; font-size:24px; font-weight:700; color:var(--ink); }
+        .health-check { padding:14px 0; border-bottom:1px solid var(--hair); }
+        .health-check:last-child { border-bottom:none; }
+        .health-check-head { display:flex; align-items:center; gap:10px; }
+        .health-check-title { flex:1; font-weight:600; font-size:14px; }
+        .health-check.clear .health-check-title { color:var(--muted); font-weight:500; }
+        .health-check-desc { margin:4px 0 0; font-size:12.5px; color:var(--muted); line-height:1.45; }
+        .health-check details { margin-top:8px; font-size:12.5px; }
+        .health-check summary { cursor:pointer; color:var(--ink); font-weight:500; }
+        .health-items { margin:8px 0 0; padding:0; list-style:none; max-height:220px; overflow-y:auto;
+            border:1px solid var(--hair); border-radius:8px; background:#fff; }
+        .health-items li { display:flex; gap:10px; justify-content:space-between; padding:6px 10px; border-bottom:1px solid var(--hair); }
+        .health-items li:last-child { border-bottom:none; }
+        .health-items .hi-main { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .health-items .hi-meta { color:var(--muted); }
+        .health-items .hi-amt { flex:0 0 auto; font-family:'IBM Plex Mono',monospace; font-variant-numeric:tabular-nums; }
+        .health-check .health-fix { margin-top:10px; padding:7px 14px; font-size:13px; }
+        @media (max-width:600px) {
+            .tool-intro { padding:14px 16px 12px; }
+            .fx-head { flex-wrap:wrap; }
+            .fx-table .fx-hide-sm { display:none; }
+            .fx-convert #fxAmount { flex:1 1 100%; width:auto; }
+            .fx-convert select { flex:1 1 0; width:auto; }
+            .fx-convert input[type=date] { flex:1 1 100%; }
+            .health-items li { flex-direction:column; gap:2px; }
+            .health-items .hi-main { white-space:normal; }
+        }
+
 
         /* ── Responsive ── */
         @media (max-width:820px) {
@@ -784,6 +841,11 @@
                         <div class="tool-title">Projects</div>
                         <div class="tool-description">Manage your active projects.</div>
                     </div>
+                    <div class="tool-card" onclick="openTool('exchangeRates')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13"/><path d="m14 5 3 3-3 3"/><path d="M20 16H7"/><path d="m10 13-3 3 3 3"/></svg>
+                        <div class="tool-title">Exchange Rates</div>
+                        <div class="tool-description">Check the rates behind your totals and convert amounts.</div>
+                    </div>
                 </div>
             </div>
 
@@ -811,6 +873,11 @@
                         <div class="tool-title">Export Financisto</div>
                         <div class="tool-description">Export all your data in Financisto format.</div>
                     </div>
+                    <div class="tool-card" onclick="openTool('importRules')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h9"/><path d="M4 12h6"/><path d="M4 18h9"/><path d="m15 9 3 3-3 3"/><path d="M10 12h8"/></svg>
+                        <div class="tool-title">Import Rules</div>
+                        <div class="tool-description">Review the payees learnt from bank descriptions.</div>
+                    </div>
                 </div>
             </div>
 
@@ -837,6 +904,11 @@
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="12" r="3.5"/><path d="M11.5 12H21"/><path d="M17 12v3"/><path d="M20 12v2"/></svg>
                         <div class="tool-title">Password</div>
                         <div class="tool-description">Change the password that unlocks your database.</div>
+                    </div>
+                    <div class="tool-card" onclick="openTool('dataHealth')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 5 6v5c0 4.4 3 8.2 7 9.5 4-1.3 7-5.1 7-9.5V6Z"/><path d="m9 12 2 2 4-4"/></svg>
+                        <div class="tool-title">Data Health</div>
+                        <div class="tool-description">Find and fix inconsistencies in your data.</div>
                     </div>
                 </div>
             </div>
@@ -1422,6 +1494,80 @@
         </div>
     </div>
 
+    <!-- Import rules: bank description -> payee, learnt while importing -->
+    <div id="importRulesModal" class="modal">
+        <div class="modal-content" style="max-width: 640px;">
+            <div class="modal-header"><h3>Import Rules</h3><button class="close-btn" onclick="closeModal('importRulesModal')">&times;</button></div>
+            <p class="tool-intro">
+                When you give an imported line a payee, Delfin remembers it, and the next
+                statement with the same description gets that payee filled in. Dates and
+                numbers in the description are ignored when matching.
+            </p>
+            <div style="padding: 0 24px;"><button onclick="openRuleEditor(null)" style="width: 100%;">Add rule</button></div>
+            <div class="search-box"><input type="text" id="ruleSearch" placeholder="Search descriptions or payees..." oninput="displayImportRules()"></div>
+            <div class="item-list" id="importRulesList"></div>
+        </div>
+    </div>
+
+    <div id="ruleEditModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header"><h3 id="ruleEditTitle">Edit rule</h3><button class="close-btn" onclick="closeModal('ruleEditModal')">&times;</button></div>
+            <div style="padding: 20px 0;">
+                <div class="form-group"><label for="ruleDesc">Description</label><input type="text" id="ruleDesc" placeholder="As it appears on the statement" oninput="updateRulePreview()"></div>
+                <div class="form-hint" id="ruleDescHint"></div>
+                <div class="form-group"><label for="rulePayee">Payee</label><input type="text" id="rulePayee" list="rulePayeeOptions" autocomplete="off"></div>
+                <datalist id="rulePayeeOptions"></datalist>
+                <div style="display: flex; gap: 10px; padding: 16px 25px 0;">
+                    <button onclick="saveRule()" style="flex: 1;">Save</button>
+                    <button onclick="closeModal('ruleEditModal')" class="secondary" style="flex: 1;">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Exchange rates: what is stored, where it falls short, and a converter -->
+    <div id="exchangeRatesModal" class="modal">
+        <div class="modal-content" style="max-width: 680px;">
+            <div class="modal-header"><h3>Exchange Rates</h3><button class="close-btn" onclick="closeModal('exchangeRatesModal')">&times;</button></div>
+            <div style="padding: 18px 24px 22px;">
+                <p class="tool-intro" style="padding: 0;">
+                    Daily reference rates from the European Central Bank. Every amount in
+                    another currency is converted at the rate of its own day; where there is
+                    no rate, it is counted 1:1.
+                </p>
+                <div class="fx-head">
+                    <div id="fxSummary" class="fx-summary">Loading…</div>
+                    <button id="fxUpdateBtn" class="secondary" onclick="updateExchangeRatesNow()">Update now</button>
+                </div>
+                <div id="fxTable"></div>
+
+                <h4 class="tool-subhead">Converter</h4>
+                <div class="fx-convert">
+                    <input type="number" id="fxAmount" value="100" step="0.01" inputmode="decimal" aria-label="Amount" oninput="runConversion()">
+                    <select id="fxFrom" aria-label="From currency" onchange="runConversion()"></select>
+                    <button type="button" class="secondary fx-swap" onclick="swapConversion()" title="Swap currencies" aria-label="Swap currencies">&#8644;</button>
+                    <select id="fxTo" aria-label="To currency" onchange="runConversion()"></select>
+                    <input type="date" id="fxDate" aria-label="Date" onchange="runConversion()">
+                </div>
+                <div id="fxResult" class="fx-result"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Data health: checks for inconsistencies, with a fix where one is safe -->
+    <div id="dataHealthModal" class="modal">
+        <div class="modal-content" style="max-width: 680px;">
+            <div class="modal-header"><h3>Data Health</h3><button class="close-btn" onclick="closeModal('dataHealthModal')">&times;</button></div>
+            <div style="padding: 18px 24px 22px;">
+                <div class="fx-head">
+                    <div id="healthSummary" class="fx-summary">Checking…</div>
+                    <button id="healthRerunBtn" class="secondary" onclick="runDataHealth()">Check again</button>
+                </div>
+                <div id="healthChecks"></div>
+            </div>
+        </div>
+    </div>
+
     <!-- Custom Confirm/Prompt Modal (replaces browser dialogs which may be blocked) -->
     <div id="customDialogModal" class="modal">
         <div class="modal-content" style="max-width: 450px;">
@@ -1703,9 +1849,370 @@
                     await fzLoadExportNotes();
                     document.getElementById('financistoExportModal').style.display = 'block';
                     break;
+                case 'importRules':
+                    document.getElementById('ruleSearch').value = '';
+                    await loadImportRulesTool();
+                    document.getElementById('importRulesModal').style.display = 'block';
+                    break;
+                case 'exchangeRates':
+                    document.getElementById('exchangeRatesModal').style.display = 'block';
+                    await openExchangeRates();
+                    break;
+                case 'dataHealth':
+                    document.getElementById('dataHealthModal').style.display = 'block';
+                    await runDataHealth();
+                    break;
             }
         }
    
+        // ============================================
+        // Import rules
+        // ============================================
+        // Each rule is a bank description, normalised the way the import matches
+        // it (normalizeDesc), and the payee it fills in. A payee is held by name,
+        // so the list flags one that no longer exists.
+        let ruleEditingKey = null;
+
+        async function loadImportRulesTool() {
+            const [rulesRes] = await Promise.all([
+                fetch(`${API_URL}/tools/import-rules`),
+                loadPayees(),
+            ]);
+            importRules = (await rulesRes.json()).rules || {};
+            document.getElementById('rulePayeeOptions').innerHTML =
+                allPayees.map(p => `<option value="${csvEsc(p.name)}"></option>`).join('');
+            displayImportRules();
+        }
+
+        function displayImportRules() {
+            const term = document.getElementById('ruleSearch').value.trim().toLowerCase();
+            const payeeNames = new Set(allPayees.map(p => p.name));
+            const rules = Object.entries(importRules)
+                .filter(([d, p]) => !term || d.toLowerCase().includes(term) || p.toLowerCase().includes(term))
+                .sort(([a], [b]) => a.localeCompare(b));
+            const list = document.getElementById('importRulesList');
+            if (!Object.keys(importRules).length) {
+                list.innerHTML = '<p class="item-meta">No rules yet. They are learnt as you assign payees while importing a statement.</p>';
+                return;
+            }
+            if (!rules.length) {
+                list.innerHTML = '<p class="item-meta">No rule matches that search.</p>';
+                return;
+            }
+            list.innerHTML = rules.map(([desc, payee]) => {
+                const known = payeeNames.has(payee);
+                const key = csvEsc(JSON.stringify(desc));
+                return `
+                <div class="item-row compact">
+                    <div class="item-info">
+                        <div class="rule-desc">${csvEsc(desc)}</div>
+                        <div class="item-meta">&rarr; ${csvEsc(payee)}${known ? '' : ' <span class="rule-warn">· this payee no longer exists</span>'}</div>
+                    </div>
+                    <div class="item-actions icons">
+                        <button title="Edit rule" aria-label="Edit rule for ${csvEsc(desc)}" onclick="openRuleEditor(${key})">${ICON_EDIT}</button>
+                        <button class="danger" title="Delete rule" aria-label="Delete rule for ${csvEsc(desc)}" onclick="deleteRule(${key})">${ICON_DELETE}</button>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function openRuleEditor(key) {
+            ruleEditingKey = key;
+            document.getElementById('ruleEditTitle').textContent = key === null ? 'Add rule' : 'Edit rule';
+            document.getElementById('ruleDesc').value = key === null ? '' : key;
+            document.getElementById('rulePayee').value = key === null ? '' : (importRules[key] || '');
+            updateRulePreview();
+            document.getElementById('ruleEditModal').style.display = 'block';
+            document.getElementById('ruleDesc').focus();
+        }
+
+        function updateRulePreview() {
+            const raw = document.getElementById('ruleDesc').value;
+            const norm = normalizeDesc(raw);
+            const hint = document.getElementById('ruleDescHint');
+            if (!raw.trim()) {
+                hint.textContent = 'Paste a description from a statement. Dates, times and numbers are ignored.';
+            } else if (!norm) {
+                hint.innerHTML = '<span class="rule-warn">Nothing left to match once numbers and symbols are removed.</span>';
+            } else {
+                hint.innerHTML = `Matched as <span class="rule-desc">${csvEsc(norm)}</span>`;
+            }
+        }
+
+        async function saveRule() {
+            const key = normalizeDesc(document.getElementById('ruleDesc').value);
+            const payee = document.getElementById('rulePayee').value.trim();
+            if (!key) { showError('Enter a description with some letters in it.'); return; }
+            const match = allPayees.find(p => p.name.toLowerCase() === payee.toLowerCase());
+            if (!match) { showError('Choose an existing payee.'); return; }
+            if (key !== ruleEditingKey && importRules[key] && importRules[key] !== match.name) {
+                const ok = await customConfirm(
+                    `There is already a rule for <strong>${csvEsc(key)}</strong>, which fills in <strong>${csvEsc(importRules[key])}</strong>. Replace it?`,
+                    'Replace rule', 'Replace');
+                if (!ok) return;
+            }
+            const changes = { [key]: match.name };
+            // An empty payee removes a rule, which is how a renamed one leaves its old key.
+            if (ruleEditingKey !== null && ruleEditingKey !== key) changes[ruleEditingKey] = '';
+            if (await postRuleChanges(changes)) {
+                closeModal('ruleEditModal');
+                showSuccess('Rule saved');
+            }
+        }
+
+        async function deleteRule(key) {
+            const ok = await customConfirm(
+                `Stop filling in <strong>${csvEsc(importRules[key])}</strong> for <strong>${csvEsc(key)}</strong>?`,
+                'Delete rule', 'Delete', true);
+            if (!ok) return;
+            if (await postRuleChanges({ [key]: '' })) showSuccess('Rule deleted');
+        }
+
+        async function postRuleChanges(changes) {
+            try {
+                const res = await fetch(`${API_URL}/tools/import-rules`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ rules: changes })
+                });
+                if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || res.statusText);
+                importRules = (await res.json()).rules || {};
+                displayImportRules();
+                return true;
+            } catch (e) {
+                showError('Could not save the rule: ' + e.message);
+                return false;
+            }
+        }
+
+        // ============================================
+        // Exchange rates
+        // ============================================
+        let fxOverview = null;
+
+        // Rates span many orders of magnitude (0.0058 to 1,700), so they keep
+        // significant figures rather than a fixed number of decimals.
+        const fmtRate = (r) => r == null ? '—'
+            : Number(r).toLocaleString('en-GB', { maximumSignificantDigits: 6, minimumSignificantDigits: 4 });
+        const fmtDay = (iso) => iso ? new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+
+        async function openExchangeRates() {
+            const today = new Date();
+            const fxDate = document.getElementById('fxDate');
+            if (!fxDate.value) fxDate.value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+            await loadExchangeRates(true);
+        }
+
+        async function loadExchangeRates(setConverter = false) {
+            document.getElementById('fxSummary').textContent = 'Loading…';
+            try {
+                const res = await fetch(`${API_URL}/tools/exchange-rates/overview`);
+                if (!res.ok) throw new Error(res.statusText);
+                fxOverview = await res.json();
+            } catch (e) {
+                document.getElementById('fxSummary').textContent = 'Could not load the rates: ' + e.message;
+                document.getElementById('fxTable').innerHTML = '';
+                return;
+            }
+            const base = fxOverview.base_currency;
+            const rows = fxOverview.currencies;
+            const problems = rows.filter(r => r.status !== 'ok').length;
+            document.getElementById('fxSummary').innerHTML =
+                `Totals in <strong>${csvEsc(base)}</strong> · latest rates from <strong>${fmtDay(fxOverview.last_update)}</strong>`
+                + (problems ? ` · <span class="rule-warn">${problems} currenc${problems === 1 ? 'y needs' : 'ies need'} attention</span>` : '');
+
+            // The display currency is the yardstick, so it only has a row when it lacks rates itself.
+            const others = rows.filter(r => !r.is_base || r.status !== 'ok');
+            document.getElementById('fxTable').innerHTML = !others.length
+                ? `<p class="fx-summary">Everything is in ${csvEsc(base)}, so nothing needs converting.</p>`
+                : `<table class="fx-table">
+                    <thead><tr>
+                        <th>Currency</th><th class="num">1 ${csvEsc(base)} =</th>
+                        <th class="fx-hide-sm">Rates from</th><th class="fx-hide-sm">Latest</th><th>Status</th>
+                    </tr></thead>
+                    <tbody>${others.map(r => `
+                        <tr>
+                            <td><span class="fx-code">${csvEsc(r.currency)}</span>
+                                <div class="item-meta">${r.transactions.toLocaleString('en-GB')} transaction${r.transactions === 1 ? '' : 's'}</div>
+                                ${r.issues.length ? `<div class="fx-issues">${r.issues.map(csvEsc).join('<br>')}</div>` : ''}</td>
+                            <td class="num">${fmtRate(r.per_base)}</td>
+                            <td class="fx-hide-sm">${r.currency === 'GBP' ? '—' : fmtDay(r.first_rate)}</td>
+                            <td class="fx-hide-sm">${r.currency === 'GBP' ? '—' : fmtDay(r.last_rate)}</td>
+                            <td><span class="status-pill ${r.status}">${{ ok: 'OK', missing: 'Missing', incomplete: 'Incomplete' }[r.status] || csvEsc(r.status)}</span></td>
+                        </tr>`).join('')}
+                    </tbody></table>`;
+
+            if (setConverter) {
+                // Rates are only fetched for the currencies in use, so those are
+                // the only ones the converter can offer (sterling is the reference
+                // and always 1).
+                const codes = [...new Set(rows.filter(r => r.rates_stored || r.currency === 'GBP').map(r => r.currency).concat('GBP'))];
+                const options = codes.map(c => `<option value="${c}">${c}</option>`).join('');
+                const from = document.getElementById('fxFrom'), to = document.getElementById('fxTo');
+                from.innerHTML = to.innerHTML = options;
+                const other = codes.find(c => c !== base) || base;
+                from.value = other;
+                to.value = codes.includes(base) ? base : codes[0];
+            }
+            runConversion();
+        }
+
+        async function updateExchangeRatesNow() {
+            const btn = document.getElementById('fxUpdateBtn');
+            btn.disabled = true;
+            btn.textContent = 'Updating…';
+            try {
+                const res = await fetch(`${API_URL}/exchange-rates/update`, { method: 'POST' });
+                const body = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(body.detail || res.statusText);
+                if (body.status === 'ok') {
+                    // The running totals in the display currency were worked out
+                    // with the old rates, so they are rebuilt, and the other pages
+                    // told to refresh.
+                    btn.textContent = 'Recalculating…';
+                    const rebuilt = await fetch(`${API_URL}/admin/initialise-balances`, { method: 'POST' });
+                    DelfinCache.markDirty('tools');
+                    showSuccess(`Stored ${body.stored.toLocaleString('en-GB')} new rate${body.stored === 1 ? '' : 's'}`
+                        + (rebuilt.ok ? '' : ' — use Refresh to recalculate the totals'));
+                } else {
+                    showSuccess('Rates were already up to date');
+                }
+                await loadExchangeRates();
+            } catch (e) {
+                showError(e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Update now';
+            }
+        }
+
+        function swapConversion() {
+            const from = document.getElementById('fxFrom'), to = document.getElementById('fxTo');
+            [from.value, to.value] = [to.value, from.value];
+            runConversion();
+        }
+
+        let fxConvertSeq = 0;
+        async function runConversion() {
+            const out = document.getElementById('fxResult');
+            const amount = parseFloat(document.getElementById('fxAmount').value);
+            const from = document.getElementById('fxFrom').value;
+            const to = document.getElementById('fxTo').value;
+            const on = document.getElementById('fxDate').value;
+            if (!isFinite(amount) || !from || !to) { out.innerHTML = ''; return; }
+            const seq = ++fxConvertSeq;
+            try {
+                const qs = new URLSearchParams({ amount, from_currency: from, to_currency: to });
+                if (on) qs.set('on', on);
+                const res = await fetch(`${API_URL}/tools/exchange-rates/convert?${qs}`);
+                const r = await res.json();
+                if (seq !== fxConvertSeq) return;   // a newer request has been made
+                if (!res.ok) throw new Error(r.detail || res.statusText);
+                if (!r.ok) {
+                    out.innerHTML = `<span class="rule-warn">No ${r.missing.map(csvEsc).join(' or ')} rate on or before that day.</span>`;
+                    return;
+                }
+                noteCurrenciesInUse([from, to]);
+                out.innerHTML = `<span class="fx-big">${fmtMoney(r.result, to)}</span>`
+                    + `1 ${csvEsc(from)} = ${fmtRate(r.rate)} ${csvEsc(to)}`
+                    + (from === to ? '' : ` · rate of ${fmtDay(r.rate_date)}`)
+                    + (r.too_old ? ' · <span class="rule-warn">older than the ledger would use</span>' : '');
+            } catch (e) {
+                if (seq === fxConvertSeq) out.innerHTML = `<span class="rule-warn">${csvEsc(e.message)}</span>`;
+            }
+        }
+
+        // ============================================
+        // Data health
+        // ============================================
+        const HEALTH_LABELS = { error: 'Problem', warning: 'Check', info: 'Tidy-up' };
+
+        async function runDataHealth() {
+            const summary = document.getElementById('healthSummary');
+            const box = document.getElementById('healthChecks');
+            const btn = document.getElementById('healthRerunBtn');
+            summary.textContent = 'Checking…';
+            btn.disabled = true;
+            try {
+                const res = await fetch(`${API_URL}/tools/health`);
+                if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || res.statusText);
+                const { checks } = await res.json();
+                const found = checks.filter(c => c.count > 0);
+                const serious = found.filter(c => c.severity !== 'info').length;
+                summary.innerHTML = !found.length
+                    ? '<strong>All clear.</strong> Nothing needs your attention.'
+                    : `<strong>${found.length} of ${checks.length}</strong> checks found something`
+                      + (serious ? '' : ' — only tidying up');
+                // What needs doing first, then what is merely untidy, then what passed.
+                const order = { error: 0, warning: 1, info: 2 };
+                const sorted = [...checks].sort((a, b) =>
+                    ((a.count ? 0 : 3) + order[a.severity]) - ((b.count ? 0 : 3) + order[b.severity]));
+                box.innerHTML = sorted.map(renderHealthCheck).join('');
+            } catch (e) {
+                summary.innerHTML = `<span class="rule-warn">Could not run the checks: ${csvEsc(e.message)}</span>`;
+                box.innerHTML = '';
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        function renderHealthItem(it) {
+            if (it.balance) {
+                const b = it.balance;
+                return `<li><span class="hi-main">${csvEsc(b.account)}</span>
+                    <span class="hi-amt">${fmtMoney(b.stored, b.currency)} <span class="hi-meta">should be</span> ${fmtMoney(b.expected, b.currency)}</span></li>`;
+            }
+            if (it.name !== undefined) {
+                return `<li><span class="hi-main">${csvEsc(it.name)}</span>${it.copies ? `<span class="hi-meta">${it.copies} copies</span>` : ''}</li>`;
+            }
+            const bits = [it.date ? fmtDay(it.date) : 'No date', it.account || 'No account', it.payee, it.note].filter(Boolean);
+            return `<li><span class="hi-main">${bits.map(csvEsc).join(' <span class="hi-meta">·</span> ')}</span>
+                <span class="hi-amt">${it.amount == null ? '—' : fmtMoney(it.amount, it.currency || 'GBP')}</span></li>`;
+        }
+
+        function renderHealthCheck(c) {
+            if (!c.count) {
+                return `<div class="health-check clear"><div class="health-check-head">
+                    <span class="health-check-title">${csvEsc(c.title)}</span><span class="status-pill ok">OK</span></div></div>`;
+            }
+            const shown = c.items.length;
+            const items = shown ? `<details><summary>${shown < c.count ? `Show the first ${shown}` : 'Show them'}</summary>
+                <ul class="health-items">${c.items.map(renderHealthItem).join('')}</ul></details>` : '';
+            const fix = c.fix ? `<button class="health-fix ${c.fix.danger ? 'danger' : 'secondary'}"
+                onclick="fixHealthIssue('${c.fix.action}', this)" data-title="${csvEsc(c.title)}" data-label="${csvEsc(c.fix.label)}" data-count="${c.count}">${csvEsc(c.fix.label)}</button>` : '';
+            return `<div class="health-check">
+                <div class="health-check-head">
+                    <span class="health-check-title">${csvEsc(c.title)}</span>
+                    <span class="status-pill ${c.severity}">${c.count.toLocaleString('en-GB')} · ${HEALTH_LABELS[c.severity]}</span>
+                </div>
+                <p class="health-check-desc">${csvEsc(c.description)}</p>
+                ${items}${fix}
+            </div>`;
+        }
+
+        async function fixHealthIssue(action, btn) {
+            const { title, label, count } = btn.dataset;
+            const danger = btn.classList.contains('danger') || action.startsWith('delete_');
+            const ok = await customConfirm(
+                `<strong>${title}</strong> (${Number(count).toLocaleString('en-GB')}): ${label.toLowerCase()}?`
+                + (danger ? '\nThis cannot be undone, short of restoring a backup.' : ''),
+                title, label, danger);
+            if (!ok) return;
+            btn.disabled = true;
+            btn.textContent = 'Working…';
+            try {
+                const res = await fetch(`${API_URL}/tools/health/fix`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action })
+                });
+                if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || res.statusText);
+                DelfinCache.markDirty('tools');
+                showSuccess(`${title}: done`);
+            } catch (e) {
+                showError(e.message);
+            }
+            await runDataHealth();
+        }
+
         // Close modal
         // The counterpart of closeModal, which this page has always had while three
         // callers of this one -- the "Add new..." entries of the import preview's

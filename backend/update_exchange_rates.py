@@ -33,6 +33,15 @@ def get_currencies_with_rates(db: Session) -> set:
     return {c[0] for c in db.query(ExchangeRate.currency).distinct().all() if c[0]}
 
 
+def get_earliest_rate_dates(db: Session) -> Dict[str, date]:
+    """The first date each currency has a stored rate for."""
+    out = {}
+    for currency, first in db.query(ExchangeRate.currency, func.min(ExchangeRate.date)).group_by(ExchangeRate.currency).all():
+        if currency and first:
+            out[currency] = first.date() if isinstance(first, datetime) else first
+    return out
+
+
 def get_currencies_in_use(db: Session) -> List[str]:
     """
     Currencies we need rates for (excluding the GBP base): every currency used
@@ -148,11 +157,17 @@ def store_rates_for_date(db: Session, rates_date: date, eur_rates: Dict[str, flo
     return stored_count
 
 
-def update_exchange_rates():
+def update_exchange_rates() -> dict:
     """
     Main function to fetch and store exchange rates.
     Only fetches rates from first transaction date onwards.
-    Performs incremental updates (only adds new dates).
+    Performs incremental updates (only adds new dates), and fills in the history
+    before a currency's first stored rate -- a currency that has just come into
+    use, or one whose transactions now reach further back because an older
+    statement was imported.
+
+    Returns what happened, so a caller that wants to say so can: ``status`` is
+    ``ok``, ``up_to_date``, ``nothing_needed`` or ``failed`` (with ``error``).
     """
     print("Starting exchange rate update...")
     print("=" * 50)
@@ -170,23 +185,23 @@ def update_exchange_rates():
         currencies_needed = get_currencies_in_use(db)
         if not currencies_needed:
             print("No non-GBP currencies found. Nothing to update.")
-            return
+            return {"status": "nothing_needed", "stored": 0}
 
         print(f"Currencies needed: {', '.join(currencies_needed)}")
 
-        # Currencies that already have rates only need the new dates appended;
-        # newly-added currencies (a new account/display currency) must be
-        # backfilled across the full history, not just from the last stored date.
-        have_rates = get_currencies_with_rates(db)
-        backfill_currencies = [c for c in currencies_needed if c not in have_rates]
-        incremental_currencies = [c for c in currencies_needed if c in have_rates]
-        if backfill_currencies:
-            print(f"Backfilling history for: {', '.join(backfill_currencies)}")
+        # Each currency is filled in up to its own first stored rate, from the
+        # first transaction on; one with no rates at all is filled in throughout.
+        # After that, every currency only needs the dates newer than the last.
+        earliest = get_earliest_rate_dates(db)
+        backfill = {c: earliest.get(c) for c in currencies_needed
+                    if earliest.get(c) is None or earliest[c] > first_tx_date}
+        if backfill:
+            print(f"Backfilling history for: {', '.join(sorted(backfill))}")
 
         historical_rates = fetch_ecb_historical_rates()
         if not historical_rates:
             print("Failed to fetch rates from ECB")
-            return
+            return {"status": "failed", "error": "Could not fetch rates from the European Central Bank."}
 
         total_stored = 0
         dates_touched = 0
@@ -194,9 +209,10 @@ def update_exchange_rates():
             if rates_date < first_tx_date:
                 continue
             is_new_date = (not last_stored_date) or rates_date > last_stored_date
-            todo = list(backfill_currencies)
             if is_new_date:
-                todo += incremental_currencies
+                todo = list(currencies_needed)
+            else:
+                todo = [c for c, first in backfill.items() if first is None or rates_date < first]
             if not todo:
                 continue
             stored = store_rates_for_date(db, rates_date, historical_rates[rates_date], todo)
@@ -205,15 +221,17 @@ def update_exchange_rates():
 
         if total_stored == 0:
             print("All exchange rates are up to date!")
-            return
+            return {"status": "up_to_date", "stored": 0}
 
         db.commit()
         print("=" * 50)
         print(f"Stored {total_stored} exchange rates across {dates_touched} dates")
+        return {"status": "ok", "stored": total_stored, "dates": dates_touched}
         
     except Exception as e:
         print(f"Error: {e}")
         db.rollback()
+        return {"status": "failed", "error": str(e)}
     finally:
         db.close()
 

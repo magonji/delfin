@@ -639,6 +639,9 @@ def delete_payee(payee_id: int, db: Session = Depends(get_db)):
     db.delete(payee)
     db.commit()
 
+    from backend import rules_store
+    rules_store.remove_payee(payee_name)
+
     return {
         "deleted": {"id": payee_id, "name": payee_name},
         "transactions_unlinked": tx_cleared,
@@ -711,8 +714,12 @@ def merge_payees(payee_id: int, duplicate_id: int, db: Session = Depends(get_db)
     ).update({RecurringExpense.payee_id: payee_id})
 
     # Delete the duplicate
+    duplicate_name, keep_name = duplicate.name, keep.name
     db.delete(duplicate)
     db.commit()
+
+    from backend import rules_store
+    rules_store.rename_payee(duplicate_name, keep_name)
 
     return {
         "kept": {"id": keep.id, "name": keep.name},
@@ -1062,12 +1069,18 @@ def update_payee(
     if not db_payee:
         raise HTTPException(status_code=404, detail="Payee not found")
 
+    old_name = db_payee.name
+
     # Update fields
     for key, value in payee.dict().items():
         setattr(db_payee, key, value)
 
     db.commit()
     db.refresh(db_payee)
+
+    # Import rules name their payee, so a rename has to follow them.
+    from backend import rules_store
+    rules_store.rename_payee(old_name, db_payee.name)
     return db_payee
 
 
@@ -2613,10 +2626,14 @@ def trigger_exchange_rate_update(db: Session = Depends(get_db)):
     """
     try:
         from backend.update_exchange_rates import update_exchange_rates
-        update_exchange_rates()
-        return {"message": "Exchange rates updated successfully"}
+        result = update_exchange_rates() or {}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update rates: {str(e)}")
+    # The updater catches its own failures, so this used to report success
+    # whether or not a single rate had arrived.
+    if result.get("status") == "failed":
+        raise HTTPException(status_code=502, detail=f"Failed to update rates: {result.get('error')}")
+    return {"message": "Exchange rates updated successfully", **result}
 
 
 @app.get("/exchange-rates", response_model=List[ExchangeRateResponse])
@@ -4999,6 +5016,82 @@ def merge_import_rules(payload: dict):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"rules": rules}
+
+
+# ============================================
+# EXCHANGE RATES & DATA HEALTH (Tools page)
+# ============================================
+
+@app.get("/tools/exchange-rates/overview")
+def exchange_rates_overview(db: Session = Depends(get_db)):
+    """Every currency in use, how far its stored rates reach, and where they fall short."""
+    from backend import data_tools
+    return data_tools.rates_overview(db)
+
+
+@app.get("/tools/exchange-rates/convert")
+def exchange_rates_convert(
+    amount: float = Query(...),
+    from_currency: str = Query(...),
+    to_currency: str = Query(...),
+    on: Optional[date] = Query(None, description="YYYY-MM-DD; today when left out"),
+    db: Session = Depends(get_db)
+):
+    """Convert an amount with the rates the ledger would use on a given day."""
+    from backend import data_tools
+    from backend.currencies import SUPPORTED_CURRENCIES
+    for c in (from_currency, to_currency):
+        if c not in SUPPORTED_CURRENCIES:
+            raise HTTPException(status_code=400, detail=f"Unsupported currency: {c}")
+    return data_tools.convert(db, amount, from_currency, to_currency, on or date.today())
+
+
+@app.get("/tools/health")
+def data_health(db: Session = Depends(get_db)):
+    """Run every Data Health check and report what each one found."""
+    from backend import data_tools
+    checks = data_tools.health_report(db)
+
+    groups = _find_duplicate_categories(db)
+    extra = sum(g["count"] - 1 for g in groups)
+    checks.insert(len(checks) - 3, {
+        "id": "duplicate_categories", "title": "Duplicate categories", "severity": "warning",
+        "count": extra,
+        "description": "Categories with the same name under the same parent, which split "
+                       "their spending between them. Merging keeps the oldest and moves "
+                       "everything onto it.",
+        "items": [{"name": f"{g['parent']} › {g['name']}" if g["parent"] else g["name"],
+                   "copies": g["count"]} for g in groups[:data_tools.SAMPLE_SIZE]],
+        "fix": {"action": "merge_duplicate_categories", "label": "Merge them"} if extra else None,
+    })
+    return {"checks": checks}
+
+
+@app.post("/tools/health/fix")
+def data_health_fix(payload: dict, db: Session = Depends(get_db)):
+    """Run one Data Health fix. Body: {"action": <a check's fix action>}."""
+    from backend import data_tools
+    action = payload.get("action")
+    if action == "clean_corrupt":
+        return clean_corrupt_transactions(db)
+    if action == "recalculate_balances":
+        return initialise_balances(db)
+    if action == "merge_duplicate_categories":
+        return merge_duplicate_categories(db)
+    try:
+        if action == "clear_broken_links":
+            changed = data_tools.clear_broken_links(db)
+        elif action in ("delete_unused_payees", "delete_unused_locations", "delete_unused_projects"):
+            changed = data_tools.delete_unused(db, action.rsplit("_", 1)[1])
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown action: {action}")
+        db.commit()
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Fix failed: {e}")
+    return {"changed": changed}
 
 
 # ============================================
