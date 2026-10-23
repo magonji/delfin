@@ -183,7 +183,9 @@
         
         /* Filters and toolbar section */
         #filters {
-            display: flex; gap: 10px; margin-bottom: 2px; flex-wrap: nowrap; align-items: center;
+            /* Onto a second line when it no longer fits: three pickers, the dates and
+               Export are more than one row holds below a wide screen. */
+            display: flex; gap: 10px; margin-bottom: 2px; flex-wrap: wrap; align-items: center;
             background: transparent; padding: 12px 0 16px; border-top: 1px solid var(--hair); border-bottom: 1px solid var(--hair);
         }
         #filters input, #filters select, #filters button {
@@ -193,7 +195,7 @@
         }
         /* Flexible fields (search + selects) share the free space and shrink to make
            room when the bulk-edit actions expand. Date pickers and buttons stay fixed. */
-        #filters input[type="text"] { flex: 2 1 0; min-width: 64px; }
+        #filters input[type="text"] { flex: 2 1 0; min-width: 120px; }
         #filters select { flex: 1 1 0; min-width: 64px; background: var(--paper) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%238A7D6C'/%3E%3C/svg%3E") no-repeat right 10px center; padding-right: 26px; cursor: pointer; }
         #filters input[type="date"] { flex: 0 0 auto; width: auto; color: #5A4E3C; }
         /* Two figures and a decimal point is all these ever hold, so they ask for
@@ -212,6 +214,31 @@
            to that rule, which is the look it has always had. */
         #filters .filter-actions button:first-child { background: #E0BE94; color: var(--ink); border-color: #E0BE94; }
         #filterToggle { display: none; }
+        /* Export is the share mark alone, so it is as wide as it is tall. */
+        #filters #btnExport { width: 34px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+
+        /* Pick-several filters (account, category, payee): a button that reads
+           like the selects it replaced, opening onto a list of ticks. The
+           checkbox rules undo what `#filters input` sets for the text fields. */
+        .mfilter { position: relative; flex: 1 1 0; min-width: 88px; }
+        #filters .mf-btn { width: 100%; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;
+            background: var(--paper) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%238A7D6C'/%3E%3C/svg%3E") no-repeat right 10px center; padding-right: 26px; }
+        #filters .mf-btn.mf-on { border-color: var(--btn-primary); font-weight: 600; }
+        .mf-menu { display: none; position: absolute; top: calc(100% + 6px); left: 0; z-index: 60; min-width: 240px; width: max-content; max-width: 320px;
+            background: var(--paper); border: 1px solid var(--hair); border-radius: 12px; box-shadow: 0 12px 30px rgba(40,28,14,.18); padding: 10px; }
+        .mfilter.open .mf-menu { display: block; }
+        #filters .mf-search { width: 100%; height: 32px; margin: 0 0 8px; }
+        .mf-list { max-height: 300px; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 2px; }
+        .mf-list label { display: flex; align-items: center; gap: 8px; padding: 6px 8px; margin: 0; border-radius: 8px; font-size: 13px; cursor: pointer;
+            font-weight: 400; letter-spacing: normal; text-transform: none; color: var(--text); }
+        .mf-list label:hover { background: var(--hair); }
+        .mf-list .mf-group { font-weight: 600; }
+        .mf-list .mf-child { padding-left: 28px; }
+        #filters .mf-list input[type="checkbox"] { width: 15px; height: 15px; min-height: 0; padding: 0; margin: 0; flex: 0 0 auto;
+            -webkit-appearance: checkbox; appearance: auto; accent-color: var(--btn-primary); }
+        .mf-none { padding: 6px 8px; color: var(--muted); font-size: 13px; }
+        .mf-actions { display: flex; justify-content: flex-end; margin-top: 8px; }
+        #filters .mf-actions button { height: 28px; font-size: 12px; }
 
         /* What this payee is usually filed under. The most-used pair is filled in
            already, as it always was; these say what the other common answers were,
@@ -236,7 +263,7 @@
         .list-empty a { color: var(--accent); font-weight: 600; }
 
         /* Bulk edit mode controls */
-        .bulk-controls { display: flex; align-items: center; gap: 5px; padding-left: 10px; border-left: 1px solid var(--border); margin-left: 2px; flex: 0 0 auto; }
+        .bulk-controls { display: flex; align-items: center; gap: 5px; padding-left: 10px; border-left: 1px solid var(--border); margin-left: auto; flex: 0 0 auto; }
         .bulk-actions-inline { display: flex; gap: 5px; max-width: 0; overflow: hidden; opacity: 0; transition: max-width 0.3s ease, opacity 0.3s ease; }
         .bulk-controls.active .bulk-actions-inline { max-width: 220px; opacity: 1; }
         .btn-bulk-main, .btn-bulk-action { flex: 0 0 auto; white-space: nowrap; }
@@ -782,7 +809,15 @@
             /* Filter toggle */
             #filterToggle { display: block; padding: 10px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; text-align: center; font-size: 14px; font-weight: 600; cursor: pointer; margin-bottom: 8px; }
             #filters { flex-direction: column; padding: 0; gap: 0; max-height: 0; overflow: hidden; border: none; background: none; transition: max-height 0.3s ease, padding 0.3s ease; }
-            #filters.open { max-height: 620px; padding: 8px; gap: 6px; border: 1px solid var(--border); background: var(--panel); }
+            #filters.open { max-height: 1200px; padding: 8px; gap: 6px; border: 1px solid var(--border); background: var(--panel); }
+            /* The panel clips what spills out of it (that is how it folds away),
+               so the list of ticks opens inside it, pushing the rest down. */
+            .mfilter { flex: 0 0 auto; width: 100%; margin-top: 6px; }
+            .mf-menu { position: static; width: auto; max-width: none; margin-top: 6px; box-shadow: none; }
+            #filters .mf-search { margin-top: 0; }
+            .mf-list { max-height: 260px; }
+            .mf-list label { padding: 9px 8px; font-size: 14px; }
+            #filters .mf-list input[type="checkbox"] { width: 18px; height: 18px; min-height: 0; margin: 0; }
             #filters input, #filters select { flex: 0 0 auto; width: 100%; min-width: 0; max-width: 100%; font-size: 14px; margin-top: 6px; }
             #filters input[type="date"] { width: 100%; }
             /* Side by side: "from" and "to" is one line of thought, and on a
@@ -799,6 +834,7 @@
             #filters .filter-amounts input[type="number"] { flex: 1 1 0; width: auto; min-width: 0; margin-top: 0; }
             .filter-actions { margin-left: 0; width: 100%; justify-content: stretch; margin-top: 6px; }
             .filter-actions button { flex: 1; }
+            #filters #btnExport { flex: 0 0 44px; width: 44px; }
             .bulk-controls { border-left: none; padding-left: 0; margin-left: 0; border-top: 1px solid var(--border); padding-top: 8px; width: 100%; justify-content: center; }
 
             /* Hide table header on mobile */
@@ -888,10 +924,16 @@
             .mobile-detail-actions { display: flex; gap: 12px; margin-top: 8px; padding-top: 6px; border-top: 1px dashed var(--border); justify-content: flex-end; }
             .mobile-detail-actions button { background: none; border: 1px solid var(--border); border-radius: 6px; padding: 4px 12px; font-size: 13px; cursor: pointer; min-height: 32px; color: var(--text); }
 
-            /* Transaction list height */
-            /* Less whatever the row of tabs is taking along the bottom, which it
-               publishes so this does not have to carry a copy of the number. */
-            .transactions-list { max-height: calc(100vh - 250px - var(--dlf-tabbar, 0px)); }
+            /* On a phone the page is the one thing that scrolls.
+
+               A list scrolling inside a page that also scrolls is two scrollers
+               fighting over one finger. Safari only gave the drag to the list
+               when it began on a cell that fitted its text -- the date -- and a
+               drag begun on a payee or account cut short with an ellipsis went
+               nowhere. With the list at its full height there is nothing to
+               choose between, and the next page loads off the window's scroll
+               instead (see the listener beside the list's own). */
+            .transactions-list { max-height: none; overflow: visible; overscroll-behavior: auto; }
 
             /* Bulk edit bar */
             .bulk-edit-header { flex-wrap: wrap; padding: 10px 15px; }
@@ -974,12 +1016,16 @@
                     <input type="number" step="0.01" min="0" inputmode="decimal" id="filterMaxAmount" placeholder="Max" title="Largest amount, ignoring sign">
                 </div>
 
-                <select id="filterAccount" title="Filter by account"><option value="">All accounts</option></select>
-                <select id="filterCategory" title="Filter by category"><option value="">All categories</option></select>
+                <div class="mfilter" id="filterAccount"></div>
+                <div class="mfilter" id="filterCategory"></div>
+                <div class="mfilter" id="filterPayee"></div>
 
                 <div class="filter-actions">
                     <button onclick="applyFilters()" title="Apply filters">Apply</button>
                     <button onclick="clearFilters()" title="Clear all filters">Clear</button>
+                    <button id="btnExport" onclick="exportTransactions()" title="Export as CSV: every transaction, or those the filters leave" aria-label="Export as CSV">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="M8 7l4-4 4 4"/><path d="M8 11H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-2"/></svg>
+                    </button>
                 </div>
 
                 <div class="bulk-controls" id="bulkControls">
@@ -1147,7 +1193,7 @@
         let pendingSplitLines = [];                            // Cross-page split grouping
         let allProjects = [];
         let bulkEditMode = false, selectedTransactions = [], selectedTransfers = [], currentBulkType = null;
-        let activeFilters = { startDate: null, endDate: null, accountId: null, categoryId: null, searchText: null, minAmount: null, maxAmount: null };
+        let activeFilters = { startDate: null, endDate: null, accountIds: [], categoryIds: [], payeeIds: [], searchText: null, minAmount: null, maxAmount: null };
         let filtersActive = false;
         let targetTransactionId = null;
         let targetTransferId = null;
@@ -1594,7 +1640,9 @@
                     accountsIncludingClosed: allAccountsIncludingClosed, locations: allLocations,
                     projects: allProjects, accountsMap: accountsMap, displayCurrency: displayCurrency,
                 }),
-                filters: () => ({ active: filtersActive, accountId: activeFilters.accountId }),
+                // A new transaction starts in the filtered account only when
+                // there is just the one; with several there is no telling which.
+                filters: () => ({ active: filtersActive, accountId: (activeFilters.accountIds || []).length === 1 ? activeFilters.accountIds[0] : null }),
                 // A new row goes straight into the list, before the server is
                 // asked again.
                 onOptimistic: (kind, row) => {
@@ -1613,7 +1661,7 @@
             // the unfiltered list would be drawn and then thrown away.
             const accountParam = new URLSearchParams(location.search).get('account');
             if (accountParam) {
-                activeFilters = { startDate: null, endDate: null, accountId: accountParam, categoryId: null, searchText: null, minAmount: null, maxAmount: null };
+                activeFilters = { startDate: null, endDate: null, accountIds: [accountParam], categoryIds: [], payeeIds: [], searchText: null, minAmount: null, maxAmount: null };
                 filtersActive = true;
             }
 
@@ -1659,17 +1707,14 @@
             // and can be changed or cleared like any other. On a phone the panel is
             // collapsed by default, so open it too.
             if (accountParam) {
-                const sel = document.getElementById('filterAccount');
-                sel.value = accountParam;
-                if (sel.value) {
+                const picker = multiFilter('account');
+                picker.set([accountParam]);
+                if (picker.ids().length) {
                     document.getElementById('filters').classList.add('open');
                 } else {
                     // Id not in the list (stale link): drop the filter rather than
                     // leave an empty list with nothing in the panel to explain it.
-                    // Assigning an unknown value leaves selectedIndex at -1, which
-                    // draws the select blank, so put it back on "All accounts".
-                    sel.selectedIndex = 0;
-                    activeFilters.accountId = null;
+                    activeFilters.accountIds = [];
                     filtersActive = false;
                     loadRecentTransactions(true, true);
                 }
@@ -1679,6 +1724,12 @@
             transactionsList.addEventListener('scroll', () => {
                 if (transactionsList.scrollTop + transactionsList.clientHeight >= transactionsList.scrollHeight - 200) loadRecentTransactions();
             });
+            // On a phone the list does not scroll by itself, the page does, so
+            // its end is reached when its bottom edge comes into the window.
+            window.addEventListener('scroll', () => {
+                if (getComputedStyle(transactionsList).overflowY !== 'visible') return;
+                if (transactionsList.getBoundingClientRect().bottom <= window.innerHeight + 200) loadRecentTransactions();
+            }, { passive: true });
 
             setupEventListeners();
 
@@ -1826,7 +1877,7 @@
             // Filters (include closed)
             // Open accounts first, then the closed ones, each alphabetically.
             const sortedAccountsForFilter = [...allAccountsIncludingClosed].sort((a, b) => (!a.is_active - !b.is_active) || a.name.localeCompare(b.name));
-            document.getElementById('filterAccount').innerHTML = '<option value="">All accounts</option>' + sortedAccountsForFilter.map(a => `<option value="${a.id}">${escapeHtml(a.name)}${!a.is_active ? ' (closed)' : ''}</option>`).join('');
+            multiFilter('account').setItems(sortedAccountsForFilter.map(a => ({ id: a.id, label: a.name + (!a.is_active ? ' (closed)' : '') })));
             // Bulk edit
             document.getElementById('bulkAccount').innerHTML = '<option value="">Don\'t change</option>' + allAccounts.map(createOpt).join('');
             document.getElementById('bulkTransferFromAccount').innerHTML = '<option value="">Don\'t change</option>' + allAccounts.map(createOpt).join('');
@@ -1847,7 +1898,15 @@
                 const bName = (b.parent ? b.parent + ' > ' : '') + b.name;
                 return aName.localeCompare(bName);
             });
-            document.getElementById('filterCategory').innerHTML = '<option value="">All categories</option>' + sortedCategoriesForFilter.map(c => `<option value="${c.id}">${c.parent ? escapeHtml(c.parent) + ' > ' : ''}${escapeHtml(c.name)}</option>`).join('');
+            // A parent with subcategories is a heading whose tick takes them all
+            // (and the parent itself); it is not listed again as an entry.
+            const byName = new Map(allCategories.filter(c => !c.parent).map(c => [c.name, c.id]));
+            const parentNames = new Set(allCategories.filter(c => c.parent).map(c => c.parent));
+            multiFilter('category').setItems(sortedCategoriesForFilter
+                .filter(c => c.parent || !parentNames.has(c.name))
+                .map(c => c.parent
+                    ? { id: c.id, label: c.name, group: c.parent, groupId: byName.get(c.parent) }
+                    : { id: c.id, label: c.name }));
             document.getElementById('bulkParentCategory').innerHTML = '<option value="">Don\'t change</option>' + opts;
             document.getElementById('bulkParentCategory').onchange = (e) => loadBulkSubcategories(e.target.value);
         }
@@ -1855,6 +1914,7 @@
         async function loadPayees() { absorbPayees(await DelfinPreflight.take('/payees')); }
         function absorbPayees(list) {
             allPayees = list;
+            multiFilter('payee').setItems([...list].sort((a, b) => a.name.localeCompare(b.name)).map(p => ({ id: p.id, label: p.name })));
             ['payeeList', 'bulkPayeeList'].forEach(id => {
                 const el = document.getElementById(id);
                 if(el) el.innerHTML = allPayees.map(p => `<option value="${escapeHtml(p.name)}">`).join('');
@@ -1917,8 +1977,9 @@
             if (filtersActive) {
                 if (activeFilters.startDate) params.append('start_date', activeFilters.startDate);
                 if (activeFilters.endDate) params.append('end_date', activeFilters.endDate);
-                if (activeFilters.accountId) params.append('account_id', activeFilters.accountId);
-                if (activeFilters.categoryId) params.append('category_id', activeFilters.categoryId);
+                (activeFilters.accountIds || []).forEach(id => params.append('account_id', id));
+                (activeFilters.categoryIds || []).forEach(id => params.append('category_id', id));
+                (activeFilters.payeeIds || []).forEach(id => params.append('payee_id', id));
                 if (activeFilters.searchText) params.append('search', activeFilters.searchText);
                 if (activeFilters.minAmount) params.append('min_amount', activeFilters.minAmount);
                 if (activeFilters.maxAmount) params.append('max_amount', activeFilters.maxAmount);
@@ -2292,18 +2353,176 @@
             activeFilters = {
                 startDate: document.getElementById('filterStartDate').value,
                 endDate: document.getElementById('filterEndDate').value,
-                accountId: document.getElementById('filterAccount').value,
-                categoryId: document.getElementById('filterCategory').value,
+                accountIds: multiFilter('account').ids(),
+                categoryIds: multiFilter('category').ids(),
+                payeeIds: multiFilter('payee').ids(),
                 searchText: document.getElementById('filterSearch').value,
                 minAmount: document.getElementById('filterMinAmount').value,
                 maxAmount: document.getElementById('filterMaxAmount').value
             };
-            filtersActive = Object.values(activeFilters).some(v => v);
+            filtersActive = Object.values(activeFilters).some(v => Array.isArray(v) ? v.length : v);
             loadRecentTransactions(true, true);
         }
         function clearFilters() {
-            ['filterStartDate','filterEndDate','filterAccount','filterCategory','filterSearch','filterMinAmount','filterMaxAmount'].forEach(id=>document.getElementById(id).value='');
+            ['filterStartDate','filterEndDate','filterSearch','filterMinAmount','filterMaxAmount'].forEach(id=>document.getElementById(id).value='');
+            ['account', 'category', 'payee'].forEach(kind => multiFilter(kind).clear());
             activeFilters = { startDate: null }; filtersActive = false; loadRecentTransactions(true, true);
+        }
+
+        // The CSV holds what the list is showing: the filters as last applied,
+        // not whatever has been ticked since without pressing Apply.
+        async function exportTransactions() {
+            const btn = document.getElementById('btnExport');
+            btn.disabled = true;
+            try {
+                const res = await fetch(`${API_URL}/transactions/export?${currentFilterParams().toString()}`);
+                if (!res.ok) throw new Error(`the server answered ${res.status}`);
+                const name = (res.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/);
+                const url = URL.createObjectURL(await res.blob());
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = name ? name[1] : 'delfin-transactions.csv';
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                URL.revokeObjectURL(url);
+            } catch (error) {
+                alert('Error exporting transactions: ' + error.message);
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        // ── Pick-several filters ──────────────────────────────────────────
+        // Account, category and payee each take any number of values. A row
+        // matches when it is in any of the accounts ticked, and under any of
+        // the categories, and with any of the payees; nothing ticked is no
+        // filter at all, as "All accounts" always was. Ticking only stages the
+        // choice -- Apply runs it, as it does for every other field in the row.
+        //
+        // Made on first use rather than at load: the catalogues can arrive
+        // (and ask to be listed here) before this part of the script has run.
+        function multiFilter(kind) {
+            const made = multiFilter.made || (multiFilter.made = {});
+            if (!made[kind]) {
+                const [id, all, many] = {
+                    account: ['filterAccount', 'All accounts', 'accounts'],
+                    category: ['filterCategory', 'All categories', 'categories'],
+                    payee: ['filterPayee', 'All payees', 'payees'],
+                }[kind];
+                made[kind] = makeMultiFilter(id, all, many);
+            }
+            return made[kind];
+        }
+
+        // The same forgiveness as the search box on the server: case, accents
+        // and spaces do not count.
+        function foldText(s) {
+            return String(s || '').normalize('NFKD').replace(/[̀-ͯ\s]/g, '').toLowerCase();
+        }
+
+        function makeMultiFilter(rootId, allLabel, manyLabel) {
+            const root = document.getElementById(rootId);
+            root.innerHTML = `<button type="button" class="mf-btn"></button>
+                <div class="mf-menu">
+                    <input type="text" class="mf-search" placeholder="Search...">
+                    <div class="mf-list"></div>
+                    <div class="mf-actions"><button type="button" class="mf-clear">Clear</button></div>
+                </div>`;
+            const btn = root.querySelector('.mf-btn');
+            const search = root.querySelector('.mf-search');
+            const list = root.querySelector('.mf-list');
+            const selected = new Set();
+            // { id, label, group, groupId }: `group` is the parent a category sits
+            // under, `groupId` that parent's own id, ticked along with its children
+            // so a transaction filed under the parent itself is not left out.
+            let items = [];
+
+            function paint() {
+                const ticked = items.filter(i => selected.has(i.id));
+                btn.textContent = ticked.length === 0 ? allLabel
+                    : ticked.length === 1 ? ticked[0].label
+                    : `${ticked.length} ${manyLabel}`;
+                btn.classList.toggle('mf-on', ticked.length > 0);
+            }
+
+            function render() {
+                const term = foldText(search.value);
+                const shown = items.filter(i => !term || foldText(i.label).includes(term) || (i.group && foldText(i.group).includes(term)));
+                let html = '', lastGroup = null;
+                shown.forEach(i => {
+                    if (i.group && i.group !== lastGroup) {
+                        const kids = shown.filter(k => k.group === i.group);
+                        const on = kids.filter(k => selected.has(k.id)).length;
+                        html += `<label class="mf-group"><input type="checkbox" data-group="${escapeHtml(i.group)}"`
+                              + `${on === kids.length ? ' checked' : ''}${on && on < kids.length ? ' data-mixed' : ''}>`
+                              + `<span>${escapeHtml(i.group)}</span></label>`;
+                    }
+                    lastGroup = i.group || null;
+                    html += `<label${i.group ? ' class="mf-child"' : ''}><input type="checkbox" value="${i.id}"${selected.has(i.id) ? ' checked' : ''}>`
+                          + `<span>${escapeHtml(i.label)}</span></label>`;
+                });
+                list.innerHTML = html || '<div class="mf-none">Nothing matches</div>';
+                list.querySelectorAll('[data-mixed]').forEach(cb => { cb.indeterminate = true; });
+            }
+
+            function close() { root.classList.remove('open'); }
+
+            btn.addEventListener('click', () => {
+                const opening = !root.classList.contains('open');
+                Object.values(multiFilter.made || {}).forEach(f => f.close());
+                if (!opening) return;
+                search.value = '';
+                render();
+                root.classList.add('open');
+                // Not on a phone: the keyboard would cover the list it opened.
+                if (window.innerWidth > 600) search.focus();
+            });
+            search.addEventListener('input', render);
+            search.addEventListener('keydown', e => { if (e.key === 'Escape') { close(); btn.focus(); } });
+            list.addEventListener('change', e => {
+                const cb = e.target;
+                if (cb.dataset.group != null) {
+                    const term = foldText(search.value);
+                    items.filter(i => i.group === cb.dataset.group
+                            && (!term || foldText(i.label).includes(term) || foldText(i.group).includes(term)))
+                        .forEach(i => {
+                            [i.id, i.groupId].forEach(v => {
+                                if (v == null) return;
+                                cb.checked ? selected.add(v) : selected.delete(v);
+                            });
+                        });
+                } else {
+                    const v = Number(cb.value);
+                    cb.checked ? selected.add(v) : selected.delete(v);
+                }
+                render();
+                paint();
+            });
+            root.querySelector('.mf-clear').addEventListener('click', () => { selected.clear(); render(); paint(); });
+            // A tick redraws the list, so the box ticked may have left the page
+            // by the time the click reaches here; that is not a click outside.
+            document.addEventListener('click', e => { if (e.target.isConnected && !root.contains(e.target)) close(); });
+
+            paint();
+            return {
+                close,
+                ids: () => [...selected],
+                clear() { selected.clear(); paint(); },
+                // Ticks exactly these; ids not in the list are dropped, so the
+                // caller can tell a stale one by what ids() gives back.
+                set(ids) {
+                    selected.clear();
+                    const known = new Set(items.flatMap(i => [i.id, i.groupId]));
+                    ids.map(Number).forEach(v => { if (known.has(v)) selected.add(v); });
+                    paint();
+                },
+                setItems(list) {
+                    items = list;
+                    if (root.classList.contains('open')) render();
+                    paint();
+                },
+            };
         }
 
         // ── Split editor ──────────────────────────────────────────────────

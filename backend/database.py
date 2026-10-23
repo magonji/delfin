@@ -7,6 +7,8 @@ unlocked** with the data key (DEK), which only happens after a successful login
 and protected routes are refused. This is what makes the at-rest encryption real
 — without the password (which unwraps the DEK) the file cannot be opened.
 """
+import unicodedata
+
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, declarative_base
 
@@ -60,6 +62,20 @@ def _apply_pragmas(dbapi_connection):
     cur.execute("PRAGMA cache_size=-64000")        # 64MB cache
     cur.execute("PRAGMA temp_store=MEMORY")        # Temp tables in RAM
     cur.close()
+    # SQLite's LIKE only folds ASCII case, so "cafe" misses "Café" and a stray
+    # space breaks the match. Searches compare fold(...) on both sides instead.
+    dbapi_connection.create_function("fold", 1, fold_text, deterministic=True)
+
+
+def fold_text(value):
+    """Lower-case, accent-free and without whitespace: "Café  Nero" -> "cafenero"."""
+    if value is None:
+        return None
+    decomposed = unicodedata.normalize("NFKD", str(value))
+    return "".join(
+        ch for ch in decomposed
+        if not unicodedata.combining(ch) and not ch.isspace()
+    ).casefold()
 
 
 # Columns added to a table after it first shipped. ``create_all`` builds missing

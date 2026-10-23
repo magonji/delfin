@@ -1205,13 +1205,61 @@ from typing import List
 from sqlalchemy.orm import joinedload
 from sqlalchemy import or_
 
+
+def _search_condition(search: str):
+    """Match `search` inside the payee name or the note, forgiving case, accents
+    and spaces: "cafe nero" finds "Café Nero" and "  mercadona" finds "Mercadona".
+    Both sides go through fold(), the SQL function registered in database.py."""
+    pattern = f"%{database.fold_text(search)}%"
+    return or_(
+        func.fold(models.Payee.name).like(pattern),
+        func.fold(models.Transaction.note).like(pattern),
+    )
+
+
+def _filtered_transactions(
+    db: Session, account_id, category_id, payee_id, location_id, project_id,
+    currency, start_date, end_date, search, min_amount, max_amount,
+):
+    """The transactions the ledger's filters leave standing, shared by the list,
+    its totals and the CSV export so the three can never disagree."""
+    query = db.query(models.Transaction)
+    if account_id:
+        query = query.filter(models.Transaction.account_id.in_(account_id))
+    if category_id:
+        query = query.filter(models.Transaction.category_id.in_(category_id))
+    if payee_id:
+        query = query.filter(models.Transaction.payee_id.in_(payee_id))
+    if location_id:
+        query = query.filter(models.Transaction.location_id == location_id)
+    if project_id:
+        query = query.filter(models.Transaction.project_id == project_id)
+    if currency:
+        query = query.filter(models.Transaction.currency == currency)
+    if start_date:
+        query = query.filter(models.Transaction.date >= datetime.combine(start_date, time.min))
+    if end_date:
+        query = query.filter(models.Transaction.date <= datetime.combine(end_date, time.max))
+    # Compared on the absolute value: "over 100" should catch both a 100 paid
+    # out and a 100 received, which is how the amount reads on the row.
+    if min_amount is not None:
+        query = query.filter(func.abs(models.Transaction.amount) >= min_amount)
+    if max_amount is not None:
+        query = query.filter(func.abs(models.Transaction.amount) <= max_amount)
+    if search:
+        # Left outer join, so a transaction with no payee can still match on its note.
+        query = query.outerjoin(models.Payee).filter(_search_condition(search))
+    return query
+
+
 @app.get("/transactions", response_model=List[schemas.TransactionWithDetails])
 def get_transactions(
     skip: int = 0,
     limit: int = 200,
-    account_id: Optional[int] = None,
-    category_id: Optional[int] = None,
-    payee_id: Optional[int] = None,
+    # Each may be given more than once (?account_id=1&account_id=4) to match any of them.
+    account_id: Optional[List[int]] = Query(None),
+    category_id: Optional[List[int]] = Query(None),
+    payee_id: Optional[List[int]] = Query(None),
     location_id: Optional[int] = None,
     project_id: Optional[int] = None,
     currency: Optional[str] = None,
@@ -1230,45 +1278,10 @@ def get_transactions(
     - Supports pagination with skip & limit (useful for infinite scroll).
     - `search` filters on payee.name and transaction.note in the backend.
     """
-    # Base query
-    query = db.query(models.Transaction)
-
-    # Apply filters (same logic as antes)
-    if account_id:
-        query = query.filter(models.Transaction.account_id == account_id)
-    if category_id:
-        query = query.filter(models.Transaction.category_id == category_id)
-    if payee_id:
-        query = query.filter(models.Transaction.payee_id == payee_id)
-    if location_id:
-        query = query.filter(models.Transaction.location_id == location_id)
-    if project_id:
-        query = query.filter(models.Transaction.project_id == project_id)
-    if currency:
-        query = query.filter(models.Transaction.currency == currency)
-    if start_date:
-        query = query.filter(models.Transaction.date >= datetime.combine(start_date, time.min))
-    if end_date:
-        query = query.filter(models.Transaction.date <= datetime.combine(end_date, time.max))
-    # Compared on the absolute value: "over 100" should catch both a 100 paid
-    # out and a 100 received, which is how the amount reads on the row.
-    if min_amount is not None:
-        query = query.filter(func.abs(models.Transaction.amount) >= min_amount)
-    if max_amount is not None:
-        query = query.filter(func.abs(models.Transaction.amount) <= max_amount)
-
-    # Search (backend) - only if provided
-    if search:
-        # Use case-insensitive LIKE for payee name and note.
-        # Note: on SQLite .ilike behaves like LIKE (case-insensitive depending on collation).
-        search_pattern = f"%{search}%"
-        # If we want to filter by payee name we should join Payee (left outer join).
-        query = query.outerjoin(models.Payee).filter(
-            or_(
-                models.Payee.name.ilike(search_pattern),
-                models.Transaction.note.ilike(search_pattern)
-            )
-        )
+    query = _filtered_transactions(
+        db, account_id, category_id, payee_id, location_id, project_id, currency,
+        start_date, end_date, search, min_amount, max_amount,
+    )
 
     # Naming groups outright is how the ledger fetches the far leg of a transfer
     # whose near leg it is showing. That is a lookup by identity rather than a
@@ -1339,9 +1352,10 @@ def get_transactions(
 
 @app.get("/transactions/summary")
 def get_transactions_summary(
-    account_id: Optional[int] = None,
-    category_id: Optional[int] = None,
-    payee_id: Optional[int] = None,
+    # Each may be given more than once (?account_id=1&account_id=4) to match any of them.
+    account_id: Optional[List[int]] = Query(None),
+    category_id: Optional[List[int]] = Query(None),
+    payee_id: Optional[List[int]] = Query(None),
     location_id: Optional[int] = None,
     project_id: Optional[int] = None,
     currency: Optional[str] = None,
@@ -1360,36 +1374,14 @@ def get_transactions_summary(
     """
     base_currency = get_base_currency(db)
 
-    query = db.query(models.Transaction)
-    if account_id:
-        query = query.filter(models.Transaction.account_id == account_id)
-    if category_id:
-        query = query.filter(models.Transaction.category_id == category_id)
-    if payee_id:
-        query = query.filter(models.Transaction.payee_id == payee_id)
-    if location_id:
-        query = query.filter(models.Transaction.location_id == location_id)
-    if project_id:
-        query = query.filter(models.Transaction.project_id == project_id)
-    if currency:
-        query = query.filter(models.Transaction.currency == currency)
-    if start_date:
-        query = query.filter(models.Transaction.date >= datetime.combine(start_date, time.min))
-    if end_date:
-        query = query.filter(models.Transaction.date <= datetime.combine(end_date, time.max))
-    if min_amount is not None:
-        query = query.filter(func.abs(models.Transaction.amount) >= min_amount)
-    if max_amount is not None:
-        query = query.filter(func.abs(models.Transaction.amount) <= max_amount)
+    query = _filtered_transactions(
+        db, account_id, category_id, payee_id, location_id, project_id, currency,
+        start_date, end_date, search, min_amount, max_amount,
+    )
     # A transfer is money moved between your own accounts, not income or
     # spending, so it is left out. Carrying a group id is what makes a row a
     # leg of one; it used to be read off a location named "Transfer In".
     query = query.filter(models.Transaction.transfer_group_id.is_(None))
-    if search:
-        pattern = f"%{search}%"
-        query = query.outerjoin(models.Payee).filter(
-            or_(models.Payee.name.ilike(pattern), models.Transaction.note.ilike(pattern))
-        )
 
     # Four columns, not whole rows: this answers with a count and two sums, and
     # building a mapped instance per matched transaction to add up their amounts
@@ -1430,6 +1422,93 @@ def get_transactions_summary(
         "money_out": round(money_out, 2),
         "base_currency": base_currency,
     }
+
+
+@app.get("/transactions/export")
+def export_transactions(
+    account_id: Optional[List[int]] = Query(None),
+    category_id: Optional[List[int]] = Query(None),
+    payee_id: Optional[List[int]] = Query(None),
+    location_id: Optional[int] = None,
+    project_id: Optional[int] = None,
+    currency: Optional[str] = None,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    search: Optional[str] = None,
+    min_amount: Optional[float] = None,
+    max_amount: Optional[float] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    The ledger as a CSV file: every transaction the filters leave standing (the
+    same filters as GET /transactions), or all of them when none are given.
+
+    One row per stored line, newest first. A split comes out as its lines, tied
+    together by the Split column; a transfer as the leg the filters matched, with
+    the account at the other end under "Transfer with".
+    """
+    import csv
+    import io
+
+    rows = _filtered_transactions(
+        db, account_id, category_id, payee_id, location_id, project_id, currency,
+        start_date, end_date, search, min_amount, max_amount,
+    ).options(
+        joinedload(models.Transaction.account),
+        joinedload(models.Transaction.category),
+        joinedload(models.Transaction.payee),
+        joinedload(models.Transaction.location),
+        joinedload(models.Transaction.project),
+    ).order_by(models.Transaction.date.desc(), models.Transaction.id.desc()).all()
+
+    # The far leg of each transfer, which the filters may well have left out:
+    # it is the only place the other account is written down.
+    groups = {t.transfer_group_id for t in rows if t.transfer_group_id is not None}
+    legs_by_group: Dict[int, list] = {}
+    if groups:
+        legs = (db.query(models.Transaction.id, models.Transaction.transfer_group_id, models.Account.name)
+                .outerjoin(models.Account, models.Account.id == models.Transaction.account_id)
+                .filter(models.Transaction.transfer_group_id.in_(groups)).all())
+        for leg_id, group, account_name in legs:
+            legs_by_group.setdefault(group, []).append((leg_id, account_name))
+
+    out = io.StringIO()
+    writer = csv.writer(out)
+    writer.writerow(["Date", "Time", "Account", "Payee", "Category", "Subcategory", "Location",
+                     "Project", "Note", "Amount", "Currency", "Transfer with", "Split"])
+    for t in rows:
+        if t.category and t.category.parent:
+            category, subcategory = t.category.parent, t.category.name
+        else:
+            category, subcategory = (t.category.name if t.category else ""), ""
+        transfer_with = ""
+        if t.transfer_group_id is not None:
+            transfer_with = next((name or "" for leg_id, name in legs_by_group.get(t.transfer_group_id, [])
+                                  if leg_id != t.id), "")
+        writer.writerow([
+            t.date.strftime("%Y-%m-%d"),
+            t.date.strftime("%H:%M"),
+            t.account.name if t.account else "",
+            t.payee.name if t.payee else "",
+            category,
+            subcategory,
+            t.location.name if t.location else "",
+            t.project.name if t.project else "",
+            t.note or "",
+            f"{t.amount:.2f}" if t.amount is not None else "",
+            t.currency or "",
+            transfer_with,
+            t.split_group_id or "",
+        ])
+
+    # The byte-order mark is what tells Excel the file is UTF-8, so a payee
+    # with an accent does not open as mojibake.
+    filename = f"delfin-transactions-{date.today().isoformat()}.csv"
+    return Response(
+        content="\ufeff" + out.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @app.get("/transactions/transfers")
