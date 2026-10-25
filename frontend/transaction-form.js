@@ -373,6 +373,7 @@
         function addSplitLine(amount = null) {
             syncSplitLinesFromDom();
             splitLines.push({ id: null, amount, parent: null, category_id: null, project_id: null, note: '' });
+            guessSplitCategories(splitLines.length - 1);
             renderSplitLines();
             document.getElementById(`splitAmount_${splitLines.length - 1}`).focus();
         }
@@ -531,7 +532,7 @@
                     project_id: l.project_id,
                     note: l.note || '',
                 };
-            }));
+            }), true);
 
             const f = document.getElementById('transactionForm');
             f.querySelector('button[type="submit"]').textContent = 'Update';
@@ -580,7 +581,8 @@
             setModalMode('transferModal', true);
         }
 
-        function enterSplitMode(lines) {
+        // `saved` is a split read back from the server, shown as it was stored.
+        function enterSplitMode(lines, saved = false) {
             splitMode = true;
             splitLines = lines && lines.length ? lines : [
                 { id: null, amount: parseMoneyAmount(document.getElementById('amount').value) || null,
@@ -602,6 +604,9 @@
             // "Save & New" keeps a form open for the next entry; a split is a
             // deliberate, one-off piece of data entry, so it does not apply.
             document.querySelectorAll('#transactionModal [data-new-only]').forEach(b => b.style.display = 'none');
+            // A transaction being split now -- new, or one being edited -- fills
+            // in what it can; a split saved earlier is shown exactly as it was.
+            if (!saved) guessSplitCategories();
             renderSplitLines();
             showSplitCategoryHints();
         }
@@ -650,9 +655,14 @@
             const payeeName = document.getElementById('payee').value.trim();
             if (!payeeName) { clearPayeeCategoryHints(); return; }
 
-            // A split fills nothing in by itself -- which line would it go on? --
-            // but offers the payee's usual categories for the lines to take.
-            if (splitMode) { showSplitCategoryHints(); return; }
+            // A split fills its lines with the payee's usual categories, and
+            // offers them as chips for anything it guessed wrong.
+            if (splitMode) {
+                syncSplitLinesFromDom();
+                if (guessSplitCategories()) renderSplitLines();
+                showSplitCategoryHints();
+                return;
+            }
 
             if (document.getElementById('transactionForm').dataset.editingId) return;
             
@@ -1208,9 +1218,57 @@
             box.hidden = false;
         }
 
-        // The same chips for a split. One suggestion is worth showing here,
-        // since nothing was filled in for you. A chip goes on the line last
-        // touched, or failing that the first one still without a category.
+        // The same chips for a split, shown even for a single suggestion: with
+        // several lines, the one filled in may not be the line it belongs on. A
+        // chip goes on the line last touched, or failing that the first one
+        // still without a category, or the last line.
+        // A line's category as one comparable key: the subcategory's id, or the
+        // parent's name for a category with no subcategories.
+        function splitCategoryKey(parent, categoryId) {
+            return categoryId ? 'c' + categoryId : (parent ? 'p' + parent : null);
+        }
+
+        /**
+         * What a single transaction does for its one category, done for a split:
+         * the payee's usual categories go into the lines, the most used first,
+         * each line taking the next one no other line has yet (and the most used
+         * again once they run out). The usual project goes in too.
+         *
+         * Only into a line still empty, or still holding an earlier guess -- a
+         * category you chose yourself is never overruled. `only` limits it to
+         * one line, for a line just added.
+         */
+        function guessSplitCategories(only = null) {
+            const name = document.getElementById('payee').value.trim().toLowerCase();
+            const payee = name && allPayees.find(p => p.name.toLowerCase() === name);
+            if (!payee) return false;
+            const tops = (payee.top_categories || [])
+                .map(c => allCategories.find(x => x.id === c.category_id))
+                .filter(Boolean)
+                .map(c => ({ parent: c.parent || c.name, category_id: c.parent ? c.id : null }));
+            const isGuess = l => splitCategoryKey(l.parent, l.category_id) === (l.guessedKey ?? null);
+            let changed = false;
+            splitLines.forEach((line, i) => {
+                if (only != null && i !== only) return;
+                if (tops.length && isGuess(line)) {
+                    const used = new Set(splitLines.filter(l => l !== line)
+                        .map(l => splitCategoryKey(l.parent, l.category_id)));
+                    const pick = tops.find(t => !used.has(splitCategoryKey(t.parent, t.category_id))) || tops[0];
+                    line.parent = pick.parent;
+                    line.category_id = pick.category_id;
+                    line.guessedKey = splitCategoryKey(pick.parent, pick.category_id);
+                    changed = true;
+                }
+                if (payee.most_common_project_id && allProjects.some(p => p.id === payee.most_common_project_id)
+                        && (line.project_id == null || line.project_id === line.guessedProject)) {
+                    line.project_id = payee.most_common_project_id;
+                    line.guessedProject = payee.most_common_project_id;
+                    changed = true;
+                }
+            });
+            return changed;
+        }
+
         function noteSplitHintLine(e) {
             const card = e.target.closest('[data-line]');
             if (card) splitHintLine = Number(card.dataset.line);
@@ -1238,6 +1296,7 @@
                     syncSplitLinesFromDom();
                     let i = splitHintLine;
                     if (i == null || !splitLines[i]) i = splitLines.findIndex(l => !l.parent && !l.category_id);
+                    if (i < 0) i = splitLines.length - 1;
                     if (i < 0) return;
                     splitLines[i].parent = category.parent || category.name;
                     splitLines[i].category_id = category.parent ? category.id : null;
