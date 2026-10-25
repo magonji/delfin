@@ -63,6 +63,7 @@
     let splitMode = false;
     let splitLines = [];           // [{ id, amount, parent, category_id, project_id, note }]
     let editingSplitGroup = null;  // set while editing an existing split
+    let splitHintLine = null;      // the line a category chip goes on: the one last touched
     let transactionBatchCount = 0;
     let transferBatchCount = 0;
     let batchAffectedAccounts = new Set();  // Track accounts that need balance recalculation
@@ -587,7 +588,10 @@
                 { id: null, amount: null, parent: null, category_id: null, project_id: null, note: '' },
             ];
             document.getElementById('singleCategoryRow').style.display = 'none';
-            clearPayeeCategoryHints();
+            splitHintLine = null;
+            // There is no `onfocusin` property to assign; adding the same named
+            // function again on the next split is a no-op, so it never doubles.
+            document.getElementById('splitLines').addEventListener('focusin', noteSplitHintLine);
             document.getElementById('singleTailFields').style.display = 'none';
             document.getElementById('splitEditor').style.display = '';
             document.getElementById('splitToggleBtn').textContent = 'Back to a single line';
@@ -599,6 +603,7 @@
             // deliberate, one-off piece of data entry, so it does not apply.
             document.querySelectorAll('#transactionModal [data-new-only]').forEach(b => b.style.display = 'none');
             renderSplitLines();
+            showSplitCategoryHints();
         }
 
         function exitSplitMode() {
@@ -606,6 +611,8 @@
             editingSplitGroup = null;
             splitLines = [];
             document.getElementById('splitLines').innerHTML = '';
+            // The chips were wired to the lines, which are gone.
+            clearPayeeCategoryHints();
             document.getElementById('singleCategoryRow').style.display = '';
             document.getElementById('singleTailFields').style.display = '';
             document.getElementById('splitEditor').style.display = 'none';
@@ -642,7 +649,11 @@
         async function handlePayeeBlur() {
             const payeeName = document.getElementById('payee').value.trim();
             if (!payeeName) { clearPayeeCategoryHints(); return; }
-            
+
+            // A split fills nothing in by itself -- which line would it go on? --
+            // but offers the payee's usual categories for the lines to take.
+            if (splitMode) { showSplitCategoryHints(); return; }
+
             if (document.getElementById('transactionForm').dataset.editingId) return;
             
             const payee = allPayees.find(p => 
@@ -1197,6 +1208,47 @@
             box.hidden = false;
         }
 
+        // The same chips for a split. One suggestion is worth showing here,
+        // since nothing was filled in for you. A chip goes on the line last
+        // touched, or failing that the first one still without a category.
+        function noteSplitHintLine(e) {
+            const card = e.target.closest('[data-line]');
+            if (card) splitHintLine = Number(card.dataset.line);
+        }
+
+        function showSplitCategoryHints() {
+            const name = document.getElementById('payee').value.trim().toLowerCase();
+            const payee = name && allPayees.find(p => p.name.toLowerCase() === name);
+            const box = document.getElementById('payeeCategoryHints');
+            const options = ((payee && payee.top_categories) || [])
+                .filter(c => c.category_id && allCategories.some(x => x.id === c.category_id));
+            if (!options.length) { clearPayeeCategoryHints(); return; }
+
+            box.querySelector('.hint-chips').innerHTML = options.map(c => {
+                const label = c.parent ? `${escapeHtml(c.parent)} › ${escapeHtml(c.name)}`
+                                       : escapeHtml(c.name || '');
+                return `<button type="button" data-category-id="${c.category_id}"
+                    title="Put on the line you are editing (${c.count} transaction${c.count === 1 ? '' : 's'} filed here)">${label}<span class="hint-count">${c.count}</span></button>`;
+            }).join('');
+
+            box.querySelectorAll('button').forEach(btn => {
+                btn.onclick = () => {
+                    const category = allCategories.find(c => c.id === Number(btn.dataset.categoryId));
+                    if (!category) return;
+                    syncSplitLinesFromDom();
+                    let i = splitHintLine;
+                    if (i == null || !splitLines[i]) i = splitLines.findIndex(l => !l.parent && !l.category_id);
+                    if (i < 0) return;
+                    splitLines[i].parent = category.parent || category.name;
+                    splitLines[i].category_id = category.parent ? category.id : null;
+                    renderSplitLines();
+                    // The next chip goes on the next empty line, not this one again.
+                    splitHintLine = null;
+                };
+            });
+            box.hidden = false;
+        }
+
         function splitAssignedTotal() {
             return Math.round(splitLines.reduce((sum, l) => sum + (Number.isFinite(l.amount) ? l.amount : 0), 0) * 100) / 100;
         }
@@ -1210,15 +1262,18 @@
             const parents = [...new Set(allCategories.map(c => c.parent || c.name))].sort();
             const parentOpts = parents.map(p =>
                 `<option value="${escapeHtml(p)}" ${p === line.parent ? 'selected' : ''}>${escapeHtml(p)}</option>`).join('');
-            const subs = allCategories.filter(c => c.parent === line.parent)
-                                      .sort((a, b) => a.name.localeCompare(b.name));
+            // Nothing until a parent is chosen: `parent === null` would match
+            // every top-level category and offer those as subcategories.
+            const subs = line.parent
+                ? allCategories.filter(c => c.parent === line.parent).sort((a, b) => a.name.localeCompare(b.name))
+                : [];
             const subOpts = subs.map(c =>
                 `<option value="${c.id}" ${c.id === line.category_id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('');
             const projOpts = allProjects.map(p =>
                 `<option value="${p.id}" ${p.id === line.project_id ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('');
 
             return `
-            <div class="split-line-card">
+            <div class="split-line-card" data-line="${index}">
                 <div class="split-line-head">
                     <span>Line ${index + 1}</span>
                     <button type="button" class="split-line-remove" onclick="removeSplitLine(${index})"
@@ -1796,9 +1851,6 @@
     global.deleteFromTransferModal = deleteFromTransferModal;
     global.duplicateFromModal = duplicateFromModal;
     global.duplicateFromTransferModal = duplicateFromTransferModal;
-    global.editSplit = editSplit;
-    global.editTransaction = editTransaction;
-    global.editTransfer = editTransfer;
     global.enterSplitMode = enterSplitMode;
     global.exitSplitMode = exitSplitMode;
     global.guardedSave = guardedSave;
@@ -1864,4 +1916,12 @@
         pendingBalances: function () { return batchAffectedAccounts.size; },
         flushBalances: function () { return recalculateAffectedBalances(); },
     };
+
+    // The rows of a ledger call these by name. They go through the doors above
+    // so the form takes the page's latest catalogues first: called bare, an
+    // edit opened with whatever the form had when the page loaded -- on
+    // Transactions that was no projects at all, since they arrive last.
+    global.editTransaction = global.DelfinTxForm.editTransaction;
+    global.editTransfer = global.DelfinTxForm.editTransfer;
+    global.editSplit = global.DelfinTxForm.editSplit;
 })(window);

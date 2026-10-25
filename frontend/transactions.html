@@ -1935,6 +1935,7 @@
         function absorbProjects(projs) {
             allProjects = projs;
             document.getElementById('bulkProject').innerHTML = '<option value="">Don\'t change</option>' + projs.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
+            DelfinTxForm.refresh();
         }
 
         /**
