@@ -110,6 +110,12 @@
         .content { max-width: 1180px; width: 100%; margin: 0 auto; padding: 26px var(--page-gutter) 80px; flex: 1; }
         .page-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 22px; }
         .page-title { margin: 0; font-family: 'Playfair Display', serif; font-size: 34px; font-weight: 800; line-height: 1; padding-left: 18px; border-left: 3px solid var(--accent); }
+        /* The report download: quiet, beside the title, out of the way of the figures. */
+        .page-action { display: inline-flex; align-items: center; gap: 7px; background: transparent; border: 1px solid var(--border);
+            border-radius: 8px; padding: 7px 12px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 1px;
+            text-transform: uppercase; color: var(--muted); cursor: pointer; }
+        .page-action:hover:not(:disabled) { color: var(--ink); background: var(--panel); }
+        .page-action:disabled { opacity: .45; cursor: default; }
 
         /* Edit affordance on a loan that has terms */
         .terms-edit { background: none; border: none; padding: 2px 6px; cursor: pointer; font-family: 'IBM Plex Mono', monospace;
@@ -300,6 +306,11 @@
     <div class="content">
         <div class="page-head">
             <h1 class="page-title">Loans &amp; Credit Cards</h1>
+            <button class="page-action" id="btnReport" onclick="exportReport()" disabled
+                    title="Download a Markdown report of every debt and its terms">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3"/><path d="M8 7l4-4 4 4"/><path d="M8 11H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-2"/></svg>
+                Export report
+            </button>
         </div>
         <div class="kpi-grid">
             <div class="kpi-cell"><div class="kpi-label">Total Owed</div><div class="kpi-val" id="totalOwed" style="color:var(--red)">—</div><div class="kpi-sub" id="owedSub"></div></div>
@@ -429,6 +440,8 @@
 
     // The last payload drawn, so a card knows the terms it is asking to edit.
     let _lastDetails = {};
+    // And the KPIs, for the Markdown report.
+    let _lastSummary = {};
 
     // =============================================================================
     // API & CACHING LAYER
@@ -499,6 +512,8 @@
             ]);
             updateSummaryUI(summary);
             renderDashboard(details);
+            _lastSummary = summary;
+            q('#btnReport').disabled = false;
 
         } catch (e) {
             showError('Error loading data: ' + e.message);
@@ -575,19 +590,15 @@
     // =============================================================================
 
     /**
-     * Generates HTML for a single loan or credit card display card
-     * Includes progress bar, statistics, and estimated interest rate (for loans)
-     * 
+     * How far along a debt is: for a loan, the share of its total cost repaid;
+     * for a card, how much of it is used up.
+     *
      * @param {object} debt - Loan/card data object
-     * @param {string} type - 'loan' or 'card'
-     * @returns {string} - HTML string for the card
+     * @param {boolean} isCard - Whether it is a credit card
+     * @returns {{progress: number, usageBand: string|null}}
      */
-    function displayDebtAccount(debt, type) {
-        // Determine account type
-        const isCard = type === 'card' || type === 'credit-card';
+    function progressOf(debt, isCard) {
         const isCompleted = debt.is_completed;
-        
-        // Calculate progress percentage
         let progress;
         // Set only when the figure really is a share of a limit, which is the only
         // reading the bands below mean anything against.
@@ -631,54 +642,271 @@
                 progress = totalLiability > 0 ? (debt.repaid / totalLiability) * 100 : 0;
             }
         }
+        return { progress, usageBand };
+    }
 
-        // -------------------------------------------------------------------------
-        // ESTIMATED INTEREST RATE CALCULATION (loans only)
-        // Uses XIRR (Extended Internal Rate of Return) to estimate the effective
-        // annual interest rate based on actual cash flows and their dates.
-        // -------------------------------------------------------------------------
-        let estimatedRate = null;
-        if (!isCard && !debt.terms && debt.transactions && debt.transactions.length > 0) {
-            try {
-                // Build cash flow arrays for XIRR calculation
-                // Initial borrowed amount is a positive inflow (from lender's perspective)
-                const flows = [debt.borrowed];
-                const dates = [new Date(debt.open_date)];
-
-                // Add repayments as negative outflows (money leaving the borrower)
-                debt.transactions.forEach(t => {
-                    if (t.amount > 0) { 
-                        flows.push(-t.amount);
-                        dates.push(new Date(t.date));
-                    }
-                });
-
-                // If there's remaining debt, treat it as a future "balloon payment" today
-                // This allows rate estimation even for ongoing loans
-                if (debt.current_owed > 0.01) {
-                    flows.push(-debt.current_owed);
-                    dates.push(new Date());
+    /**
+     * The annual rate a loan without agreed terms appears to be charging, by XIRR
+     * over the money actually borrowed and repaid, with whatever is still owed
+     * treated as settled today.
+     *
+     * @param {object} debt - Loan data object
+     * @returns {string|null} - The rate as a percentage string, or null when unknown
+     */
+    function estimateRate(debt) {
+        if (debt.terms || !debt.transactions || !debt.transactions.length) return null;
+        try {
+            // The amount borrowed is an inflow, every repayment an outflow.
+            const flows = [debt.borrowed];
+            const dates = [new Date(debt.open_date)];
+            debt.transactions.forEach(t => {
+                if (t.amount > 0) {
+                    flows.push(-t.amount);
+                    dates.push(new Date(t.date));
                 }
-
-                // Only calculate if we have at least the initial loan plus one payment/balance
-                if (flows.length >= 2) {
-                    const rateDecimal = calculateXIRR(flows, dates);
-                    if (!isNaN(rateDecimal) && isFinite(rateDecimal)) {
-                        // Format with appropriate precision
-                        const ratePercent = rateDecimal * 100;
-                        if (ratePercent >= 0 && ratePercent < 100) {
-                            estimatedRate = ratePercent.toFixed(1);
-                        } else if (ratePercent >= 100) {
-                            estimatedRate = ratePercent.toFixed(0);
-                        }
-                        // Negative or extremely high rates are shown as N/A
-                    }
-                }
-            } catch (e) {
-                console.warn('Error calculating XIRR for', debt.account.name, e);
-                estimatedRate = null;
+            });
+            // What is still owed, as a balloon payment today, so an ongoing loan
+            // can be priced too.
+            if (debt.current_owed > 0.01) {
+                flows.push(-debt.current_owed);
+                dates.push(new Date());
             }
+            if (flows.length < 2) return null;
+
+            const rate = calculateXIRR(flows, dates);
+            if (isNaN(rate) || !isFinite(rate)) return null;
+            const pct = rate * 100;
+            // A negative rate is noise, not a bargain.
+            if (pct < 0) return null;
+            return pct < 100 ? pct.toFixed(1) : pct.toFixed(0);
+        } catch (e) {
+            console.warn('Error calculating XIRR for', debt.account.name, e);
+            return null;
         }
+    }
+
+    // =============================================================================
+    // MARKDOWN REPORT
+    // =============================================================================
+
+    /** Downloads a Markdown report of every debt on the page and its terms. */
+    function exportReport() {
+        try {
+            const md = buildReport(_lastSummary, _lastDetails);
+            const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `delfin-debts-${new Date().toISOString().slice(0, 10)}.md`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        } catch (e) {
+            showError('Error building the report: ' + e.message);
+            console.error(e);
+        }
+    }
+
+    /**
+     * The report itself: a summary, an at-a-glance table, then each debt with
+     * everything known about it. Plain Markdown, readable as text too.
+     *
+     * @param {object} summary - Payload from /loans/summary
+     * @param {object} details - Payload from /loans/details
+     * @returns {string} - Markdown document
+     */
+    function buildReport(summary, details) {
+        summary = summary || {};
+        details = details || {};
+        const loans = details.loans || [];
+        const cards = details.credit_cards || [];
+        const completed = details.completed || [];
+        const base = summary.base_currency || globalCurrency;
+
+        // Pipes and line breaks would break a table cell; everything else in a
+        // name is left as typed.
+        const cell = (v) => String(v == null ? '' : v).replace(/\|/g, '\\|').replace(/\s*\n\s*/g, ' ');
+        const money = (n, cur) => `${sym(cur)}${formatNum(n || 0)}`;
+        const pct = (n) => `${Math.round(n)}%`;
+        const every = { 1: 'monthly', 3: 'quarterly', 6: 'every six months', 12: 'annually' };
+        const kindOf = {
+            french: 'constant instalment',
+            interest_only: 'interest only',
+            constant_principal: 'constant capital',
+        };
+        const rateOf = (d) => {
+            if (d.terms) return `${formatRate(d.terms.annual_rate)}% agreed`;
+            const est = estimateRate(d);
+            return est ? `~${est}% est. APR` : '—';
+        };
+
+        const out = [];
+        const today = new Date();
+        out.push('# Debt report', '');
+        out.push(`Generated by Delfin on ${today.toLocaleDateString('en-GB')}. `
+            + `Totals are in ${base} at historical rates; each debt is shown in its own currency.`, '');
+
+        // ---- Summary -------------------------------------------------------------
+        out.push('## Summary', '');
+        out.push('| | |', '|---|---:|');
+        out.push(`| Total owed | ${money(summary.total_owed, base)} |`);
+        out.push(`| Interest paid (lifetime) | ${money(summary.total_interest, base)} |`);
+        out.push(`| Active loans | ${summary.active_loans ?? loans.length} |`);
+        out.push(`| Credit cards | ${summary.active_credit_cards ?? cards.length} |`);
+        out.push(`| Paid off loans | ${completed.length} |`);
+
+        // What the agreed schedules take each month, per currency: instalments
+        // are not added across currencies.
+        const monthly = {};
+        loans.forEach(d => {
+            if (!d.terms || !d.schedule || !d.schedule.next_payment_date) return;
+            const cur = d.account.currency;
+            const months = d.terms.payment_months || 1;
+            const amount = (d.schedule.next_payment_amount ?? d.schedule.instalment) || 0;
+            monthly[cur] = (monthly[cur] || 0) + amount / months;
+        });
+        const monthlyText = Object.entries(monthly).map(([cur, n]) => money(n, cur)).join(' + ');
+        if (monthlyText) out.push(`| Scheduled repayments per month | ${monthlyText} |`);
+        out.push('');
+
+        if (!loans.length && !cards.length && !completed.length) {
+            out.push('_No accounts are marked as a loan or a credit card._', '');
+            return out.join('\n');
+        }
+
+        // ---- At a glance ---------------------------------------------------------
+        if (loans.length || cards.length) {
+            out.push('## At a glance', '');
+            out.push('| Debt | Type | Lender | Owed | Rate | Instalment | Next payment | Final payment |');
+            out.push('|---|---|---|---:|---|---:|---|---|');
+            loans.forEach(d => {
+                const sc = d.schedule || {};
+                const s = d.account.currency;
+                out.push(`| ${cell(d.account.name)} | Loan | ${cell(d.lender_name)} | ${money(d.current_owed, s)} | ${rateOf(d)} | `
+                    + `${sc.instalment ? money(sc.instalment, s) + ' ' + (every[d.terms.payment_months] || '') : '—'} | `
+                    + `${sc.next_payment_date ? formatDate(sc.next_payment_date) : '—'} | `
+                    + `${sc.final_payment_date ? formatDate(sc.final_payment_date) : '—'} |`);
+            });
+            cards.forEach(d => {
+                const owed = Math.max(0, -(d.current_balance || 0));
+                out.push(`| ${cell(d.account.name)} | Credit card | ${cell(d.lender_name)} | ${money(owed, d.account.currency)} | — | — | — | — |`);
+            });
+            out.push('');
+        }
+
+        // ---- Active loans --------------------------------------------------------
+        if (loans.length) {
+            out.push('## Active loans', '');
+            loans.forEach(d => {
+                const s = d.account.currency;
+                const t = d.terms, sc = d.schedule || {};
+                const { progress } = progressOf(d, false);
+                out.push(`### ${d.account.name}`, '');
+                out.push(`- **Lender:** ${d.lender_name || '—'}`);
+                out.push(`- **Currency:** ${s}`);
+                out.push(`- **Opened:** ${formatDate(d.open_date)}`);
+                out.push(`- **Outstanding:** ${money(d.current_owed, s)}`);
+                out.push(`- **Borrowed:** ${money(d.borrowed, s)} · **Repaid:** ${money(d.repaid, s)} · **Interest charged so far:** ${money(d.interest, s)}`);
+                out.push(`- **Progress:** ${pct(progress)} ${t && sc.total_cost > 0 ? 'of the total cost repaid' : 'of capital and interest so far repaid'}`);
+
+                if (t && sc.payments_total) {
+                    const kind = kindOf[t.repayment_type] || t.repayment_type;
+                    out.push(`- **Rate:** ${formatRate(t.annual_rate)}% agreed`
+                        + (sc.effective_rate != null ? ` · ${formatApr(sc.effective_rate)}% effective` : '')
+                        + (t.interest_unit === 'day' ? ' · interest accrued daily' : ''));
+                    out.push(`- **Repayment:** ${money(sc.instalment, s)} ${every[t.payment_months] || ''}, ${kind}, `
+                        + `over ${t.term_count} ${t.term_unit}${t.term_count === 1 ? '' : 's'}`);
+                    out.push(`- **Payments:** ${sc.payments_made} of ${sc.payments_total} made`
+                        + (sc.next_payment_date ? ` · next ${formatDate(sc.next_payment_date)}`
+                            + (sc.next_payment_amount != null ? ` (${money(sc.next_payment_amount, s)})` : '') : '')
+                        + (sc.final_payment_date ? ` · final ${formatDate(sc.final_payment_date)}` : ''));
+                    if (sc.financed_principal) out.push(`- **Capital financed:** ${money(sc.financed_principal, s)}`);
+                    out.push(`- **Interest over the term:** ${money(sc.total_interest, s)} `
+                        + `(${money(sc.interest_paid, s)} paid, ${money(sc.interest_remaining, s)} still to come)`);
+                    if (sc.total_cost) out.push(`- **Total cost of the loan:** ${money(sc.total_cost, s)}`);
+                    if (sc.opening_fee > 0) {
+                        out.push(`- **Opening fee:** ${money(sc.opening_fee, s)}, `
+                            + (sc.fee_treatment === 'capitalised' ? 'added to the loan' : 'paid at the outset'));
+                    }
+                    if (sc.recurring_fee > 0) {
+                        out.push(`- **Standing fee:** ${money(sc.recurring_fee, s)} ${every[sc.recurring_fee_months] || ''}`
+                            + (sc.fees_remaining > 0 ? ` (${money(sc.fees_remaining, s)} still to come)` : ''));
+                    }
+                    if (sc.settlement_today > 0) {
+                        out.push(`- **To settle today:** ${money(sc.settlement_today, s)}`
+                            + (sc.early_repayment_fee_pct > 0
+                                ? ` (including a ${formatRate(sc.early_repayment_fee_pct)}% early repayment charge of ${money(sc.early_repayment_fee, s)})`
+                                : ''));
+                    }
+                    const drift = round2((sc.expected_balance || 0) - d.current_owed);
+                    if (Math.abs(drift) >= 0.01) {
+                        out.push(`- **Against the schedule:** ${money(drift, s)} ${drift > 0 ? 'ahead' : 'behind'}`);
+                    } else {
+                        out.push('- **Against the schedule:** on track');
+                    }
+                } else {
+                    const est = estimateRate(d);
+                    out.push(`- **Rate:** ${est ? `~${est}% estimated from the payments made` : 'unknown (no agreed terms)'}`);
+                }
+                out.push('');
+            });
+        }
+
+        // ---- Credit cards --------------------------------------------------------
+        if (cards.length) {
+            out.push('## Credit cards', '');
+            cards.forEach(d => {
+                const s = d.account.currency;
+                const bal = d.current_balance || 0;
+                const limit = d.account.credit_limit;
+                const owed = Math.max(0, -bal);
+                out.push(`### ${d.account.name}`, '');
+                out.push(`- **Issuer:** ${d.lender_name || '—'}`);
+                out.push(`- **Currency:** ${s}`);
+                out.push(`- **Opened:** ${formatDate(d.open_date)}`);
+                out.push(`- **Balance:** ${bal < 0 ? `${money(bal, s)} owed` : (bal > 0 ? `${money(bal, s)} in credit` : 'nothing owed')}`);
+                if (limit > 0) {
+                    out.push(`- **Credit limit:** ${money(limit, s)} · ${pct(owed / limit * 100)} used · ${money(Math.max(0, limit - owed), s)} available`);
+                } else {
+                    out.push(`- **Credit limit:** not recorded${d.max_debt > 0 ? ` (peak debt ${money(d.max_debt, s)})` : ''}`);
+                }
+                out.push(`- **Charges:** ${money(d.borrowed, s)} · **Repaid:** ${money(d.repaid, s)} · **Interest and fees:** ${money(d.interest, s)}`);
+                out.push(`- **Payees:** ${d.unique_payees}`);
+                out.push('');
+            });
+        }
+
+        // ---- Paid off ------------------------------------------------------------
+        if (completed.length) {
+            out.push('## Paid off loans', '');
+            out.push('| Loan | Lender | Opened | Closed | Borrowed | Interest paid |');
+            out.push('|---|---|---|---|---:|---:|');
+            completed.forEach(d => {
+                const s = d.account.currency;
+                out.push(`| ${cell(d.account.name)} | ${cell(d.lender_name)} | ${formatDate(d.open_date)} | `
+                    + `${d.close_date ? formatDate(d.close_date) : '—'} | ${money(d.borrowed, s)} | ${money(d.interest, s)} |`);
+            });
+            out.push('');
+        }
+
+        return out.join('\n');
+    }
+
+    /**
+     * Generates HTML for a single loan or credit card display card
+     * Includes progress bar, statistics, and estimated interest rate (for loans)
+     * 
+     * @param {object} debt - Loan/card data object
+     * @param {string} type - 'loan' or 'card'
+     * @returns {string} - HTML string for the card
+     */
+    function displayDebtAccount(debt, type) {
+        // Determine account type
+        const isCard = type === 'card' || type === 'credit-card';
+        const isCompleted = debt.is_completed;
+        const { progress, usageBand } = progressOf(debt, isCard);
+        const estimatedRate = isCard ? null : estimateRate(debt);
 
         // The two bars measure opposite things -- a full loan is paid off, a full
         // card is used up -- and the figure beside them is just a number. This is
